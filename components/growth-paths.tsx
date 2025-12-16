@@ -1,6 +1,5 @@
 "use client"
-
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
 type Level = "Low" | "Medium" | "High"
 
@@ -361,6 +360,9 @@ function build8Paths(input: GrowthInput): Path[] {
   })
 
 
+  return paths
+}
+
 export default function GrowthPaths({ result }: { result: GrowthInput }) {
   const paths = useMemo(() => build8Paths(result), [result])
   const [selectedId, setSelectedId] = useState<string | null>(paths[0]?.id || null)
@@ -547,12 +549,11 @@ export default function GrowthPaths({ result }: { result: GrowthInput }) {
         <div className="rounded-lg border p-4 text-sm text-muted-foreground">
           免費版僅顯示 Top3 成長路線與摘要建議；「超詳細分析 / 商業價值 / 合作邀請機率」可做成訂閱功能（例如 NT$99/月）。
         </div>
-      {/* 免費版提示（你之後做付費牆可以用） */}
-      <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-        免費版僅顯示 Top3 成長路線與摘要建議；「超詳細分析 / 商業價值 / 合作邀請機率」可做成訂閱功能（例如 NT$99/月）。
+        {/* 免費版提示（你之後做付費牆可以用） */}
+        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+          免費版僅顯示 Top3 成長路線與摘要建議；「超詳細分析 / 商業價值 / 合作邀請機率」可做成訂閱功能（例如 NT$99/月）。
+        </div>
       </div>
     </div>
   )
 }
-
-export { GrowthPaths }
