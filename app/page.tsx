@@ -135,7 +135,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+    <main className="min-h-screen flex items-center justify-center bg-[#0b1220] px-4">
       <Card className="w-full max-w-3xl">
         <CardHeader>
           <div className="text-xs tracking-widest text-muted-foreground">DEMO TOOL</div>

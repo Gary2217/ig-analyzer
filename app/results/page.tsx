@@ -72,7 +72,7 @@ export default function ResultsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
           <p>Analyzing account...</p>
@@ -83,15 +83,15 @@ export default function ResultsPage() {
 
   if (!result) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
         <Alert>
           <AlertTitle>No analysis results found</AlertTitle>
           <AlertDescription>
             We couldn't find any analysis results. Please try analyzing an account again.
           </AlertDescription>
-          <Button 
-            className="mt-4" 
-            onClick={() => router.push('/')}
+          <Button
+            className="mt-4"
+            onClick={() => router.push("/")}
           >
             Back to Home
           </Button>
@@ -100,129 +100,139 @@ export default function ResultsPage() {
     )
   }
 
+  const hasSidebar = Boolean(result.username)
+
   return (
     <>
       <Toaster position="top-center" />
-      <main className="min-h-screen bg-slate-50 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        <Button 
-          variant="ghost" 
-          onClick={() => router.back()}
-          className="mb-6"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
-        </Button>
+      <main className="min-h-screen w-full bg-[#0b1220] py-6 px-4 sm:px-6 overflow-x-hidden">
+        <div className="w-full max-w-none mx-auto">
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="mb-6"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back
+          </Button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-2xl">
-                  @{result.username}
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    {result.platform === 'instagram' ? 'Instagram' : 'Threads'}
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AccountScores 
-                  result={{
-                    confidenceScore: result.confidenceScore,
-                    automationLikelihood: result.automationLikelihood as "Low" | "Medium" | "High",
-                    abnormalBehaviorRisk: result.abnormalBehaviorRisk as "Low" | "Medium" | "High",
-                    engagementQuality: result.engagementQuality as "Low" | "Medium" | "High",
-                    contentConsistency: result.contentConsistency as "Low" | "Medium" | "High",
-                    postingFrequency: result.postingFrequency as "Low" | "Medium" | "High"
-                  }} 
-                />
-                
-                {/* Add Monetization Section */}
-                <div className="mt-8">
-                  <MonetizationSection 
-                    monetizationGap={18} // This would be calculated from the analysis in a real app
-                    isSubscribed={isSubscribed}
+          {/* Responsive grid: 手機 1 欄；有 sidebar 時 md+ 並排，無 sidebar 則單欄撐滿 */}
+          <div className="grid grid-cols-1 gap-6 lg:gap-4">
+            <div className="w-full lg:col-span-2 space-y-6 lg:space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-2xl lg:text-xl">
+                    @{result.username}
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      {result.platform === 'instagram' ? 'Instagram' : 'Threads'}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <AccountScores 
+                    result={{
+                      confidenceScore: result.confidenceScore,
+                      automationLikelihood: result.automationLikelihood as "Low" | "Medium" | "High",
+                      abnormalBehaviorRisk: result.abnormalBehaviorRisk as "Low" | "Medium" | "High",
+                      engagementQuality: result.engagementQuality as "Low" | "Medium" | "High",
+                      contentConsistency: result.contentConsistency as "Low" | "Medium" | "High",
+                      postingFrequency: result.postingFrequency as "Low" | "Medium" | "High"
+                    }} 
                   />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Account Insights</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Account Type</p>
-                      <p className="font-medium">{result.accountType}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Account Age</p>
-                      <p className="font-medium">{result.accountAge}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Visibility</p>
-                      <p className="font-medium">{result.visibility}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Posting Frequency</p>
-                      <p className="font-medium">{result.postingFrequency}</p>
-                    </div>
+                  
+                  {/* Add Monetization Section */}
+                  <div className="mt-8 lg:mt-6">
+                    <MonetizationSection 
+                      monetizationGap={18} // This would be calculated from the analysis in a real app
+                      isSubscribed={isSubscribed}
+                    />
                   </div>
-
-                  {result.notes.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-medium mb-2">Key Findings</h3>
-                      <ul className="space-y-2">
-                        {result.notes.map((note, i) => (
-                          <li key={i} className="flex items-start">
-                            <span className="text-green-500 mr-2">•</span>
-                            <span>{note}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Share Results Section - Moved to bottom of main content */}
-          </div>
-
-          <div className="lg:col-span-1">
-            <Card className="sticky top-6 h-[calc(100vh-3rem)] overflow-hidden flex flex-col">
-              <CardHeader className="border-b border-slate-700/50">
-                <CardTitle className="text-lg">Growth Opportunities</CardTitle>
-                <p className="text-sm text-slate-400 mt-1">Personalized recommendations for @{result.username}</p>
-              </CardHeader>
-              <div className="flex-1 overflow-y-auto">
-                <CardContent className="pb-6">
-                  <GrowthPaths result={{
-                    handle: result.username,
-                    platform: result.platform,
-                    confidence: result.confidenceScore,
-                    abnormalBehaviorRisk: result.abnormalBehaviorRisk as "Low" | "Medium" | "High",
-                    automationLikelihood: result.automationLikelihood as "Low" | "Medium" | "High"
-                  }} />
                 </CardContent>
-              </div>
-            </Card>
-          </div>
-        </div>
+              </Card>
 
-        <div className="mt-12 space-y-8">
-          <ShareResults 
-            platform={result.platform === 'instagram' ? 'Instagram' : 'Threads'}
-            username={result.username}
-            monetizationGap={18}
-          />
-          <div className="text-center text-sm text-slate-400 pt-4 border-t border-slate-800">
-            <p>{result.disclaimer}</p>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-xl lg:text-lg">Account Insights</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4 lg:space-y-3">
+                    <div className="grid grid-cols-2 gap-6 lg:gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Account Type</p>
+                        <p className="font-medium">{result.accountType}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Account Age</p>
+                        <p className="font-medium">{result.accountAge}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Visibility</p>
+                        <p className="font-medium">{result.visibility}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Posting Frequency</p>
+                        <p className="font-medium">{result.postingFrequency}</p>
+                      </div>
+                    </div>
+
+                    {result.notes.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">Key Findings</h3>
+                        <ul className="space-y-2 lg:space-y-1.5">
+                          {result.notes.map((note, i) => (
+                            <li key={i} className="flex items-start">
+                              <span className="text-green-500 mr-2">•</span>
+                              <span>{note}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Share Results Section - Moved to bottom of main content */}
+            </div>
+
+            {hasSidebar && (
+              <div className="lg:col-span-1 w-full">
+                <Card className="sticky top-4 max-h-[calc(100vh-6rem)] ... p-4 ...">
+                  <CardHeader className="border-b border-slate-700/50">
+                    <CardTitle className="text-base">Growth Opportunities</CardTitle>
+                    <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
+                      Personalized recommendations for @{result.username}
+                    </p>
+                  </CardHeader>
+                  <div className="flex-1 overflow-y-auto">
+                    <CardContent className="pb-6 lg:pb-4">
+                      <GrowthPaths
+                        result={{
+                          handle: result.username,
+                          platform: result.platform,
+                          confidence: result.confidenceScore,
+                          abnormalBehaviorRisk: result.abnormalBehaviorRisk as "Low" | "Medium" | "High",
+                          automationLikelihood: result.automationLikelihood as "Low" | "Medium" | "High",
+                        }}
+                      />
+                    </CardContent>
+                  </div>
+                </Card>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-12 lg:mt-8 space-y-8 lg:space-y-6">
+            <ShareResults 
+              platform={result.platform === 'instagram' ? 'Instagram' : 'Threads'}
+              username={result.username}
+              monetizationGap={18}
+            />
+            <div className="text-center text-sm text-slate-400 pt-4 lg:pt-3 border-t border-slate-800">
+              <p>{result.disclaimer}</p>
+            </div>
           </div>
         </div>
-      </div>
-    </main>
-  </>)
+      </main>
+    </>
+  )
 }
