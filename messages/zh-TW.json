@@ -30,6 +30,200 @@
   "results": {
     "title": "帳號分析結果",
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
+    "platform": {
+      "instagram": "Instagram",
+      "threads": "Threads"
+    },
+    "tone": {
+      "risk": "風險",
+      "warning": "警示",
+      "good": "良好"
+    },
+    "priority": {
+      "high": "高優先",
+      "medium": "中優先",
+      "maintain": "維持"
+    },
+    "badges": {
+      "demo": "示範資料／樣本輸出"
+    },
+    "overview": {
+      "kicker": "總覽",
+      "threadsNote": "Threads 相關洞察為根據內容節奏與互動重疊訊號的推論結果。"
+    },
+    "insights": {
+      "growthStrong": "偵測到強烈的互動訊號",
+      "growthUneven": "互動訊號看起來不太均衡",
+      "monetizationClear": "且具備明確的變現路徑",
+      "monetizationUnderutilized": "但變現準備度尚未充分發揮",
+      "automationAttention": "自動化風險訊號需要特別留意。",
+      "title": "帳號洞察",
+      "fields": {
+        "accountType": "帳號類型",
+        "accountAge": "帳號年資",
+        "visibility": "可見度",
+        "postingFrequency": "發文頻率"
+      },
+      "keyFindings": "重點發現"
+    },
+    "summary": {
+      "strengthEngagement": "優勢：互動品質",
+      "strengthConsistency": "優勢：帳號訊號一致性",
+      "bottleneckMonetization": "瓶頸：變現準備度",
+      "bottleneckAutomation": "瓶頸：自動化風險",
+      "bottleneckPrioritization": "瓶頸：優先順序",
+      "nextStepEngagement": "下一步：強化 Hook 與留言互動速度",
+      "nextStepAutomation": "下一步：降低自動化痕跡並穩定活躍節奏",
+      "nextStepExecute": "下一步：本週先執行前三項改善"
+    },
+    "copy": {
+      "summaryTitle": "帳號分析摘要",
+      "accountLabel": "帳號",
+      "platformLabel": "平台",
+      "primarySignals": "主要訊號",
+      "authenticity": "帳號真實度",
+      "engagement": "互動品質",
+      "automation": "自動化風險",
+      "recommendation": "建議",
+      "disclaimer": "本報告為根據公開訊號推論的分析結果，並非平台官方提供指標。"
+    },
+    "metrics": {
+      "authenticity": {
+        "title": "帳號真實度",
+        "desc": "根據公開互動模式推論，訊號與人類自然活動較一致。",
+        "note": "此為推論訊號，非身份驗證。"
+      },
+      "engagement": {
+        "title": "互動品質",
+        "desc": "依公開可觀察的互動深度、留言結構與一致性評估。"
+      },
+      "automation": {
+        "title": "自動化風險",
+        "desc": "根據時間分佈與互動訊號推估異常或自動化活動的可能性。"
+      }
+    },
+    "toast": {
+      "summarySoon": "摘要面板即將推出",
+      "summaryCopied": "已複製摘要",
+      "linkCopied": "已複製連結",
+      "exported": "已匯出 .txt",
+      "copyFailed": "複製失敗",
+      "comingSoon": "價格頁即將推出",
+      "connectSoon": "OAuth 串接完成後會開放連結流程"
+    },
+    "performance": {
+      "kicker": "表現總覽",
+      "title": "帳號在關鍵成長維度的表現",
+      "cardTitle": "表現總覽",
+      "radarTitle": "雷達圖與訊號摘要",
+      "radarDesc": "彙整真實度、互動、內容一致性與風險等成長訊號。",
+      "howToInterpret": "解讀方式：優先改善最低的維度，通常它會限制整體成長。"
+    },
+    "scores": {
+      "risk": "風險",
+      "confidenceScore": "信心分數",
+      "level": {
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      },
+      "radar": {
+        "content": "內容",
+        "engagement": "互動",
+        "frequency": "頻率",
+        "growth": "成長",
+        "monetization": "變現"
+      },
+      "cards": {
+        "authenticity": {
+          "title": "帳號真實度",
+          "desc": "依行為模式推估帳號看起來是否自然、真實。"
+        },
+        "engagement": {
+          "title": "互動品質",
+          "desc": "評估互動的品質與真實性。"
+        },
+        "automation": {
+          "title": "自動化風險",
+          "desc": "顯示可能存在自動化行為的機率。"
+        }
+      },
+      "overview": {
+        "title": "帳號強度總覽",
+        "subtitle": "關鍵績效指標的視覺化呈現"
+      },
+      "kpis": {
+        "title": "關鍵績效分數",
+        "subtitle": "表現指標的細項拆解",
+        "items": {
+          "growthPotential": {
+            "label": "成長潛力",
+            "desc": "根據目前指標推估受眾成長的可能性"
+          },
+          "commercialValue": {
+            "label": "商業價值",
+            "desc": "對潛在贊助商與廣告主的吸引力"
+          },
+          "collaborationReadiness": {
+            "label": "合作準備度",
+            "desc": "進行品牌合作與聯名的適配程度"
+          }
+        }
+      }
+    },
+    "monetization": {
+      "title": "變現準備度",
+      "subtitle": "根據相似公開創作者檔案的歷史模式推估。",
+      "paywall": {
+        "stat": "只有約 18% 的相似帳號能穩定變現。",
+        "desc": "適合想要可複製營收路徑、同時不犧牲成長的創作者與團隊。",
+        "unlocks": "解鎖內容",
+        "items": {
+          "growthLevers": "個人化成長槓桿",
+          "timing": "變現時機洞察",
+          "optimizations": "平台專屬最佳化建議",
+          "actionPlan": "接下來 14 天的優先行動計畫"
+        },
+        "cta": "解鎖完整變現路線圖",
+        "note": "你會拿到清楚的計畫、優先順序與平台專屬行動。"
+      }
+    },
+    "sidebar": {
+      "title": "成長機會",
+      "subtitle": "為你量身打造的建議："
+    },
+    "next": {
+      "title": "建議的下一步行動",
+      "subtitle": "依最強訊號與目前限制整理的 3 步驟計畫。",
+      "step1": "第 1 步",
+      "step2": "第 2 步",
+      "step3": "第 3 步",
+      "s1": {
+        "title": "提升內容一致性",
+        "line1": "降低變異度以提升分發穩定性。",
+        "line2": "未來 7 天聚焦在可重複的格式與節奏。"
+      },
+      "s2": {
+        "title": "優化互動 Hook",
+        "line1": "提升早期留存與有效互動。",
+        "line2": "前兩行加入更明確的 CTA 與留言引導。"
+      },
+      "s3": {
+        "title": "啟動變現訊號",
+        "line1": "對齊內容、商品/服務與定位。",
+        "line2": "穩定加入方案/案例/引流素材等呼叫。"
+      }
+    },
+    "copyable": {
+      "title": "可複製摘要",
+      "subtitle": "分享給團隊或客戶的精簡快照。",
+      "copy": "複製",
+      "disclaimer": "分析基於公開可觀察資料、歷史模式與推論行為模型；不使用私人資料或直接存取帳號。"
+    },
+    "footer": {
+      "line": "創作者、代理商與成長團隊用來評估社群帳號潛力。",
+      "upgrade": "升級 Pro"
+    },
     "actions": {
       "analyzePost": "分析貼文",
       "copySummary": "複製摘要",
@@ -42,14 +236,6 @@
       "back": "返回",
       "backToHome": "回首頁"
     },
-    "toast": {
-      "summaryCopied": "已複製摘要",
-      "linkCopied": "已複製連結",
-      "exported": "已匯出 .txt",
-      "copyFailed": "複製失敗",
-      "comingSoon": "價格頁即將推出",
-      "connectSoon": "OAuth 串接完成後會開放連結流程"
-    },
     "states": {
       "loading": "正在分析帳號...",
       "noResultsTitle": "找不到分析結果",
@@ -60,6 +246,184 @@
     "title": "單篇貼文分析",
     "subtitle": "以公開可觀察訊號進行推論；官方貼文指標僅於明確授權後顯示。",
     "modeExplain": "A（推論）：基於公開可觀察訊號與模型推論。\nC（官方）：需官方授權後，才顯示平台提供指標。",
+    "platform": {
+      "instagram": "Instagram",
+      "threads": "Threads"
+    },
+    "level": {
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
+    "loading": {
+      "resultsTitle": "分析結果",
+      "resultsDesc": "正在整理推論訊號與建議草稿…"
+    },
+    "preview": {
+      "title": "貼文預覽",
+      "subtitle": "由你提供的連結推導出的預覽（示意）。",
+      "openOriginal": "開啟原始貼文",
+      "thumbnail": "縮圖（示意）",
+      "source": "來源",
+      "caption": "內文（示意）：",
+      "unknownSource": "（連結）",
+      "note1": "不進行圖片解析；此預覽僅為 UI 流程示意。",
+      "note2": "此預覽僅為版型模擬，不會抓取或解析貼文內容。"
+    },
+    "quick": {
+      "title": "快速建議",
+      "subtitle": "根據推論的卡點提供可展開的建議。",
+      "items": {
+        "a1": "把 Hook 說得更明確",
+        "a2": "加入更具體的 CTA",
+        "a3": "改善手機閱讀性"
+      },
+      "show": "展開",
+      "hide": "收合"
+    },
+    "unlock": {
+      "title": "解鎖官方貼文表現",
+      "badge": "官方（C）",
+      "subtitle": "完成授權即可查看平台提供的官方指標與基準對照（C 模式）。",
+      "bullets": {
+        "1": "實際觸及與曝光（官方）",
+        "2": "與帳號基準表現對比（官方）",
+        "3": "發佈時段與初期互動影響（官方）"
+      },
+      "connect": "連結 Instagram 帳號",
+      "note": "僅唯讀授權，不會發文、不會讀取私訊。"
+    },
+    "health": {
+      "title": "貼文健康度摘要",
+      "badge": "推論（A）",
+      "subtitle": "依公開可觀察訊號與模式推論的指標摘要。",
+      "note": "此段為推論建議，非官方後台指標。",
+      "status": {
+        "good": "良好",
+        "moderate": "普通",
+        "needsImprovement": "需改善"
+      },
+      "metrics": {
+        "hook": {
+          "title": "Hook 強度",
+          "detail": "訊號顯示首屏價值主張存在，但對陌生受眾可能不夠直接清楚。"
+        },
+        "clarity": {
+          "title": "內容清晰度",
+          "detail": "可能因措辭較密或焦點過多而提高理解成本。"
+        },
+        "readability": {
+          "title": "視覺可讀性",
+          "detail": "螢幕文字層級與對比可能不足，影響手機快速理解。"
+        },
+        "interaction": {
+          "title": "互動引導",
+          "detail": "可能受 CTA 位置影響；引導存在但強度不足以促發留言或收藏。"
+        },
+        "dropoff": {
+          "title": "流失風險",
+          "detail": "前幾秒回饋偏慢，可能提高早期滑走／略過的風險。"
+        }
+      }
+    },
+    "underperform": {
+      "title": "為什麼這篇可能表現不佳",
+      "subtitle": "以顧問式角度推論可能的限制（非指責、僅推論）。",
+      "reasons": {
+        "1": "開頭 Hook 可能無法在第一個可見畫面清楚傳達價值。",
+        "2": "視覺層級可能提高解讀成本，尤其在小螢幕上。",
+        "3": "互動引導存在，但可能不夠具體，難以帶動留言或收藏。"
+      }
+    },
+    "rewrite": {
+      "title": "可直接套用的改寫建議",
+      "subtitle": "依推論卡點提供可直接複製的改寫與視覺建議。",
+      "sections": {
+        "hooks": "Hook 改寫（3）",
+        "ctas": "CTA 改寫（2）",
+        "visuals": "視覺最佳化建議"
+      },
+      "version": "版本",
+      "option": "選項",
+      "hooks": {
+        "1": "如果你正在做 X，你會流失觸及——這裡有 10 秒修正法。",
+        "2": "多數創作者漏掉這個訊號；修好它，你的下一篇會更好。",
+        "3": "今天發文前先檢查這點——它可能影響分發。"
+      },
+      "ctas": {
+        "1": "留言「PLAN」我把檢查清單給你。",
+        "2": "先收藏下來，並告訴我你會先改哪一段。"
+      },
+      "visuals": {
+        "1": "第一行盡量控制在約 7 個字以內，並以單一關鍵字開頭。",
+        "2": "文字靠同一側對齊並提高對比，讓掃讀更快。",
+        "3": "每個畫面只保留一個主焦點，避免多重提示互相競爭。"
+      }
+    },
+    "official": {
+      "title": "官方貼文表現（C）",
+      "subtitle": "平台提供的官方指標",
+      "metrics": {
+        "reach": "觸及",
+        "impressions": "曝光",
+        "likes": "喜歡",
+        "comments": "留言"
+      },
+      "vsAvg": {
+        "title": "相較帳號平均",
+        "above": "高於平均",
+        "below": "低於平均",
+        "note": "授權後會以你近期貼文表現作為基準進行對照。"
+      }
+    },
+    "contrast": {
+      "title": "內容品質 vs 實際成效",
+      "subtitle": "對照推論品質與實際成果的差異",
+      "contentQuality": "內容品質",
+      "actualReach": "實際觸及",
+      "note": "這通常更像是分發或時機限制，而非內容品質本身的問題。"
+    },
+    "snapshot": {
+      "title": "可複製快照",
+      "subtitle": "可貼到文件或分享給客戶的精簡摘要。",
+      "short": "精簡",
+      "detailed": "詳細",
+      "copy": "複製",
+      "toast": {
+        "copied": "已複製",
+        "copyFailed": "複製失敗"
+      }
+    },
+    "copy": {
+      "snapshotTitle": "貼文分析快照",
+      "summaryTitle": "貼文分析 — 摘要",
+      "shortTitle": "貼文分析（A）— 推論快照",
+      "mode": "模式",
+      "modeHint": "A＝推論 / C＝授權後顯示官方",
+      "postUrl": "貼文連結",
+      "link": "連結",
+      "notProvided": "（未提供）",
+      "keySignals": "主要推論訊號",
+      "topSignals": "重點訊號",
+      "recommendations": "建議",
+      "officialSection": "官方貼文表現（平台提供）",
+      "vsAvg": "相較帳號平均",
+      "disclaimer": "A 模式分析基於公開可觀察訊號與推論模型；官方指標僅於使用者明確授權後顯示。",
+      "shortDisclaimer": "A 模式為推論分析；官方指標需授權後才會解鎖。",
+      "rec": {
+        "1": "1）讓首屏更明確",
+        "2": "2）加入更具體 CTA",
+        "3": "3）提升可讀性",
+        "4": "4）降低早期流失"
+      }
+    },
+    "export": {
+      "assumptions": "假設：僅推論（A 模式）",
+      "notOfficial": "除非明確授權 C 模式，否則不代表官方指標。"
+    },
+    "footer": {
+      "disclaimer": "A 模式分析基於公開可觀察訊號與推論模型；官方數據僅於使用者明確授權後讀取並顯示。"
+    },
     "mode": {
       "inferred": "A（推論）",
       "official": "C（官方）"

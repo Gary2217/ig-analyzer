@@ -153,36 +153,49 @@ export default function ResultsPage() {
       ? "warning"
       : "good"
 
+  const toneLabel = (label: string) => {
+    if (label === "Risk") return t("results.tone.risk")
+    if (label === "Warning") return t("results.tone.warning")
+    return t("results.tone.good")
+  }
+
   const headerInsight = (() => {
     const growth =
       safeResult.engagementQuality === "High"
-        ? "Strong engagement signals detected"
-        : "Engagement signals look uneven"
-    const monetization = isSubscribed ? "with clear monetization paths" : "but monetization readiness is underutilized"
+        ? t("results.insights.growthStrong")
+        : t("results.insights.growthUneven")
+    const monetization = isSubscribed
+      ? t("results.insights.monetizationClear")
+      : t("results.insights.monetizationUnderutilized")
     const risk =
-      safeResult.automationLikelihood === "High" ? "Automation risk signals require attention." : ""
+      safeResult.automationLikelihood === "High" ? t("results.insights.automationAttention") : ""
     return [growth, monetization, risk].filter(Boolean).join(", ")
   })()
 
   const reportSummaryLine = (() => {
-    const strength = safeResult.engagementQuality === "High" ? "Strength: engagement quality" : "Strength: consistent account signals"
+    const strength =
+      safeResult.engagementQuality === "High"
+        ? t("results.summary.strengthEngagement")
+        : t("results.summary.strengthConsistency")
     const bottleneck =
       !isSubscribed
-        ? "Bottleneck: monetization readiness"
+        ? t("results.summary.bottleneckMonetization")
         : safeResult.automationLikelihood === "High"
-        ? "Bottleneck: automation risk"
-        : "Bottleneck: prioritization"
+        ? t("results.summary.bottleneckAutomation")
+        : t("results.summary.bottleneckPrioritization")
     const nextStep =
       safeResult.engagementQuality === "Low"
-        ? "Next step: strengthen hooks and comment velocity"
+        ? t("results.summary.nextStepEngagement")
         : safeResult.automationLikelihood === "High"
-        ? "Next step: reduce automation patterns and stabilize activity"
-        : "Next step: execute the top three improvements this week"
+        ? t("results.summary.nextStepAutomation")
+        : t("results.summary.nextStepExecute")
     return `${strength} • ${bottleneck} • ${nextStep}.`
   })()
 
   const summaryText = (() => {
-    return `Account Analysis Summary\n\nAccount: @${safeResult.username}\nPlatform: ${safeResult.platform === "instagram" ? "Instagram" : "Threads"}\n\nPrimary signals\n- Account Authenticity: ${safeResult.confidenceScore}% (${authenticityStatus})\n- Engagement Quality: ${engagementPercent}% (${engagementStatus})\n- Automation Risk: ${automationRiskPercent}% (${automationStatus})\n\nRecommendation\n- ${reportSummaryLine}\n\nThis report reflects inferred analysis based on public signals, not official platform-provided metrics.\n`
+    return `${t("results.copy.summaryTitle")}\n\n${t("results.copy.accountLabel")}: @${safeResult.username}\n${t("results.copy.platformLabel")}: ${
+      safeResult.platform === "instagram" ? t("results.platform.instagram") : t("results.platform.threads")
+    }\n\n${t("results.copy.primarySignals")}\n- ${t("results.copy.authenticity")}: ${safeResult.confidenceScore}% (${authenticityStatus})\n- ${t("results.copy.engagement")}: ${engagementPercent}% (${engagementStatus})\n- ${t("results.copy.automation")}: ${automationRiskPercent}% (${automationStatus})\n\n${t("results.copy.recommendation")}\n- ${reportSummaryLine}\n\n${t("results.copy.disclaimer")}\n`
   })()
 
   const showToast = (message: string) => {
@@ -268,6 +281,12 @@ export default function ResultsPage() {
     showToast(t("results.toast.connectSoon"))
   }
 
+  const priorityLabel = (label: string) => {
+    if (label === "High priority") return t("results.priority.high")
+    if (label === "Medium priority") return t("results.priority.medium")
+    return t("results.priority.maintain")
+  }
+
   return (
     <>
       <div aria-live="polite" className="sr-only">
@@ -305,10 +324,12 @@ export default function ResultsPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/5 text-slate-200 border border-white/10">
-                      Demo data / Sample output
+                      {t("results.badges.demo")}
                     </span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
-                      {safeResult.platform === "instagram" ? "Instagram" : "Threads"}
+                      {safeResult.platform === "instagram"
+                        ? t("results.platform.instagram")
+                        : t("results.platform.threads")}
                     </span>
                     <span className="text-[11px] text-slate-300 truncate">@{safeResult.username}</span>
                   </div>
@@ -369,12 +390,12 @@ export default function ResultsPage() {
             <CardContent className="p-6 sm:p-8">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-2">
-                  <div className="text-sm text-slate-300">Overview</div>
+                  <div className="text-sm text-slate-300">{t("results.overview.kicker")}</div>
                   <div className="text-3xl sm:text-4xl font-bold text-white tracking-tight">@{safeResult.username}</div>
                   <div className="text-sm text-slate-300 max-w-2xl">{headerInsight}</div>
                   {safeResult.platform === "threads" && (
                     <div className="text-xs text-slate-400 max-w-2xl">
-                      Threads-related insights are inferred from content cadence and engagement overlap signals.
+                      {t("results.overview.threadsNote")}
                     </div>
                   )}
                   <div className="text-sm text-slate-200/90 max-w-3xl">
@@ -392,7 +413,7 @@ export default function ResultsPage() {
                   <Button
                     variant="outline"
                     className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={() => showToast("Summary panel coming soon")}
+                    onClick={() => showToast(t("results.toast.summarySoon"))}
                   >
                     {t("results.actions.viewSummary")}
                   </Button>
@@ -401,63 +422,67 @@ export default function ResultsPage() {
 
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {(() => {
-                  const t = metricTone(authenticityStatus)
+                  const tone = metricTone(authenticityStatus)
                   return (
-                    <Card className={`rounded-xl border ${t.border} ${t.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}>
+                    <Card
+                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}
+                    >
                       <CardContent className="p-5 h-full flex flex-col justify-between">
                         <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-200">Account Authenticity</div>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${t.text} ${t.bg}`}>
-                            {t.label}
+                          <div className="text-sm text-slate-200">{t("results.metrics.authenticity.title")}</div>
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
+                          >
+                            {toneLabel(tone.label)}
                           </span>
                         </div>
                         <div className="mt-3 text-3xl font-bold text-white">{safeResult.confidenceScore}%</div>
-                        <div className="mt-1 text-sm text-slate-300">
-                          Signals consistent with organic human-like activity based on public engagement patterns.
-                        </div>
-                        <div className="mt-1 text-xs text-slate-400">
-                          This is an inferred signal, not a verification of identity.
-                        </div>
+                        <div className="mt-1 text-sm text-slate-300">{t("results.metrics.authenticity.desc")}</div>
+                        <div className="mt-1 text-xs text-slate-400">{t("results.metrics.authenticity.note")}</div>
                       </CardContent>
                     </Card>
                   )
                 })()}
 
                 {(() => {
-                  const t = metricTone(engagementStatus)
+                  const tone = metricTone(engagementStatus)
                   return (
-                    <Card className={`rounded-xl border ${t.border} ${t.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}>
+                    <Card
+                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}
+                    >
                       <CardContent className="p-5 h-full flex flex-col justify-between">
                         <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-200">Engagement Quality</div>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${t.text} ${t.bg}`}>
-                            {t.label}
+                          <div className="text-sm text-slate-200">{t("results.metrics.engagement.title")}</div>
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
+                          >
+                            {toneLabel(tone.label)}
                           </span>
                         </div>
                         <div className="mt-3 text-3xl font-bold text-white">{engagementPercent}%</div>
-                        <div className="mt-1 text-sm text-slate-300">
-                          Evaluated using publicly observable interaction depth, comment structure, and engagement consistency.
-                        </div>
+                        <div className="mt-1 text-sm text-slate-300">{t("results.metrics.engagement.desc")}</div>
                       </CardContent>
                     </Card>
                   )
                 })()}
 
                 {(() => {
-                  const t = metricTone(automationStatus)
+                  const tone = metricTone(automationStatus)
                   return (
-                    <Card className={`rounded-xl border ${t.border} ${t.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}>
+                    <Card
+                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}
+                    >
                       <CardContent className="p-5 h-full flex flex-col justify-between">
                         <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-200">Automation Risk</div>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${t.text} ${t.bg}`}>
-                            {t.label}
+                          <div className="text-sm text-slate-200">{t("results.metrics.automation.title")}</div>
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
+                          >
+                            {toneLabel(tone.label)}
                           </span>
                         </div>
                         <div className="mt-3 text-3xl font-bold text-white">{automationRiskPercent}%</div>
-                        <div className="mt-1 text-sm text-slate-300">
-                          Confidence score indicating likelihood of automated-like or abnormal activity patterns based on timing and interaction signals.
-                        </div>
+                        <div className="mt-1 text-sm text-slate-300">{t("results.metrics.automation.desc")}</div>
                       </CardContent>
                     </Card>
                   )
@@ -469,11 +494,11 @@ export default function ResultsPage() {
           <div className="mt-10 space-y-12">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-slate-300">Performance Overview</div>
-                <h2 className="text-xl sm:text-2xl font-semibold text-white">How your account performs across growth-critical dimensions</h2>
+                <div className="text-sm text-slate-300">{t("results.performance.kicker")}</div>
+                <h2 className="text-xl sm:text-2xl font-semibold text-white">{t("results.performance.title")}</h2>
               </div>
               <Button variant="ghost" onClick={() => router.back()} className="text-slate-200 hover:bg-white/5">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                <ArrowLeft className="mr-2 h-4 w-4" /> {t("results.actions.back")}
               </Button>
             </div>
 
@@ -483,19 +508,19 @@ export default function ResultsPage() {
                 <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                   <CardHeader className="border-b border-white/10">
                     <CardTitle className="text-2xl lg:text-2xl font-bold">
-                      Performance Overview
+                      {t("results.performance.cardTitle")}
                       <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/50 text-blue-300 border border-blue-800/50">
-                        {safeResult.platform === 'instagram' ? 'Instagram' : 'Threads'}
+                        {safeResult.platform === "instagram"
+                          ? t("results.platform.instagram")
+                          : t("results.platform.threads")}
                       </span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       <div>
-                        <div className="text-sm font-medium text-white">Radar & Signal Summary</div>
-                        <div className="text-sm text-slate-300">
-                          This section summarizes growth signals across authenticity, engagement, content consistency, and risk patterns.
-                        </div>
+                        <div className="text-sm font-medium text-white">{t("results.performance.radarTitle")}</div>
+                        <div className="text-sm text-slate-300">{t("results.performance.radarDesc")}</div>
                       </div>
                     <AccountScores 
                       result={{
@@ -508,7 +533,7 @@ export default function ResultsPage() {
                       }} 
                     />
                       <div className="pt-2 border-t border-white/10 text-sm text-slate-300">
-                        How to interpret: prioritize the lowest dimension first; it usually caps overall growth.
+                        {t("results.performance.howToInterpret")}
                       </div>
                     </div>
                   </CardContent>
@@ -516,11 +541,11 @@ export default function ResultsPage() {
 
                 <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                   <CardHeader className="border-b border-white/10">
-                    <CardTitle className="text-xl lg:text-xl font-bold">Monetization Readiness</CardTitle>
+                    <CardTitle className="text-xl lg:text-xl font-bold">{t("results.monetization.title")}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-xs text-slate-400 mb-3">
-                      Based on historical patterns observed across similar public creator profiles.
+                      {t("results.monetization.subtitle")}
                     </p>
                     <div className="relative rounded-xl border border-white/10 bg-white/5 p-5">
                       <div className={!isSubscribed ? "blur-sm pointer-events-none select-none" : undefined}>
@@ -536,18 +561,18 @@ export default function ResultsPage() {
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="space-y-3">
                                 <div className="text-sm text-slate-200">
-                                  Only 18% of accounts with this profile consistently monetize.
+                                  {t("results.monetization.paywall.stat")}
                                 </div>
                                 <div className="text-sm text-slate-300">
-                                  Best for creators and teams who want a repeatable revenue path without sacrificing growth.
+                                  {t("results.monetization.paywall.desc")}
                                 </div>
                                 <div className="pt-2">
-                                  <div className="text-xs text-slate-300">Unlocks</div>
+                                  <div className="text-xs text-slate-300">{t("results.monetization.paywall.unlocks")}</div>
                                   <ul className="mt-2 text-sm text-slate-200 space-y-2">
-                                    <li>Personalized growth levers</li>
-                                    <li>Monetization timing insights</li>
-                                    <li>Platform-specific optimization actions</li>
-                                    <li>Priority action plan for the next 14 days</li>
+                                    <li>{t("results.monetization.paywall.items.growthLevers")}</li>
+                                    <li>{t("results.monetization.paywall.items.timing")}</li>
+                                    <li>{t("results.monetization.paywall.items.optimizations")}</li>
+                                    <li>{t("results.monetization.paywall.items.actionPlan")}</li>
                                   </ul>
                                 </div>
                               </div>
@@ -556,7 +581,7 @@ export default function ResultsPage() {
                                   className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full lg:w-auto focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
                                   onClick={handleUpgrade}
                                 >
-                                  Unlock the full monetization roadmap
+                                  {t("results.monetization.paywall.cta")}
                                 </Button>
                                 <Button
                                   variant="outline"
@@ -566,7 +591,7 @@ export default function ResultsPage() {
                                   {t("results.actions.connect")}
                                 </Button>
                                 <div className="text-xs text-slate-300">
-                                  You’ll receive a clear plan, priorities, and platform-specific actions.
+                                  {t("results.monetization.paywall.note")}
                                 </div>
                               </div>
                             </div>
@@ -579,32 +604,32 @@ export default function ResultsPage() {
 
                 <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                   <CardHeader className="border-b border-white/10">
-                    <CardTitle className="text-xl lg:text-xl font-bold">Account Insights</CardTitle>
+                    <CardTitle className="text-xl lg:text-xl font-bold">{t("results.insights.title")}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4 lg:space-y-3">
                       <div className="grid grid-cols-2 gap-6 lg:gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">Account Type</p>
+                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountType")}</p>
                           <p className="font-medium">{safeResult.accountType}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Account Age</p>
+                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountAge")}</p>
                           <p className="font-medium">{safeResult.accountAge}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Visibility</p>
+                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.visibility")}</p>
                           <p className="font-medium">{safeResult.visibility}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Posting Frequency</p>
+                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.postingFrequency")}</p>
                           <p className="font-medium">{safeResult.postingFrequency}</p>
                         </div>
                       </div>
 
                       {safeResult.notes.length > 0 && (
                         <div>
-                          <h3 className="text-sm font-medium mb-2">Key Findings</h3>
+                          <h3 className="text-sm font-medium mb-2">{t("results.insights.keyFindings")}</h3>
                           <ul className="space-y-2 lg:space-y-1.5">
                             {safeResult.notes.map((note, i) => (
                               <li key={i} className="flex items-start">
@@ -626,9 +651,9 @@ export default function ResultsPage() {
                 <div className="lg:col-span-1 w-full">
                   <Card className="sticky top-4 max-h-[calc(100vh-6rem)] rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                     <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-base">Growth Opportunities</CardTitle>
+                      <CardTitle className="text-base">{t("results.sidebar.title")}</CardTitle>
                       <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
-                        Personalized recommendations for @{safeResult.username}
+                        {t("results.sidebar.subtitle")} @{safeResult.username}
                       </p>
                     </CardHeader>
                     <div className="flex-1 overflow-y-auto">
@@ -651,9 +676,9 @@ export default function ResultsPage() {
 
             <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
               <CardHeader className="border-b border-white/10">
-                <CardTitle className="text-xl lg:text-xl font-bold">Recommended Next Actions</CardTitle>
+                <CardTitle className="text-xl lg:text-xl font-bold">{t("results.next.title")}</CardTitle>
                 <p className="text-sm text-slate-400 mt-1">
-                  A focused 3-step plan mapped to the strongest signals and current constraints.
+                  {t("results.next.subtitle")}
                 </p>
               </CardHeader>
               <CardContent>
@@ -665,23 +690,24 @@ export default function ResultsPage() {
                         : safeResult.contentConsistency === "Mixed"
                         ? "warning"
                         : "risk"
-                    const t = metricTone(status)
-                    const priority = status === "risk" ? "High priority" : status === "warning" ? "Medium priority" : "Maintain"
+                    const tone = metricTone(status)
+                    const priority =
+                      status === "risk" ? "High priority" : status === "warning" ? "Medium priority" : "Maintain"
                     return (
                       <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                         <CardContent className="p-5 h-full">
                           <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium text-white">Step 1</div>
+                            <div className="text-sm font-medium text-white">{t("results.next.step1")}</div>
                             <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${t.text} ${t.bg}`}
+                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
                             >
-                              {priority}
+                              {priorityLabel(priority)}
                             </span>
                           </div>
-                          <div className="mt-2 text-base font-semibold text-white">Improve content consistency</div>
-                          <div className="mt-2 text-sm text-slate-300">Reduce variability to improve distribution.</div>
+                          <div className="mt-2 text-base font-semibold text-white">{t("results.next.s1.title")}</div>
+                          <div className="mt-2 text-sm text-slate-300">{t("results.next.s1.line1")}</div>
                           <div className="mt-1 text-sm text-slate-300">
-                            Focus on a repeatable format and cadence for the next 7 days.
+                            {t("results.next.s1.line2")}
                           </div>
                         </CardContent>
                       </Card>
@@ -690,25 +716,26 @@ export default function ResultsPage() {
 
                   {(() => {
                     const status = engagementStatus
-                    const t = metricTone(status)
-                    const priority = status === "risk" ? "High priority" : status === "warning" ? "Medium priority" : "Maintain"
+                    const tone = metricTone(status)
+                    const priority =
+                      status === "risk" ? "High priority" : status === "warning" ? "Medium priority" : "Maintain"
                     return (
                       <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                         <CardContent className="p-5 h-full">
                           <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium text-white">Step 2</div>
+                            <div className="text-sm font-medium text-white">{t("results.next.step2")}</div>
                             <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${t.text} ${t.bg}`}
+                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
                             >
-                              {priority}
+                              {priorityLabel(priority)}
                             </span>
                           </div>
-                          <div className="mt-2 text-base font-semibold text-white">Optimize engagement hooks</div>
+                          <div className="mt-2 text-base font-semibold text-white">{t("results.next.s2.title")}</div>
                           <div className="mt-2 text-sm text-slate-300">
-                            Increase early retention and qualified interactions.
+                            {t("results.next.s2.line1")}
                           </div>
                           <div className="mt-1 text-sm text-slate-300">
-                            Use clearer CTAs and comment prompts in the first 2 lines.
+                            {t("results.next.s2.line2")}
                           </div>
                         </CardContent>
                       </Card>
@@ -717,23 +744,23 @@ export default function ResultsPage() {
 
                   {(() => {
                     const status = isSubscribed ? "good" : "warning"
-                    const t = metricTone(status)
+                    const tone = metricTone(status)
                     const priority = status === "warning" ? "High priority" : "Maintain"
                     return (
                       <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                         <CardContent className="p-5 h-full">
                           <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium text-white">Step 3</div>
+                            <div className="text-sm font-medium text-white">{t("results.next.step3")}</div>
                             <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${t.text} ${t.bg}`}
+                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
                             >
-                              {priority}
+                              {priorityLabel(priority)}
                             </span>
                           </div>
-                          <div className="mt-2 text-base font-semibold text-white">Activate monetization signals</div>
-                          <div className="mt-2 text-sm text-slate-300">Align content, offers, and positioning.</div>
+                          <div className="mt-2 text-base font-semibold text-white">{t("results.next.s3.title")}</div>
+                          <div className="mt-2 text-sm text-slate-300">{t("results.next.s3.line1")}</div>
                           <div className="mt-1 text-sm text-slate-300">
-                            Introduce consistent callouts to offers, case studies, or lead magnets.
+                            {t("results.next.s3.line2")}
                           </div>
                         </CardContent>
                       </Card>
@@ -745,9 +772,9 @@ export default function ResultsPage() {
 
             <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
               <CardHeader className="border-b border-white/10">
-                <CardTitle className="text-xl lg:text-xl font-bold">Copyable Summary</CardTitle>
+                <CardTitle className="text-xl lg:text-xl font-bold">{t("results.copyable.title")}</CardTitle>
                 <p className="text-sm text-slate-400 mt-1">
-                  Share a compact snapshot with your team or clients.
+                  {t("results.copyable.subtitle")}
                 </p>
               </CardHeader>
               <CardContent>
@@ -762,11 +789,11 @@ export default function ResultsPage() {
                     onClick={handleCopySummary}
                     aria-busy={headerCopied ? true : undefined}
                   >
-                    Copy
+                    {t("results.copyable.copy")}
                   </Button>
                 </div>
                 <p className="mt-3 text-xs text-slate-400">
-                  Analysis is based on publicly observable data, historical patterns, and inferred behavioral models. No private data or direct account access is used.
+                  {t("results.copyable.disclaimer")}
                 </p>
               </CardContent>
             </Card>
@@ -783,12 +810,12 @@ export default function ResultsPage() {
             </div>
             <div className="mt-16 pt-8 border-t border-gray-800/50">
               <div className="text-center text-gray-400 text-sm">
-                <p>Used by creators, agencies, and growth teams to evaluate social account potential.</p>
+                <p>{t("results.footer.line")}</p>
                 <Button
                   className="mt-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
                   onClick={handleUpgrade}
                 >
-                  Upgrade to Pro
+                  {t("results.footer.upgrade")}
                 </Button>
               </div>
             </div>

@@ -30,6 +30,200 @@
   "results": {
     "title": "Account Analysis Results",
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
+    "platform": {
+      "instagram": "Instagram",
+      "threads": "Threads"
+    },
+    "tone": {
+      "risk": "Risk",
+      "warning": "Warning",
+      "good": "Good"
+    },
+    "priority": {
+      "high": "High priority",
+      "medium": "Medium priority",
+      "maintain": "Maintain"
+    },
+    "badges": {
+      "demo": "Demo data / Sample output"
+    },
+    "overview": {
+      "kicker": "Overview",
+      "threadsNote": "Threads-related insights are inferred from content cadence and engagement overlap signals."
+    },
+    "insights": {
+      "growthStrong": "Strong engagement signals detected",
+      "growthUneven": "Engagement signals look uneven",
+      "monetizationClear": "with clear monetization paths",
+      "monetizationUnderutilized": "but monetization readiness is underutilized",
+      "automationAttention": "Automation risk signals require attention.",
+      "title": "Account Insights",
+      "fields": {
+        "accountType": "Account Type",
+        "accountAge": "Account Age",
+        "visibility": "Visibility",
+        "postingFrequency": "Posting Frequency"
+      },
+      "keyFindings": "Key Findings"
+    },
+    "summary": {
+      "strengthEngagement": "Strength: engagement quality",
+      "strengthConsistency": "Strength: consistent account signals",
+      "bottleneckMonetization": "Bottleneck: monetization readiness",
+      "bottleneckAutomation": "Bottleneck: automation risk",
+      "bottleneckPrioritization": "Bottleneck: prioritization",
+      "nextStepEngagement": "Next step: strengthen hooks and comment velocity",
+      "nextStepAutomation": "Next step: reduce automation patterns and stabilize activity",
+      "nextStepExecute": "Next step: execute the top three improvements this week"
+    },
+    "copy": {
+      "summaryTitle": "Account Analysis Summary",
+      "accountLabel": "Account",
+      "platformLabel": "Platform",
+      "primarySignals": "Primary signals",
+      "authenticity": "Account Authenticity",
+      "engagement": "Engagement Quality",
+      "automation": "Automation Risk",
+      "recommendation": "Recommendation",
+      "disclaimer": "This report reflects inferred analysis based on public signals, not official platform-provided metrics."
+    },
+    "metrics": {
+      "authenticity": {
+        "title": "Account Authenticity",
+        "desc": "Signals consistent with organic human-like activity based on public engagement patterns.",
+        "note": "This is an inferred signal, not a verification of identity."
+      },
+      "engagement": {
+        "title": "Engagement Quality",
+        "desc": "Evaluated using publicly observable interaction depth, comment structure, and engagement consistency."
+      },
+      "automation": {
+        "title": "Automation Risk",
+        "desc": "Confidence score indicating likelihood of automated-like or abnormal activity patterns based on timing and interaction signals."
+      }
+    },
+    "toast": {
+      "summarySoon": "Summary panel coming soon",
+      "summaryCopied": "Summary copied",
+      "linkCopied": "Link copied",
+      "exported": "Exported .txt",
+      "copyFailed": "Copy failed",
+      "comingSoon": "Pricing page coming soon",
+      "connectSoon": "Connect flow will be enabled after OAuth setup"
+    },
+    "performance": {
+      "kicker": "Performance Overview",
+      "title": "How your account performs across growth-critical dimensions",
+      "cardTitle": "Performance Overview",
+      "radarTitle": "Radar & Signal Summary",
+      "radarDesc": "This section summarizes growth signals across authenticity, engagement, content consistency, and risk patterns.",
+      "howToInterpret": "How to interpret: prioritize the lowest dimension first; it usually caps overall growth."
+    },
+    "scores": {
+      "risk": "Risk",
+      "confidenceScore": "confidence score",
+      "level": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "radar": {
+        "content": "Content",
+        "engagement": "Engagement",
+        "frequency": "Frequency",
+        "growth": "Growth",
+        "monetization": "Monetization"
+      },
+      "cards": {
+        "authenticity": {
+          "title": "Account Authenticity",
+          "desc": "Measures how authentic the account appears based on behavior patterns."
+        },
+        "engagement": {
+          "title": "Engagement Quality",
+          "desc": "Evaluates the quality and authenticity of engagement."
+        },
+        "automation": {
+          "title": "Automation Risk",
+          "desc": "Indicates likelihood of automated behavior."
+        }
+      },
+      "overview": {
+        "title": "Account Strength Overview",
+        "subtitle": "Visual representation of key performance indicators"
+      },
+      "kpis": {
+        "title": "Key Performance Scores",
+        "subtitle": "Detailed breakdown of performance metrics",
+        "items": {
+          "growthPotential": {
+            "label": "Growth Potential",
+            "desc": "Potential for audience growth based on current metrics"
+          },
+          "commercialValue": {
+            "label": "Commercial Value",
+            "desc": "Attractiveness to potential sponsors and advertisers"
+          },
+          "collaborationReadiness": {
+            "label": "Collaboration Readiness",
+            "desc": "Suitability for brand partnerships and collaborations"
+          }
+        }
+      }
+    },
+    "monetization": {
+      "title": "Monetization Readiness",
+      "subtitle": "Based on historical patterns observed across similar public creator profiles.",
+      "paywall": {
+        "stat": "Only 18% of accounts with this profile consistently monetize.",
+        "desc": "Best for creators and teams who want a repeatable revenue path without sacrificing growth.",
+        "unlocks": "Unlocks",
+        "items": {
+          "growthLevers": "Personalized growth levers",
+          "timing": "Monetization timing insights",
+          "optimizations": "Platform-specific optimization actions",
+          "actionPlan": "Priority action plan for the next 14 days"
+        },
+        "cta": "Unlock the full monetization roadmap",
+        "note": "You’ll receive a clear plan, priorities, and platform-specific actions."
+      }
+    },
+    "sidebar": {
+      "title": "Growth Opportunities",
+      "subtitle": "Personalized recommendations for"
+    },
+    "next": {
+      "title": "Recommended Next Actions",
+      "subtitle": "A focused 3-step plan mapped to the strongest signals and current constraints.",
+      "step1": "Step 1",
+      "step2": "Step 2",
+      "step3": "Step 3",
+      "s1": {
+        "title": "Improve content consistency",
+        "line1": "Reduce variability to improve distribution.",
+        "line2": "Focus on a repeatable format and cadence for the next 7 days."
+      },
+      "s2": {
+        "title": "Optimize engagement hooks",
+        "line1": "Increase early retention and qualified interactions.",
+        "line2": "Use clearer CTAs and comment prompts in the first 2 lines."
+      },
+      "s3": {
+        "title": "Activate monetization signals",
+        "line1": "Align content, offers, and positioning.",
+        "line2": "Introduce consistent callouts to offers, case studies, or lead magnets."
+      }
+    },
+    "copyable": {
+      "title": "Copyable Summary",
+      "subtitle": "Share a compact snapshot with your team or clients.",
+      "copy": "Copy",
+      "disclaimer": "Analysis is based on publicly observable data, historical patterns, and inferred behavioral models. No private data or direct account access is used."
+    },
+    "footer": {
+      "line": "Used by creators, agencies, and growth teams to evaluate social account potential.",
+      "upgrade": "Upgrade to Pro"
+    },
     "actions": {
       "analyzePost": "Analyze a Post",
       "copySummary": "Copy Summary",
@@ -42,14 +236,6 @@
       "back": "Back",
       "backToHome": "Back to Home"
     },
-    "toast": {
-      "summaryCopied": "Summary copied",
-      "linkCopied": "Link copied",
-      "exported": "Exported .txt",
-      "copyFailed": "Copy failed",
-      "comingSoon": "Pricing page coming soon",
-      "connectSoon": "Connect flow will be enabled after OAuth setup"
-    },
     "states": {
       "loading": "Analyzing account...",
       "noResultsTitle": "No analysis results found",
@@ -60,6 +246,184 @@
     "title": "Single Post Analysis",
     "subtitle": "Inferred insights from public signals. Official post metrics are only shown after explicit platform authorization.",
     "modeExplain": "A (Inferred): based on public observable signals and inferred models.\nC (Official): shown only after explicit platform authorization.",
+    "platform": {
+      "instagram": "Instagram",
+      "threads": "Threads"
+    },
+    "level": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "loading": {
+      "resultsTitle": "Results",
+      "resultsDesc": "Preparing inferred signals and draft recommendations…"
+    },
+    "preview": {
+      "title": "Post Preview",
+      "subtitle": "Preview (mock) derived from the provided link.",
+      "openOriginal": "Open original",
+      "thumbnail": "Thumbnail (mock)",
+      "source": "Source",
+      "caption": "Caption (mock):",
+      "unknownSource": "(link)",
+      "note1": "No image parsing is performed. This preview is a placeholder for UI flow.",
+      "note2": "This preview is UI-only and does not fetch or parse the post content."
+    },
+    "quick": {
+      "title": "Quick Recommendations",
+      "subtitle": "Expandable suggestions based on inferred friction points.",
+      "items": {
+        "a1": "Make the hook explicit",
+        "a2": "Add a specific CTA",
+        "a3": "Improve readability on mobile"
+      },
+      "show": "Show",
+      "hide": "Hide"
+    },
+    "unlock": {
+      "title": "Unlock official post performance",
+      "badge": "Official (C)",
+      "subtitle": "Authorize to view platform-provided metrics and benchmarks (C mode).",
+      "bullets": {
+        "1": "Actual reach and impressions (official)",
+        "2": "Compared to account baseline (official)",
+        "3": "Timing and early interactions (official)"
+      },
+      "connect": "Connect Instagram Account",
+      "note": "Read-only authorization. No posting and no DM access."
+    },
+    "health": {
+      "title": "Post Health Summary",
+      "badge": "Inferred (A)",
+      "subtitle": "Inferred indicators based on publicly observable signals and patterns.",
+      "note": "This section is inferred guidance, not official analytics.",
+      "status": {
+        "good": "Good",
+        "moderate": "Moderate",
+        "needsImprovement": "Needs Improvement"
+      },
+      "metrics": {
+        "hook": {
+          "title": "Hook Strength",
+          "detail": "Signals suggest the first-frame value proposition is present but may not be explicit enough for cold viewers."
+        },
+        "clarity": {
+          "title": "Content Clarity",
+          "detail": "Likely impacted by dense phrasing or competing focal points that increase cognitive load."
+        },
+        "readability": {
+          "title": "Visual Readability",
+          "detail": "Signals suggest on-screen text hierarchy and contrast may reduce fast comprehension on mobile."
+        },
+        "interaction": {
+          "title": "Interaction Cues",
+          "detail": "Likely impacted by CTA placement; the cue exists but may not be strong enough to trigger comments or saves."
+        },
+        "dropoff": {
+          "title": "Drop-off Risk",
+          "detail": "Signals suggest early-scrolling or swipe-away risk due to delayed payoff within the first seconds."
+        }
+      }
+    },
+    "underperform": {
+      "title": "Why This Post May Underperform",
+      "subtitle": "Consultant-style diagnosis based on likely constraints (non-accusatory, inferred).",
+      "reasons": {
+        "1": "The initial hook may not clearly communicate the value within the first visible frame.",
+        "2": "Visual hierarchy may increase interpretation cost, especially on small screens.",
+        "3": "Interaction prompts are present, but likely not specific enough to drive replies or saves."
+      }
+    },
+    "rewrite": {
+      "title": "Actionable Rewrite Suggestions",
+      "subtitle": "Copy-ready rewrites and visual guidance based on inferred friction points.",
+      "sections": {
+        "hooks": "Hook rewrites (3)",
+        "ctas": "CTA rewrites (2)",
+        "visuals": "Visual optimization suggestions"
+      },
+      "version": "Version",
+      "option": "Option",
+      "hooks": {
+        "1": "If you're doing X, you're losing reach — here's the 10‑second fix.",
+        "2": "Most creators miss this one signal. Fix it, and your next post performs better.",
+        "3": "Before you post today, check this — it likely affects distribution."
+      },
+      "ctas": {
+        "1": "Comment 'PLAN' and I'll share the checklist.",
+        "2": "Save this for your next post — and tell me which part you'd improve first."
+      },
+      "visuals": {
+        "1": "Keep the first on-screen line under ~7 words and lead with a single keyword.",
+        "2": "Align text to one edge and increase contrast for fast scanning.",
+        "3": "Use one primary focal point per frame; avoid competing callouts."
+      }
+    },
+    "official": {
+      "title": "Official Post Performance (C)",
+      "subtitle": "Official platform-provided metrics",
+      "metrics": {
+        "reach": "Reach",
+        "impressions": "Impressions",
+        "likes": "Likes",
+        "comments": "Comments"
+      },
+      "vsAvg": {
+        "title": "Compared to account average",
+        "above": "Above Avg",
+        "below": "Below Avg",
+        "note": "Benchmarking uses your recent post baseline after authorization."
+      }
+    },
+    "contrast": {
+      "title": "Content Quality vs Actual Performance",
+      "subtitle": "A diagnostic contrast between inferred quality and observed outcomes",
+      "contentQuality": "Content Quality",
+      "actualReach": "Actual Reach",
+      "note": "This suggests distribution or timing constraints rather than content quality issues."
+    },
+    "snapshot": {
+      "title": "Copyable Snapshot",
+      "subtitle": "A compact summary you can paste into a doc or share with a client.",
+      "short": "Short",
+      "detailed": "Detailed",
+      "copy": "Copy",
+      "toast": {
+        "copied": "Copied",
+        "copyFailed": "Copy failed"
+      }
+    },
+    "copy": {
+      "snapshotTitle": "Post Analysis Snapshot",
+      "summaryTitle": "Post Analysis — Summary",
+      "shortTitle": "Post Analysis (A) — Inferred snapshot",
+      "mode": "Mode",
+      "modeHint": "A = inferred / C = official after authorization",
+      "postUrl": "Post URL",
+      "link": "Link",
+      "notProvided": "(not provided)",
+      "keySignals": "Key inferred signals",
+      "topSignals": "Top signals",
+      "recommendations": "Recommendations",
+      "officialSection": "Official post performance (platform-provided)",
+      "vsAvg": "vs account average",
+      "disclaimer": "Analysis in A mode is based on publicly observable signals and inferred models. Official metrics are only shown after explicit platform authorization.",
+      "shortDisclaimer": "A-mode is inferred from public signals. Official metrics unlock after authorization.",
+      "rec": {
+        "1": "1) Make the first frame explicit",
+        "2": "2) Add a specific CTA",
+        "3": "3) Improve readability",
+        "4": "4) Reduce early drop-off risk"
+      }
+    },
+    "export": {
+      "assumptions": "Assumptions: inferred only (A mode)",
+      "notOfficial": "Not official metrics unless C mode is explicitly authorized."
+    },
+    "footer": {
+      "disclaimer": "A-mode analysis is based on publicly observable signals and inferred models. Official metrics are read and shown only after explicit authorization."
+    },
     "mode": {
       "inferred": "A (Inferred)",
       "official": "C (Official)"
