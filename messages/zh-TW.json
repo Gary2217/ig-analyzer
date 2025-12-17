@@ -1,0 +1,109 @@
+{
+  "home": {
+    "hero": {
+      "title": "Instagram 與 Threads 帳號分析器",
+      "subtitle": "示範用模擬工具：不會存取任何 Instagram / Threads 真實資料。"
+    },
+    "tabs": {
+      "instagram": "Instagram",
+      "threads": "Threads"
+    },
+    "input": {
+      "placeholder": "輸入 @username（示範用）"
+    },
+    "cta": {
+      "analyzeAccount": "分析帳號",
+      "analyzingAccount": "分析中…（模擬）",
+      "analyzePost": "分析貼文"
+    },
+    "helper": {
+      "postAnalysisNote": "貼文分析不需登入；官方指標需授權後才會解鎖。"
+    },
+    "alerts": {
+      "missingUsernameTitle": "缺少使用者名稱",
+      "missingUsernameDesc": "請輸入公開的使用者名稱（示範用）。"
+    },
+    "loading": {
+      "analyzing": "正在分析帳號..."
+    }
+  },
+  "results": {
+    "title": "帳號分析結果",
+    "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
+    "actions": {
+      "analyzePost": "分析貼文",
+      "copySummary": "複製摘要",
+      "copied": "已複製",
+      "export": "匯出",
+      "share": "分享",
+      "upgrade": "升級 Pro",
+      "viewSummary": "查看摘要",
+      "connect": "連結（OAuth）",
+      "back": "返回",
+      "backToHome": "回首頁"
+    },
+    "toast": {
+      "summaryCopied": "已複製摘要",
+      "linkCopied": "已複製連結",
+      "exported": "已匯出 .txt",
+      "copyFailed": "複製失敗",
+      "comingSoon": "價格頁即將推出",
+      "connectSoon": "OAuth 串接完成後會開放連結流程"
+    },
+    "states": {
+      "loading": "正在分析帳號...",
+      "noResultsTitle": "找不到分析結果",
+      "noResultsDesc": "目前沒有可用的分析結果，請重新分析一次。"
+    }
+  },
+  "post": {
+    "title": "單篇貼文分析",
+    "subtitle": "以公開可觀察訊號進行推論；官方貼文指標僅於明確授權後顯示。",
+    "modeExplain": "A（推論）：基於公開可觀察訊號與模型推論。\nC（官方）：需官方授權後，才顯示平台提供指標。",
+    "mode": {
+      "inferred": "A（推論）",
+      "official": "C（官方）"
+    },
+    "toast": {
+      "summaryCopied": "已複製摘要",
+      "linkCopied": "已複製連結",
+      "exported": "已匯出 .txt",
+      "copyFailed": "複製失敗"
+    },
+    "header": {
+      "title": "貼文分析結果",
+      "badge": "貼文分析",
+      "backToAccount": "回到帳號分析",
+      "copySummary": "複製摘要",
+      "export": "匯出",
+      "share": "分享",
+      "copied": "已複製"
+    },
+    "input": {
+      "sectionTitle": "1）輸入",
+      "sectionSubtitle": "貼上 Instagram 或 Threads 的貼文連結。",
+      "label": "貼文連結",
+      "placeholder": "https://www.instagram.com/p/... 或 https://www.threads.net/...",
+      "analyze": "開始分析",
+      "analyzing": "正在分析公開訊號…",
+      "hint": "A 模式為推論分析；官方指標僅於授權後顯示。",
+      "pasteToBegin": "貼上貼文連結即可開始。",
+      "invalidUrl": "連結格式可能不正確：請確認包含 instagram.com 或 threads.net。"
+    }
+  },
+  "footer": {
+    "brand": "IG Analyzer",
+    "disclaimer": "本工具提供推論與示範輸出，不保證正確；官方數據需使用者明確授權後才會讀取並顯示；本工具不隸屬 IG/Threads/Meta。",
+    "compliance": "建議你依實際使用情境自行確認合規要求，必要時可諮詢專業法律意見。",
+    "links": {
+      "terms": "服務條款",
+      "privacy": "隱私權",
+      "contact": "聯絡我們"
+    }
+  },
+  "language": {
+    "current": "語言",
+    "zhTW": "繁體中文",
+    "en": "English"
+  }
+}

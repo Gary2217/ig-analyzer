@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { RadarChartComponent } from "@/components/ui/radar-chart"
-import { ProgressBar } from "@/components/ui/progress-bar"
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
+import { RadarChartComponent } from "./ui/radar-chart"
+import { ProgressBar } from "./ui/progress-bar"
 
 interface ScoreCardProps {
   title: string

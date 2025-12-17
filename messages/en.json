@@ -1,0 +1,109 @@
+{
+  "home": {
+    "hero": {
+      "title": "Instagram & Threads Account Analyzer",
+      "subtitle": "Demo simulation. No real Instagram or Threads data is accessed."
+    },
+    "tabs": {
+      "instagram": "Instagram",
+      "threads": "Threads"
+    },
+    "input": {
+      "placeholder": "Enter @username (demo only)"
+    },
+    "cta": {
+      "analyzeAccount": "Analyze an Account",
+      "analyzingAccount": "Analyzing… (simulated)",
+      "analyzePost": "Analyze a Post"
+    },
+    "helper": {
+      "postAnalysisNote": "Post analysis works without login. Official metrics unlock after authorization."
+    },
+    "alerts": {
+      "missingUsernameTitle": "Missing username",
+      "missingUsernameDesc": "Please enter a public username (demo only)."
+    },
+    "loading": {
+      "analyzing": "Analyzing account..."
+    }
+  },
+  "results": {
+    "title": "Account Analysis Results",
+    "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
+    "actions": {
+      "analyzePost": "Analyze a Post",
+      "copySummary": "Copy Summary",
+      "copied": "Copied",
+      "export": "Export",
+      "share": "Share",
+      "upgrade": "Upgrade to Pro",
+      "viewSummary": "View Summary",
+      "connect": "Connect (OAuth)",
+      "back": "Back",
+      "backToHome": "Back to Home"
+    },
+    "toast": {
+      "summaryCopied": "Summary copied",
+      "linkCopied": "Link copied",
+      "exported": "Exported .txt",
+      "copyFailed": "Copy failed",
+      "comingSoon": "Pricing page coming soon",
+      "connectSoon": "Connect flow will be enabled after OAuth setup"
+    },
+    "states": {
+      "loading": "Analyzing account...",
+      "noResultsTitle": "No analysis results found",
+      "noResultsDesc": "We couldn't find any analysis results. Please try analyzing an account again."
+    }
+  },
+  "post": {
+    "title": "Single Post Analysis",
+    "subtitle": "Inferred insights from public signals. Official post metrics are only shown after explicit platform authorization.",
+    "modeExplain": "A (Inferred): based on public observable signals and inferred models.\nC (Official): shown only after explicit platform authorization.",
+    "mode": {
+      "inferred": "A (Inferred)",
+      "official": "C (Official)"
+    },
+    "toast": {
+      "summaryCopied": "Summary copied",
+      "linkCopied": "Link copied",
+      "exported": "Exported .txt",
+      "copyFailed": "Copy failed"
+    },
+    "header": {
+      "title": "Post Analysis Results",
+      "badge": "Post Analysis",
+      "backToAccount": "Back to Account Analysis",
+      "copySummary": "Copy Summary",
+      "export": "Export",
+      "share": "Share",
+      "copied": "Copied"
+    },
+    "input": {
+      "sectionTitle": "1) Input",
+      "sectionSubtitle": "Paste an Instagram or Threads post link.",
+      "label": "Post Link",
+      "placeholder": "https://www.instagram.com/p/... or https://www.threads.net/...",
+      "analyze": "Analyze Post",
+      "analyzing": "Analyzing public signals…",
+      "hint": "A-mode is inferred from public signals. Official metrics unlock after authorization.",
+      "pasteToBegin": "Paste a post link to begin.",
+      "invalidUrl": "The link may be invalid. Please include instagram.com or threads.net."
+    }
+  },
+  "footer": {
+    "brand": "IG Analyzer",
+    "disclaimer": "This tool provides inferred/demo output and does not guarantee accuracy. Official metrics are shown only after explicit authorization. This tool is not affiliated with IG/Threads/Meta.",
+    "compliance": "Please verify compliance requirements for your use case. Consider professional legal advice if needed.",
+    "links": {
+      "terms": "Terms",
+      "privacy": "Privacy",
+      "contact": "Contact"
+    }
+  },
+  "language": {
+    "current": "Language",
+    "zhTW": "繁體中文",
+    "en": "English"
+  }
+}

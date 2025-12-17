@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import GrowthPaths from "@/components/growth-paths"
+import { useI18n } from "../components/locale-provider"
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert"
+import GrowthPaths from "../components/growth-paths"
 
 type FakeAnalysis = {
   platform: "instagram" | "threads"
@@ -46,6 +47,7 @@ function pick<T>(arr: readonly T[]): T {
 }
 
 export default function Home() {
+  const { locale, t } = useI18n()
   const [username, setUsername] = useState("")
   const [platform, setPlatform] = useState<"instagram" | "threads">("instagram")
   const [loading, setLoading] = useState(false)
@@ -111,7 +113,7 @@ export default function Home() {
     setResult(null)
 
     if (!u) {
-      setAlert({ title: "Missing username", desc: "Please enter a public username (demo only)." })
+      setAlert({ title: t("home.alerts.missingUsernameTitle"), desc: t("home.alerts.missingUsernameDesc") })
       return
     }
 
@@ -131,7 +133,7 @@ export default function Home() {
       engagementQuality: result.engagementQuality
     })
     
-    router.push(`/results?${params.toString()}`)
+    router.push(`/${locale}/results?${params.toString()}`)
   }
 
   return (
@@ -139,9 +141,9 @@ export default function Home() {
       <Card className="w-full max-w-3xl">
         <CardHeader>
           <div className="text-xs tracking-widest text-muted-foreground">DEMO TOOL</div>
-          <CardTitle className="text-3xl">IG / Threads Account Analyzer (Simulated)</CardTitle>
+          <CardTitle className="text-3xl">{t("home.hero.title")}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            No real IG / Threads data is accessed. This is a demo simulation.
+            {t("home.hero.subtitle")}
           </p>
         </CardHeader>
 
@@ -153,35 +155,61 @@ export default function Home() {
             </Alert>
           )}
 
-          <div className="flex gap-2">
-            <Button
-              variant={platform === "instagram" ? "default" : "outline"}
-              onClick={() => setPlatform("instagram")}
-            >
-              Instagram
-            </Button>
-            <Button
-              variant={platform === "threads" ? "default" : "outline"}
-              onClick={() => setPlatform("threads")}
-            >
-              Threads
-            </Button>
-          </div>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            await handleAnalyze();
+          }} className="space-y-4">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={platform === "instagram" ? "default" : "outline"}
+                onClick={() => setPlatform("instagram")}
+              >
+                {t("home.tabs.instagram")}
+              </Button>
+              <Button
+                type="button"
+                variant={platform === "threads" ? "default" : "outline"}
+                onClick={() => setPlatform("threads")}
+              >
+                {t("home.tabs.threads")}
+              </Button>
+            </div>
 
-          <Input
-            placeholder="Enter @username (demo only)"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
+            <Input
+              placeholder={t("home.input.placeholder")}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
 
-          <Button className="w-full" onClick={handleAnalyze} disabled={loading}>
-            {loading ? "Analyzing… (simulated)" : "Analyze"}
-          </Button>
+            <div className="w-full overflow-hidden">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg"
+                  disabled={loading}
+                >
+                  {loading ? t("home.cta.analyzingAccount") : t("home.cta.analyzeAccount")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg"
+                  onClick={() => router.push(`/${locale}/post-analysis`)}
+                >
+                  {t("home.cta.analyzePost")}
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                {t("home.helper.postAnalysisNote")}
+              </div>
+            </div>
+          </form>
 
           {loading && (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-              <p>Analyzing account...</p>
+              <p>{t("home.loading.analyzing")}</p>
             </div>
           )}
         </CardContent>
