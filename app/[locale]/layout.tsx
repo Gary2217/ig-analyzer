@@ -1,5 +1,5 @@
 import { cookies } from "next/headers"
-import { LocaleProvider } from "../components/locale-provider"
+import { LocaleProvider } from "./components/locale-provider"
 import LocaleSwitcher from "../components/locale-switcher"
 import { loadMessages, type Locale } from "../lib/i18n"
 
@@ -8,7 +8,8 @@ export default async function LocaleLayout({
 }: {
   children: React.ReactNode
 }) {
-  const cookieLocale = cookies().get("locale")?.value
+  const cookieStore = await cookies()
+  const cookieLocale = cookieStore.get("locale")?.value
   const locale: Locale =
     cookieLocale === "zh-TW" || cookieLocale === "en"
       ? cookieLocale
