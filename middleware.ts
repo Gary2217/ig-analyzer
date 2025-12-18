@@ -35,33 +35,32 @@ function detectLocale(req: NextRequest): SupportedLocale {
   if (al.includes("zh-hant") || al.includes("zh-tw") || al.includes("zh-hk")) return "zh-TW"
   if (al.includes("ja")) return "ja"
 
-  // 4) fallback（你的主市場）
-  return "zh-TW"
+  // 4) fallback
+  return "en"
 }
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl
   if (shouldSkip(pathname)) return NextResponse.next()
 
-  // 已經有 locale prefix → 直接放行（避免 /zh-TW/zh-TW/...）
-  const firstSeg = pathname.split("/").filter(Boolean)[0] || ""
-  if (isSupportedLocale(firstSeg)) {
-    const res = NextResponse.next()
-    // 同步 cookie（讓使用者手動切換後可被記住）
-    const existing = req.cookies.get("locale")?.value
-    if (existing !== firstSeg) {
-      res.cookies.set("locale", firstSeg, { path: "/", maxAge: 60 * 60 * 24 * 365 })
-    }
+  if (pathname === "/") {
+    const url = req.nextUrl.clone()
+    url.pathname = "/en"
+    const res = NextResponse.redirect(url)
+    res.cookies.set("locale", "en", { path: "/", maxAge: 60 * 60 * 24 * 365 })
     return res
   }
 
+  // 已經有 locale prefix → 直接放行（避免 /zh-TW/zh-TW/...）
+  const firstSeg = pathname.split("/").filter(Boolean)[0] || ""
+  if (firstSeg === "en" || firstSeg === "zh-TW") return NextResponse.next()
+
   // 沒有 locale prefix → 導向 /{locale}{pathname}
-  const locale = detectLocale(req)
   const url = req.nextUrl.clone()
-  url.pathname = `/${locale}${pathname}`
+  url.pathname = `/en${pathname}`
   url.search = search
   const res = NextResponse.redirect(url)
-  res.cookies.set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365 })
+  res.cookies.set("locale", "en", { path: "/", maxAge: 60 * 60 * 24 * 365 })
   return res
 }
 

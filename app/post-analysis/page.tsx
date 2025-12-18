@@ -1,11 +1,12 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Input } from "../../components/ui/input"
+import { extractLocaleFromPathname, localeUrl } from "../lib/locale-path"
 
 type InferredStatus = "Good" | "Moderate" | "Needs Improvement"
 
@@ -15,28 +16,29 @@ type InferredMetric = {
   detail: string
 }
 
-function toneForStatus(status: InferredStatus): { label: string; classes: string } {
+function toneForStatus(status: InferredStatus): { labelKey: string; classes: string } {
   if (status === "Good") {
     return {
-      label: "Good",
+      labelKey: "post.health.status.good",
       classes: "bg-emerald-500/10 text-emerald-200 border-emerald-400/20",
     }
   }
   if (status === "Moderate") {
     return {
-      label: "Moderate",
+      labelKey: "post.health.status.moderate",
       classes: "bg-amber-500/10 text-amber-200 border-amber-400/20",
     }
   }
   return {
-    label: "Needs Improvement",
+    labelKey: "post.health.status.needsImprovement",
     classes: "bg-rose-500/10 text-rose-200 border-rose-400/20",
   }
 }
 
 export default function PostAnalysisPage() {
-  const { locale, t } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
+  const pathname = usePathname() || "/"
   const [postUrl, setPostUrl] = useState("")
   const [hasAnalysis, setHasAnalysis] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -46,6 +48,7 @@ export default function PostAnalysisPage() {
   const [headerCopied, setHeaderCopied] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [selectedHealthMetricIdx, setSelectedHealthMetricIdx] = useState(0)
   const [accordionOpen, setAccordionOpen] = useState<Record<string, boolean>>({
     a1: true,
     a2: false,
@@ -78,83 +81,87 @@ export default function PostAnalysisPage() {
   const inferredMetrics: InferredMetric[] = useMemo(
     () => [
       {
-        title: "Hook Strength",
+        title: t("post.health.metrics.hook.title"),
         status: "Moderate",
-        detail: "Signals suggest the first-frame value proposition is present but may not be explicit enough for cold viewers.",
+        detail: t("post.health.metrics.hook.detail"),
       },
       {
-        title: "Content Clarity",
+        title: t("post.health.metrics.clarity.title"),
         status: "Moderate",
-        detail: "Likely impacted by dense phrasing or competing focal points that increase cognitive load.",
+        detail: t("post.health.metrics.clarity.detail"),
       },
       {
-        title: "Visual Readability",
+        title: t("post.health.metrics.readability.title"),
         status: "Needs Improvement",
-        detail: "Signals suggest on-screen text hierarchy and contrast may reduce fast comprehension on mobile.",
+        detail: t("post.health.metrics.readability.detail"),
       },
       {
-        title: "Interaction Cues",
+        title: t("post.health.metrics.interaction.title"),
         status: "Moderate",
-        detail: "Likely impacted by CTA placement; the cue exists but may not be strong enough to trigger comments or saves.",
+        detail: t("post.health.metrics.interaction.detail"),
       },
       {
-        title: "Drop-off Risk",
+        title: t("post.health.metrics.dropoff.title"),
         status: "Needs Improvement",
-        detail: "Signals suggest early-scrolling or swipe-away risk due to delayed payoff within the first seconds.",
+        detail: t("post.health.metrics.dropoff.detail"),
       },
     ],
-    []
+    [t]
   )
 
   const postPreview = useMemo(() => {
-    const postTypes = ["Reel", "Carousel", "Photo"] as const
+    const postTypes = [
+      t("post.preview.postTypes.reel"),
+      t("post.preview.postTypes.carousel"),
+      t("post.preview.postTypes.photo"),
+    ] as const
     const idx = Math.abs(postUrl.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)) % postTypes.length
 
     const captions = [
-      "A quick breakdown of what most creators miss in the first 2 seconds…",
-      "If your post stalls early, this is usually the hidden bottleneck.",
-      "Before you post today, consider this one change to improve clarity.",
+      t("post.preview.captions.1"),
+      t("post.preview.captions.2"),
+      t("post.preview.captions.3"),
     ]
     const cidx = Math.abs(postUrl.split("").reduce((acc, c) => acc + c.charCodeAt(0) * 3, 0)) % captions.length
 
-    const times = ["Today · 2:14 PM", "Yesterday · 9:05 AM", "3 days ago · 7:42 PM"]
+    const times = [t("post.preview.times.1"), t("post.preview.times.2"), t("post.preview.times.3")]
     const tidx = Math.abs(postUrl.split("").reduce((acc, c) => acc + c.charCodeAt(0) * 7, 0)) % times.length
 
     return {
-      platformLabel: inferredPlatform === "instagram" ? "Instagram" : "Threads",
+      platformLabel: inferredPlatform === "instagram" ? t("post.platform.instagram") : t("post.platform.threads"),
       postType: postTypes[idx],
       captionSnippet: captions[cidx],
       postedTime: times[tidx],
     }
-  }, [inferredPlatform, postUrl])
+  }, [inferredPlatform, postUrl, t])
 
   const underperformReasons = useMemo(
     () => [
-      "The initial hook may not clearly communicate the value within the first visible frame.",
-      "Visual hierarchy may increase interpretation cost, especially on small screens.",
-      "Interaction prompts are present, but likely not specific enough to drive replies or saves.",
+      t("post.underperform.reasons.1"),
+      t("post.underperform.reasons.2"),
+      t("post.underperform.reasons.3"),
     ],
-    []
+    [t]
   )
 
   const rewriteSuggestions = useMemo(
     () => ({
       hooks: [
-        "If you're doing X, you're losing reach — here's the 10‑second fix.",
-        "Most creators miss this one signal. Fix it, and your next post performs better.",
-        "Before you post today, check this — it likely affects distribution.",
+        t("post.rewrite.hooks.1"),
+        t("post.rewrite.hooks.2"),
+        t("post.rewrite.hooks.3"),
       ],
       ctas: [
-        "Comment 'PLAN' and I'll share the checklist.",
-        "Save this for your next post — and tell me which part you'd improve first.",
+        t("post.rewrite.ctas.1"),
+        t("post.rewrite.ctas.2"),
       ],
       visuals: [
-        "Keep the first on-screen line under ~7 words and lead with a single keyword.",
-        "Align text to one edge and increase contrast for fast scanning.",
-        "Use one primary focal point per frame; avoid competing callouts.",
+        t("post.rewrite.visuals.1"),
+        t("post.rewrite.visuals.2"),
+        t("post.rewrite.visuals.3"),
       ],
     }),
-    []
+    [t]
   )
 
   const officialMetrics = useMemo(
@@ -171,34 +178,32 @@ export default function PostAnalysisPage() {
   )
 
   const copyBlock = useMemo(() => {
-    const base = `Post Analysis Snapshot\n\nMode: ${isConnected ? "C (Official Metrics)" : "A (Inferred)"}\nPost URL: ${postUrl || "(not provided)"}\n\nKey inferred signals\n- Hook Strength: ${inferredMetrics[0]?.status}\n- Content Clarity: ${inferredMetrics[1]?.status}\n- Visual Readability: ${inferredMetrics[2]?.status}\n- Interaction Cues: ${inferredMetrics[3]?.status}\n- Drop-off Risk: ${inferredMetrics[4]?.status}\n`
+    const base = `${t("post.copy.snapshotTitle")}\n\n${t("post.copy.mode")}: ${isConnected ? t("post.mode.official") : t("post.mode.inferred")}\n${t("post.copy.postUrl")}: ${postUrl || t("post.copy.notProvided")}\n\n${t("post.copy.keySignals")}\n- ${t("post.health.metrics.hook.title")}: ${inferredMetrics[0]?.status}\n- ${t("post.health.metrics.clarity.title")}: ${inferredMetrics[1]?.status}\n- ${t("post.health.metrics.readability.title")}: ${inferredMetrics[2]?.status}\n- ${t("post.health.metrics.interaction.title")}: ${inferredMetrics[3]?.status}\n- ${t("post.health.metrics.dropoff.title")}: ${inferredMetrics[4]?.status}\n`
 
     const c = isConnected
-      ? `\nOfficial post performance (platform-provided)\n- Reach: ${officialMetrics.reach}\n- Impressions: ${officialMetrics.impressions}\n- Likes / Comments: ${officialMetrics.likes} / ${officialMetrics.comments}\n- vs account average: ${officialMetrics.vsAvg}\n`
+      ? `\n${t("post.copy.officialSection")}\n- ${t("post.official.metrics.reach")}: ${officialMetrics.reach}\n- ${t("post.official.metrics.impressions")}: ${officialMetrics.impressions}\n- ${t("post.official.metrics.likes")} / ${t("post.official.metrics.comments")}: ${officialMetrics.likes} / ${officialMetrics.comments}\n- ${t("post.copy.vsAvg")}: ${officialMetrics.vsAvg}\n`
       : ""
 
-    const disclaimer =
-      "\nAnalysis in A mode is based on publicly observable signals and inferred models. Official metrics are only shown after explicit platform authorization.\n\nA 模式為推論分析；官方指標僅於授權後顯示。\n"
+    const disclaimer = `\n${t("post.copy.disclaimer")}\n\n${t("post.copy.shortDisclaimer")}\n`
 
     return `${base}${c}${disclaimer}`
-  }, [inferredMetrics, isConnected, officialMetrics, postUrl])
+  }, [inferredMetrics, isConnected, officialMetrics, postUrl, t])
 
   const shortCopyBlock = useMemo(() => {
     const lines = [
-      `Post Analysis (A) — Inferred snapshot`,
-      `Source: ${sourceDomain}`,
-      `Link: ${postUrl || "(not provided)"}`,
+      t("post.copy.shortTitle"),
+      `${t("post.preview.source")}: ${sourceDomain}`,
+      `${t("post.copy.link")}: ${postUrl || t("post.copy.notProvided")}`,
       "",
-      `Top signals`,
-      `- Hook: ${inferredMetrics[0]?.status}`,
-      `- Clarity: ${inferredMetrics[1]?.status}`,
-      `- Readability: ${inferredMetrics[2]?.status}`,
+      t("post.copy.topSignals"),
+      `- ${t("post.health.metrics.hook.title")}: ${inferredMetrics[0]?.status}`,
+      `- ${t("post.health.metrics.clarity.title")}: ${inferredMetrics[1]?.status}`,
+      `- ${t("post.health.metrics.readability.title")}: ${inferredMetrics[2]?.status}`,
       "",
-      "A-mode is inferred from public signals. Official metrics unlock after authorization.",
-      "A 模式為推論分析；官方指標僅於授權後顯示。",
+      t("post.copy.shortDisclaimer"),
     ]
     return `${lines.join("\n")}\n`
-  }, [inferredMetrics, postUrl, sourceDomain])
+  }, [inferredMetrics, postUrl, sourceDomain, t])
 
   const proSummaryText = useMemo(() => {
     const mode = isConnected ? "C（官方）" : "A（推論）"
@@ -309,7 +314,8 @@ export default function PostAnalysisPage() {
 
   const handleBackToResults = () => {
     const qs = typeof window !== "undefined" ? window.location.search : ""
-    router.push(`/${locale}/results${qs || ""}`)
+    const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
+    router.push(localeUrl("/results", activeLocale, qs))
   }
 
   const handleHeaderCopySummary = async () => {
@@ -370,7 +376,12 @@ export default function PostAnalysisPage() {
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
                   {inferredPlatform === "instagram" ? "Instagram" : "Threads"}
                 </span>
-                <span className="text-[11px] text-slate-300 truncate">{isConnected ? t("post.mode.official") : t("post.mode.inferred")}</span>
+                <span
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-200 border border-emerald-400/20"
+                  title="A = inferred / estimated. C = official / connected."
+                >
+                  {isConnected ? "Official (C)" : "Inferred (A)"}
+                </span>
               </div>
               <div className="text-sm font-semibold text-white truncate">{t("post.header.title")}</div>
             </div>
@@ -434,7 +445,7 @@ export default function PostAnalysisPage() {
                 {t("post.input.sectionSubtitle")}
               </p>
             </CardHeader>
-            <CardContent className="p-6 space-y-5">
+            <CardContent className="p-4 md:p-6 space-y-5">
               <div className="space-y-2">
                 <div className="text-sm font-medium text-white">{t("post.input.label")}</div>
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-center">
@@ -477,16 +488,16 @@ export default function PostAnalysisPage() {
             <div className="space-y-6">
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                 <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">Results</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">Preparing inferred signals and draft recommendations…</p>
+                  <CardTitle className="text-xl font-bold text-white">{t("post.loading.resultsTitle")}</CardTitle>
+                  <p className="text-sm text-slate-400 mt-1">{t("post.loading.resultsDesc")}</p>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-pulse">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
                       <div className="h-4 w-32 bg-white/10 rounded" />
                       <div className="mt-3 h-24 bg-white/10 rounded" />
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
                       <div className="h-4 w-40 bg-white/10 rounded" />
                       <div className="mt-3 space-y-2">
                         <div className="h-3 w-full bg-white/10 rounded" />
@@ -506,8 +517,8 @@ export default function PostAnalysisPage() {
                 <CardHeader className="border-b border-white/10">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <CardTitle className="text-xl font-bold text-white">Post Preview</CardTitle>
-                      <p className="text-sm text-slate-400 mt-1">Preview (mock) derived from the provided link.</p>
+                      <CardTitle className="text-xl font-bold text-white">{t("post.preview.title")}</CardTitle>
+                      <p className="text-sm text-slate-400 mt-1">{t("post.preview.subtitle")}</p>
                     </div>
                     <a
                       href={postUrl}
@@ -515,18 +526,18 @@ export default function PostAnalysisPage() {
                       rel="noopener noreferrer"
                       className="text-xs text-blue-200 hover:text-blue-100 underline underline-offset-4 shrink-0 mt-1 break-all"
                     >
-                      Open original
+                      {t("post.preview.openOriginal")}
                     </a>
                   </div>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-6">
                   <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
                     <div className="w-full max-w-[260px]">
                       <div className="aspect-[4/5] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
                         <div className="relative text-slate-300">
                           <div className="mx-auto h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
-                          <div className="mt-2 text-xs">Thumbnail (mock)</div>
+                          <div className="mt-2 text-xs">{t("post.preview.thumbnail")}</div>
                         </div>
                       </div>
                     </div>
@@ -541,18 +552,18 @@ export default function PostAnalysisPage() {
                         <span className="text-[11px] text-slate-400">{postPreview.postedTime}</span>
                       </div>
                       <div className="text-xs text-slate-400">
-                        <span className="text-slate-500">Source:</span> {sourceDomain}
+                        <span className="text-slate-500">{t("post.preview.source")}:</span> {sourceDomain}
                       </div>
-                      <div className="text-xs text-slate-300 break-all">{postUrl || "(not provided)"}</div>
+                      <div className="text-xs text-slate-300 break-all">{postUrl || t("post.copy.notProvided")}</div>
                       <div className="text-sm text-slate-200">
-                        <span className="text-slate-400">Caption (mock): </span>
+                        <span className="text-slate-400">{t("post.preview.caption")} </span>
                         {postPreview.captionSnippet}
                       </div>
                       <div className="text-xs text-slate-400">
-                        No image parsing is performed. This preview is a placeholder for UI flow.
+                        {t("post.preview.note1")}
                       </div>
                       <div className="text-xs text-slate-400">
-                        貼文預覽為版型模擬，不進行圖片解析或實際內容擷取。
+                        {t("post.preview.note2")}
                       </div>
                     </div>
                   </div>
@@ -561,25 +572,25 @@ export default function PostAnalysisPage() {
 
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                 <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">Quick Recommendations</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">Expandable suggestions based on inferred friction points.</p>
+                  <CardTitle className="text-xl font-bold text-white">{t("post.quick.title")}</CardTitle>
+                  <p className="text-sm text-slate-400 mt-1">{t("post.quick.subtitle")}</p>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-6">
                   <div className="space-y-3">
                     {([
                       {
                         id: "a1",
-                        title: "Make the hook explicit",
+                        title: t("post.quick.items.a1"),
                         body: rewriteSuggestions.hooks[0],
                       },
                       {
                         id: "a2",
-                        title: "Add a specific CTA",
+                        title: t("post.quick.items.a2"),
                         body: rewriteSuggestions.ctas[0],
                       },
                       {
                         id: "a3",
-                        title: "Improve readability on mobile",
+                        title: t("post.quick.items.a3"),
                         body: rewriteSuggestions.visuals[0],
                       },
                     ] as const).map((item) => {
@@ -588,7 +599,7 @@ export default function PostAnalysisPage() {
                         <div key={item.id} className="rounded-xl border border-white/10 bg-[#0b1220]/35">
                           <button
                             type="button"
-                            className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                            className="w-full flex items-center justify-between gap-4 px-4 md:px-6 py-3 md:py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
                             onClick={() =>
                               setAccordionOpen((p) => ({
                                 ...p,
@@ -597,10 +608,10 @@ export default function PostAnalysisPage() {
                             }
                             aria-expanded={isOpen}
                           >
-                            <div className="text-sm font-medium text-white">{item.title}</div>
-                            <div className="text-xs text-slate-300">{isOpen ? "Hide" : "Show"}</div>
+                            <div className="text-sm font-medium text-white leading-relaxed">{item.title}</div>
+                            <div className="text-xs text-slate-300">{isOpen ? t("post.quick.hide") : t("post.quick.show")}</div>
                           </button>
-                          {isOpen && <div className="px-4 pb-4 text-sm text-slate-200">{item.body}</div>}
+                          {isOpen && <div className="px-4 md:px-6 pb-4 md:pb-6 text-sm text-slate-200 leading-relaxed">{item.body}</div>}
                         </div>
                       )
                     })}
@@ -608,23 +619,26 @@ export default function PostAnalysisPage() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+              <Card
+                id="post-unlock"
+                className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl"
+              >
                 <CardHeader className="border-b border-white/10">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-xl font-bold text-white">🔒 Unlock official post performance</CardTitle>
+                    <CardTitle className="text-xl font-bold text-white">{t("post.unlock.title")}</CardTitle>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-500/10 text-purple-200 border border-purple-400/20">
-                      官方 (C)
+                      {t("post.unlock.badge")}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-400 mt-1">授權後即可查看此貼文的官方指標與對照基準（C 模式）。</p>
+                  <p className="text-sm text-slate-400 mt-1">{t("post.unlock.subtitle")}</p>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-6">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                     <div className="space-y-3">
                       <ul className="text-sm text-slate-200 space-y-2">
-                        <li>實際觸及與曝光（官方）</li>
-                        <li>與帳號平均表現對比（官方）</li>
-                        <li>發佈時段／初期互動影響（以官方數據為準）</li>
+                        <li>{t("post.unlock.bullets.1")}</li>
+                        <li>{t("post.unlock.bullets.2")}</li>
+                        <li>{t("post.unlock.bullets.3")}</li>
                       </ul>
                     </div>
                     <div className="space-y-2">
@@ -632,9 +646,9 @@ export default function PostAnalysisPage() {
                         className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
                         onClick={() => setIsConnected(true)}
                       >
-                        Connect Instagram Account
+                        {t("post.unlock.connect")}
                       </Button>
-                      <div className="text-xs text-slate-400">僅唯讀授權，不會發文、不會讀取私訊。</div>
+                      <div className="text-xs text-slate-400 leading-relaxed">{t("post.unlock.note")}</div>
                     </div>
                   </div>
                 </CardContent>
@@ -643,54 +657,89 @@ export default function PostAnalysisPage() {
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                 <CardHeader className="border-b border-white/10">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-xl font-bold text-white">2) Post Health Summary</CardTitle>
+                    <CardTitle className="text-xl font-bold text-white">{t("post.health.title")}</CardTitle>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
-                      推論 (A)
+                      {t("post.health.badge")}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-400 mt-1">
-                    Inferred indicators based on publicly observable signals and patterns.
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">本段為推論建議，非官方後台指標。</p>
+                  <p className="text-sm text-slate-400 mt-1">{t("post.health.subtitle")}</p>
+                  <p className="text-xs text-slate-400 mt-1">{t("post.health.note")}</p>
                 </CardHeader>
-                <CardContent className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {inferredMetrics.map((m) => {
-                      const t = toneForStatus(m.status)
-                      return (
-                        <Card
-                          key={m.title}
-                          className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl"
-                        >
-                          <CardContent className="p-5 h-full">
+                <CardContent className="p-4 md:p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4">
+                    <div className="rounded-xl border border-white/10 bg-[#0b1220]/35 p-2">
+                      <div className="space-y-1">
+                        {inferredMetrics.map((m, idx) => {
+                          const isActive = idx === selectedHealthMetricIdx
+                          const tmeta = toneForStatus(m.status)
+                          return (
+                            <button
+                              key={m.title}
+                              type="button"
+                              onClick={() => setSelectedHealthMetricIdx(idx)}
+                              className={`w-full text-left rounded-lg px-3 py-2.5 transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
+                                isActive
+                                  ? "border-blue-400/30 bg-blue-500/10"
+                                  : "border-transparent hover:border-white/10 hover:bg-white/5"
+                              }`}
+                              aria-pressed={isActive}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className={`text-sm font-medium leading-relaxed ${isActive ? "text-blue-100" : "text-white"}`}>{m.title}</div>
+                                <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${tmeta.classes}`}>{t(tmeta.labelKey)}</span>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
+                      {(() => {
+                        const m = inferredMetrics[selectedHealthMetricIdx] ?? inferredMetrics[0]
+                        if (!m) return null
+                        const tmeta = toneForStatus(m.status)
+                        return (
+                          <div>
                             <div className="flex items-center justify-between gap-3">
-                              <div className="text-sm font-medium text-white">{m.title}</div>
-                              <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${t.classes}`}>{t.label}</span>
+                              <div className="text-base font-semibold text-white leading-relaxed">{m.title}</div>
+                              <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${tmeta.classes}`}>{t(tmeta.labelKey)}</span>
                             </div>
-                            <div className="mt-3 text-sm text-slate-300">{m.detail}</div>
-                          </CardContent>
-                        </Card>
-                      )
-                    })}
+                            <div className="mt-3 text-sm text-slate-200 leading-relaxed">{m.detail}</div>
+                            <div className="mt-5 flex justify-end">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                                onClick={() => document.getElementById("post-unlock")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                              >
+                                查看進階分析（Pro）
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                 <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">3) Why This Post May Underperform</CardTitle>
+                  <CardTitle className="text-xl font-bold text-white">{t("post.underperform.title")}</CardTitle>
                   <p className="text-sm text-slate-400 mt-1">
-                    Consultant-style diagnosis based on likely constraints (non-accusatory, inferred).
+                    {t("post.underperform.subtitle")}
                   </p>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-6">
                   <div className="space-y-3">
                     {underperformReasons.map((r, idx) => (
                       <div key={r} className="flex gap-3">
                         <div className="mt-0.5 h-6 w-6 shrink-0 rounded-full border border-white/10 bg-white/5 text-slate-200 text-xs flex items-center justify-center">
                           {idx + 1}
                         </div>
-                        <div className="text-sm text-slate-200">{r}</div>
+                        <div className="text-sm text-slate-200 leading-relaxed">{r}</div>
                       </div>
                     ))}
                   </div>
@@ -699,23 +748,23 @@ export default function PostAnalysisPage() {
 
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                 <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">4) Actionable Rewrite Suggestions</CardTitle>
+                  <CardTitle className="text-xl font-bold text-white">{t("post.rewrite.title")}</CardTitle>
                   <p className="text-sm text-slate-400 mt-1">
-                    Copy-ready rewrites and visual guidance based on inferred friction points.
+                    {t("post.rewrite.subtitle")}
                   </p>
                 </CardHeader>
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-base font-semibold text-white">Hook rewrites (3)</CardTitle>
+                        <CardTitle className="text-base font-semibold text-white">{t("post.rewrite.sections.hooks")}</CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0">
                         <div className="space-y-3">
                           {rewriteSuggestions.hooks.map((h, i) => (
                             <div key={h} className="rounded-lg border border-white/10 bg-[#0b1220]/40 p-3">
-                              <div className="text-[11px] text-slate-400">Version {i + 1}</div>
-                              <div className="mt-1 text-sm text-slate-200">{h}</div>
+                              <div className="text-[11px] text-slate-400">{t("post.rewrite.version")} {i + 1}</div>
+                              <div className="mt-1 text-sm text-slate-200 leading-relaxed">{h}</div>
                             </div>
                           ))}
                         </div>
@@ -724,14 +773,14 @@ export default function PostAnalysisPage() {
 
                     <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-base font-semibold text-white">CTA rewrites (2)</CardTitle>
+                        <CardTitle className="text-base font-semibold text-white">{t("post.rewrite.sections.ctas")}</CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0">
                         <div className="space-y-3">
                           {rewriteSuggestions.ctas.map((c, i) => (
                             <div key={c} className="rounded-lg border border-white/10 bg-[#0b1220]/40 p-3">
-                              <div className="text-[11px] text-slate-400">Option {i + 1}</div>
-                              <div className="mt-1 text-sm text-slate-200">{c}</div>
+                              <div className="text-[11px] text-slate-400">{t("post.rewrite.option")} {i + 1}</div>
+                              <div className="mt-1 text-sm text-slate-200 leading-relaxed">{c}</div>
                             </div>
                           ))}
                         </div>
@@ -740,12 +789,12 @@ export default function PostAnalysisPage() {
 
                     <Card className="rounded-xl border border-white/10 bg-white/5 lg:col-span-2 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-base font-semibold text-white">Visual optimization suggestions</CardTitle>
+                        <CardTitle className="text-base font-semibold text-white">{t("post.rewrite.sections.visuals")}</CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           {rewriteSuggestions.visuals.map((v) => (
-                            <div key={v} className="rounded-lg border border-white/10 bg-[#0b1220]/40 p-3 text-sm text-slate-200">
+                            <div key={v} className="rounded-lg border border-white/10 bg-[#0b1220]/40 p-3 text-sm text-slate-200 leading-relaxed">
                               {v}
                             </div>
                           ))}
@@ -760,40 +809,40 @@ export default function PostAnalysisPage() {
                 <div className="space-y-10">
                   <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                     <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-xl font-bold text-white">5) Official Post Performance (C)</CardTitle>
-                      <p className="text-sm text-slate-400 mt-1">Official platform-provided metrics</p>
+                      <CardTitle className="text-xl font-bold text-white">{t("post.official.title")}</CardTitle>
+                      <p className="text-sm text-slate-400 mt-1">{t("post.official.subtitle")}</p>
                     </CardHeader>
-                    <CardContent className="p-6">
+                    <CardContent className="p-4 md:p-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                          <CardContent className="p-5">
-                            <div className="text-sm text-slate-300">Reach</div>
+                          <CardContent className="p-4 md:p-6">
+                            <div className="text-sm text-slate-300">{t("post.official.metrics.reach")}</div>
                             <div className="mt-2 text-2xl font-bold text-white">{officialMetrics.reach.toLocaleString()}</div>
                           </CardContent>
                         </Card>
                         <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                          <CardContent className="p-5">
-                            <div className="text-sm text-slate-300">Impressions</div>
+                          <CardContent className="p-4 md:p-6">
+                            <div className="text-sm text-slate-300">{t("post.official.metrics.impressions")}</div>
                             <div className="mt-2 text-2xl font-bold text-white">{officialMetrics.impressions.toLocaleString()}</div>
                           </CardContent>
                         </Card>
                         <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                          <CardContent className="p-5">
-                            <div className="text-sm text-slate-300">Likes</div>
+                          <CardContent className="p-4 md:p-6">
+                            <div className="text-sm text-slate-300">{t("post.official.metrics.likes")}</div>
                             <div className="mt-2 text-2xl font-bold text-white">{officialMetrics.likes.toLocaleString()}</div>
                           </CardContent>
                         </Card>
                         <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                          <CardContent className="p-5">
-                            <div className="text-sm text-slate-300">Comments</div>
+                          <CardContent className="p-4 md:p-6">
+                            <div className="text-sm text-slate-300">{t("post.official.metrics.comments")}</div>
                             <div className="mt-2 text-2xl font-bold text-white">{officialMetrics.comments.toLocaleString()}</div>
                           </CardContent>
                         </Card>
                       </div>
 
-                      <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-5">
+                      <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-medium text-white">Compared to account average</div>
+                          <div className="text-sm font-medium text-white">{t("post.official.vsAvg.title")}</div>
                           <span
                             className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${
                               officialMetrics.vsAvg === "Above Avg"
@@ -805,7 +854,7 @@ export default function PostAnalysisPage() {
                           </span>
                         </div>
                         <div className="mt-2 text-sm text-slate-300">
-                          Benchmarking uses your recent post baseline after authorization.
+                          <span className="leading-relaxed">{t("post.official.vsAvg.note")}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -813,73 +862,73 @@ export default function PostAnalysisPage() {
 
                   <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                     <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-xl font-bold text-white">6) Content Quality vs Actual Performance</CardTitle>
-                      <p className="text-sm text-slate-400 mt-1">A diagnostic contrast between inferred quality and observed outcomes</p>
+                      <CardTitle className="text-xl font-bold text-white">{t("post.contrast.title")}</CardTitle>
+                      <p className="text-sm text-slate-400 mt-1">{t("post.contrast.subtitle")}</p>
                     </CardHeader>
-                    <CardContent className="p-6">
+                    <CardContent className="p-4 md:p-6">
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-                          <div className="text-sm text-slate-300">Content Quality</div>
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
+                          <div className="text-sm text-slate-300">{t("post.contrast.contentQuality")}</div>
                           <div className="mt-2 text-2xl font-bold text-white">{officialMetrics.contentQuality}</div>
                         </div>
-                        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-                          <div className="text-sm text-slate-300">Actual Reach</div>
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
+                          <div className="text-sm text-slate-300">{t("post.contrast.actualReach")}</div>
                           <div className="mt-2 text-2xl font-bold text-white">{officialMetrics.actualReach}</div>
                         </div>
                       </div>
-                      <div className="mt-4 text-sm text-slate-300">
-                        This suggests distribution or timing constraints rather than content quality issues.
-                      </div>
+                      <div className="mt-4 text-sm text-slate-300 leading-relaxed">{t("post.contrast.note")}</div>
                     </CardContent>
                   </Card>
                 </div>
               )}
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">Copyable Snapshot</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">A compact summary you can paste into a doc or share with a client.</p>
-                  <p className="text-xs text-slate-400 mt-1">適合貼給客戶、簡報或 Notion 報告使用。</p>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={summaryMode === "short" ? "default" : "outline"}
-                      className={summaryMode === "short" ? "" : "border-white/15 text-slate-200 hover:bg-white/5"}
-                      onClick={() => setSummaryMode("short")}
-                    >
-                      Short
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={summaryMode === "detailed" ? "default" : "outline"}
-                      className={summaryMode === "detailed" ? "" : "border-white/15 text-slate-200 hover:bg-white/5"}
-                      onClick={() => setSummaryMode("detailed")}
-                    >
-                      Detailed
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
-                    <textarea
-                      className="w-full min-h-[180px] rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200 outline-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-                      readOnly
-                      value={summaryMode === "short" ? shortCopyBlock : copyBlock}
-                    />
-                    <Button
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full lg:w-auto focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                      onClick={async () => {
-                        const ok = await copyToClipboard(summaryMode === "short" ? shortCopyBlock : copyBlock)
-                        showToast(ok ? "Copied" : "Copy failed")
-                      }}
-                    >
-                      Copy
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              {false && (
+                <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+                  <CardHeader className="border-b border-white/10">
+                    <CardTitle className="text-xl font-bold text-white">{t("post.snapshot.title")}</CardTitle>
+                    <p className="text-sm text-slate-400 mt-1">{t("post.snapshot.subtitle")}</p>
+                    <p className="text-xs text-slate-400 mt-1">{t("post.snapshot.subtitleZh")}</p>
+                  </CardHeader>
+                  <CardContent className="p-4 md:p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={summaryMode === "short" ? "default" : "outline"}
+                        className={summaryMode === "short" ? "" : "border-white/15 text-slate-200 hover:bg-white/5"}
+                        onClick={() => setSummaryMode("short")}
+                      >
+                        {t("post.snapshot.short")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={summaryMode === "detailed" ? "default" : "outline"}
+                        className={summaryMode === "detailed" ? "" : "border-white/15 text-slate-200 hover:bg-white/5"}
+                        onClick={() => setSummaryMode("detailed")}
+                      >
+                        {t("post.snapshot.detailed")}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
+                      <textarea
+                        className="w-full min-h-[180px] rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200 outline-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                        readOnly
+                        value={summaryMode === "short" ? shortCopyBlock : copyBlock}
+                      />
+                      <Button
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full lg:w-auto focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                        onClick={async () => {
+                          const ok = await copyToClipboard(summaryMode === "short" ? shortCopyBlock : copyBlock)
+                          showToast(ok ? t("post.snapshot.toast.copied") : t("post.snapshot.toast.copyFailed"))
+                        }}
+                      >
+                        {t("post.snapshot.copy")}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 

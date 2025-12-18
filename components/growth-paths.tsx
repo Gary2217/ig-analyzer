@@ -1,5 +1,6 @@
 "use client"
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Button } from "./ui/button"
 
 type Level = "Low" | "Medium" | "High"
 
@@ -369,6 +370,28 @@ export default function GrowthPaths({ result }: { result: GrowthInput }) {
   const selected = selectedId ? paths.find((p) => p.id === selectedId) : paths[0]
   const platformLabel = (result.platform || "Instagram").toString()
   const mix = mixNormalize(result.contentMix)
+  const detailRef = useRef<HTMLDivElement | null>(null)
+  const [isProModalOpen, setIsProModalOpen] = useState(false)
+
+  const handleContextualUpgrade = () => {
+    setIsProModalOpen(true)
+  }
+
+  const handleUpgradeClick = () => {
+    const el = document.getElementById("results-pro-upgrade")
+    el?.scrollIntoView({ behavior: "smooth", block: "center" })
+    window.setTimeout(() => {
+      const btn = document.getElementById("results-pro-upgrade") as HTMLButtonElement | null
+      btn?.click()
+    }, 200)
+  }
+
+  const handleSelectPath = (id: string) => {
+    setSelectedId(id)
+    window.setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 0)
+  }
 
   return (
     <div className="space-y-4">
@@ -436,7 +459,7 @@ export default function GrowthPaths({ result }: { result: GrowthInput }) {
             return (
               <button
                 key={path.id}
-                onClick={() => setSelectedId(path.id)}
+                onClick={() => handleSelectPath(path.id)}
                 className={`text-left p-3.5 rounded-lg border transition-all ${
                   isSelected
                     ? "border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10"
@@ -478,77 +501,144 @@ export default function GrowthPaths({ result }: { result: GrowthInput }) {
           })}
         </div>
 
-        {/* Top 3 */}
-        <div className="grid gap-3">
-          {paths.slice(0, 3).map((p, i) => (
-            <div key={p.id} className={`rounded-lg border p-4 ${i === 0 ? "bg-slate-50/5" : ""}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="font-semibold">
-                    #{i + 1} {p.title}
-                  </div>
-                  <div className="text-sm text-muted-foreground">{p.subtitle}</div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-full border px-2 py-1">適配度：{p.fitScore}%</span>
-                  <span className="rounded-full border px-2 py-1 text-muted-foreground">
-                    距離門檻：{p.distanceToGoal}%
-                  </span>
-                  <span className="rounded-full border px-2 py-1">難度：{p.difficulty}</span>
-                  <span className="rounded-full border px-2 py-1">變現：{p.monetization}</span>
-                </div>
+        {selected && (
+          <div ref={detailRef} className="rounded-lg border p-4 bg-slate-50/5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="font-semibold">{selected.title}</div>
+                <div className="text-sm text-muted-foreground">{selected.subtitle}</div>
               </div>
 
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-md bg-slate-50/5 p-3">
-                  <div className="text-xs text-muted-foreground mb-2">為什麼推薦你</div>
-                  <ul className="text-sm list-disc pl-5 space-y-1">
-                    {p.why.map((x, idx) => (
-                      <li key={idx}>{x}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="rounded-md bg-slate-50/5 p-3">
-                  <div className="text-xs text-muted-foreground mb-2">本週行動（直接照做）</div>
-                  <ol className="text-sm list-decimal pl-5 space-y-1">
-                    {p.weeklyActions.map((x, idx) => (
-                      <li key={idx}>{x}</li>
-                    ))}
-                  </ol>
-                </div>
-
-                <div className="rounded-md bg-slate-50/5 p-3">
-                  <div className="text-xs text-muted-foreground mb-2">主要卡點</div>
-                  <ul className="text-sm list-disc pl-5 space-y-1">
-                    {p.blockers.map((x, idx) => (
-                      <li key={idx}>{x}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="rounded-md bg-slate-50/5 p-3">
-                  <div className="text-xs text-muted-foreground mb-2">建議內容配比（平台導向）</div>
-                  <div className="text-sm space-y-1">
-                    <div>Photo · {p.recommendedMix.photo}%</div>
-                    <div>Reels · {p.recommendedMix.reels}%</div>
-                    <div>Threads · {p.recommendedMix.threads}%</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 text-xs text-muted-foreground">
-                提示：目前為 Demo 假資料邏輯；未連接 IG/Threads API，也不會讀取私人資料。
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded-full border px-2 py-1">適配度：{selected.fitScore}%</span>
+                <span className="rounded-full border px-2 py-1 text-muted-foreground">
+                  距離門檻：{selected.distanceToGoal}%
+                </span>
+                <span className="rounded-full border px-2 py-1">難度：{selected.difficulty}</span>
+                <span className="rounded-full border px-2 py-1">變現：{selected.monetization}</span>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* 免費版提示（你之後做付費牆可以用） */}
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-          免費版僅顯示 Top3 成長路線與摘要建議；「超詳細分析 / 商業價值 / 合作邀請機率」可做成訂閱功能（例如 NT$99/月）。
-        </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md bg-slate-50/5 p-3">
+                <div className="text-xs text-muted-foreground mb-2">為什麼推薦你</div>
+                <ul className="text-sm list-disc pl-5 space-y-1">
+                  {selected.why.map((x, idx) => (
+                    <li key={idx}>{x}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="rounded-md bg-slate-50/5 p-3">
+                <div className="text-xs text-muted-foreground mb-2">本週行動（直接照做）</div>
+                <ol className="text-sm list-decimal pl-5 space-y-1">
+                  {selected.weeklyActions.map((x, idx) => (
+                    <li key={idx}>{x}</li>
+                  ))}
+                </ol>
+              </div>
+
+              <div className="rounded-md bg-slate-50/5 p-3">
+                <div className="text-xs text-muted-foreground mb-2">主要卡點</div>
+                <ul className="text-sm list-disc pl-5 space-y-1">
+                  {selected.blockers.map((x, idx) => (
+                    <li key={idx}>{x}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="rounded-md bg-slate-50/5 p-3">
+                <div className="text-xs text-muted-foreground mb-2">建議內容配比（平台導向）</div>
+                <div className="text-sm space-y-1">
+                  <div>Photo · {selected.recommendedMix.photo}%</div>
+                  <div>Reels · {selected.recommendedMix.reels}%</div>
+                  <div>Threads · {selected.recommendedMix.threads}%</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 text-xs text-muted-foreground">
+              提示：目前為 Demo 假資料邏輯；未連接 IG/Threads API，也不會讀取私人資料。
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                onClick={handleContextualUpgrade}
+              >
+                查看進階分析（Pro）
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {isProModalOpen && (
+          <div className="fixed inset-0 z-[70]">
+            <button
+              type="button"
+              aria-label="Close"
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setIsProModalOpen(false)}
+            />
+            <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
+              <div className="p-4 md:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-sm text-slate-400">你正在查看</div>
+                    <div className="mt-1 text-lg font-semibold text-white leading-snug">
+                      {selected?.title}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300 leading-relaxed">
+                      {selected?.subtitle}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-slate-200 hover:bg-white/5"
+                    onClick={() => setIsProModalOpen(false)}
+                  >
+                    關閉
+                  </Button>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-sm font-medium text-white">解鎖 Pro 可看到</div>
+                  <ul className="mt-2 text-sm text-slate-200 space-y-1.5">
+                    <li>更完整的路線拆解（為什麼適合你、如何執行、避雷點）</li>
+                    <li>更清楚的成長計畫與優先順序（下一步先做什麼）</li>
+                    <li>更多可複製的內容/互動模板（降低試錯成本）</li>
+                  </ul>
+                </div>
+
+                <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-white/15 text-slate-200 hover:bg-white/5"
+                    onClick={() => setIsProModalOpen(false)}
+                  >
+                    先不要
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+                    onClick={() => {
+                      setIsProModalOpen(false)
+                      handleUpgradeClick()
+                    }}
+                  >
+                    升級 Pro 解鎖
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 免費版提示（你之後做付費牆可以用） */}
         <div className="rounded-lg border p-4 text-sm text-muted-foreground">
           免費版僅顯示 Top3 成長路線與摘要建議；「超詳細分析 / 商業價值 / 合作邀請機率」可做成訂閱功能（例如 NT$99/月）。
