@@ -8,10 +8,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert"
 import { ArrowLeft, Instagram, AtSign } from "lucide-react"
 import GrowthPaths from "../../components/growth-paths"
-import AccountScores from "../../components/account-scores"
 import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
+
+type IgMeResponse = {
+  username: string
+  profile_picture_url?: string
+  account_type?: string
+  followers_count?: number
+  recent_media?: Array<{
+    id: string
+    media_type?: string
+    media_url?: string
+    caption?: string
+    timestamp?: string
+  }>
+}
 
 type FakeAnalysis = {
   platform: "instagram" | "threads"
@@ -39,6 +52,10 @@ export default function ResultsPage() {
   const searchParams = useSearchParams()
   const [result, setResult] = useState<FakeAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
+  const [igMe, setIgMe] = useState<IgMeResponse | null>(null)
+  const [igMeLoading, setIgMeLoading] = useState(true)
+  const [igMeUnauthorized, setIgMeUnauthorized] = useState(false)
+  const [connectEnvError, setConnectEnvError] = useState<"missing_env" | null>(null)
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [headerCopied, setHeaderCopied] = useState(false)
@@ -50,6 +67,10 @@ export default function ResultsPage() {
   const [upgradeHighlight, setUpgradeHighlight] = useState(false)
 
   const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
+
+  const isConnected = Boolean(igMe?.username)
+
+  const displayUsername = isConnected ? igMe!.username : ""
 
   const accountTypeLabel = (value: string) => {
     if (value === "Personal Account") return t("results.values.accountType.personal")
@@ -135,6 +156,41 @@ export default function ResultsPage() {
     return () => clearTimeout(timer)
   }, [searchParams, t])
 
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      setIgMeLoading(true)
+      setIgMeUnauthorized(false)
+      setConnectEnvError(null)
+      try {
+        const r = await fetch("/api/auth/instagram/me", { cache: "no-store" })
+        if (cancelled) return
+
+        if (r.status === 401) {
+          setIgMe(null)
+          setIgMeUnauthorized(true)
+          return
+        }
+
+        if (!r.ok) {
+          setIgMe(null)
+          return
+        }
+
+        const data = (await r.json()) as IgMeResponse
+        setIgMe(data?.username ? data : null)
+      } catch {
+        if (!cancelled) setIgMe(null)
+      } finally {
+        if (!cancelled) setIgMeLoading(false)
+      }
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
     platform: "instagram",
@@ -155,7 +211,7 @@ export default function ResultsPage() {
     disclaimer: "",
   }
 
-  const hasSidebar = Boolean(safeResult.username)
+  const hasSidebar = Boolean(displayUsername)
 
   const engagementPercent = (() => {
     const v = (safeResult.engagementQuality || "Medium").toLowerCase()
@@ -253,7 +309,8 @@ export default function ResultsPage() {
   })()
 
   const summaryText = (() => {
-    return `${t("results.copy.summaryTitle")}\n\n${t("results.copy.accountLabel")}: @${safeResult.username}\n${t("results.copy.platformLabel")}: ${
+    const accountLabel = displayUsername ? `@${displayUsername}` : t("results.instagram.connectPromptHandle")
+    return `${t("results.copy.summaryTitle")}\n\n${t("results.copy.accountLabel")}: ${accountLabel}\n${t("results.copy.platformLabel")}: ${
       safeResult.platform === "instagram" ? t("results.platform.instagram") : t("results.platform.threads")
     }\n\n${t("results.copy.primarySignals")}\n- ${t("results.copy.authenticity")}: ${safeResult.confidenceScore}% (${authenticityStatus})\n- ${t("results.copy.engagement")}: ${engagementPercent}% (${engagementStatus})\n- ${t("results.copy.automation")}: ${automationRiskPercent}% (${automationStatus})\n\n${t("results.copy.recommendation")}\n- ${reportSummaryLine}\n\n${t("results.copy.disclaimer")}\n`
   })()
@@ -337,7 +394,36 @@ export default function ResultsPage() {
   }
 
   const handleConnect = () => {
-    showToast(t("results.toast.connectSoon"))
+    const run = async () => {
+      setConnectEnvError(null)
+      try {
+        const r = await fetch(`/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`, {
+          method: "GET",
+          redirect: "manual",
+          cache: "no-store",
+        })
+
+        if (r.status === 500) {
+          const data = (await r.json().catch(() => null)) as { error?: string } | null
+          if (data?.error === "missing_env") {
+            setConnectEnvError("missing_env")
+            return
+          }
+        }
+
+        if (r.status >= 300 && r.status < 400) {
+          const loc = r.headers.get("Location")
+          window.location.href = loc || `/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`
+          return
+        }
+
+        window.location.href = `/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`
+      } catch {
+        window.location.href = `/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`
+      }
+    }
+
+    void run()
   }
 
   const priorityLabel = (label: string) => {
@@ -364,12 +450,57 @@ export default function ResultsPage() {
           </div>
         </div>
       )}
-      {loading ? (
+      {igMeLoading || loading ? (
         <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
           <div className="text-center space-y-4">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
             <p>{t("results.states.loading")}</p>
           </div>
+        </main>
+      ) : igMeUnauthorized ? (
+        <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
+          <Card className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-2xl sm:text-3xl font-bold text-white">
+                {t("results.instagram.connectGate.title")}
+              </CardTitle>
+              <p className="text-sm text-slate-300 mt-2">
+                {t("results.instagram.connectGate.desc")}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {connectEnvError === "missing_env" && (
+                <Alert>
+                  <AlertTitle>{t("results.instagram.missingEnv.title")}</AlertTitle>
+                  <AlertDescription>
+                    <div className="space-y-2">
+                      <div>{t("results.instagram.missingEnv.desc")}</div>
+                      <div className="font-mono text-xs break-all">
+                        APP_BASE_URL / META_APP_ID / META_APP_SECRET
+                      </div>
+                      <div>{t("results.instagram.missingEnv.restartHint")}</div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg"
+                  onClick={handleConnect}
+                  disabled={igMeLoading}
+                >
+                  {t("results.instagram.connectGate.cta")}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg"
+                  onClick={() => router.push(localePathname("/", activeLocale))}
+                >
+                  {t("results.instagram.connectGate.back")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </main>
       ) : !hasResult ? (
         <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
@@ -388,33 +519,44 @@ export default function ResultsPage() {
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/5 text-slate-200 border border-white/10">
-                      {t("results.badges.demo")}
-                    </span>
+                    {!isConnected && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/5 text-slate-200 border border-white/10">
+                        {t("results.badges.demo")}
+                      </span>
+                    )}
+                    {isConnected && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-200 border border-emerald-400/20">
+                        {t("results.instagram.connectedBadge")}
+                      </span>
+                    )}
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
                       {safeResult.platform === "instagram"
                         ? t("results.platform.instagram")
                         : t("results.platform.threads")}
                     </span>
-                    <span
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-200 border border-emerald-400/20"
-                      title={t("results.badges.modeHint")}
-                    >
-                      {t("results.badges.inferredA")}
-                    </span>
+                    {!isConnected && (
+                      <span
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-200 border border-emerald-400/20"
+                        title={t("results.badges.modeHint")}
+                      >
+                        {t("results.badges.inferredA")}
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm font-semibold text-white truncate">{t("results.title")}</div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={() => router.push(localePathname("/post-analysis", activeLocale))}
-                  >
-                    {t("results.actions.analyzePost")}
-                  </Button>
+                  {!isConnected && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                      onClick={() => router.push(localePathname("/post-analysis", activeLocale))}
+                    >
+                      {t("results.actions.analyzePost")}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -425,30 +567,34 @@ export default function ResultsPage() {
                   >
                     {t("results.actions.export")}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={handleShare}
-                    aria-busy={shareCopied ? true : undefined}
-                  >
-                    {shareCopied ? t("results.actions.copied") : t("results.actions.share")}
-                  </Button>
+                  {displayUsername && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                      onClick={handleShare}
+                      aria-busy={shareCopied ? true : undefined}
+                    >
+                      {shareCopied ? t("results.actions.copied") : t("results.actions.share")}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
-            <div className="space-y-2">
-              <h1 className="text-2xl sm:text-3xl font-bold text-white">{t("results.title")}</h1>
-              <p className="text-sm text-slate-300 max-w-2xl">
-                {t("results.subtitle")}
-              </p>
-              <div className="text-xs text-slate-400 max-w-3xl">
-                <span className="font-medium text-slate-300">{t("results.badges.inferredA")}</span> {t("results.badges.inferredDesc")}
+            {!isConnected && (
+              <div className="space-y-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">{t("results.title")}</h1>
+                <p className="text-sm text-slate-300 max-w-2xl">
+                  {t("results.subtitle")}
+                </p>
+                <div className="text-xs text-slate-400 max-w-3xl">
+                  <span className="font-medium text-slate-300">{t("results.badges.inferredA")}</span> {t("results.badges.inferredDesc")}
+                </div>
               </div>
-            </div>
+            )}
 
           <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
             <CardContent className="p-6 sm:p-8">
@@ -456,13 +602,23 @@ export default function ResultsPage() {
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300">{t("results.overview.kicker")}</div>
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-600/40 border border-white/10 flex items-center justify-center shrink-0">
-                      <Instagram className="h-5 w-5 text-slate-100" />
-                    </div>
+                    {isConnected && igMe?.profile_picture_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={igMe.profile_picture_url}
+                        alt={`@${igMe.username}`}
+                        className="h-12 w-12 rounded-full border border-white/10 object-cover shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-600/40 border border-white/10 flex items-center justify-center shrink-0">
+                        <Instagram className="h-5 w-5 text-slate-100" />
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="text-2xl sm:text-3xl font-bold text-white tracking-tight min-w-0 truncate">
-                          {safeResult.username ? safeResult.username : "Instagram Account"}
+                          {isConnected ? `@${igMe!.username}` : t("results.instagram.connectPromptTitle")}
                         </div>
                         <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20 shrink-0">
                           {safeResult.platform === "instagram" ? (
@@ -472,25 +628,53 @@ export default function ResultsPage() {
                           )}
                           {safeResult.platform === "instagram" ? t("results.platform.instagram") : t("results.platform.threads")}
                         </span>
+                        {isConnected && igMe?.account_type && (
+                          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-slate-200 border border-white/10 shrink-0">
+                            {igMe.account_type}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1 inline-flex items-center gap-2 text-sm text-slate-300 min-w-0">
                         <AtSign className="h-4 w-4 shrink-0 text-slate-400" />
-                        <span className="truncate">{safeResult.username ? `@${safeResult.username}` : "@unknown"}</span>
+                        <span className="truncate">
+                          {isConnected ? `@${igMe!.username}` : t("results.instagram.connectPromptHandle")}
+                        </span>
                       </div>
+                      {isConnected && typeof igMe?.followers_count === "number" && (
+                        <div className="mt-1 text-sm text-slate-300">
+                          {t("results.instagram.followersLabel")}: {igMe.followers_count.toLocaleString()}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="text-sm text-slate-300 max-w-2xl">{headerInsight}</div>
+                  {!isConnected && (
+                    <div className="text-sm text-slate-300 max-w-2xl">{t("results.instagram.connectPromptDesc")}</div>
+                  )}
+                  {isConnected && (
+                    <div className="text-sm text-slate-300 max-w-2xl">{headerInsight}</div>
+                  )}
                   {safeResult.platform === "threads" && (
                     <div className="text-xs text-slate-400 max-w-2xl">
                       {t("results.overview.threadsNote")}
                     </div>
                   )}
-                  <div className="text-sm text-slate-200/90 max-w-3xl">
-                    {reportSummaryLine}
-                  </div>
+                  {isConnected && (
+                    <div className="text-sm text-slate-200/90 max-w-3xl">
+                      {reportSummaryLine}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
+                  {!isConnected && (
+                    <Button
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                      onClick={handleConnect}
+                      disabled={igMeLoading}
+                    >
+                      {t("results.instagram.connectCta")}
+                    </Button>
+                  )}
                   {false && (
                     <Button
                       className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
@@ -592,6 +776,55 @@ export default function ResultsPage() {
           </Card>
 
           <div className="mt-10 space-y-12">
+            {isConnected && (
+              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <CardHeader className="border-b border-white/10">
+                  <CardTitle className="text-xl font-bold text-white">{t("results.instagram.recentPostsTitle")}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 md:p-6">
+                  {Array.isArray(igMe?.recent_media) && igMe!.recent_media!.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {igMe!.recent_media!.slice(0, 3).map((m) => {
+                        const caption = typeof m.caption === "string" ? m.caption : ""
+                        const mediaUrl = typeof m.media_url === "string" ? m.media_url : ""
+                        const ts = typeof m.timestamp === "string" ? m.timestamp : ""
+                        const dateLabel = ts ? new Date(ts).toLocaleString() : ""
+
+                        return (
+                          <div key={m.id} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                            <div className="aspect-square bg-black/20">
+                              {mediaUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={mediaUrl}
+                                  alt={caption ? caption.slice(0, 40) : m.id}
+                                  className="h-full w-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-sm text-slate-400">
+                                  {t("results.instagram.recentPostsNoPreview")}
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-3 space-y-2">
+                              {dateLabel && <div className="text-xs text-slate-400">{dateLabel}</div>}
+                              {caption ? (
+                                <div className="text-sm text-slate-200 line-clamp-3">{caption}</div>
+                              ) : (
+                                <div className="text-sm text-slate-400">{t("results.instagram.recentPostsNoCaption")}</div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-300">{t("results.instagram.recentPostsEmpty")}</div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-slate-300">{t("results.performance.kicker")}</div>
@@ -627,17 +860,6 @@ export default function ResultsPage() {
                         <div className="text-sm font-medium text-white">{t("results.performance.radarTitle")}</div>
                         <div className="text-sm text-slate-300">{t("results.performance.radarDesc")}</div>
                       </div>
-                    <AccountScores 
-                      result={{
-                        confidenceScore: safeResult.confidenceScore,
-                        automationLikelihood: safeResult.automationLikelihood as "Low" | "Medium" | "High",
-                        abnormalBehaviorRisk: safeResult.abnormalBehaviorRisk as "Low" | "Medium" | "High",
-                        engagementQuality: safeResult.engagementQuality as "Low" | "Medium" | "High",
-                        contentConsistency: safeResult.contentConsistency as "Low" | "Medium" | "High",
-                        postingFrequency: safeResult.postingFrequency as "Low" | "Medium" | "High"
-                      }}
-                      activeKpi={activeKpi}
-                    />
                       <div className="pt-2 border-t border-white/10 text-sm text-slate-300">
                         {t("results.performance.howToInterpret")}
                       </div>
@@ -759,18 +981,19 @@ export default function ResultsPage() {
                     <CardHeader className="border-b border-white/10">
                       <CardTitle className="text-base">{t("results.sidebar.title")}</CardTitle>
                       <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
-                        {t("results.sidebar.subtitle")} @{safeResult.username}
+                        {t("results.sidebar.subtitle")} @{displayUsername}
                       </p>
                     </CardHeader>
                     <div className="flex-1 overflow-y-auto">
                       <CardContent className="p-4 md:p-6 pb-6 lg:pb-4">
                         <GrowthPaths
                           result={{
-                            handle: safeResult.username,
+                            handle: displayUsername,
                             platform: safeResult.platform,
                             confidence: safeResult.confidenceScore,
                             abnormalBehaviorRisk: safeResult.abnormalBehaviorRisk as "Low" | "Medium" | "High",
                             automationLikelihood: safeResult.automationLikelihood as "Low" | "Medium" | "High",
+                            engagementQuality: safeResult.engagementQuality as "Low" | "Medium" | "High",
                           }}
                         />
                       </CardContent>
@@ -980,7 +1203,7 @@ export default function ResultsPage() {
             <div className="mt-12 lg:mt-8 space-y-6">
               <ShareResults 
                 platform={safeResult.platform === 'instagram' ? 'Instagram' : 'Threads'}
-                username={safeResult.username}
+                username={displayUsername}
                 monetizationGap={18}
               />
               <div className={`rounded-xl border border-white/10 bg-white/5 px-4 md:px-6 py-4 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${upgradeHighlight ? "ring-2 ring-blue-500/50" : ""}`}>

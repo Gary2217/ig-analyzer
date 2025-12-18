@@ -53,6 +53,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [alert, setAlert] = useState<{ title: string; desc: string } | null>(null)
   const [result, setResult] = useState<FakeAnalysis | null>(null)
+  const [showDemo, setShowDemo] = useState(false)
+  const [connectEnvError, setConnectEnvError] = useState<"missing_env" | null>(null)
 
   const datasets = useMemo(() => {
     return {
@@ -107,6 +109,39 @@ export default function Home() {
 
   const router = useRouter()
 
+  const handleConnect = () => {
+    const run = async () => {
+      setConnectEnvError(null)
+      try {
+        const r = await fetch(`/api/auth/instagram?locale=${encodeURIComponent(locale)}`, {
+          method: "GET",
+          redirect: "manual",
+          cache: "no-store",
+        })
+
+        if (r.status === 500) {
+          const data = (await r.json().catch(() => null)) as { error?: string } | null
+          if (data?.error === "missing_env") {
+            setConnectEnvError("missing_env")
+            return
+          }
+        }
+
+        if (r.status >= 300 && r.status < 400) {
+          const loc = r.headers.get("Location")
+          window.location.href = loc || `/api/auth/instagram?locale=${encodeURIComponent(locale)}`
+          return
+        }
+
+        window.location.href = `/api/auth/instagram?locale=${encodeURIComponent(locale)}`
+      } catch {
+        window.location.href = `/api/auth/instagram?locale=${encodeURIComponent(locale)}`
+      }
+    }
+
+    void run()
+  }
+
   const handleAnalyze = async () => {
     const u = username.trim().replace(/^@+/, "")
     setAlert(null)
@@ -140,11 +175,23 @@ export default function Home() {
     <main className="min-h-screen flex items-center justify-center bg-[#0b1220] px-4">
       <Card className="w-full max-w-3xl">
         <CardHeader>
-          <div className="text-xs tracking-widest text-muted-foreground">DEMO TOOL</div>
-          <CardTitle className="text-3xl">{t("home.hero.title")}</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {t("home.hero.subtitle")}
-          </p>
+          {!showDemo && (
+            <>
+              <CardTitle className="text-3xl">{t("home.connect.title")}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {t("home.connect.subtitle")}
+              </p>
+            </>
+          )}
+          {showDemo && (
+            <>
+              <div className="text-xs tracking-widest text-muted-foreground">DEMO TOOL</div>
+              <CardTitle className="text-3xl">{t("home.hero.title")}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {t("home.hero.subtitle")}
+              </p>
+            </>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-4">
@@ -155,10 +202,53 @@ export default function Home() {
             </Alert>
           )}
 
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            await handleAnalyze();
-          }} className="space-y-4">
+          {!showDemo && (
+            <>
+              {connectEnvError === "missing_env" && (
+                <Alert>
+                  <AlertTitle>{t("home.connect.missingEnv.title")}</AlertTitle>
+                  <AlertDescription>
+                    <div className="space-y-2">
+                      <div>{t("home.connect.missingEnv.desc")}</div>
+                      <div className="font-mono text-xs break-all">
+                        APP_BASE_URL / META_APP_ID / META_APP_SECRET
+                      </div>
+                      <div>{t("home.connect.missingEnv.restartHint")}</div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="w-full overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full">
+                  <Button
+                    type="button"
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg"
+                    onClick={handleConnect}
+                  >
+                    {t("home.connect.cta")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg"
+                    onClick={() => {
+                      setConnectEnvError(null)
+                      setShowDemo(true)
+                    }}
+                  >
+                    {t("home.connect.viewDemo")}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {showDemo && (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              await handleAnalyze();
+            }} className="space-y-4">
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -204,7 +294,18 @@ export default function Home() {
                 {t("home.helper.postAnalysisNote")}
               </div>
             </div>
-          </form>
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-slate-200 hover:bg-white/5"
+                  onClick={() => setShowDemo(false)}
+                >
+                  {t("home.connect.hideDemo")}
+                </Button>
+              </div>
+            </form>
+          )}
 
           {loading && (
             <div className="text-center py-8">

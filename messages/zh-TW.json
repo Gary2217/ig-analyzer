@@ -4,6 +4,18 @@
       "title": "Instagram 與 Threads 帳號分析器",
       "subtitle": "示範用模擬工具：不會存取任何 Instagram / Threads 真實資料。"
     },
+    "connect": {
+      "title": "連結 Instagram 後開始分析",
+      "subtitle": "完成唯讀授權以載入你的真實個人檔案並開始分析。",
+      "cta": "連結 Instagram",
+      "viewDemo": "查看示範（可選）",
+      "hideDemo": "隱藏示範",
+      "missingEnv": {
+        "title": "尚未設定環境變數",
+        "desc": "連結前請先設定以下環境變數：",
+        "restartHint": "設定完成後請重啟開發伺服器（npm run dev）。"
+      }
+    },
     "tabs": {
       "instagram": "Instagram",
       "threads": "Threads"
@@ -30,6 +42,29 @@
   "results": {
     "title": "帳號分析結果",
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
+    "instagram": {
+      "connectedBadge": "已連結 Instagram",
+      "connectPromptTitle": "連結 Instagram 以載入真實資料",
+      "connectPromptDesc": "完成授權後，將以你的真實 IG 個人檔案與最近貼文取代示範資料。",
+      "connectPromptHandle": "（尚未連結）",
+      "connectCta": "連結 Instagram",
+      "connectGate": {
+        "title": "連結 Instagram",
+        "desc": "連結你的 Instagram 帳號以載入真實資料並查看分析結果。",
+        "cta": "連結 Instagram",
+        "back": "回首頁"
+      },
+      "missingEnv": {
+        "title": "尚未設定環境變數",
+        "desc": "OAuth 尚未設定完成，請先設定以下環境變數：",
+        "restartHint": "設定完成後請重啟開發伺服器（npm run dev）。"
+      },
+      "followersLabel": "追蹤者",
+      "recentPostsTitle": "最近 3 則貼文",
+      "recentPostsEmpty": "目前沒有可顯示的最近貼文。",
+      "recentPostsNoPreview": "無法預覽",
+      "recentPostsNoCaption": "（無內文）"
+    },
     "platform": {
       "instagram": "Instagram",
       "threads": "Threads"
