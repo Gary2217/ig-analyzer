@@ -45,7 +45,10 @@
       "maintain": "Maintain"
     },
     "badges": {
-      "demo": "Demo data / Sample output"
+      "demo": "Demo data / Sample output",
+      "inferredA": "Inferred (A)",
+      "modeHint": "A = inferred / estimated. C = official / connected.",
+      "inferredDesc": "is an estimate from visible signals. Official (C) requires a connected account."
     },
     "overview": {
       "kicker": "Overview",
@@ -65,6 +68,32 @@
         "postingFrequency": "Posting Frequency"
       },
       "keyFindings": "Key Findings"
+    },
+    "values": {
+      "accountType": {
+        "personal": "Personal account",
+        "creator": "Creator account",
+        "business": "Business account"
+      },
+      "accountAge": {
+        "new": "New",
+        "growing": "Growing",
+        "established": "Established"
+      },
+      "visibility": {
+        "public": "Public",
+        "limited": "Limited (simulated)"
+      },
+      "level": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      }
+    },
+    "demoNotes": {
+      "1": "This page is a demo output and does not access or store real social data.",
+      "2": "Metrics and recommendations are model-inferred, not official platform analytics.",
+      "3": "Use as a decision reference and validate against your actual performance data."
     },
     "summary": {
       "strengthEngagement": "Strength: engagement quality",
@@ -115,8 +144,8 @@
       "kicker": "Performance Overview",
       "title": "How your account performs across growth-critical dimensions",
       "cardTitle": "Performance Overview",
-      "radarTitle": "Radar & Signal Summary",
-      "radarDesc": "This section summarizes growth signals across authenticity, engagement, content consistency, and risk patterns.",
+      "radarTitle": "Visualized KPI overview",
+      "radarDesc": "Use the radar chart to quickly understand your account’s structure across content, engagement, frequency, growth, and monetization.",
       "howToInterpret": "How to interpret: prioritize the lowest dimension first; it usually caps overall growth."
     },
     "scores": {
@@ -198,6 +227,9 @@
       "step1": "Step 1",
       "step2": "Step 2",
       "step3": "Step 3",
+      "desc1": "Standardize your posting format and cadence for the next 7 days to stabilize distribution.",
+      "desc2": "Tighten your hook and early CTA to lift retention and drive higher-quality comments.",
+      "desc3": "Unlock the monetization roadmap to prioritize the highest-impact revenue actions.",
       "s1": {
         "title": "Improve content consistency",
         "line1": "Reduce variability to improve distribution.",
@@ -222,7 +254,19 @@
     },
     "footer": {
       "line": "Used by creators, agencies, and growth teams to evaluate social account potential.",
-      "upgrade": "Upgrade to Pro"
+      "upgrade": "Upgrade to Pro",
+      "proPitchTitle": "Need deeper official benchmarks and comparisons?",
+      "proPitchDesc": "If you’re ready to turn this report into an actionable growth plan.",
+      "proModalTitle": "Unlock advanced analysis",
+      "proModalDesc": "Pro includes a clearer strategy, reusable templates, and a prioritized growth roadmap.",
+      "proModalBulletsTitle": "With Pro you’ll get",
+      "proModalBullets": {
+        "1": "A clearer strategy with step-by-step execution",
+        "2": "A prioritized roadmap (what to do first, next, later)",
+        "3": "More copy-ready content and engagement templates"
+      },
+      "proModalPrimary": "Upgrade to Pro",
+      "proModalSecondary": "Maybe later"
     },
     "actions": {
       "analyzePost": "Analyze a Post",

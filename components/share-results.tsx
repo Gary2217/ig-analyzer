@@ -34,7 +34,7 @@ export function ShareResults({ platform, username, monetizationGap }: ShareResul
       setIsCopied(true)
       toast.success('已複製分享內容')
       setTimeout(() => setIsCopied(false), 2000)
-    } catch (err) {
+    } catch {
       toast.error('複製失敗，請重試')
     }
   }
@@ -52,7 +52,7 @@ export function ShareResults({ platform, username, monetizationGap }: ShareResul
         toast.success('已複製連結')
       }
     } catch (err) {
-      if (err.name !== 'AbortError') {
+      if (err instanceof Error && err.name !== 'AbortError') {
         console.error('分享失敗:', err)
       }
     }
@@ -60,16 +60,19 @@ export function ShareResults({ platform, username, monetizationGap }: ShareResul
 
   return (
     <Card className="border border-slate-700 bg-slate-800/50 hover:border-slate-600 transition-colors">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2 text-slate-100">
-          <Share2 className="h-5 w-5 text-blue-400" />
-          分享分析結果
+      <CardHeader className="pb-4 px-4 md:px-6">
+        <CardTitle className="text-lg flex items-center gap-3 text-slate-100">
+          <Share2 className="h-5 w-5 text-blue-400 shrink-0" />
+          <span className="leading-relaxed">把這次分析，直接變成可發布內容</span>
         </CardTitle>
+        <p className="text-sm text-slate-400 mt-1 leading-relaxed">
+          選一個風格，一鍵生成可直接貼到 Threads / 社群的文案。
+        </p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+      <CardContent className="p-4 md:p-6 space-y-4">
+        <div className="bg-slate-800/50 p-4 md:p-6 rounded-lg border border-slate-700">
           <p className="text-sm text-slate-400 mb-3 font-medium">
-            分享文案選擇：
+            選擇你要的語氣：
           </p>
           
           <div className="grid grid-cols-3 gap-2 mb-4">
@@ -110,8 +113,14 @@ export function ShareResults({ platform, username, monetizationGap }: ShareResul
               引戰/好奇版
             </button>
           </div>
+
+          <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+            {shareVariant === 'creator' && '適合：創作者日常更新、分享近況與成果。'}
+            {shareVariant === 'professional' && '適合：對接品牌／接案合作，用更專業的語氣呈現。'}
+            {shareVariant === 'curious' && '適合：引發互動與討論（好奇／引戰／反差感）。'}
+          </p>
           
-          <div className="bg-slate-900/30 border border-slate-700 rounded-lg p-4 text-sm mb-4">
+          <div className="bg-slate-900/30 border border-slate-700 rounded-lg p-4 md:p-6 text-sm mb-4">
             <p className="whitespace-pre-wrap text-slate-200 leading-relaxed">
               {shareVariant === 'creator' && (
                 `我剛分析了我的 ${platform === 'instagram' ? 'Instagram' : 'Threads'},\n距離穩定變現只差 ${monetizationGap}% 👀\n原來問題不是內容，而是方向。`
@@ -131,29 +140,29 @@ export function ShareResults({ platform, username, monetizationGap }: ShareResul
               className="flex-1 bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-600 text-slate-200"
               onClick={handleCopyLink}
             >
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-3 px-1">
                 {isCopied ? (
-                  <Check className="h-4 w-4 text-green-400" />
+                  <Check className="h-4 w-4 text-green-400 shrink-0" />
                 ) : (
-                  <Copy className="h-4 w-4 text-blue-400" />
+                  <Copy className="h-4 w-4 text-blue-400 shrink-0" />
                 )}
-                <span className="font-medium">{isCopied ? '已複製' : '複製連結'}</span>
+                <span className="font-medium leading-relaxed">{isCopied ? '已複製' : '複製文案'}</span>
               </span>
             </Button>
             <Button 
               className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700 text-white"
               onClick={handleShare}
             >
-              <Share2 className="h-4 w-4" />
-              <span className="font-medium">分享</span>
+              <Share2 className="h-4 w-4 shrink-0" />
+              <span className="font-medium leading-relaxed">立刻分享</span>
             </Button>
           </div>
         </div>
         
         <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-800">
-          <span className="flex items-center text-slate-400">
-            <Instagram className="h-3 w-3 mr-1.5 text-blue-400" />
-            @{username}
+          <span className="flex items-center gap-2 text-slate-400 px-1">
+            <Instagram className="h-3 w-3 text-blue-400 shrink-0" />
+            <span className="leading-relaxed">@{username}</span>
           </span>
           <span className="text-slate-500">Powered by IG Analyzer</span>
         </div>

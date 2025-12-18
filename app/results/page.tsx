@@ -1,16 +1,17 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Instagram, AtSign } from "lucide-react"
 import GrowthPaths from "../../components/growth-paths"
 import AccountScores from "../../components/account-scores"
 import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
+import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 
 type FakeAnalysis = {
   platform: "instagram" | "threads"
@@ -32,8 +33,9 @@ type FakeAnalysis = {
 }
 
 export default function ResultsPage() {
-  const { locale, t } = useI18n()
+  const { t } = useI18n()
   const router = useRouter()
+  const pathname = usePathname() || "/"
   const searchParams = useSearchParams()
   const [result, setResult] = useState<FakeAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +44,64 @@ export default function ResultsPage() {
   const [headerCopied, setHeaderCopied] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [activeKpi, setActiveKpi] = useState<"authenticity" | "engagement" | "automation" | null>(null)
+  const [activeNextId, setActiveNextId] = useState<"next-1" | "next-2" | "next-3" | null>(null)
+  const [isProModalOpen, setIsProModalOpen] = useState(false)
+  const [upgradeHighlight, setUpgradeHighlight] = useState(false)
+
+  const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
+
+  const accountTypeLabel = (value: string) => {
+    if (value === "Personal Account") return t("results.values.accountType.personal")
+    if (value === "Creator Account") return t("results.values.accountType.creator")
+    if (value === "Business Account") return t("results.values.accountType.business")
+    return value
+  }
+
+  const focusKpi = (kpi: "authenticity" | "engagement" | "automation") => {
+    setActiveKpi(kpi)
+    window.setTimeout(() => {
+      const el = document.getElementById(`account-scores-kpi-${kpi}`)
+      el?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 0)
+  }
+
+  const scrollToId = (id: string, block: ScrollLogicalPosition = "start") => {
+    const el = document.getElementById(id)
+    el?.scrollIntoView({ behavior: "smooth", block })
+  }
+
+  const flashUpgradeHighlight = () => {
+    setUpgradeHighlight(true)
+    window.setTimeout(() => setUpgradeHighlight(false), 1200)
+  }
+
+  const accountAgeLabel = (value: string) => {
+    if (value === "New account") return t("results.values.accountAge.new")
+    if (value === "Growing account") return t("results.values.accountAge.growing")
+    if (value === "Established account") return t("results.values.accountAge.established")
+    return value
+  }
+
+  const visibilityLabel = (value: string) => {
+    if (value === "Public") return t("results.values.visibility.public")
+    if (value === "Limited visibility (simulated)") return t("results.values.visibility.limited")
+    return value
+  }
+
+  const postingFrequencyLabel = (value: string) => {
+    if (value === "High") return t("results.values.level.high")
+    if (value === "Medium") return t("results.values.level.medium")
+    if (value === "Low") return t("results.values.level.low")
+    return value
+  }
+
+  const noteLabel = (value: string) => {
+    if (value === "Content cadence aligns with human posting windows.") return t("results.demoNotes.1")
+    if (value === "Engagement appears organic and consistent.") return t("results.demoNotes.2")
+    if (value === "No signs of automation detected.") return t("results.demoNotes.3")
+    return value
+  }
 
   useEffect(() => {
     // In a real app, you would fetch the analysis results here
@@ -66,14 +126,14 @@ export default function ResultsPage() {
           'No signs of automation detected.'
         ],
         confidenceScore: 92,
-        analysisType: 'Demo analysis',
-        disclaimer: 'This is a simulated analysis for demonstration purposes.'
+        analysisType: t('results.demo.analysisType'),
+        disclaimer: t('results.demo.disclaimer')
       })
       setLoading(false)
     }, 1000)
 
     return () => clearTimeout(timer)
-  }, [searchParams])
+  }, [searchParams, t])
 
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
@@ -273,8 +333,7 @@ export default function ResultsPage() {
   }
 
   const handleUpgrade = () => {
-    showToast(t("results.toast.comingSoon"))
-    router.push(`/${locale}`)
+    setIsProModalOpen(true)
   }
 
   const handleConnect = () => {
@@ -284,6 +343,12 @@ export default function ResultsPage() {
   const priorityLabel = (label: string) => {
     if (label === "High priority") return t("results.priority.high")
     if (label === "Medium priority") return t("results.priority.medium")
+    return t("results.priority.maintain")
+  }
+
+  const nextPriorityLabel = (status: "good" | "warning" | "risk") => {
+    if (status === "risk") return t("results.priority.high")
+    if (status === "warning") return t("results.priority.medium")
     return t("results.priority.maintain")
   }
 
@@ -313,12 +378,12 @@ export default function ResultsPage() {
             <AlertDescription>
               {t("results.states.noResultsDesc")}
             </AlertDescription>
-            <Button className="mt-4" onClick={() => router.push(`/${locale}`)}>{t("results.actions.backToHome")}</Button>
+            <Button className="mt-4" onClick={() => router.push(localePathname("/", activeLocale))}>{t("results.actions.backToHome")}</Button>
           </Alert>
         </main>
       ) : (
         <main className="min-h-screen w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
-          <div className="sticky top-0 z-50 border-b border-white/10 bg-[#0b1220]/80 backdrop-blur-md">
+          <div className="border-b border-white/10 bg-[#0b1220]/60 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
@@ -331,7 +396,12 @@ export default function ResultsPage() {
                         ? t("results.platform.instagram")
                         : t("results.platform.threads")}
                     </span>
-                    <span className="text-[11px] text-slate-300 truncate">@{safeResult.username}</span>
+                    <span
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-200 border border-emerald-400/20"
+                      title={t("results.badges.modeHint")}
+                    >
+                      {t("results.badges.inferredA")}
+                    </span>
                   </div>
                   <div className="text-sm font-semibold text-white truncate">{t("results.title")}</div>
                 </div>
@@ -341,18 +411,9 @@ export default function ResultsPage() {
                     size="sm"
                     variant="outline"
                     className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={() => router.push(`/${locale}/post-analysis`)}
+                    onClick={() => router.push(localePathname("/post-analysis", activeLocale))}
                   >
                     {t("results.actions.analyzePost")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={handleCopySummary}
-                    aria-busy={headerCopied ? true : undefined}
-                  >
-                    {headerCopied ? t("results.actions.copied") : t("results.actions.copySummary")}
                   </Button>
                   <Button
                     size="sm"
@@ -384,14 +445,40 @@ export default function ResultsPage() {
               <p className="text-sm text-slate-300 max-w-2xl">
                 {t("results.subtitle")}
               </p>
+              <div className="text-xs text-slate-400 max-w-3xl">
+                <span className="font-medium text-slate-300">{t("results.badges.inferredA")}</span> {t("results.badges.inferredDesc")}
+              </div>
             </div>
 
-          <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+          <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
             <CardContent className="p-6 sm:p-8">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300">{t("results.overview.kicker")}</div>
-                  <div className="text-3xl sm:text-4xl font-bold text-white tracking-tight">@{safeResult.username}</div>
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-600/40 border border-white/10 flex items-center justify-center shrink-0">
+                      <Instagram className="h-5 w-5 text-slate-100" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="text-2xl sm:text-3xl font-bold text-white tracking-tight min-w-0 truncate">
+                          {safeResult.username ? safeResult.username : "Instagram Account"}
+                        </div>
+                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20 shrink-0">
+                          {safeResult.platform === "instagram" ? (
+                            <Instagram className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <span className="h-3.5 w-3.5 rounded-full bg-blue-200/80 shrink-0" />
+                          )}
+                          {safeResult.platform === "instagram" ? t("results.platform.instagram") : t("results.platform.threads")}
+                        </span>
+                      </div>
+                      <div className="mt-1 inline-flex items-center gap-2 text-sm text-slate-300 min-w-0">
+                        <AtSign className="h-4 w-4 shrink-0 text-slate-400" />
+                        <span className="truncate">{safeResult.username ? `@${safeResult.username}` : "@unknown"}</span>
+                      </div>
+                    </div>
+                  </div>
                   <div className="text-sm text-slate-300 max-w-2xl">{headerInsight}</div>
                   {safeResult.platform === "threads" && (
                     <div className="text-xs text-slate-400 max-w-2xl">
@@ -404,19 +491,14 @@ export default function ResultsPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={handleUpgrade}
-                  >
-                    {t("results.actions.upgrade")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={() => showToast(t("results.toast.summarySoon"))}
-                  >
-                    {t("results.actions.viewSummary")}
-                  </Button>
+                  {false && (
+                    <Button
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                      onClick={handleUpgrade}
+                    >
+                      {t("results.actions.upgrade")}
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -425,7 +507,13 @@ export default function ResultsPage() {
                   const tone = metricTone(authenticityStatus)
                   return (
                     <Card
-                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => focusKpi("authenticity")}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") focusKpi("authenticity")
+                      }}
+                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 ${activeKpi === "authenticity" ? "ring-2 ring-blue-500/40" : ""}`}
                     >
                       <CardContent className="p-5 h-full flex flex-col justify-between">
                         <div className="flex items-center justify-between">
@@ -448,7 +536,13 @@ export default function ResultsPage() {
                   const tone = metricTone(engagementStatus)
                   return (
                     <Card
-                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => focusKpi("engagement")}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") focusKpi("engagement")
+                      }}
+                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 ${activeKpi === "engagement" ? "ring-2 ring-blue-500/40" : ""}`}
                     >
                       <CardContent className="p-5 h-full flex flex-col justify-between">
                         <div className="flex items-center justify-between">
@@ -470,7 +564,13 @@ export default function ResultsPage() {
                   const tone = metricTone(automationStatus)
                   return (
                     <Card
-                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => focusKpi("automation")}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") focusKpi("automation")
+                      }}
+                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 ${activeKpi === "automation" ? "ring-2 ring-blue-500/40" : ""}`}
                     >
                       <CardContent className="p-5 h-full flex flex-col justify-between">
                         <div className="flex items-center justify-between">
@@ -497,26 +597,31 @@ export default function ResultsPage() {
                 <div className="text-sm text-slate-300">{t("results.performance.kicker")}</div>
                 <h2 className="text-xl sm:text-2xl font-semibold text-white">{t("results.performance.title")}</h2>
               </div>
-              <Button variant="ghost" onClick={() => router.back()} className="text-slate-200 hover:bg-white/5">
-                <ArrowLeft className="mr-2 h-4 w-4" /> {t("results.actions.back")}
+              <Button
+                variant="ghost"
+                onClick={() => router.back()}
+                className="text-slate-200 hover:bg-white/5 inline-flex items-center gap-3"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                <span className="leading-relaxed">{t("results.actions.back")}</span>
               </Button>
             </div>
 
             {/* Responsive grid: 手機 1 欄；有 sidebar 時 md+ 並排，無 sidebar 則單欄撐滿 */}
             <div className="grid grid-cols-1 gap-8 lg:gap-6">
               <div className="w-full lg:col-span-2 space-y-6 lg:space-y-4">
-                <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+                <Card id="results-section-performance" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
                   <CardHeader className="border-b border-white/10">
-                    <CardTitle className="text-2xl lg:text-2xl font-bold">
-                      {t("results.performance.cardTitle")}
-                      <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/50 text-blue-300 border border-blue-800/50">
+                    <CardTitle className="text-2xl lg:text-2xl font-bold flex items-center justify-between gap-3 min-w-0">
+                      <span className="min-w-0 truncate">{t("results.performance.cardTitle")}</span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/50 text-blue-300 border border-blue-800/50 shrink-0">
                         {safeResult.platform === "instagram"
                           ? t("results.platform.instagram")
                           : t("results.platform.threads")}
                       </span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 md:p-6">
                     <div className="space-y-4">
                       <div>
                         <div className="text-sm font-medium text-white">{t("results.performance.radarTitle")}</div>
@@ -530,7 +635,8 @@ export default function ResultsPage() {
                         engagementQuality: safeResult.engagementQuality as "Low" | "Medium" | "High",
                         contentConsistency: safeResult.contentConsistency as "Low" | "Medium" | "High",
                         postingFrequency: safeResult.postingFrequency as "Low" | "Medium" | "High"
-                      }} 
+                      }}
+                      activeKpi={activeKpi}
                     />
                       <div className="pt-2 border-t border-white/10 text-sm text-slate-300">
                         {t("results.performance.howToInterpret")}
@@ -539,15 +645,15 @@ export default function ResultsPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+                <Card id="results-section-monetization" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
                   <CardHeader className="border-b border-white/10">
                     <CardTitle className="text-xl lg:text-xl font-bold">{t("results.monetization.title")}</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 md:p-6">
                     <p className="text-xs text-slate-400 mb-3">
                       {t("results.monetization.subtitle")}
                     </p>
-                    <div className="relative rounded-xl border border-white/10 bg-white/5 p-5">
+                    <div className="relative rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
                       <div className={!isSubscribed ? "blur-sm pointer-events-none select-none" : undefined}>
                         <MonetizationSection 
                           monetizationGap={18} // This would be calculated from the analysis in a real app
@@ -557,7 +663,7 @@ export default function ResultsPage() {
 
                       {!isSubscribed && (
                         <div className="absolute inset-0 flex items-center justify-center p-4">
-                          <div className="w-full max-w-3xl rounded-xl border border-white/10 bg-[#0b1220]/80 backdrop-blur-sm p-6">
+                          <div className="w-full max-w-3xl rounded-xl border border-white/10 bg-[#0b1220]/80 backdrop-blur-sm p-4 md:p-6">
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="space-y-3">
                                 <div className="text-sm text-slate-200">
@@ -602,28 +708,28 @@ export default function ResultsPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+                <Card id="results-section-insights" className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
                   <CardHeader className="border-b border-white/10">
                     <CardTitle className="text-xl lg:text-xl font-bold">{t("results.insights.title")}</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 md:p-6">
                     <div className="space-y-4 lg:space-y-3">
                       <div className="grid grid-cols-2 gap-6 lg:gap-4">
                         <div>
                           <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountType")}</p>
-                          <p className="font-medium">{safeResult.accountType}</p>
+                          <p className="font-medium">{accountTypeLabel(safeResult.accountType)}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountAge")}</p>
-                          <p className="font-medium">{safeResult.accountAge}</p>
+                          <p className="font-medium">{accountAgeLabel(safeResult.accountAge)}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">{t("results.insights.fields.visibility")}</p>
-                          <p className="font-medium">{safeResult.visibility}</p>
+                          <p className="font-medium">{visibilityLabel(safeResult.visibility)}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">{t("results.insights.fields.postingFrequency")}</p>
-                          <p className="font-medium">{safeResult.postingFrequency}</p>
+                          <p className="font-medium">{postingFrequencyLabel(safeResult.postingFrequency)}</p>
                         </div>
                       </div>
 
@@ -634,7 +740,7 @@ export default function ResultsPage() {
                             {safeResult.notes.map((note, i) => (
                               <li key={i} className="flex items-start">
                                 <span className="text-green-500 mr-2">•</span>
-                                <span>{note}</span>
+                                <span className="leading-relaxed">{noteLabel(note)}</span>
                               </li>
                             ))}
                           </ul>
@@ -649,7 +755,7 @@ export default function ResultsPage() {
 
               {hasSidebar && (
                 <div className="lg:col-span-1 w-full">
-                  <Card className="sticky top-4 max-h-[calc(100vh-6rem)] rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+                  <Card className="sticky top-4 max-h-[calc(100vh-6rem)] rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
                     <CardHeader className="border-b border-white/10">
                       <CardTitle className="text-base">{t("results.sidebar.title")}</CardTitle>
                       <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
@@ -657,7 +763,7 @@ export default function ResultsPage() {
                       </p>
                     </CardHeader>
                     <div className="flex-1 overflow-y-auto">
-                      <CardContent className="pb-6 lg:pb-4">
+                      <CardContent className="p-4 md:p-6 pb-6 lg:pb-4">
                         <GrowthPaths
                           result={{
                             handle: safeResult.username,
@@ -674,14 +780,14 @@ export default function ResultsPage() {
               )}
             </div>
 
-            <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+            <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
               <CardHeader className="border-b border-white/10">
                 <CardTitle className="text-xl lg:text-xl font-bold">{t("results.next.title")}</CardTitle>
                 <p className="text-sm text-slate-400 mt-1">
                   {t("results.next.subtitle")}
                 </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 md:p-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   {(() => {
                     const status =
@@ -691,24 +797,35 @@ export default function ResultsPage() {
                         ? "warning"
                         : "risk"
                     const tone = metricTone(status)
-                    const priority =
-                      status === "risk" ? "High priority" : status === "warning" ? "Medium priority" : "Maintain"
+                    const priority = nextPriorityLabel(status)
                     return (
-                      <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                        <CardContent className="p-5 h-full">
+                      <Card
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          setActiveNextId("next-1")
+                          window.setTimeout(() => scrollToId("next-1"), 0)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            setActiveNextId("next-1")
+                            window.setTimeout(() => scrollToId("next-1"), 0)
+                          }
+                        }}
+                        className={`rounded-xl border border-white/10 bg-white/5 cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
+                          activeNextId === "next-1" ? "ring-2 ring-blue-500/40" : ""
+                        }`}
+                      >
+                        <CardContent className="p-4 md:p-6 h-full">
                           <div className="flex items-center justify-between">
                             <div className="text-sm font-medium text-white">{t("results.next.step1")}</div>
                             <span
                               className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
                             >
-                              {priorityLabel(priority)}
+                              {priority}
                             </span>
                           </div>
-                          <div className="mt-2 text-base font-semibold text-white">{t("results.next.s1.title")}</div>
-                          <div className="mt-2 text-sm text-slate-300">{t("results.next.s1.line1")}</div>
-                          <div className="mt-1 text-sm text-slate-300">
-                            {t("results.next.s1.line2")}
-                          </div>
+                          <div className="mt-3 text-sm text-slate-300 leading-relaxed">{t("results.next.desc1")}</div>
                         </CardContent>
                       </Card>
                     )
@@ -717,26 +834,35 @@ export default function ResultsPage() {
                   {(() => {
                     const status = engagementStatus
                     const tone = metricTone(status)
-                    const priority =
-                      status === "risk" ? "High priority" : status === "warning" ? "Medium priority" : "Maintain"
+                    const priority = nextPriorityLabel(status)
                     return (
-                      <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                        <CardContent className="p-5 h-full">
+                      <Card
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          setActiveNextId("next-2")
+                          window.setTimeout(() => scrollToId("next-2"), 0)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            setActiveNextId("next-2")
+                            window.setTimeout(() => scrollToId("next-2"), 0)
+                          }
+                        }}
+                        className={`rounded-xl border border-white/10 bg-white/5 cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
+                          activeNextId === "next-2" ? "ring-2 ring-blue-500/40" : ""
+                        }`}
+                      >
+                        <CardContent className="p-4 md:p-6 h-full">
                           <div className="flex items-center justify-between">
                             <div className="text-sm font-medium text-white">{t("results.next.step2")}</div>
                             <span
                               className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
                             >
-                              {priorityLabel(priority)}
+                              {priority}
                             </span>
                           </div>
-                          <div className="mt-2 text-base font-semibold text-white">{t("results.next.s2.title")}</div>
-                          <div className="mt-2 text-sm text-slate-300">
-                            {t("results.next.s2.line1")}
-                          </div>
-                          <div className="mt-1 text-sm text-slate-300">
-                            {t("results.next.s2.line2")}
-                          </div>
+                          <div className="mt-3 text-sm text-slate-300 leading-relaxed">{t("results.next.desc2")}</div>
                         </CardContent>
                       </Card>
                     )
@@ -745,83 +871,202 @@ export default function ResultsPage() {
                   {(() => {
                     const status = isSubscribed ? "good" : "warning"
                     const tone = metricTone(status)
-                    const priority = status === "warning" ? "High priority" : "Maintain"
+                    const priority = status === "warning" ? t("results.priority.high") : t("results.priority.maintain")
                     return (
-                      <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                        <CardContent className="p-5 h-full">
+                      <Card
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          setActiveNextId("next-3")
+                          window.setTimeout(() => scrollToId("next-3"), 0)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            setActiveNextId("next-3")
+                            window.setTimeout(() => scrollToId("next-3"), 0)
+                          }
+                        }}
+                        className={`rounded-xl border border-white/10 bg-white/5 cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
+                          activeNextId === "next-3" ? "ring-2 ring-blue-500/40" : ""
+                        }`}
+                      >
+                        <CardContent className="p-4 md:p-6 h-full">
                           <div className="flex items-center justify-between">
                             <div className="text-sm font-medium text-white">{t("results.next.step3")}</div>
                             <span
                               className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
                             >
-                              {priorityLabel(priority)}
+                              {priority}
                             </span>
                           </div>
-                          <div className="mt-2 text-base font-semibold text-white">{t("results.next.s3.title")}</div>
-                          <div className="mt-2 text-sm text-slate-300">{t("results.next.s3.line1")}</div>
-                          <div className="mt-1 text-sm text-slate-300">
-                            {t("results.next.s3.line2")}
-                          </div>
+                          <div className="mt-3 text-sm text-slate-300 leading-relaxed">{t("results.next.desc3")}</div>
                         </CardContent>
                       </Card>
                     )
                   })()}
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-              <CardHeader className="border-b border-white/10">
-                <CardTitle className="text-xl lg:text-xl font-bold">{t("results.copyable.title")}</CardTitle>
-                <p className="text-sm text-slate-400 mt-1">
-                  {t("results.copyable.subtitle")}
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
-                  <textarea
-                    className="w-full min-h-[180px] rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200 outline-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-                    readOnly
-                    defaultValue={summaryText}
-                  />
-                  <Button
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full lg:w-auto focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={handleCopySummary}
-                    aria-busy={headerCopied ? true : undefined}
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <Card
+                    id="next-1"
+                    className={`rounded-xl border border-white/10 bg-white/5 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
+                      activeNextId === "next-1" ? "ring-2 ring-blue-500/40" : ""
+                    }`}
                   >
-                    {t("results.copyable.copy")}
-                  </Button>
+                    <CardContent className="p-4 md:p-6">
+                      <div className="text-sm font-semibold text-white">{t("results.next.s1.title")}</div>
+                      <div className="mt-2 text-sm text-slate-300 leading-relaxed">{t("results.next.s1.line1")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.next.s1.line2")}</div>
+                    </CardContent>
+                  </Card>
+                  <Card
+                    id="next-2"
+                    className={`rounded-xl border border-white/10 bg-white/5 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
+                      activeNextId === "next-2" ? "ring-2 ring-blue-500/40" : ""
+                    }`}
+                  >
+                    <CardContent className="p-4 md:p-6">
+                      <div className="text-sm font-semibold text-white">{t("results.next.s2.title")}</div>
+                      <div className="mt-2 text-sm text-slate-300 leading-relaxed">{t("results.next.s2.line1")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.next.s2.line2")}</div>
+                    </CardContent>
+                  </Card>
+                  <Card
+                    id="next-3"
+                    className={`rounded-xl border border-white/10 bg-white/5 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
+                      activeNextId === "next-3" ? "ring-2 ring-blue-500/40" : ""
+                    }`}
+                  >
+                    <CardContent className="p-4 md:p-6">
+                      <div className="text-sm font-semibold text-white">{t("results.next.s3.title")}</div>
+                      <div className="mt-2 text-sm text-slate-300 leading-relaxed">{t("results.next.s3.line1")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.next.s3.line2")}</div>
+                    </CardContent>
+                  </Card>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">
-                  {t("results.copyable.disclaimer")}
-                </p>
               </CardContent>
             </Card>
 
-            <div className="mt-12 lg:mt-8 space-y-8 lg:space-y-6">
+            {false && (
+              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
+                <CardHeader className="border-b border-white/10">
+                  <CardTitle className="text-xl lg:text-xl font-bold">{t("results.copyable.title")}</CardTitle>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {t("results.copyable.subtitle")}
+                  </p>
+                </CardHeader>
+                <CardContent className="p-4 md:p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
+                    <textarea
+                      className="w-full min-h-[180px] rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200 outline-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                      readOnly
+                      defaultValue={summaryText}
+                    />
+                    <Button
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full lg:w-auto focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                      onClick={handleCopySummary}
+                      aria-busy={headerCopied ? true : undefined}
+                    >
+                      {t("results.copyable.copy")}
+                    </Button>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-400 leading-relaxed">
+                    {t("results.copyable.disclaimer")}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="mt-12 lg:mt-8 space-y-6">
               <ShareResults 
                 platform={safeResult.platform === 'instagram' ? 'Instagram' : 'Threads'}
                 username={safeResult.username}
                 monetizationGap={18}
               />
-              <div className="text-center text-sm text-slate-400 pt-4 lg:pt-3 border-t border-slate-800">
-                <p>{safeResult.disclaimer}</p>
-              </div>
-            </div>
-            <div className="mt-16 pt-8 border-t border-gray-800/50">
-              <div className="text-center text-gray-400 text-sm">
-                <p>{t("results.footer.line")}</p>
-                <Button
-                  className="mt-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                  onClick={handleUpgrade}
-                >
-                  {t("results.footer.upgrade")}
-                </Button>
+              <div className={`rounded-xl border border-white/10 bg-white/5 px-4 md:px-6 py-4 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${upgradeHighlight ? "ring-2 ring-blue-500/50" : ""}`}>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-slate-200 leading-relaxed">{t("results.footer.proPitchTitle")}</div>
+                    <div className="mt-1 text-xs text-slate-400 leading-relaxed">{t("results.footer.proPitchDesc")}</div>
+                  </div>
+                  <Button
+                    id="results-pro-upgrade"
+                    variant="outline"
+                    className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 w-full md:w-auto"
+                    onClick={handleUpgrade}
+                  >
+                    {t("results.footer.upgrade")}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
           </div>
         </main>
+      )}
+
+      {isProModalOpen && (
+        <div className="fixed inset-0 z-[70]">
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setIsProModalOpen(false)}
+          />
+          <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
+            <div className="p-4 md:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="mt-1 text-lg font-semibold text-white leading-snug">
+                    {t("results.footer.proModalTitle")}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-300 leading-relaxed">
+                    {t("results.footer.proModalDesc")}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-slate-200 hover:bg-white/5"
+                  onClick={() => setIsProModalOpen(false)}
+                >
+                  {t("results.footer.proModalSecondary")}
+                </Button>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                <div className="text-sm font-medium text-white">{t("results.footer.proModalBulletsTitle")}</div>
+                <ul className="mt-2 text-sm text-slate-200 space-y-1.5">
+                  <li>{t("results.footer.proModalBullets.1")}</li>
+                  <li>{t("results.footer.proModalBullets.2")}</li>
+                  <li>{t("results.footer.proModalBullets.3")}</li>
+                </ul>
+              </div>
+
+              <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                  onClick={() => setIsProModalOpen(false)}
+                >
+                  {t("results.footer.proModalSecondary")}
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                  onClick={() => {
+                    setIsProModalOpen(false)
+                    scrollToId("results-pro-upgrade", "center")
+                    flashUpgradeHighlight()
+                  }}
+                >
+                  {t("results.footer.proModalPrimary")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

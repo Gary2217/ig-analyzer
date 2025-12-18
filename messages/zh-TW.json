@@ -45,7 +45,10 @@
       "maintain": "維持"
     },
     "badges": {
-      "demo": "示範資料／樣本輸出"
+      "demo": "示範資料／樣本輸出",
+      "inferredA": "推論（A）",
+      "modeHint": "A＝推論／估算；C＝官方／需連結帳號。",
+      "inferredDesc": "為根據可見訊號的推估；官方（C）需連結帳號後才可顯示。"
     },
     "overview": {
       "kicker": "總覽",
@@ -65,6 +68,32 @@
         "postingFrequency": "發文頻率"
       },
       "keyFindings": "重點發現"
+    },
+    "values": {
+      "accountType": {
+        "personal": "個人帳號",
+        "creator": "創作者帳號",
+        "business": "商業帳號"
+      },
+      "accountAge": {
+        "new": "新帳號",
+        "growing": "成長中",
+        "established": "已建立"
+      },
+      "visibility": {
+        "public": "公開",
+        "limited": "可見度受限（示範）"
+      },
+      "level": {
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+      }
+    },
+    "demoNotes": {
+      "1": "此頁面為示範輸出；不會存取或儲存任何真實社群資料。",
+      "2": "指標與建議為模型推論，並非平台官方後台數據。",
+      "3": "請將結果作為決策參考，並以實際營運數據交叉驗證。"
     },
     "summary": {
       "strengthEngagement": "優勢：互動品質",
@@ -115,8 +144,8 @@
       "kicker": "表現總覽",
       "title": "帳號在關鍵成長維度的表現",
       "cardTitle": "表現總覽",
-      "radarTitle": "雷達圖與訊號摘要",
-      "radarDesc": "彙整真實度、互動、內容一致性與風險等成長訊號。",
+      "radarTitle": "關鍵績效指標的視覺化呈現",
+      "radarDesc": "用雷達圖快速掌握帳號在內容、互動、頻率、成長與變現的結構分佈。",
       "howToInterpret": "解讀方式：優先改善最低的維度，通常它會限制整體成長。"
     },
     "scores": {
@@ -198,6 +227,9 @@
       "step1": "第 1 步",
       "step2": "第 2 步",
       "step3": "第 3 步",
+      "desc1": "接下來 7 天固定版型與節奏，先把分發與觸及穩定下來。",
+      "desc2": "強化開頭 Hook 與早期 CTA，提升留存並帶動更有效的留言互動。",
+      "desc3": "解鎖變現路線圖，將高影響的營收行動排入優先序。",
       "s1": {
         "title": "提升內容一致性",
         "line1": "降低變異度以提升分發穩定性。",
@@ -222,7 +254,19 @@
     },
     "footer": {
       "line": "創作者、代理商與成長團隊用來評估社群帳號潛力。",
-      "upgrade": "升級 Pro"
+      "upgrade": "升級 Pro",
+      "proPitchTitle": "需要更深入的官方數據與比較？",
+      "proPitchDesc": "如果你準備往下一步，把分析變成可執行的成長策略。",
+      "proModalTitle": "解鎖進階分析",
+      "proModalDesc": "Pro 會提供更完整策略、可複製模板、成長路線與優先順序。",
+      "proModalBulletsTitle": "升級 Pro 可解鎖",
+      "proModalBullets": {
+        "1": "更完整的策略拆解與執行步驟",
+        "2": "更清楚的優先順序（先做什麼、再做什麼）",
+        "3": "更多可直接套用的內容／互動模板"
+      },
+      "proModalPrimary": "升級 Pro 解鎖",
+      "proModalSecondary": "稍後"
     },
     "actions": {
       "analyzePost": "分析貼文",
