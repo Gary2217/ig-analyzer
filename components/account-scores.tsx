@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { RadarChartComponent } from "./ui/radar-chart"
 import { ProgressBar } from "./ui/progress-bar"
+import { useI18n } from "./locale-provider"
 
 interface ScoreCardProps {
   title: string
@@ -10,6 +11,8 @@ interface ScoreCardProps {
 }
 
 const ScoreCard = ({ title, score, level, description }: ScoreCardProps) => {
+  const { t } = useI18n()
+
   const getLevelColor = () => {
     switch (level) {
       case 'High':
@@ -21,6 +24,12 @@ const ScoreCard = ({ title, score, level, description }: ScoreCardProps) => {
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
     }
+  }
+
+  const levelLabel = () => {
+    if (level === "High") return t("results.scores.level.high")
+    if (level === "Medium") return t("results.scores.level.medium")
+    return t("results.scores.level.low")
   }
 
   const getScoreColor = () => {
@@ -35,7 +44,7 @@ const ScoreCard = ({ title, score, level, description }: ScoreCardProps) => {
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{title}</CardTitle>
           <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${getLevelColor()}`}>
-            {level} {level === 'High' ? 'Risk' : level === 'Medium' ? 'Risk' : 'Risk'}
+            {levelLabel()} {t("results.scores.risk")}
           </span>
         </div>
       </CardHeader>
@@ -44,7 +53,7 @@ const ScoreCard = ({ title, score, level, description }: ScoreCardProps) => {
           <span className={`text-3xl font-bold ${getScoreColor()}`}>
             {score}%
           </span>
-          <span className="text-sm text-muted-foreground">confidence score</span>
+          <span className="text-sm text-muted-foreground">{t("results.scores.confidenceScore")}</span>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
       </CardContent>
@@ -64,6 +73,8 @@ interface AccountScoresProps {
 }
 
 export default function AccountScores({ result }: AccountScoresProps) {
+  const { t } = useI18n()
+
   // Map qualitative values to numeric scores
   const mapToScore = (value: string): number => {
     if (value === 'High') return 85
@@ -72,28 +83,28 @@ export default function AccountScores({ result }: AccountScoresProps) {
   }
 
   const radarData = [
-    { subject: 'Content', value: mapToScore(result.contentConsistency) },
-    { subject: 'Engagement', value: mapToScore(result.engagementQuality) },
-    { subject: 'Frequency', value: mapToScore(result.postingFrequency) },
-    { subject: 'Growth', value: mapToScore(result.abnormalBehaviorRisk === 'Low' ? 'High' : 'Medium') },
-    { subject: 'Monetization', value: mapToScore(result.confidenceScore > 70 ? 'High' : 'Medium') },
+    { subject: t("results.scores.radar.content"), value: mapToScore(result.contentConsistency) },
+    { subject: t("results.scores.radar.engagement"), value: mapToScore(result.engagementQuality) },
+    { subject: t("results.scores.radar.frequency"), value: mapToScore(result.postingFrequency) },
+    { subject: t("results.scores.radar.growth"), value: mapToScore(result.abnormalBehaviorRisk === 'Low' ? 'High' : 'Medium') },
+    { subject: t("results.scores.radar.monetization"), value: mapToScore(result.confidenceScore > 70 ? 'High' : 'Medium') },
   ]
 
   const progressScores = [
     {
-      label: 'Growth Potential',
+      label: t("results.scores.kpis.items.growthPotential.label"),
       value: result.abnormalBehaviorRisk === 'Low' ? 85 : 60,
-      description: 'Potential for audience growth based on current metrics'
+      description: t("results.scores.kpis.items.growthPotential.desc"),
     },
     {
-      label: 'Commercial Value',
+      label: t("results.scores.kpis.items.commercialValue.label"),
       value: result.confidenceScore > 70 ? 90 : result.confidenceScore > 50 ? 65 : 40,
-      description: 'Attractiveness to potential sponsors and advertisers'
+      description: t("results.scores.kpis.items.commercialValue.desc"),
     },
     {
-      label: 'Collaboration Readiness',
+      label: t("results.scores.kpis.items.collaborationReadiness.label"),
       value: result.engagementQuality === 'High' ? 88 : result.engagementQuality === 'Medium' ? 65 : 45,
-      description: 'Suitability for brand partnerships and collaborations'
+      description: t("results.scores.kpis.items.collaborationReadiness.desc"),
     }
   ]
 
@@ -101,29 +112,29 @@ export default function AccountScores({ result }: AccountScoresProps) {
     <div className="space-y-8">
       <div className="grid gap-4 md:grid-cols-3">
         <ScoreCard 
-          title="Account Authenticity"
+          title={t("results.scores.cards.authenticity.title")}
           score={result.confidenceScore}
           level={result.abnormalBehaviorRisk as "Low" | "Medium" | "High"}
-          description="Measures how authentic the account appears based on behavior patterns."
+          description={t("results.scores.cards.authenticity.desc")}
         />
         <ScoreCard
-          title="Engagement Quality"
+          title={t("results.scores.cards.engagement.title")}
           score={mapToScore(result.engagementQuality)}
           level={result.engagementQuality as "Low" | "Medium" | "High"}
-          description="Evaluates the quality and authenticity of engagement."
+          description={t("results.scores.cards.engagement.desc")}
         />
         <ScoreCard
-          title="Automation Risk"
+          title={t("results.scores.cards.automation.title")}
           score={100 - mapToScore(result.automationLikelihood)}
           level={result.automationLikelihood as "Low" | "Medium" | "High"}
-          description="Indicates likelihood of automated behavior."
+          description={t("results.scores.cards.automation.desc")}
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Account Strength Overview</CardTitle>
-          <p className="text-sm text-muted-foreground">Visual representation of key performance indicators</p>
+          <CardTitle>{t("results.scores.overview.title")}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t("results.scores.overview.subtitle")}</p>
         </CardHeader>
         <CardContent>
           <div className="h-64 md:h-80">
@@ -134,8 +145,8 @@ export default function AccountScores({ result }: AccountScoresProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Key Performance Scores</CardTitle>
-          <p className="text-sm text-muted-foreground">Detailed breakdown of performance metrics</p>
+          <CardTitle>{t("results.scores.kpis.title")}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t("results.scores.kpis.subtitle")}</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {progressScores.map((item, index) => (
