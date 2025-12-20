@@ -11,6 +11,8 @@ import GrowthPaths from "../../components/growth-paths"
 import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
+import ConnectedGate from "../[locale]/results/ConnectedGate"
+import { mockAnalysis } from "../[locale]/results/mockData"
 
 type IgMeResponse = {
   username: string
@@ -45,11 +47,67 @@ type FakeAnalysis = {
   disclaimer: string
 }
 
+function ProgressRing({
+  value,
+  label,
+  subLabel,
+}: {
+  value: number
+  label: string
+  subLabel?: string
+}) {
+  const v = Math.max(0, Math.min(100, value))
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+      <div
+        className="h-12 w-12 rounded-full"
+        style={{
+          background: `conic-gradient(#34d399 ${v}%, rgba(255,255,255,0.12) ${v}%)`,
+        }}
+      >
+        <div className="m-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full bg-[#0b1220]/90 flex items-center justify-center">
+          <span className="text-xs font-semibold text-white">{v}%</span>
+        </div>
+      </div>
+      <div className="leading-tight">
+        <div className="text-sm font-semibold text-white">{label}</div>
+        {subLabel ? <div className="text-xs text-white/60">{subLabel}</div> : null}
+      </div>
+    </div>
+  )
+}
+
 export default function ResultsPage() {
   const { t } = useI18n()
   const router = useRouter()
   const pathname = usePathname() || "/"
   const searchParams = useSearchParams()
+
+  const [media, setMedia] = useState<Array<{ id: string; timestamp: string }>>([])
+
+  const [selectedGoal, setSelectedGoal] = useState<
+    | null
+    | "growFollowers"
+    | "increaseLikes"
+    | "increaseComments"
+    | "boostReach"
+    | "buildPersonalBrand"
+    | "getBrandDeals"
+    | "becomeCreator"
+    | "monetizeConsistently"
+  >(null)
+
+  useEffect(() => {
+    fetch("/api/instagram/media")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.data) {
+          setMedia(data.data)
+        }
+      })
+      .catch(console.error)
+  }, [])
+
   const [result, setResult] = useState<FakeAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
   const [igMe, setIgMe] = useState<IgMeResponse | null>(null)
@@ -438,82 +496,194 @@ export default function ResultsPage() {
     return t("results.priority.maintain")
   }
 
+  const insights = [
+    {
+      title: t("results.insights.items.0.title"),
+      description: t("results.insights.items.0.description"),
+    },
+    {
+      title: t("results.insights.items.1.title"),
+      description: t("results.insights.items.1.description"),
+    },
+    {
+      title: t("results.insights.items.2.title"),
+      description: t("results.insights.items.2.description"),
+    },
+  ]
+
+  const goalOptions: Array<{
+    id: NonNullable<typeof selectedGoal>
+    labelKey: string
+    primaryKpi: "followers" | "engagementRate" | "avgLikes" | "avgComments" | "engagementVolume" | "postsPerWeek"
+  }> = [
+    {
+      id: "growFollowers",
+      labelKey: "results.goals.options.growthStageAccount",
+      primaryKpi: "followers",
+    },
+    {
+      id: "increaseLikes",
+      labelKey: "results.goals.options.personalBrandBuilder",
+      primaryKpi: "avgLikes",
+    },
+    {
+      id: "increaseComments",
+      labelKey: "results.goals.options.trafficFocusedCreator",
+      primaryKpi: "avgComments",
+    },
+    {
+      id: "boostReach",
+      labelKey: "results.goals.options.highEngagementCommunity",
+      primaryKpi: "postsPerWeek",
+    },
+    {
+      id: "buildPersonalBrand",
+      labelKey: "results.goals.options.serviceClientReady",
+      primaryKpi: "engagementRate",
+    },
+    {
+      id: "getBrandDeals",
+      labelKey: "results.goals.options.brandCollaborationProfile",
+      primaryKpi: "engagementRate",
+    },
+    {
+      id: "becomeCreator",
+      labelKey: "results.goals.options.fullTimeCreator",
+      primaryKpi: "postsPerWeek",
+    },
+    {
+      id: "monetizeConsistently",
+      labelKey: "results.goals.options.monetizationFocusedAccount",
+      primaryKpi: "engagementRate",
+    },
+  ]
+
+  const selectedGoalConfig = selectedGoal ? goalOptions.find((o) => o.id === selectedGoal) : null
+
+  const kpis: Array<{
+    id: "followers" | "engagementRate" | "avgLikes" | "avgComments" | "engagementVolume" | "postsPerWeek"
+    titleKey: string
+    descriptionKey: string
+    value: string
+  }> = [
+    {
+      id: "followers",
+      titleKey: "results.kpis.followers.title",
+      descriptionKey: "results.kpis.followers.description",
+      value: mockAnalysis.profile.followers.toLocaleString(),
+    },
+    {
+      id: "engagementRate",
+      titleKey: "results.kpis.engagementRate.title",
+      descriptionKey: "results.kpis.engagementRate.description",
+      value: `${(mockAnalysis.metrics.engagementRate * 100).toFixed(1)}%`,
+    },
+    {
+      id: "avgLikes",
+      titleKey: "results.kpis.avgLikes.title",
+      descriptionKey: "results.kpis.avgLikes.description",
+      value: mockAnalysis.metrics.avgLikes.toLocaleString(),
+    },
+    {
+      id: "avgComments",
+      titleKey: "results.kpis.avgComments.title",
+      descriptionKey: "results.kpis.avgComments.description",
+      value: mockAnalysis.metrics.avgComments.toLocaleString(),
+    },
+    {
+      id: "engagementVolume",
+      titleKey: "results.kpis.engagementVolume.title",
+      descriptionKey: "results.kpis.engagementVolume.description",
+      value: (mockAnalysis.metrics.avgLikes + mockAnalysis.metrics.avgComments).toLocaleString(),
+    },
+    {
+      id: "postsPerWeek",
+      titleKey: "results.kpis.postsPerWeek.title",
+      descriptionKey: "results.kpis.postsPerWeek.description",
+      value: mockAnalysis.metrics.postsPerWeek.toFixed(1),
+    },
+  ]
+
+  const kpiInterpretationKey = (
+    goalId: NonNullable<typeof selectedGoal>,
+    kpiId: (typeof kpis)[number]["id"],
+    field: "focus" | "role" | "status" | "note"
+  ) => `results.goals.interpretations.${goalId}.${kpiId}.${field}`
+
   return (
-    <>
-      <div aria-live="polite" className="sr-only">
-        {toast ?? ""}
-      </div>
-      {toast && (
-        <div className="fixed top-4 right-4 z-[60]">
-          <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-4 py-3 text-sm text-slate-200 shadow-xl">
-            {toast}
+    <ConnectedGate
+      notConnectedUI={
+        <>
+          <div aria-live="polite" className="sr-only">
+            {toast ?? ""}
           </div>
-        </div>
-      )}
-      {igMeLoading || loading ? (
-        <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-            <p>{t("results.states.loading")}</p>
-          </div>
-        </main>
-      ) : igMeUnauthorized ? (
-        <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
-          <Card className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-2xl sm:text-3xl font-bold text-white">
-                {t("results.instagram.connectGate.title")}
-              </CardTitle>
-              <p className="text-sm text-slate-300 mt-2">
-                {t("results.instagram.connectGate.desc")}
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {connectEnvError === "missing_env" && (
-                <Alert>
-                  <AlertTitle>{t("results.instagram.missingEnv.title")}</AlertTitle>
-                  <AlertDescription>
-                    <div className="space-y-2">
-                      <div>{t("results.instagram.missingEnv.desc")}</div>
-                      <div className="font-mono text-xs break-all">
-                        APP_BASE_URL / META_APP_ID / META_APP_SECRET
-                      </div>
-                      <div>{t("results.instagram.missingEnv.restartHint")}</div>
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg"
-                  onClick={handleConnect}
-                  disabled={igMeLoading}
-                >
-                  {t("results.instagram.connectGate.cta")}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg"
-                  onClick={() => router.push(localePathname("/", activeLocale))}
-                >
-                  {t("results.instagram.connectGate.back")}
-                </Button>
+          {toast && (
+            <div className="fixed top-4 right-4 z-[60]">
+              <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-4 py-3 text-sm text-slate-200 shadow-xl">
+                {toast}
               </div>
-            </CardContent>
-          </Card>
-        </main>
-      ) : !hasResult ? (
-        <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
-          <Alert>
-            <AlertTitle>{t("results.states.noResultsTitle")}</AlertTitle>
-            <AlertDescription>
-              {t("results.states.noResultsDesc")}
-            </AlertDescription>
-            <Button className="mt-4" onClick={() => router.push(localePathname("/", activeLocale))}>{t("results.actions.backToHome")}</Button>
-          </Alert>
-        </main>
-      ) : (
-        <main className="min-h-screen w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
+            </div>
+          )}
+          {igMeLoading || loading ? (
+            <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
+              <div className="text-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                <p>{t("results.states.loading")}</p>
+              </div>
+            </main>
+          ) : igMeUnauthorized ? (
+            <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
+              <Card className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="text-2xl sm:text-3xl font-bold text-white">
+                    {t("results.instagram.connectGate.title")}
+                  </CardTitle>
+                  <p className="text-sm text-slate-300 mt-2">{t("results.instagram.connectGate.desc")}</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {connectEnvError === "missing_env" && (
+                    <Alert>
+                      <AlertTitle>{t("results.instagram.missingEnv.title")}</AlertTitle>
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <div>{t("results.instagram.missingEnv.desc")}</div>
+                          <div className="font-mono text-xs break-all">APP_BASE_URL / META_APP_ID / META_APP_SECRET</div>
+                          <div>{t("results.instagram.missingEnv.restartHint")}</div>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg"
+                      onClick={handleConnect}
+                      disabled={igMeLoading}
+                    >
+                      {t("results.instagram.connectGate.cta")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg"
+                      onClick={() => router.push(localePathname("/", activeLocale))}
+                    >
+                      {t("results.instagram.connectGate.back")}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </main>
+          ) : !hasResult ? (
+            <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
+              <Alert>
+                <AlertTitle>{t("results.states.noResultsTitle")}</AlertTitle>
+                <AlertDescription>{t("results.states.noResultsDesc")}</AlertDescription>
+                <Button className="mt-4" onClick={() => router.push(localePathname("/", activeLocale))}>
+                  {t("results.actions.backToHome")}
+                </Button>
+              </Alert>
+            </main>
+          ) : (
+            <main className="min-h-screen w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
           <div className="border-b border-white/10 bg-[#0b1220]/60 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-4">
@@ -607,11 +777,11 @@ export default function ResultsPage() {
                       <img
                         src={igMe.profile_picture_url}
                         alt={`@${igMe.username}`}
-                        className="h-12 w-12 rounded-full border border-white/10 object-cover shrink-0"
+                        className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border border-white/10 object-cover shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-600/40 border border-white/10 flex items-center justify-center shrink-0">
+                      <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-600/40 border border-white/10 flex items-center justify-center shrink-0">
                         <Instagram className="h-5 w-5 text-slate-100" />
                       </div>
                     )}
@@ -1228,69 +1398,427 @@ export default function ResultsPage() {
         </main>
       )}
 
-      {isProModalOpen && (
-        <div className="fixed inset-0 z-[70]">
-          <button
-            type="button"
-            aria-label="Close"
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setIsProModalOpen(false)}
-          />
-          <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
-            <div className="p-4 md:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="mt-1 text-lg font-semibold text-white leading-snug">
-                    {t("results.footer.proModalTitle")}
+          {isProModalOpen && (
+            <div className="fixed inset-0 z-[70]">
+              <button
+                type="button"
+                aria-label="Close"
+                className="absolute inset-0 bg-black/60"
+                onClick={() => setIsProModalOpen(false)}
+              />
+              <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
+                <div className="p-4 md:p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="mt-1 text-lg font-semibold text-white leading-snug">{t("results.footer.proModalTitle")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.footer.proModalDesc")}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="text-slate-200 hover:bg-white/5"
+                      onClick={() => setIsProModalOpen(false)}
+                    >
+                      {t("results.footer.proModalSecondary")}
+                    </Button>
                   </div>
-                  <div className="mt-1 text-sm text-slate-300 leading-relaxed">
-                    {t("results.footer.proModalDesc")}
+
+                  <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-sm font-medium text-white">{t("results.footer.proModalBulletsTitle")}</div>
+                    <ul className="mt-2 text-sm text-slate-200 space-y-1.5">
+                      <li>{t("results.footer.proModalBullets.1")}</li>
+                      <li>{t("results.footer.proModalBullets.2")}</li>
+                      <li>{t("results.footer.proModalBullets.3")}</li>
+                    </ul>
+                  </div>
+
+                  <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                      onClick={() => setIsProModalOpen(false)}
+                    >
+                      {t("results.footer.proModalSecondary")}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                      onClick={() => {
+                        setIsProModalOpen(false)
+                        scrollToId("results-pro-upgrade", "center")
+                        flashUpgradeHighlight()
+                      }}
+                    >
+                      {t("results.footer.proModalPrimary")}
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="text-slate-200 hover:bg-white/5"
-                  onClick={() => setIsProModalOpen(false)}
-                >
-                  {t("results.footer.proModalSecondary")}
-                </Button>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="text-sm font-medium text-white">{t("results.footer.proModalBulletsTitle")}</div>
-                <ul className="mt-2 text-sm text-slate-200 space-y-1.5">
-                  <li>{t("results.footer.proModalBullets.1")}</li>
-                  <li>{t("results.footer.proModalBullets.2")}</li>
-                  <li>{t("results.footer.proModalBullets.3")}</li>
-                </ul>
-              </div>
-
-              <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-                  onClick={() => setIsProModalOpen(false)}
-                >
-                  {t("results.footer.proModalSecondary")}
-                </Button>
-                <Button
-                  type="button"
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-                  onClick={() => {
-                    setIsProModalOpen(false)
-                    scrollToId("results-pro-upgrade", "center")
-                    flashUpgradeHighlight()
-                  }}
-                >
-                  {t("results.footer.proModalPrimary")}
-                </Button>
               </div>
             </div>
+          )}
+        </>
+      }
+      connectedUI={
+        <>
+          <div className="p-6 flex items-center justify-between gap-3">
+            <div className="text-sm text-green-400">{t("results.instagram.connectedBadge")}</div>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 shadow-lg shadow-violet-500/20 border border-white/10"
+              onClick={() => console.log("open_full_analysis_top")}
+            >
+              {t("results.actions.viewFullAnalysis")}
+            </button>
           </div>
-        </div>
-      )}
-    </>
+
+          <div className="px-6 pb-6">
+            <div className="mb-4">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                {t("results.preview.heading")}
+              </h2>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("results.preview.description")}
+              </p>
+            </div>
+
+            <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0 pt-1">
+                    {igMe?.profile_picture_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={igMe.profile_picture_url}
+                        alt={`@${mockAnalysis.profile.username}`}
+                        className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border border-white/10 object-cover shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border border-white/10 bg-white/10 shrink-0" />
+                    )}
+
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className="text-lg font-semibold text-white truncate">
+                        {mockAnalysis.profile.displayName}
+                      </div>
+                      <div className="text-sm text-slate-300 truncate">@{mockAnalysis.profile.username}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {t(
+                          selectedGoal
+                            ? `results.positioning.values.${selectedGoal}`
+                            : "results.positioning.values.default"
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 shadow-lg shadow-violet-500/20 border border-white/10"
+                      onClick={() => console.log("open_full_analysis")}
+                    >
+                      {t("results.actions.fullDataAnalysis")}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-200 border border-white/15 hover:bg-white/5"
+                      onClick={() => console.log("export_summary")}
+                    >
+                      {t("results.actions.exportSummary")}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
+                    <div className="mt-1 text-lg font-semibold text-white">
+                      {mockAnalysis.profile.followers.toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
+                    <div className="mt-1 text-base font-semibold text-white">
+                      {mockAnalysis.profile.following.toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
+                    <div className="mt-1 text-base font-semibold text-white">
+                      {mockAnalysis.profile.posts.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="mt-4">
+              <div className="flex justify-end">
+                <div className="text-[11px] text-muted-foreground">{t("results.proHint.rings")}</div>
+              </div>
+
+              <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <ProgressRing
+                  value={Math.round((mockAnalysis.metrics.engagementRate ?? 0) * 100)}
+                  label={t("results.rings.engagementRate.label")}
+                  subLabel={t("results.rings.engagementRate.description")}
+                />
+                <ProgressRing
+                  value={Math.min(100, Math.round(((mockAnalysis.metrics.avgLikes ?? 0) / 1000) * 100))}
+                  label={t("results.rings.likeStrength.label")}
+                  subLabel={t("results.rings.likeStrength.description")}
+                />
+                <ProgressRing
+                  value={Math.min(100, Math.round(((mockAnalysis.metrics.avgComments ?? 0) / 100) * 100))}
+                  label={t("results.rings.commentStrength.label")}
+                  subLabel={t("results.rings.commentStrength.description")}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 text-xs text-muted-foreground">
+              {t("results.proReminder")}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {kpis.map((kpi) => {
+                const isSelected = Boolean(selectedGoalConfig)
+                const focus = isSelected
+                  ? t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "focus"))
+                  : ""
+                const isPrimary = isSelected && selectedGoalConfig!.primaryKpi === kpi.id
+                const note = isSelected ? t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "note")) : ""
+
+                return (
+                  <Card
+                    key={kpi.id}
+                    className={
+                      "rounded-xl border bg-white/5 backdrop-blur-sm " +
+                      (isPrimary ? "border-white/25" : "border-white/10")
+                    }
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className={"text-xs text-slate-400" + (isPrimary ? " font-medium" : "")}>{t(kpi.titleKey)}</div>
+                        {isSelected ? <div className="text-[11px] text-muted-foreground text-right">{focus}</div> : null}
+                      </div>
+
+                      <div className="mt-1 text-lg font-semibold text-white">{kpi.value}</div>
+                      <div className="mt-1 text-xs text-slate-400">{t(kpi.descriptionKey)}</div>
+
+                      {isSelected ? (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          <div>{t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "role"))}</div>
+                          <div className="mt-1">{t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "status"))}</div>
+                          {note ? <div className="mt-1">{note}</div> : null}
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+
+            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-white">{t("results.goals.title")}</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">{t("results.goals.subtitle")}</p>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {goalOptions.map((opt) => {
+                    const isSelected = selectedGoal === opt.id
+                    return (
+                      <div
+                        key={opt.id}
+                        role="button"
+                        tabIndex={0}
+                        className={
+                          "select-none rounded-xl border px-3 py-2 text-sm transition-colors " +
+                          (isSelected
+                            ? "border-white/25 bg-white/10 text-white"
+                            : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10")
+                        }
+                        onClick={() => setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                          }
+                        }}
+                      >
+                        {t(opt.labelKey)}
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-white">{t("results.topPosts.title")}</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("results.topPosts.description")}
+                </p>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {mockAnalysis.topPosts.slice(0, 3).map((p, index) => (
+                    <div key={p.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <div className="text-xs text-slate-400">{t("results.topPosts.card.likesLabel")}</div>
+                          <div className="mt-1 text-lg font-semibold text-white">{p.likes.toLocaleString()}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs text-slate-400">{t("results.topPosts.card.commentsLabel")}</div>
+                          <div className="mt-1 text-lg font-semibold text-white">{p.comments.toLocaleString()}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs text-slate-400">{t("results.topPosts.card.engagementLabel")}</div>
+                          <div className="mt-1 text-lg font-semibold text-white">
+                            {(p.likes + p.comments).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {t("results.topPosts.card.proHintFull")}
+                      </div>
+
+                      <div className="mt-4 text-sm text-muted-foreground">
+                        {t("results.topPosts.card.proHint")}
+                      </div>
+
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {media[index]
+                          ? `Post ID: ${media[index].id} · ${new Date(
+                              media[index].timestamp
+                            ).toLocaleDateString()}`
+                          : t("results.topPosts.card.metadataFallback")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-white">{t("results.recommendations.title")}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-3">
+                  {insights.map((insight) => (
+                    <div key={insight.title} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-sm font-semibold text-white">{insight.title}</div>
+                        <div className="text-xs text-muted-foreground text-right">{t("results.insights.proHint")}</div>
+                      </div>
+                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{insight.description}</div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="text-xs text-muted-foreground">{t("results.cta.trust")}</div>
+
+                <h2 className="mt-2 text-xl font-semibold">{t("results.cta.title")}</h2>
+
+                <div className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  {t("results.cta.intro")}
+                </div>
+                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <li>{t("results.cta.bullets.1")}</li>
+                  <li>{t("results.cta.bullets.2")}</li>
+                  <li>{t("results.cta.bullets.3")}</li>
+                  <li>{t("results.cta.bullets.4")}</li>
+                </ul>
+
+                <Button
+                  type="button"
+                  className="mt-4 bg-emerald-500 hover:bg-emerald-600"
+                  onClick={() => {
+                    window.open("https://forms.gle/REPLACE_WITH_YOUR_FORM", "_blank")
+                  }}
+                >
+                  {t("results.cta.button")}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {isProModalOpen && (
+            <div className="fixed inset-0 z-[70]">
+              <button
+                type="button"
+                aria-label="Close"
+                className="absolute inset-0 bg-black/60"
+                onClick={() => setIsProModalOpen(false)}
+              />
+              <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
+                <div className="p-4 md:p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="mt-1 text-lg font-semibold text-white leading-snug">{t("results.footer.proModalTitle")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.footer.proModalDesc")}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="text-slate-200 hover:bg-white/5"
+                      onClick={() => setIsProModalOpen(false)}
+                    >
+                      {t("results.footer.proModalSecondary")}
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-sm font-medium text-white">{t("results.footer.proModalBulletsTitle")}</div>
+                    <ul className="mt-2 text-sm text-slate-200 space-y-1.5">
+                      <li>{t("results.footer.proModalBullets.1")}</li>
+                      <li>{t("results.footer.proModalBullets.2")}</li>
+                      <li>{t("results.footer.proModalBullets.3")}</li>
+                    </ul>
+                  </div>
+
+                  <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                      onClick={() => setIsProModalOpen(false)}
+                    >
+                      {t("results.footer.proModalSecondary")}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                      onClick={() => {
+                        setIsProModalOpen(false)
+                        scrollToId("results-pro-upgrade", "center")
+                        flashUpgradeHighlight()
+                      }}
+                    >
+                      {t("results.footer.proModalPrimary")}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      }
+    />
   )
 }

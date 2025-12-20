@@ -42,6 +42,472 @@
   "results": {
     "title": "Account Analysis Results",
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
+    "proReminder": "Pro includes deeper post-level details and more actionable recommendations.",
+    "proHint": {
+      "rings": "Subscribe to see a detailed breakdown"
+    },
+    "positioning": {
+      "values": {
+        "default": "Qualitative positioning",
+        "growFollowers": "Growth-stage account",
+        "increaseLikes": "Personal brand builder",
+        "increaseComments": "Traffic-focused creator",
+        "boostReach": "High-engagement community",
+        "buildPersonalBrand": "Service / client-ready account",
+        "getBrandDeals": "Brand-collaboration profile",
+        "becomeCreator": "Full-time creator",
+        "monetizeConsistently": "Monetization-focused account"
+      }
+    },
+    "preview": {
+      "heading": "AI-powered Instagram Account Analysis",
+      "description": "This dashboard provides a preview of how we analyze Instagram accounts using engagement signals, post performance, and AI-driven insights."
+    },
+    "previewPro": {
+      "preview": "You are viewing a preview analysis.",
+      "pro": "Pro unlocks post-level breakdowns, copy patterns, and goal-based action plans."
+    },
+    "profile": {
+      "followingLabel": "Following",
+      "postsLabel": "Posts"
+    },
+    "rings": {
+      "engagementRate": {
+        "label": "Engagement rate",
+        "description": "Quickly indicates content attractiveness"
+      },
+      "likeStrength": {
+        "label": "Like strength",
+        "description": "Visual scale normalized to 1,000 likes"
+      },
+      "commentStrength": {
+        "label": "Comment strength",
+        "description": "Visual scale normalized to 100 comments"
+      }
+    },
+    "kpis": {
+      "followers": {
+        "title": "Followers",
+        "description": "Current audience base"
+      },
+      "engagementRate": {
+        "title": "Engagement Rate",
+        "description": "Estimated vs similar-sized accounts"
+      },
+      "avgLikes": {
+        "title": "Avg Likes",
+        "description": "Estimated from last 30 days"
+      },
+      "avgComments": {
+        "title": "Avg Comments",
+        "description": "Conversation-driven signal"
+      },
+      "engagementVolume": {
+        "title": "Engagement Volume",
+        "description": "Total interactions per post (approx.)"
+      },
+      "postsPerWeek": {
+        "title": "Posts / Week",
+        "description": "Consistency supports distribution"
+      }
+    },
+    "goals": {
+      "title": "What's your current goal?",
+      "subtitle": "Choose one focus to see how your current metrics support that goal.",
+      "options": {
+        "growthStageAccount": "Growth-stage account",
+        "personalBrandBuilder": "Personal brand builder",
+        "trafficFocusedCreator": "Traffic-focused creator",
+        "highEngagementCommunity": "High-engagement community",
+        "serviceClientReady": "Service / client-ready account",
+        "brandCollaborationProfile": "Brand-collaboration profile",
+        "fullTimeCreator": "Full-time creator",
+        "monetizationFocusedAccount": "Monetization-focused account",
+        "growFollowers": "Grow followers",
+        "increaseLikes": "Increase likes",
+        "increaseComments": "Increase comments",
+        "boostReach": "Boost reach",
+        "buildPersonalBrand": "Build personal brand",
+        "getBrandDeals": "Get brand deals",
+        "becomeCreator": "Become a creator",
+        "monetizeConsistently": "Monetize consistently"
+      },
+      "helpers": {
+        "growFollowers": {
+          "role": "This metric helps you estimate whether your content earns reactions that lead to follow intent.",
+          "status": "Your current performance suggests a stable foundation, with room to improve consistency.",
+          "action": "Next step: repeat one high-performing format weekly and tighten the first line hook."
+        },
+        "increaseLikes": {
+          "role": "This metric shows whether your posts reliably earn lightweight positive feedback.",
+          "status": "Your current performance looks steady, with opportunities to sharpen what resonates.",
+          "action": "Next step: test two visual-first formats and keep the best one for the next 5 posts."
+        },
+        "increaseComments": {
+          "role": "This metric reflects how often your content triggers conversation, not just quick reactions.",
+          "status": "Your current performance indicates engagement is present, but discussion could deepen.",
+          "action": "Next step: add a specific question or a two-choice prompt and pin the best reply."
+        },
+        "boostReach": {
+          "role": "This metric helps you track whether you are giving the algorithm enough consistent opportunities to distribute.",
+          "status": "Your current performance appears workable, but reach typically improves with steadier cadence.",
+          "action": "Next step: set a fixed weekly schedule and maintain it for two cycles before adjusting."
+        },
+        "buildPersonalBrand": {
+          "role": "This metric indicates whether your content earns trust and relevance signals from the audience.",
+          "status": "Your current performance suggests you have a base signal, but messaging clarity can improve.",
+          "action": "Next step: keep one consistent point of view and repeat it across a three-post series."
+        },
+        "getBrandDeals": {
+          "role": "This metric is a proxy for audience quality and how strongly your content holds attention.",
+          "status": "Your current performance shows a reasonable baseline, with room to improve signal strength.",
+          "action": "Next step: publish one case-study style post and track which angle gets the most responses."
+        },
+        "becomeCreator": {
+          "role": "This metric reflects whether your publishing system is consistent enough to learn and iterate.",
+          "status": "Your current performance looks sustainable, but consistency is the main lever to strengthen.",
+          "action": "Next step: lock a repeatable weekly rhythm and batch-produce your next week’s posts."
+        },
+        "monetizeConsistently": {
+          "role": "This metric helps you validate whether attention translates into meaningful interest over time.",
+          "status": "Your current performance shows early signals, but outcomes benefit from a clearer offer narrative.",
+          "action": "Next step: add one clear call-to-action in a weekly post and keep it consistent for a month."
+        }
+      },
+      "interpretations": {
+        "growFollowers": {
+          "followers": {
+            "focus": "Primary focus",
+            "role": "Followers represents the audience base you are trying to grow.",
+            "status": "Your current baseline is clear, and consistency will matter most going forward.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Supporting metric",
+            "role": "Engagement rate signals whether your content earns enough reactions to convert to follows.",
+            "status": "Your current signal looks workable, and tighter consistency can improve it.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Indirect influence",
+            "role": "Average likes reflect lightweight interest that can support discovery.",
+            "status": "Your current performance is usable, with room to sharpen what resonates.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Indirect influence",
+            "role": "Comments indicate deeper intent, which can strengthen follow decisions.",
+            "status": "Your current performance suggests discussion can be encouraged further.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Supporting metric",
+            "role": "Engagement volume captures total interaction momentum per post.",
+            "status": "Your current signal suggests momentum is present but can be steadier.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Prerequisite",
+            "role": "Posting frequency sets how many opportunities you create for people to find you.",
+            "status": "Your current cadence looks sustainable, and consistency is the next lever.",
+            "note": ""
+          }
+        },
+        "increaseLikes": {
+          "followers": {
+            "focus": "Indirect influence",
+            "role": "Followers affects the pool of people who can like your posts.",
+            "status": "Your current baseline is clear, and growth can gradually lift likes.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Supporting metric",
+            "role": "Engagement rate reflects whether your content is broadly appealing.",
+            "status": "Your current signal looks steady, and clarity can improve response.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Primary focus",
+            "role": "Average likes directly tracks whether more people are reacting to your posts.",
+            "status": "Your current performance is stable, and format refinement is the main lever.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Supporting metric",
+            "role": "Comments often co-move with likes when content is compelling.",
+            "status": "Your current signal suggests conversation can be prompted more intentionally.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Supporting metric",
+            "role": "Engagement volume reflects total reaction mass per post.",
+            "status": "Your current performance suggests there is momentum to build on.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Prerequisite",
+            "role": "Posting frequency gives you more chances to test and learn what earns likes.",
+            "status": "Your current cadence looks workable, and consistency will help iteration.",
+            "note": ""
+          }
+        },
+        "increaseComments": {
+          "followers": {
+            "focus": "Indirect influence",
+            "role": "Followers sets the pool that can participate in comments.",
+            "status": "Your current baseline is visible, and comment growth comes from prompts.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Supporting metric",
+            "role": "Engagement rate indicates whether your content earns responses of any kind.",
+            "status": "Your current signal looks workable, and conversation prompts can improve it.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Indirect influence",
+            "role": "Likes can rise when comments rise, but they are not the main target here.",
+            "status": "Your current signal is steady and can support broader engagement.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Primary focus",
+            "role": "Average comments directly reflects discussion depth on your posts.",
+            "status": "Your current performance suggests there is room to encourage replies.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Supporting metric",
+            "role": "Engagement volume reflects overall interaction intensity.",
+            "status": "Your current signal suggests participation can be made more consistent.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Prerequisite",
+            "role": "Posting frequency determines how often you can invite discussion.",
+            "status": "Your current cadence looks sustainable, and prompts will do the work.",
+            "note": ""
+          }
+        },
+        "boostReach": {
+          "followers": {
+            "focus": "Supporting metric",
+            "role": "Followers can amplify initial distribution, but reach still depends on response.",
+            "status": "Your current baseline is clear, and reach can expand with consistency.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Supporting metric",
+            "role": "Engagement rate influences whether distribution continues beyond the first viewers.",
+            "status": "Your current signal looks workable, and stronger hooks can help.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Indirect influence",
+            "role": "Likes are one signal that can support distribution.",
+            "status": "Your current signal suggests there is room to refine formats.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Indirect influence",
+            "role": "Comments can extend distribution by sustaining activity.",
+            "status": "Your current signal suggests discussion can be encouraged.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Supporting metric",
+            "role": "Engagement volume summarizes total interaction momentum that supports reach.",
+            "status": "Your current signal indicates momentum exists but can be steadier.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Primary focus",
+            "role": "Posting frequency is the most controllable lever to create repeated distribution opportunities.",
+            "status": "Your current cadence looks workable, and stability will improve learning.",
+            "note": ""
+          }
+        },
+        "buildPersonalBrand": {
+          "followers": {
+            "focus": "Supporting metric",
+            "role": "Followers reflects how many people opt into your long-term narrative.",
+            "status": "Your current baseline is clear, and brand builds through repeated clarity.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Primary focus",
+            "role": "Engagement rate indicates trust and relevance signals around your positioning.",
+            "status": "Your current signal suggests a foundation, with room to sharpen message consistency.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Supporting metric",
+            "role": "Likes reflect broad agreement, which supports recognition.",
+            "status": "Your current signal looks steady, and clearer framing can help.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Supporting metric",
+            "role": "Comments reflect depth of belief and connection.",
+            "status": "Your current signal suggests discussion can be invited more deliberately.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Indirect influence",
+            "role": "Engagement volume captures overall momentum but not brand clarity by itself.",
+            "status": "Your current signal suggests momentum exists but needs consistent themes.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Prerequisite",
+            "role": "Posting frequency ensures your point of view repeats enough to stick.",
+            "status": "Your current cadence looks sustainable, and repetition will help positioning.",
+            "note": ""
+          }
+        },
+        "getBrandDeals": {
+          "followers": {
+            "focus": "Supporting metric",
+            "role": "Followers provides a simple sense of audience scale for partners.",
+            "status": "Your current baseline is clear, and quality signals matter alongside it.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Primary focus",
+            "role": "Engagement rate is a proxy for audience quality and attention.",
+            "status": "Your current signal looks workable, and consistency can strengthen credibility.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Supporting metric",
+            "role": "Likes reflect broad appeal, which can support partnership fit.",
+            "status": "Your current signal is steady, and format clarity can improve response.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Supporting metric",
+            "role": "Comments signal trust and product-relevant intent.",
+            "status": "Your current signal suggests conversation prompts could be stronger.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Indirect influence",
+            "role": "Engagement volume summarizes total interaction but not audience-fit alone.",
+            "status": "Your current signal suggests momentum exists but can be steadier.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Prerequisite",
+            "role": "Posting frequency keeps your account active and provides more brand-safe examples.",
+            "status": "Your current cadence looks workable, and consistency will help.",
+            "note": ""
+          }
+        },
+        "becomeCreator": {
+          "followers": {
+            "focus": "Supporting metric",
+            "role": "Followers tracks the compounding effect of consistent publishing.",
+            "status": "Your current baseline is visible, and consistency is the main lever.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Supporting metric",
+            "role": "Engagement rate indicates whether your content is earning attention reliably.",
+            "status": "Your current signal looks steady, and repeatable formats can strengthen it.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Indirect influence",
+            "role": "Likes reflect quick feedback that helps you learn faster.",
+            "status": "Your current signal is usable, and iteration can refine it.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Indirect influence",
+            "role": "Comments reflect community formation, which helps long-term creation.",
+            "status": "Your current signal suggests deeper interaction can be invited.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Supporting metric",
+            "role": "Engagement volume summarizes total feedback you can learn from.",
+            "status": "Your current signal suggests momentum exists but can be steadier.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Primary focus",
+            "role": "Posting frequency reflects whether you have a repeatable system to publish and learn.",
+            "status": "Your current cadence looks sustainable, and consistency is the next step.",
+            "note": ""
+          }
+        },
+        "monetizeConsistently": {
+          "followers": {
+            "focus": "Supporting metric",
+            "role": "Followers sets the pool that can convert over time.",
+            "status": "Your current baseline is clear, and quality matters more than scale alone.",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "Primary focus",
+            "role": "Engagement rate helps validate sustained interest, which supports repeatable monetization.",
+            "status": "Your current signal suggests a foundation, with room to improve message consistency.",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "Indirect influence",
+            "role": "Likes indicate attention but do not always translate into intent.",
+            "status": "Your current signal is steady, and clearer outcomes can improve intent.",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "Supporting metric",
+            "role": "Comments can indicate higher intent and help you understand objections.",
+            "status": "Your current signal suggests you can invite more practical questions.",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "Supporting metric",
+            "role": "Engagement volume captures overall demand signals across posts.",
+            "status": "Your current signal suggests momentum exists but needs consistency.",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "Prerequisite",
+            "role": "Posting frequency maintains trust and keeps your offer narrative visible.",
+            "status": "Your current cadence looks workable, and steadiness will help outcomes.",
+            "note": ""
+          }
+        }
+      }
+    },
+    "topPosts": {
+      "title": "Top Performing Posts",
+      "description": "These are your strongest posts by engagement. Pro unlocks the “why” behind performance—timing signals, caption patterns, and repeatable hooks.",
+      "card": {
+        "likesLabel": "Likes",
+        "commentsLabel": "Comments",
+        "engagementLabel": "Engagement",
+        "proHintFull": "🔒 Full post content, posting time, and breakdown available in Pro",
+        "proHint": "🔒 Pro feature: View post captions, publish time, and why this post performed well.",
+        "metadataFallback": "Post ID · Publish Time · Caption Analysis (Pro)"
+      }
+    },
+    "recommendations": {
+      "title": "Insights & Recommendations"
+    },
+    "cta": {
+      "trust": "Read-only access · No posting on your behalf · Revoke anytime",
+      "title": "Unlock the full report (including post-level analysis)",
+      "intro": "You’re viewing a preview. Pro will unlock:",
+      "bullets": {
+        "1": "• Post-level analysis: publish time, engagement drivers, and why it performed",
+        "2": "• Caption analysis: repeatable hooks, structure patterns, and topic suggestions",
+        "3": "• Trend tracking: week/month changes and growth curves",
+        "4": "• AI recommendations: next-step content direction and an action checklist"
+      },
+      "button": "Get Early Access"
+    },
     "instagram": {
       "connectedBadge": "Instagram Connected",
       "connectPromptTitle": "Connect Instagram to load real data",
@@ -95,6 +561,21 @@
       "monetizationClear": "with clear monetization paths",
       "monetizationUnderutilized": "but monetization readiness is underutilized",
       "automationAttention": "Automation risk signals require attention.",
+      "proHint": "🔒 Detailed explanation & actionable breakdown in Pro",
+      "items": {
+        "0": {
+          "title": "Strong Engagement Rate",
+          "description": "You're already outperforming the baseline—your audience consistently reacts to your content. Next: pick 1–2 winning formats and repeat them weekly, aiming to increase saves + comments with a clear hook in the first line."
+        },
+        "1": {
+          "title": "Optimal Posting Frequency",
+          "description": "Your cadence is healthy and sustainable, which is a strong predictor of steady reach. Next: lock a repeatable weekly rhythm (e.g., 4–5 posts) and track what happens when you shift timing by 1–2 hours."
+        },
+        "2": {
+          "title": "Comments Drive Visibility",
+          "description": "Your best posts generate more comments—often a signal that boosts distribution. Next: add a specific question or an A/B choice prompt, and pin the best reply to keep the thread active."
+        }
+      },
       "title": "Account Insights",
       "fields": {
         "accountType": "Account Type",
@@ -304,6 +785,9 @@
       "proModalSecondary": "Maybe later"
     },
     "actions": {
+      "viewFullAnalysis": "View full analysis",
+      "fullDataAnalysis": "Full data analysis",
+      "exportSummary": "Export summary",
       "analyzePost": "Analyze a Post",
       "copySummary": "Copy Summary",
       "copied": "Copied",
