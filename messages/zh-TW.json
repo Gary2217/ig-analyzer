@@ -42,6 +42,472 @@
   "results": {
     "title": "帳號分析結果",
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
+    "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
+    "proHint": {
+      "rings": "訂閱後可查看更完整的細項拆解"
+    },
+    "positioning": {
+      "values": {
+        "default": "質化定位",
+        "growFollowers": "成長期帳號",
+        "increaseLikes": "個人品牌經營",
+        "increaseComments": "導流導向創作者",
+        "boostReach": "高互動社群型",
+        "buildPersonalBrand": "服務與接案準備型",
+        "getBrandDeals": "品牌合作導向",
+        "becomeCreator": "全職創作者路線",
+        "monetizeConsistently": "變現導向帳號"
+      }
+    },
+    "preview": {
+      "heading": "人工智慧驅動的 IG 帳號分析",
+      "description": "此儀表板為預覽版，示範我們如何透過互動訊號、貼文表現與人工智慧推論洞察來分析 IG 帳號。"
+    },
+    "previewPro": {
+      "preview": "你目前看到的是預覽分析。",
+      "pro": "專業版可解鎖貼文層級拆解、文案模式線索，以及依目標整理的行動計畫。"
+    },
+    "profile": {
+      "followingLabel": "追蹤中",
+      "postsLabel": "貼文"
+    },
+    "rings": {
+      "engagementRate": {
+        "label": "互動率",
+        "description": "用互動率快速判斷內容吸引力"
+      },
+      "likeStrength": {
+        "label": "按讚強度",
+        "description": "以 1000 讚作為視覺刻度（可之後調整）"
+      },
+      "commentStrength": {
+        "label": "留言強度",
+        "description": "以 100 則留言作為視覺刻度（可之後調整）"
+      }
+    },
+    "kpis": {
+      "followers": {
+        "title": "追蹤者",
+        "description": "目前的受眾基礎"
+      },
+      "engagementRate": {
+        "title": "互動率",
+        "description": "相對同量級帳號的推估表現"
+      },
+      "avgLikes": {
+        "title": "平均按讚",
+        "description": "內容受歡迎的即時訊號"
+      },
+      "avgComments": {
+        "title": "平均留言",
+        "description": "對話性內容指標"
+      },
+      "engagementVolume": {
+        "title": "互動量",
+        "description": "每篇貼文的總互動（約略）"
+      },
+      "postsPerWeek": {
+        "title": "每週貼文",
+        "description": "穩定頻率有助分發"
+      }
+    },
+    "goals": {
+      "title": "你目前的目標是什麼？",
+      "subtitle": "選擇一個重點，看看目前指標如何支撐這個目標。",
+      "options": {
+        "growthStageAccount": "成長期帳號",
+        "personalBrandBuilder": "個人品牌經營",
+        "trafficFocusedCreator": "導流導向創作者",
+        "highEngagementCommunity": "高互動社群型",
+        "serviceClientReady": "服務與接案準備型",
+        "brandCollaborationProfile": "品牌合作導向",
+        "fullTimeCreator": "全職創作者路線",
+        "monetizationFocusedAccount": "變現導向帳號",
+        "growFollowers": "增加追蹤者",
+        "increaseLikes": "提升按讚",
+        "increaseComments": "提升留言",
+        "boostReach": "提升觸及",
+        "buildPersonalBrand": "建立個人品牌",
+        "getBrandDeals": "取得品牌合作",
+        "becomeCreator": "成為創作者",
+        "monetizeConsistently": "穩定變現"
+      },
+      "helpers": {
+        "growFollowers": {
+          "role": "這個指標能幫你判斷內容是否引發足夠的互動，進而提升追蹤意願。",
+          "status": "目前表現顯示基礎穩定，但仍有空間把輸出變得更一致。",
+          "action": "下一步：每週固定重複一種有效格式，並把開頭第一句的吸引點寫得更清楚。"
+        },
+        "increaseLikes": {
+          "role": "這個指標能反映貼文是否穩定獲得輕量的正向回饋。",
+          "status": "目前表現看起來平穩，但可以更精準地強化受眾最有感的元素。",
+          "action": "下一步：測試兩種以視覺為主的版型，連續套用 5 篇並保留表現較佳的版本。"
+        },
+        "increaseComments": {
+          "role": "這個指標能反映內容引發對話的程度，而不只是快速互動。",
+          "status": "目前表現顯示互動存在，但討論深度仍可再提升。",
+          "action": "下一步：加入具體問題或二選一提示，並置頂最佳回覆讓討論延續。"
+        },
+        "boostReach": {
+          "role": "這個指標能幫你追蹤是否提供足夠且一致的發文機會，讓分發更穩定。",
+          "status": "目前表現可運作，但觸及通常更依賴穩定的節奏來累積。",
+          "action": "下一步：設定固定的每週排程，連續維持兩個週期後再調整。"
+        },
+        "buildPersonalBrand": {
+          "role": "這個指標能反映內容是否建立出信任與相關性訊號。",
+          "status": "目前表現顯示已有基礎訊號，但主張與訊息的一致性還能更清楚。",
+          "action": "下一步：選定一個固定觀點，做成三篇系列貼文以形成清楚定位。"
+        },
+        "getBrandDeals": {
+          "role": "這個指標可作為受眾品質與內容吸引力的近似觀察點。",
+          "status": "目前表現提供可參考的基準，但仍可強化穩定性以提高說服力。",
+          "action": "下一步：發布一篇案例式貼文，並觀察哪個角度帶來最多回應。"
+        },
+        "becomeCreator": {
+          "role": "這個指標能反映你的產出節奏是否足夠穩定，讓你能持續學習與迭代。",
+          "status": "目前表現看起來可持續，但最需要加強的是節奏的一致性。",
+          "action": "下一步：固定每週節奏並提前批次產出下一週的內容，降低臨時變動。"
+        },
+        "monetizeConsistently": {
+          "role": "這個指標能幫你驗證關注是否能長期轉化為更有意義的興趣。",
+          "status": "目前表現顯示早期訊號存在，但更清楚的價值敘事會更有利於結果穩定。",
+          "action": "下一步：每週固定一篇放入明確的行動引導，連續維持一個月再評估。"
+        }
+      },
+      "interpretations": {
+        "growFollowers": {
+          "followers": {
+            "focus": "主要重點",
+            "role": "追蹤者代表你要累積的受眾基礎。",
+            "status": "目前基準清楚，接下來最關鍵的是維持一致的輸出。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "輔助指標",
+            "role": "互動率能反映內容是否有足夠反應，進而轉化為追蹤。",
+            "status": "目前訊號可用，提升一致性會更有幫助。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "間接影響",
+            "role": "平均按讚反映輕量興趣，有助於被更多人看見。",
+            "status": "目前表現可運作，但仍可更精準強化受眾偏好。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "間接影響",
+            "role": "留言代表更深的意圖，有助於提升追蹤決策。",
+            "status": "目前表現顯示討論仍可再被引導得更積極。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "輔助指標",
+            "role": "互動量呈現每篇貼文的總互動動能。",
+            "status": "目前訊號顯示動能存在，但仍可更穩定。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "前置條件",
+            "role": "發文頻率決定你提供多少被發現與轉化的機會。",
+            "status": "目前節奏看起來可持續，下一步是把一致性做穩。",
+            "note": ""
+          }
+        },
+        "increaseLikes": {
+          "followers": {
+            "focus": "間接影響",
+            "role": "追蹤者影響可按讚的人數基礎。",
+            "status": "目前基準清楚，成長會逐步帶動按讚提升。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "輔助指標",
+            "role": "互動率反映內容是否具備廣泛吸引力。",
+            "status": "目前訊號平穩，訊息更清楚時反應通常會更好。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "主要重點",
+            "role": "平均按讚能直接追蹤是否有更多人對貼文給出反應。",
+            "status": "目前表現穩定，主要槓桿在於內容形式的優化。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "輔助指標",
+            "role": "留言常與按讚一起上升，代表內容更具吸引力。",
+            "status": "目前訊號顯示可以更有意識地引導對話。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "輔助指標",
+            "role": "互動量反映每篇貼文累積的總反應量。",
+            "status": "目前表現顯示有可延伸的動能。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "前置條件",
+            "role": "發文頻率提供更多測試與學習的機會，幫你找出更受歡迎的形式。",
+            "status": "目前節奏可運作，穩定性會加速迭代。",
+            "note": ""
+          }
+        },
+        "increaseComments": {
+          "followers": {
+            "focus": "間接影響",
+            "role": "追蹤者決定能參與留言的受眾池大小。",
+            "status": "目前基準可見，留言成長更依賴提問與引導。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "輔助指標",
+            "role": "互動率反映內容是否能引發任何形式的回應。",
+            "status": "目前訊號可用，更明確的提問通常能改善回應。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "間接影響",
+            "role": "按讚可能會隨留言提升，但不是此目標的主要指標。",
+            "status": "目前訊號平穩，能支撐整體互動表現。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "主要重點",
+            "role": "平均留言能直接反映貼文的討論深度。",
+            "status": "目前表現顯示仍有空間把回覆引導得更明確。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "輔助指標",
+            "role": "互動量反映整體參與強度。",
+            "status": "目前訊號顯示參與可再變得更穩定。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "前置條件",
+            "role": "發文頻率決定你能多常邀請討論與回覆。",
+            "status": "目前節奏可持續，提問設計會是主要工作。",
+            "note": ""
+          }
+        },
+        "boostReach": {
+          "followers": {
+            "focus": "輔助指標",
+            "role": "追蹤者能放大初始分發，但觸及仍取決於後續反應。",
+            "status": "目前基準清楚，觸及常隨一致性提升而擴大。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "輔助指標",
+            "role": "互動率會影響分發是否能從第一批觀眾繼續擴散。",
+            "status": "目前訊號可運作，更強的開頭通常更有利。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "間接影響",
+            "role": "按讚是其中一個可支撐分發的訊號。",
+            "status": "目前訊號顯示仍可透過形式優化改善反應。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "間接影響",
+            "role": "留言能延長活躍度，常有助於觸及延伸。",
+            "status": "目前訊號顯示可以更主動引導討論。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "輔助指標",
+            "role": "互動量概括每篇貼文的總互動動能，有助於觸及表現。",
+            "status": "目前訊號顯示動能存在，但仍可更穩定。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "主要重點",
+            "role": "發文頻率是最可控的槓桿，用來創造重複的分發機會。",
+            "status": "目前節奏可運作，穩定性會提升學習與調整效率。",
+            "note": ""
+          }
+        },
+        "buildPersonalBrand": {
+          "followers": {
+            "focus": "輔助指標",
+            "role": "追蹤者反映有多少人願意長期接收你的觀點敘事。",
+            "status": "目前基準清楚，品牌更依賴重複的清晰度累積。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "主要重點",
+            "role": "互動率能反映受眾對你定位的信任與相關性訊號。",
+            "status": "目前訊號顯示有基礎，但訊息一致性仍可更清楚。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "輔助指標",
+            "role": "按讚反映廣泛認同，有助於建立辨識度。",
+            "status": "目前訊號平穩，更清楚的框架會更有利。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "輔助指標",
+            "role": "留言反映連結深度與信念強度。",
+            "status": "目前訊號顯示可以更刻意地邀請討論。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "間接影響",
+            "role": "互動量呈現總動能，但本身不等同於定位清晰。",
+            "status": "目前訊號顯示動能存在，但需要更一致的主題線。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "前置條件",
+            "role": "發文頻率確保你的觀點重複出現到足以被記住。",
+            "status": "目前節奏可持續，重複與一致性會幫助定位。",
+            "note": ""
+          }
+        },
+        "getBrandDeals": {
+          "followers": {
+            "focus": "輔助指標",
+            "role": "追蹤者提供合作方對受眾規模的基本感受。",
+            "status": "目前基準清楚，除了規模外更需要品質訊號支撐。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "主要重點",
+            "role": "互動率常被視為受眾品質與注意力的近似指標。",
+            "status": "目前訊號可運作，強化一致性會提高可信度。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "輔助指標",
+            "role": "按讚反映廣泛吸引力，有助於合作契合度。",
+            "status": "目前訊號平穩，內容框架更清楚時反應通常更佳。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "輔助指標",
+            "role": "留言能反映信任與更接近購買意圖的討論。",
+            "status": "目前訊號顯示提問與引導可以更精準。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "間接影響",
+            "role": "互動量概括總互動，但單靠它不足以判斷受眾契合。",
+            "status": "目前訊號顯示動能存在，但仍可更穩定。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "前置條件",
+            "role": "發文頻率維持活躍度，也提供更多可被合作方檢視的內容樣本。",
+            "status": "目前節奏可運作，穩定性會更有利。",
+            "note": ""
+          }
+        },
+        "becomeCreator": {
+          "followers": {
+            "focus": "輔助指標",
+            "role": "追蹤者反映穩定產出帶來的累積效果。",
+            "status": "目前基準可見，最主要槓桿仍是穩定輸出。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "輔助指標",
+            "role": "互動率反映內容是否能穩定獲得注意力。",
+            "status": "目前訊號平穩，建立可重複格式會更有利。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "間接影響",
+            "role": "按讚提供快速回饋，有助於更快學習。",
+            "status": "目前訊號可用，持續迭代能改善反應。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "間接影響",
+            "role": "留言反映社群形成，有助於長期創作。",
+            "status": "目前訊號顯示可以更主動邀請更深互動。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "輔助指標",
+            "role": "互動量概括你能用來學習的總回饋量。",
+            "status": "目前訊號顯示動能存在，但仍可更穩定。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "主要重點",
+            "role": "發文頻率反映你是否具備可重複的產出系統來發布與學習。",
+            "status": "目前節奏可持續，下一步是把一致性做穩。",
+            "note": ""
+          }
+        },
+        "monetizeConsistently": {
+          "followers": {
+            "focus": "輔助指標",
+            "role": "追蹤者提供長期轉化的受眾池基礎。",
+            "status": "目前基準清楚，單靠規模不足，更需要品質訊號。",
+            "note": ""
+          },
+          "engagementRate": {
+            "focus": "主要重點",
+            "role": "互動率能驗證持續興趣，有助於建立可重複的變現路徑。",
+            "status": "目前訊號顯示有基礎，但訊息一致性仍可加強。",
+            "note": ""
+          },
+          "avgLikes": {
+            "focus": "間接影響",
+            "role": "按讚代表注意力，但不一定等同於意圖。",
+            "status": "目前訊號平穩，更清楚的結果導向會更有利於意圖。",
+            "note": ""
+          },
+          "avgComments": {
+            "focus": "輔助指標",
+            "role": "留言可能代表更高意圖，也能幫你理解疑問與阻礙。",
+            "status": "目前訊號顯示可以更主動引導實務問題。",
+            "note": ""
+          },
+          "engagementVolume": {
+            "focus": "輔助指標",
+            "role": "互動量概括跨貼文的需求訊號總量。",
+            "status": "目前訊號顯示動能存在，但需要更一致的輸出來穩定。",
+            "note": ""
+          },
+          "postsPerWeek": {
+            "focus": "前置條件",
+            "role": "發文頻率維持信任，也讓價值敘事持續被看見。",
+            "status": "目前節奏可運作，穩定性會更有利於結果。",
+            "note": ""
+          }
+        }
+      }
+    },
+    "topPosts": {
+      "title": "表現最佳貼文",
+      "description": "這些是你的高互動貼文。專業版將解鎖「為什麼表現好」：發文時段訊號、文案模式與可複製的鉤子。",
+      "card": {
+        "likesLabel": "按讚",
+        "commentsLabel": "留言",
+        "engagementLabel": "互動",
+        "proHintFull": "🔒 專業版提供完整貼文內容、發文時間與拆解分析",
+        "proHint": "🔒 專業版功能：查看貼文內文、發佈時間，以及這篇為何表現好。",
+        "metadataFallback": "貼文編號 · 發佈時間 · 內文分析（專業版）"
+      }
+    },
+    "recommendations": {
+      "title": "洞察與建議"
+    },
+    "cta": {
+      "trust": "僅唯讀授權 · 不會代發文 · 隨時可撤銷",
+      "title": "解鎖完整報告（含貼文層級分析）",
+      "intro": "你目前看到的是預覽版。專業版將解鎖：",
+      "bullets": {
+        "1": "• 貼文層級分析：發文時間、互動來源、表現原因",
+        "2": "• 內文分析：可複製的鉤子／句型與話題建議",
+        "3": "• 趨勢追蹤：週／月維度變化與成長曲線",
+        "4": "• 智慧建議：下一步內容方向與可執行清單"
+      },
+      "button": "取得早鳥資格"
+    },
     "instagram": {
       "connectedBadge": "已連結 Instagram",
       "connectPromptTitle": "連結 Instagram 以載入真實資料",
@@ -95,6 +561,21 @@
       "monetizationClear": "且具備明確的變現路徑",
       "monetizationUnderutilized": "但變現準備度尚未充分發揮",
       "automationAttention": "自動化風險訊號需要特別留意。",
+      "proHint": "🔒 專業版提供更完整的原因解釋與可執行拆解",
+      "items": {
+        "0": {
+          "title": "互動率表現強勁",
+          "description": "你目前已超過同級帳號的基準表現，觀眾對你的內容反應穩定。下一步：挑選 1–2 個最有效的內容形式，每週固定重複並優化，並在開頭第一句放入清楚的吸引點，目標提升收藏與留言。"
+        },
+        "1": {
+          "title": "發文頻率最合適",
+          "description": "你目前的發文節奏健康且可持續，通常能帶來更穩定的觸及。下一步：建立可重複的每週節奏（例如每週 4–5 篇），並觀察把發文時間前後調整 1–2 小時後的變化。"
+        },
+        "2": {
+          "title": "留言能推動曝光",
+          "description": "表現最好的貼文通常會帶來更多留言，這往往能推動分發與觸及。下一步：在貼文加入具體問題或二選一提示，並置頂最佳回覆，讓討論持續發酵。"
+        }
+      },
       "title": "帳號洞察",
       "fields": {
         "accountType": "帳號類型",
@@ -304,6 +785,9 @@
       "proModalSecondary": "稍後"
     },
     "actions": {
+      "viewFullAnalysis": "查看完整分析",
+      "fullDataAnalysis": "完整數據分析",
+      "exportSummary": "匯出摘要",
       "analyzePost": "分析貼文",
       "copySummary": "複製摘要",
       "copied": "已複製",

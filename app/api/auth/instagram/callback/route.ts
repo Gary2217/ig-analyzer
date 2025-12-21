@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { cookies } from "next/headers"
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
@@ -58,6 +59,13 @@ export async function GET(req: NextRequest) {
     if (!accessToken) {
       throw new Error("missing_access_token")
     }
+
+    const c = await cookies()
+    c.set("ig_connected", "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+    })
 
     const res = NextResponse.redirect(new URL(`/${locale}/results?connected=instagram`, url.origin))
 
