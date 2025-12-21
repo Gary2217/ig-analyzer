@@ -43,10 +43,191 @@
     "title": "帳號分析結果",
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
     "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
+    "proBadge": "專業",
+    "levelPill": {
+      "default": "成長中創作者",
+      "growthStageAccount": "成長中創作者",
+      "personalBrandBuilder": "品牌建立中",
+      "trafficFocusedCreator": "對話導向",
+      "highEngagementCommunity": "社群帶動",
+      "serviceClientReady": "接案就緒",
+      "brandCollaborationProfile": "品牌合作就緒",
+      "fullTimeCreator": "創作系統化",
+      "monetizationFocusedAccount": "變現導向"
+    },
+    "nextActions": {
+      "title": "你現在最該做的 3 件事",
+      "subtitle": "這週先做這三件事。",
+      "helperLine": "👉 這三件事會直接影響你接下來 30 天的成長速度",
+      "freeBadge": "免費",
+      "proBadge": "專業",
+      "lockLine": "升級後解鎖",
+      "actions": {
+        "default": {
+          "1": {
+            "title": "👉 先定一個每週主題",
+            "desc": "選一個可重複主題，本週發兩篇。"
+          },
+          "2": {
+            "title": "👉 先把開頭寫更清楚",
+            "desc": "第一句直接講受眾痛點與好處。"
+          },
+          "3": {
+            "title": "👉 直接複製有效內容",
+            "desc": "把表現最好的一篇做成三集小系列。"
+          }
+        },
+        "growthStageAccount": {
+          "1": {
+            "title": "👉 先穩住發文節奏",
+            "desc": "本週至少兩篇，同主題同版型。"
+          },
+          "2": {
+            "title": "👉 用一句話講清定位",
+            "desc": "我幫誰、分享什麼、為何重要。"
+          },
+          "3": {
+            "title": "👉 先排好 10 篇題目",
+            "desc": "一次寫 10 個標題，之後就不缺靈感。"
+          }
+        },
+        "personalBrandBuilder": {
+          "1": {
+            "title": "👉 做一個招牌系列",
+            "desc": "選一種版型連發三次，訊息一致。"
+          },
+          "2": {
+            "title": "👉 整理個人頁",
+            "desc": "簡介與置頂貼文要一眼看懂你做什麼。"
+          },
+          "3": {
+            "title": "👉 先定 5 個內容角度",
+            "desc": "先定想被記住的 5 個角度，再輪流發。"
+          }
+        },
+        "trafficFocusedCreator": {
+          "1": {
+            "title": "👉 每篇留一個問題",
+            "desc": "結尾留一句簡單問題，讓留言更好開始。"
+          },
+          "2": {
+            "title": "👉 把留言變成內容",
+            "desc": "挑一則常見留言，直接做成下一篇回覆。"
+          },
+          "3": {
+            "title": "👉 準備回覆模板",
+            "desc": "先寫好 3–5 句回覆，對話更順。"
+          }
+        },
+        "highEngagementCommunity": {
+          "1": {
+            "title": "👉 做一個每週儀式",
+            "desc": "固定每週一個互動題，讓大家期待參與。"
+          },
+          "2": {
+            "title": "👉 多放大受眾",
+            "desc": "分享一則追蹤者故事或留言，再補上你的看法。"
+          },
+          "3": {
+            "title": "👉 整理社群話題庫",
+            "desc": "列出 8 個愛聊話題，輪流重複使用。"
+          }
+        },
+        "serviceClientReady": {
+          "1": {
+            "title": "👉 把服務講清楚",
+            "desc": "一句話說清你做什麼、適合誰。"
+          },
+          "2": {
+            "title": "👉 補一篇成果證明",
+            "desc": "用短案例：問題→做法→結果。"
+          },
+          "3": {
+            "title": "👉 設定詢問入口",
+            "desc": "決定詢問走私訊或表單，並固定提到。"
+          }
+        },
+        "brandCollaborationProfile": {
+          "1": {
+            "title": "👉 準備 3 個合作想法",
+            "desc": "寫 3 個品牌安全的內容點子，本月可交付。"
+          },
+          "2": {
+            "title": "👉 做一份簡版媒體包",
+            "desc": "一頁整理：領域、受眾、代表作。"
+          },
+          "3": {
+            "title": "👉 寫好合作私訊",
+            "desc": "準備一段短訊息，30 秒內就能寄出。"
+          }
+        },
+        "fullTimeCreator": {
+          "1": {
+            "title": "👉 把流程系統化",
+            "desc": "批次做：今天寫 5 篇大綱，明天拍，後天剪。"
+          },
+          "2": {
+            "title": "👉 重做表現最好的格式",
+            "desc": "用同版型換角度，再做一次。"
+          },
+          "3": {
+            "title": "👉 排兩週內容表",
+            "desc": "做一個簡單兩週行事曆，輸出更穩。"
+          }
+        },
+        "monetizationFocusedAccount": {
+          "1": {
+            "title": "👉 先選一條變現路",
+            "desc": "本月先專注一個：服務、產品或分潤。"
+          },
+          "2": {
+            "title": "👉 固定一個行動呼籲",
+            "desc": "在貼文與簡介放同一句 CTA，讓人知道下一步。"
+          },
+          "3": {
+            "title": "👉 寫一篇轉換貼文",
+            "desc": "清楚講問題與解法，讓想要的人願意詢問。"
+          }
+        }
+      }
+    },
+    "accountLevel": {
+      "title": "帳號等級",
+      "labels": {
+        "growthStage": "成長起步",
+        "personalBrand": "個人品牌",
+        "stableCreator": "穩定創作者",
+        "clientReady": "接案就緒",
+        "brandCollaboration": "品牌合作就緒"
+      },
+      "description": {
+        "growthStage": "你正在打底期。先把發文節奏穩住，主題清楚一點，新的人才知道為什麼要追蹤你。",
+        "personalBrand": "互動表現不錯。下一步是把你的主張和風格包裝得更明確，讓更多人看見你。",
+        "stableCreator": "你有穩定輸出，也有不錯的互動。維持節奏，把有效的內容做成可複製的系列。",
+        "clientReady": "觀眾願意留言回你，代表信任度在上升。可以開始把注意力轉成詢問：用一句話講清楚你能幫誰、解決什麼。",
+        "brandCollaboration": "你有規模，也有互動品質。很適合開始主動談合作：準備好案例、受眾輪廓與合作提案。"
+      }
+    },
+    "levels": {
+      "low": "偏低",
+      "medium": "普通",
+      "strong": "很強"
+    },
     "proHint": {
       "rings": "訂閱後可查看更完整的細項拆解"
     },
     "positioning": {
+      "labels": {
+        "default": "帳號等級",
+        "growthStageAccount": "成長就緒",
+        "personalBrandBuilder": "品牌建立中",
+        "trafficFocusedCreator": "對話導向",
+        "highEngagementCommunity": "社群帶動",
+        "serviceClientReady": "接案就緒",
+        "brandCollaborationProfile": "品牌合作就緒",
+        "fullTimeCreator": "創作系統化",
+        "monetizationFocusedAccount": "變現就緒"
+      },
       "values": {
         "default": "質化定位",
         "growFollowers": "成長期帳號",
@@ -88,32 +269,260 @@
     "kpis": {
       "followers": {
         "title": "追蹤者",
-        "description": "目前的受眾基礎"
+        "description": "先把主題講清楚，再穩定輸出，追蹤者才會慢慢上來。"
       },
       "engagementRate": {
         "title": "互動率",
-        "description": "相對同量級帳號的推估表現"
+        "description": "先保留有效內容，再把訊息說更簡單，讓更多人願意互動。"
       },
       "avgLikes": {
         "title": "平均按讚",
-        "description": "內容受歡迎的即時訊號"
+        "description": "把高按讚的版型重複做，直接做成三篇小系列。"
       },
       "avgComments": {
         "title": "平均留言",
-        "description": "對話性內容指標"
+        "description": "每篇結尾留一個明確問題，先把留言帶起來。"
       },
       "engagementVolume": {
         "title": "互動量",
-        "description": "每篇貼文的總互動（約略）"
+        "description": "挑你最有把握的角度再發一次，開頭換個更清楚的說法。"
       },
       "postsPerWeek": {
         "title": "每週貼文",
-        "description": "穩定頻率有助分發"
+        "description": "先選一個你做得到的節奏，接下來兩週就照著走。"
+      }
+    },
+    "kpi": {
+      "badgeLabels": {
+        "followers": "看不出你是誰",
+        "engagementRate": "看了不想回",
+        "avgLikes": "看過記不住",
+        "avgComments": "不太會留言",
+        "engagementVolume": "動能起不來",
+        "postsPerWeek": "節奏不穩"
+      },
+      "consequence": {
+        "followers": "長期這樣，新觀眾不容易留下來。",
+        "engagementRate": "長期這樣，推薦會慢慢變少。",
+        "avgLikes": "長期這樣，別人看完也不會特別記得你。",
+        "avgComments": "長期這樣，很難累積對話和信任。",
+        "engagementVolume": "長期這樣，表現好的內容不會累積成勢能。",
+        "postsPerWeek": "長期這樣，觀眾很難養成固定來看的習慣。"
       }
     },
     "goals": {
       "title": "你目前的目標是什麼？",
       "subtitle": "選擇一個重點，看看目前指標如何支撐這個目標。",
+      "evaluations": {
+        "growthStageAccount": {
+          "followers": {
+            "level": "strong",
+            "note": "追蹤者基礎穩定，有助於成長效應累積。"
+          },
+          "engagementRate": {
+            "level": "medium",
+            "note": "互動率能反映新觀眾是否願意留下並追蹤你。"
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "按讚能支撐分發，但成長更依賴持續與一致。"
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "留言代表更強意圖，常能帶動觸及擴散。"
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "總互動量反映動能，有助於被更多人看見。"
+          },
+          "postsPerWeek": {
+            "level": "strong",
+            "note": "穩定發文能創造更多成長機會與學習迭代。"
+          }
+        },
+        "personalBrandBuilder": {
+          "followers": {
+            "level": "medium",
+            "note": "受眾規模會放大你的訊息傳播效果。"
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "互動率強通常代表定位與內容主張有打中人。"
+          },
+          "avgLikes": {
+            "level": "strong",
+            "note": "按讚反映快速認同，有助於建立品牌記憶點。"
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "留言能加深信任，也能看出大家在意什麼。"
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "互動動能有助於內容擴散到核心受眾之外。"
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "穩定輸出能讓受眾更清楚你代表什麼。"
+          }
+        },
+        "trafficFocusedCreator": {
+          "followers": {
+            "level": "medium",
+            "note": "追蹤者很重要，但帶動行動更仰賴對話與互動。"
+          },
+          "engagementRate": {
+            "level": "medium",
+            "note": "互動能支撐分發，尤其是留言表現明顯時。"
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "按讚有幫助，但不一定會轉成點擊或回覆。"
+          },
+          "avgComments": {
+            "level": "strong",
+            "note": "留言代表高意圖，常能大幅提升分發與觸及。"
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "互動量高有助於貼文被持續推送與停留更久。"
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "固定頻率能讓你更常邀請受眾採取行動。"
+          }
+        },
+        "highEngagementCommunity": {
+          "followers": {
+            "level": "medium",
+            "note": "社群型成長較穩定，關鍵在於連結感。"
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "互動率能反映社群活躍度與回應速度。"
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "按讚是輕量支持；留言更能形成社群黏著。"
+          },
+          "avgComments": {
+            "level": "strong",
+            "note": "留言能讓社群與你互動，也讓彼此更容易交流。"
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "穩定互動量代表社群循環健康、互動持續。"
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "可預期的節奏能讓社群願意固定回來。"
+          }
+        },
+        "serviceClientReady": {
+          "followers": {
+            "level": "medium",
+            "note": "追蹤者有助於可信度，但成交更靠清晰與信任。"
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "互動代表信任訊號，對接案與引流很重要。"
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "按讚代表注意力；搭配案例與成果更容易轉化。"
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "留言常透露疑問與阻礙，適合用內容逐一化解。"
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "互動動能能讓你的專業更容易被對的人看見。"
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "穩定輸出能建立信任，降低對方的猶豫。"
+          }
+        },
+        "brandCollaborationProfile": {
+          "followers": {
+            "level": "medium",
+            "note": "規模重要，但穩定度與合作契合度同樣關鍵。"
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "互動強通常是品牌合作方很看重的指標。"
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "按讚代表廣泛喜好；保持內容安全且可複製更加分。"
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "留言能反映信任與對產品話題的相關度。"
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "互動量高能提升合作吸引力與曝光機會。"
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "固定發文能累積更多合作方可參考的內容樣本。"
+          }
+        },
+        "fullTimeCreator": {
+          "followers": {
+            "level": "medium",
+            "note": "成長會累積，但系統化輸出才能穩定前進。"
+          },
+          "engagementRate": {
+            "level": "medium",
+            "note": "互動能反映內容形式是否有效，便於快速調整。"
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "按讚提供快速回饋，有助於更快迭代內容。"
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "留言能提升黏著度，也有助於分發延伸。"
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "動能有助於你判斷該加碼哪類內容。"
+          },
+          "postsPerWeek": {
+            "level": "strong",
+            "note": "可重複的發文節奏，是全職創作的核心能力。"
+          }
+        },
+        "monetizationFocusedAccount": {
+          "followers": {
+            "level": "medium",
+            "note": "受眾變大會有幫助，但變現更依賴信任與意圖。"
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "互動代表信任訊號，是變現非常關鍵的基礎。"
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "按讚代表注意力；搭配清楚方案與成果更容易轉化。"
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "留言能看出需求與疑問，是轉化的好入口。"
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "總互動量高通常代表更強的興趣與意圖。"
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "穩定輸出能讓你的價值與方案持續被看見。"
+          }
+        }
+      },
       "options": {
         "growthStageAccount": "成長期帳號",
         "personalBrandBuilder": "個人品牌經營",
@@ -175,6 +584,311 @@
         }
       },
       "interpretations": {
+        "growthStageAccount": {
+          "followers": {
+            "focus": "主要重點",
+            "role": "追蹤者代表你目前的受眾基礎有多大。",
+            "status": "穩定",
+            "note": "把簡介和內容主題先統一，讓新來的人知道為什麼要追蹤你。"
+          },
+          "engagementRate": {
+            "focus": "品質檢查",
+            "role": "這代表你的內容有沒有真的讓人想互動。",
+            "status": "穩定",
+            "note": "先把開頭寫得更清楚，並用同一種版型連續做一週。"
+          },
+          "avgLikes": {
+            "focus": "快速回饋",
+            "role": "按讚是最快的認同訊號，能幫你判斷內容方向。",
+            "status": "穩定",
+            "note": "把表現好的版型變成固定格式，讓人一眼就認得你。"
+          },
+          "avgComments": {
+            "focus": "意圖訊號",
+            "role": "留言代表更投入的互動，也常會帶動分發。",
+            "status": "穩定",
+            "note": "每篇結尾放一個具體問題，讓人更容易留言。"
+          },
+          "engagementVolume": {
+            "focus": "動能",
+            "role": "總互動量能看出你的內容現在有沒有在累積熱度。",
+            "status": "穩定",
+            "note": "維持穩定節奏，並把有效題材重複做成系列，讓動能更連續。"
+          },
+          "postsPerWeek": {
+            "focus": "成長槓桿",
+            "role": "發文越穩定，被看見的機會就越多。",
+            "status": "偏強",
+            "note": "維持簡單可持續的週排程，用重複來累積成長。"
+          }
+        },
+        "personalBrandBuilder": {
+          "followers": {
+            "focus": "信任基礎",
+            "role": "追蹤者代表有多少人願意長期關注你的主題與風格。",
+            "status": "普通",
+            "note": "建議先穩定 1–2 個核心主題，讓新觀眾一眼看懂你是誰。"
+          },
+          "engagementRate": {
+            "focus": "共鳴程度",
+            "role": "互動率代表內容是否真的打中受眾的在意點。",
+            "status": "很強",
+            "note": "把表現好的角度做成短系列，連續 3–5 篇強化記憶點。"
+          },
+          "avgLikes": {
+            "focus": "快速回饋",
+            "role": "平均按讚代表內容是否容易被認同、被記住。",
+            "status": "很強",
+            "note": "把高按讚的版型變成你的招牌格式，風格保持一致。"
+          },
+          "avgComments": {
+            "focus": "信任深度",
+            "role": "留言代表觀眾是否願意花時間回應你。",
+            "status": "普通",
+            "note": "每篇結尾留一個明確問題，讓留言更容易開始。"
+          },
+          "engagementVolume": {
+            "focus": "擴散動能",
+            "role": "互動量反映內容是否有被大量討論與分享。",
+            "status": "普通",
+            "note": "每週固定一個重複的內容主題，累積討論動能。"
+          },
+          "postsPerWeek": {
+            "focus": "一致性節奏",
+            "role": "發文頻率會影響受眾是否記住你、是否建立信任。",
+            "status": "普通",
+            "note": "維持可預期的節奏，讓觀眾知道何時能看到你的內容。"
+          }
+        },
+        "trafficFocusedCreator": {
+          "followers": {
+            "focus": "觸及基礎",
+            "role": "追蹤者決定你每篇內容最基本能被看到的範圍。",
+            "status": "穩定",
+            "note": "把簡介連結與下一步寫清楚，讓流量知道要去哪裡。"
+          },
+          "engagementRate": {
+            "focus": "分發助力",
+            "role": "互動率會影響內容能不能被推給更多非追蹤者。",
+            "status": "穩定",
+            "note": "把開頭寫得更有吸引力，並加上更清楚的互動引導。"
+          },
+          "avgLikes": {
+            "focus": "輕量興趣",
+            "role": "按讚代表注意力，但不一定代表會採取行動。",
+            "status": "普通",
+            "note": "在價值內容後加一句明確的行動引導（例如私訊或點連結）。"
+          },
+          "avgComments": {
+            "focus": "行動意圖",
+            "role": "留言常代表更高意圖，也能帶動分發延伸。",
+            "status": "偏強",
+            "note": "用更具體的問題引導回覆，並把回覆導向你想要的下一步。"
+          },
+          "engagementVolume": {
+            "focus": "持續觸及",
+            "role": "互動量高會讓貼文更久被看見，流量也更持續。",
+            "status": "偏強",
+            "note": "每週固定重複一個有效的導流版型，讓成果更可預期。"
+          },
+          "postsPerWeek": {
+            "focus": "機會",
+            "role": "發得越穩定，你就越常有機會邀請受眾採取行動。",
+            "status": "穩定",
+            "note": "先把節奏設定成你做得到的頻率，重點是長期維持。"
+          }
+        },
+        "highEngagementCommunity": {
+          "followers": {
+            "focus": "社群規模",
+            "role": "追蹤者反映你社群裡有多少人。",
+            "status": "穩定",
+            "note": "讓大家感覺被看見、被回應，社群就更容易留下來。"
+          },
+          "engagementRate": {
+            "focus": "社群健康度",
+            "role": "互動率能看出社群有沒有真的在回應你。",
+            "status": "偏強",
+            "note": "多做互動型內容，讓人有理由留言、分享或回覆。"
+          },
+          "avgLikes": {
+            "focus": "輕量支持",
+            "role": "按讚是快速支持；留言更能代表連結感。",
+            "status": "普通",
+            "note": "用固定格式鼓勵收藏與分享，讓支持更持續。"
+          },
+          "avgComments": {
+            "focus": "對話",
+            "role": "留言能讓社群更有參與感，也更容易形成互動。",
+            "status": "偏強",
+            "note": "用故事型或立場題讓大家有話想說。"
+          },
+          "engagementVolume": {
+            "focus": "社群循環",
+            "role": "互動量穩定通常代表社群互動循環做起來了。",
+            "status": "偏強",
+            "note": "設計每週固定主題，讓大家知道什麼時候會來參與。"
+          },
+          "postsPerWeek": {
+            "focus": "一致性",
+            "role": "固定發文能讓社群更常回來，也更容易聊起來。",
+            "status": "穩定",
+            "note": "用可預期的排程維持對話，不用追求爆量。"
+          }
+        },
+        "serviceClientReady": {
+          "followers": {
+            "focus": "可信度",
+            "role": "追蹤者能加分可信度，但真正成交還是看你講得清不清楚。",
+            "status": "穩定",
+            "note": "把你提供的服務與成果寫清楚，並把案例置頂。"
+          },
+          "engagementRate": {
+            "focus": "信任訊號",
+            "role": "互動越好，通常代表你講的內容更容易被相信。",
+            "status": "偏強",
+            "note": "用教學內容解決一個明確問題，讓人感覺你很懂。"
+          },
+          "avgLikes": {
+            "focus": "注意力",
+            "role": "按讚代表注意力；案例內容能把注意力變成詢問。",
+            "status": "穩定",
+            "note": "這週加一篇案例或成果分享，讓人看到你能做到什麼。"
+          },
+          "avgComments": {
+            "focus": "疑問",
+            "role": "留言常會出現客戶的疑問，適合拿來做內容回覆。",
+            "status": "普通",
+            "note": "把最常見的問題整理成小型問答系列。"
+          },
+          "engagementVolume": {
+            "focus": "能見度",
+            "role": "互動量能讓你的專業更常被看見、停留更久。",
+            "status": "穩定",
+            "note": "先聚焦一個客戶痛點，連續 3 篇用不同角度講清楚。"
+          },
+          "postsPerWeek": {
+            "focus": "可靠感",
+            "role": "穩定輸出會降低對方的猶豫，讓人更敢詢問你。",
+            "status": "偏強",
+            "note": "用固定週節奏：教學、案例、問答，三種輪替就好。"
+          }
+        },
+        "brandCollaborationProfile": {
+          "followers": {
+            "focus": "規模訊號",
+            "role": "追蹤者能讓合作方快速理解你的影響範圍。",
+            "status": "穩定",
+            "note": "保持內容清楚、乾淨好讀，合作方更容易判斷適合度。"
+          },
+          "engagementRate": {
+            "focus": "合作訊號",
+            "role": "互動率常被當作受眾品質與注意力的參考。",
+            "status": "偏強",
+            "note": "把主題定位做得更一致，合作方會更快看懂你。"
+          },
+          "avgLikes": {
+            "focus": "廣泛喜好",
+            "role": "按讚反映廣泛喜好，有助合作方信心。",
+            "status": "普通",
+            "note": "用可複製的固定版型，讓內容看起來更穩、更專業。"
+          },
+          "avgComments": {
+            "focus": "信任",
+            "role": "留言能看出信任與對話題的相關性。",
+            "status": "普通",
+            "note": "多問偏好與選擇題，讓互動更自然。"
+          },
+          "engagementVolume": {
+            "focus": "動能",
+            "role": "互動量高會讓你在合作方眼中更有吸引力。",
+            "status": "偏強",
+            "note": "設計一個容易收藏、容易回覆的系列內容。"
+          },
+          "postsPerWeek": {
+            "focus": "作品集",
+            "role": "穩定發文能累積更多可被合作方參考的內容。",
+            "status": "穩定",
+            "note": "維持穩定節奏，讓合作方看到你近期的表現。"
+          }
+        },
+        "fullTimeCreator": {
+          "followers": {
+            "focus": "基礎受眾",
+            "role": "追蹤者是你長期創作累積的基本盤。",
+            "status": "穩定",
+            "note": "建立可重複的內容流程，才能讓成長更穩。"
+          },
+          "engagementRate": {
+            "focus": "版型適配",
+            "role": "互動率能看出你目前的內容形式有沒有對味。",
+            "status": "普通",
+            "note": "先小幅測試，再把表現最好的版型固定一週。"
+          },
+          "avgLikes": {
+            "focus": "回饋迴圈",
+            "role": "按讚讓你快速知道哪些內容方向有效。",
+            "status": "普通",
+            "note": "把最有效的觀點做成 3 篇系列，讓學習更快。"
+          },
+          "avgComments": {
+            "focus": "留存",
+            "role": "留言能提升黏著度，也更容易帶動分發。",
+            "status": "普通",
+            "note": "每週固定一個提問，養成互動習慣。"
+          },
+          "engagementVolume": {
+            "focus": "動能",
+            "role": "互動量能看出你的產出系統有沒有在累積熱度。",
+            "status": "普通",
+            "note": "維持節奏並重複有效內容，讓動能更連續。"
+          },
+          "postsPerWeek": {
+            "focus": "系統健康度",
+            "role": "發文頻率反映你是否有可重複的工作流程。",
+            "status": "偏強",
+            "note": "用批次製作，讓你能穩定發文又不容易累。"
+          }
+        },
+        "monetizationFocusedAccount": {
+          "followers": {
+            "focus": "入口",
+            "role": "追蹤者有幫助，但變現更靠信任與意圖。",
+            "status": "穩定",
+            "note": "把方案放在容易找到的位置，並固定重複你的價值主張。"
+          },
+          "engagementRate": {
+            "focus": "信任",
+            "role": "互動通常代表信任，信任是變現的基礎。",
+            "status": "偏強",
+            "note": "用教學內容解一個明確結果，並把問題引導到私訊。"
+          },
+          "avgLikes": {
+            "focus": "注意力",
+            "role": "按讚代表注意力；案例能把注意力變成意圖。",
+            "status": "普通",
+            "note": "這週安排一篇案例與一篇方案貼文，搭配清楚引導。"
+          },
+          "avgComments": {
+            "focus": "需求",
+            "role": "留言常透露需求與疑問，適合拿來做轉化內容。",
+            "status": "普通",
+            "note": "把最常問的問題整理成短問答並置頂。"
+          },
+          "engagementVolume": {
+            "focus": "成交訊號",
+            "role": "互動量高常代表興趣更強，也更容易帶來詢問。",
+            "status": "偏強",
+            "note": "重複最容易帶來收藏、回覆或私訊的內容類型。"
+          },
+          "postsPerWeek": {
+            "focus": "一致性",
+            "role": "穩定輸出能讓你的方案與主張一直被看見。",
+            "status": "穩定",
+            "note": "用週節奏輪替：價值、案例、方案，維持可預期。"
+          }
+        },
+
         "growFollowers": {
           "followers": {
             "focus": "主要重點",

@@ -6,7 +6,7 @@ import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert"
-import { ArrowLeft, Instagram, AtSign } from "lucide-react"
+import { ArrowLeft, Instagram, AtSign, Lock } from "lucide-react"
 import GrowthPaths from "../../components/growth-paths"
 import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
@@ -78,23 +78,30 @@ function ProgressRing({
 }
 
 export default function ResultsPage() {
-  const { t } = useI18n()
   const router = useRouter()
   const pathname = usePathname() || "/"
   const searchParams = useSearchParams()
+  const { t } = useI18n()
+
+  const safeT = (key: string) => {
+    const v = t(key)
+    return v === key ? "" : v
+  }
+
+  const isPro = false // TODO: wire to real subscription state
 
   const [media, setMedia] = useState<Array<{ id: string; timestamp: string }>>([])
 
   const [selectedGoal, setSelectedGoal] = useState<
     | null
-    | "growFollowers"
-    | "increaseLikes"
-    | "increaseComments"
-    | "boostReach"
-    | "buildPersonalBrand"
-    | "getBrandDeals"
-    | "becomeCreator"
-    | "monetizeConsistently"
+    | "growthStageAccount"
+    | "personalBrandBuilder"
+    | "trafficFocusedCreator"
+    | "highEngagementCommunity"
+    | "serviceClientReady"
+    | "brandCollaborationProfile"
+    | "fullTimeCreator"
+    | "monetizationFocusedAccount"
   >(null)
 
   useEffect(() => {
@@ -451,6 +458,16 @@ export default function ResultsPage() {
     setIsProModalOpen(true)
   }
 
+  const scrollToKpiSection = () => {
+    const el = document.getElementById("kpi-section")
+    if (!el) return
+
+    const y = el.getBoundingClientRect().top + window.scrollY
+    const offset = 140
+
+    window.scrollTo({ top: y - offset, behavior: "smooth" })
+  }
+
   const handleConnect = () => {
     const run = async () => {
       setConnectEnvError(null)
@@ -517,48 +534,249 @@ export default function ResultsPage() {
     primaryKpi: "followers" | "engagementRate" | "avgLikes" | "avgComments" | "engagementVolume" | "postsPerWeek"
   }> = [
     {
-      id: "growFollowers",
+      id: "growthStageAccount",
       labelKey: "results.goals.options.growthStageAccount",
       primaryKpi: "followers",
     },
     {
-      id: "increaseLikes",
+      id: "personalBrandBuilder",
       labelKey: "results.goals.options.personalBrandBuilder",
       primaryKpi: "avgLikes",
     },
     {
-      id: "increaseComments",
+      id: "trafficFocusedCreator",
       labelKey: "results.goals.options.trafficFocusedCreator",
       primaryKpi: "avgComments",
     },
     {
-      id: "boostReach",
+      id: "highEngagementCommunity",
       labelKey: "results.goals.options.highEngagementCommunity",
       primaryKpi: "postsPerWeek",
     },
     {
-      id: "buildPersonalBrand",
+      id: "serviceClientReady",
       labelKey: "results.goals.options.serviceClientReady",
       primaryKpi: "engagementRate",
     },
     {
-      id: "getBrandDeals",
+      id: "brandCollaborationProfile",
       labelKey: "results.goals.options.brandCollaborationProfile",
       primaryKpi: "engagementRate",
     },
     {
-      id: "becomeCreator",
+      id: "fullTimeCreator",
       labelKey: "results.goals.options.fullTimeCreator",
       primaryKpi: "postsPerWeek",
     },
     {
-      id: "monetizeConsistently",
+      id: "monetizationFocusedAccount",
       labelKey: "results.goals.options.monetizationFocusedAccount",
       primaryKpi: "engagementRate",
     },
   ]
 
   const selectedGoalConfig = selectedGoal ? goalOptions.find((o) => o.id === selectedGoal) : null
+
+  const goalMeta: Record<
+    NonNullable<typeof selectedGoal> | "default",
+    {
+      label: string
+      levelLabel: string
+      actions: Array<{ titleKey: string; descKey: string; isPro: boolean }>
+    }
+  > = {
+    default: {
+      label: safeT("results.goals.title"),
+      levelLabel: safeT("results.levelPill.default"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.default.1.title",
+          descKey: "results.nextActions.actions.default.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.default.2.title",
+          descKey: "results.nextActions.actions.default.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.default.3.title",
+          descKey: "results.nextActions.actions.default.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    growthStageAccount: {
+      label: safeT("results.goals.options.growthStageAccount"),
+      levelLabel: safeT("results.levelPill.growthStageAccount"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.growthStageAccount.1.title",
+          descKey: "results.nextActions.actions.growthStageAccount.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.growthStageAccount.2.title",
+          descKey: "results.nextActions.actions.growthStageAccount.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.growthStageAccount.3.title",
+          descKey: "results.nextActions.actions.growthStageAccount.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    personalBrandBuilder: {
+      label: safeT("results.goals.options.personalBrandBuilder"),
+      levelLabel: safeT("results.levelPill.personalBrandBuilder"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.personalBrandBuilder.1.title",
+          descKey: "results.nextActions.actions.personalBrandBuilder.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.personalBrandBuilder.2.title",
+          descKey: "results.nextActions.actions.personalBrandBuilder.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.personalBrandBuilder.3.title",
+          descKey: "results.nextActions.actions.personalBrandBuilder.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    trafficFocusedCreator: {
+      label: safeT("results.goals.options.trafficFocusedCreator"),
+      levelLabel: safeT("results.levelPill.trafficFocusedCreator"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.trafficFocusedCreator.1.title",
+          descKey: "results.nextActions.actions.trafficFocusedCreator.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.trafficFocusedCreator.2.title",
+          descKey: "results.nextActions.actions.trafficFocusedCreator.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.trafficFocusedCreator.3.title",
+          descKey: "results.nextActions.actions.trafficFocusedCreator.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    highEngagementCommunity: {
+      label: safeT("results.goals.options.highEngagementCommunity"),
+      levelLabel: safeT("results.levelPill.highEngagementCommunity"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.highEngagementCommunity.1.title",
+          descKey: "results.nextActions.actions.highEngagementCommunity.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.highEngagementCommunity.2.title",
+          descKey: "results.nextActions.actions.highEngagementCommunity.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.highEngagementCommunity.3.title",
+          descKey: "results.nextActions.actions.highEngagementCommunity.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    serviceClientReady: {
+      label: safeT("results.goals.options.serviceClientReady"),
+      levelLabel: safeT("results.levelPill.serviceClientReady"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.serviceClientReady.1.title",
+          descKey: "results.nextActions.actions.serviceClientReady.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.serviceClientReady.2.title",
+          descKey: "results.nextActions.actions.serviceClientReady.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.serviceClientReady.3.title",
+          descKey: "results.nextActions.actions.serviceClientReady.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    brandCollaborationProfile: {
+      label: safeT("results.goals.options.brandCollaborationProfile"),
+      levelLabel: safeT("results.levelPill.brandCollaborationProfile"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.brandCollaborationProfile.1.title",
+          descKey: "results.nextActions.actions.brandCollaborationProfile.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.brandCollaborationProfile.2.title",
+          descKey: "results.nextActions.actions.brandCollaborationProfile.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.brandCollaborationProfile.3.title",
+          descKey: "results.nextActions.actions.brandCollaborationProfile.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    fullTimeCreator: {
+      label: safeT("results.goals.options.fullTimeCreator"),
+      levelLabel: safeT("results.levelPill.fullTimeCreator"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.fullTimeCreator.1.title",
+          descKey: "results.nextActions.actions.fullTimeCreator.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.fullTimeCreator.2.title",
+          descKey: "results.nextActions.actions.fullTimeCreator.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.fullTimeCreator.3.title",
+          descKey: "results.nextActions.actions.fullTimeCreator.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+    monetizationFocusedAccount: {
+      label: safeT("results.goals.options.monetizationFocusedAccount"),
+      levelLabel: safeT("results.levelPill.monetizationFocusedAccount"),
+      actions: [
+        {
+          titleKey: "results.nextActions.actions.monetizationFocusedAccount.1.title",
+          descKey: "results.nextActions.actions.monetizationFocusedAccount.1.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.monetizationFocusedAccount.2.title",
+          descKey: "results.nextActions.actions.monetizationFocusedAccount.2.desc",
+          isPro: false,
+        },
+        {
+          titleKey: "results.nextActions.actions.monetizationFocusedAccount.3.title",
+          descKey: "results.nextActions.actions.monetizationFocusedAccount.3.desc",
+          isPro: true,
+        },
+      ],
+    },
+  }
+
+  const activeGoalMeta = goalMeta[selectedGoal ?? "default"]
 
   const kpis: Array<{
     id: "followers" | "engagementRate" | "avgLikes" | "avgComments" | "engagementVolume" | "postsPerWeek"
@@ -609,6 +827,40 @@ export default function ResultsPage() {
     kpiId: (typeof kpis)[number]["id"],
     field: "focus" | "role" | "status" | "note"
   ) => `results.goals.interpretations.${goalId}.${kpiId}.${field}`
+
+  const kpiEvaluationLevel = (
+    goalId: NonNullable<typeof selectedGoal>,
+    kpiId: (typeof kpis)[number]["id"]
+  ) => {
+    const raw = t(`results.goals.evaluations.${goalId}.${kpiId}.level`)
+    if (raw === "low" || raw === "medium" || raw === "strong") return raw
+    return "medium" as const
+  }
+
+  const kpiEvaluationTone = (level: "low" | "medium" | "strong") => {
+    if (level === "low") {
+      return {
+        container: "border-white/10 bg-white/3",
+        pill: "border-white/15 bg-white/5 text-slate-300/90",
+        bar: "bg-slate-400/60",
+        barEmpty: "bg-white/5",
+      }
+    }
+    if (level === "medium") {
+      return {
+        container: "border-sky-400/15 bg-sky-500/5",
+        pill: "border-sky-400/20 bg-sky-500/10 text-sky-100/95",
+        bar: "bg-sky-300/80",
+        barEmpty: "bg-sky-500/10",
+      }
+    }
+    return {
+      container: "border-emerald-500/20 bg-emerald-500/5",
+      pill: "border-emerald-500/25 bg-emerald-500/10 text-emerald-200/95",
+      bar: "bg-emerald-400/80",
+      barEmpty: "bg-emerald-500/10",
+    }
+  }
 
   return (
     <ConnectedGate
@@ -1468,7 +1720,12 @@ export default function ResultsPage() {
               className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 shadow-lg shadow-violet-500/20 border border-white/10"
               onClick={() => console.log("open_full_analysis_top")}
             >
-              {t("results.actions.viewFullAnalysis")}
+              <span className="inline-flex items-center gap-2">
+                {t("results.actions.viewFullAnalysis")}
+                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-100">
+                  {safeT("results.proBadge")}
+                </span>
+              </span>
             </button>
           </div>
 
@@ -1485,18 +1742,18 @@ export default function ResultsPage() {
 
             <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0 pt-1">
+                <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     {igMe?.profile_picture_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={igMe.profile_picture_url}
                         alt={`@${mockAnalysis.profile.username}`}
-                        className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border border-white/10 object-cover shrink-0"
+                        className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-white/10 object-cover shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border border-white/10 bg-white/10 shrink-0" />
+                      <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-white/10 bg-white/10 shrink-0" />
                     )}
 
                     <div className="flex flex-col gap-1 min-w-0">
@@ -1504,52 +1761,67 @@ export default function ResultsPage() {
                         {mockAnalysis.profile.displayName}
                       </div>
                       <div className="text-sm text-slate-300 truncate">@{mockAnalysis.profile.username}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {t(
-                          selectedGoal
-                            ? `results.positioning.values.${selectedGoal}`
-                            : "results.positioning.values.default"
-                        )}
+                    </div>
+                  </div>
+
+                  <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 items-center justify-center">
+                    <div className="grid grid-cols-3 gap-4 xl:gap-6 md:min-w-[360px] text-center">
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
+                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
+                          {mockAnalysis.profile.followers.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
+                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
+                          {mockAnalysis.profile.following.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
+                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
+                          {mockAnalysis.profile.posts.toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 shadow-lg shadow-violet-500/20 border border-white/10"
-                      onClick={() => console.log("open_full_analysis")}
-                    >
-                      {t("results.actions.fullDataAnalysis")}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-slate-200 border border-white/15 hover:bg-white/5"
-                      onClick={() => console.log("export_summary")}
-                    >
-                      {t("results.actions.exportSummary")}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
-                    <div className="mt-1 text-lg font-semibold text-white">
-                      {mockAnalysis.profile.followers.toLocaleString()}
+                  <div className="w-full md:w-auto lg:hidden md:flex-[1.2] md:flex md:justify-center">
+                    <div className="grid grid-cols-3 gap-4 md:gap-6 md:min-w-[360px] text-center">
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
+                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
+                          {mockAnalysis.profile.followers.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
+                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
+                          {mockAnalysis.profile.following.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
+                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
+                          {mockAnalysis.profile.posts.toLocaleString()}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
-                    <div className="mt-1 text-base font-semibold text-white">
-                      {mockAnalysis.profile.following.toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
-                    <div className="mt-1 text-base font-semibold text-white">
-                      {mockAnalysis.profile.posts.toLocaleString()}
+
+                  <div className="hidden lg:flex flex-col justify-center max-w-[360px] min-w-[220px] text-right px-1 sm:px-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                        {safeT("results.proBadge")}
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70">
+                        {t(
+                          selectedGoal
+                            ? `results.positioning.labels.${selectedGoal}`
+                            : "results.positioning.labels.default"
+                        )}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1580,40 +1852,77 @@ export default function ResultsPage() {
               </div>
             </div>
 
-            <div className="mt-4 text-xs text-muted-foreground">
-              {t("results.proReminder")}
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div id="kpi-section" className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 scroll-mt-40">
               {kpis.map((kpi) => {
                 const isSelected = Boolean(selectedGoalConfig)
                 const focus = isSelected
-                  ? t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "focus"))
+                  ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "focus"))
                   : ""
                 const isPrimary = isSelected && selectedGoalConfig!.primaryKpi === kpi.id
-                const note = isSelected ? t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "note")) : ""
+                const note = isSelected ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "note")) : ""
+
+                const evalLevel = isSelected ? kpiEvaluationLevel(selectedGoalConfig!.id, kpi.id) : null
+                const evalTone = evalLevel ? kpiEvaluationTone(evalLevel) : null
+                const evalNote = isSelected ? t(`results.goals.evaluations.${selectedGoalConfig!.id}.${kpi.id}.note`) : ""
+
+                const levelSegments = evalLevel === "low" ? 1 : evalLevel === "medium" ? 2 : 3
 
                 return (
                   <Card
                     key={kpi.id}
                     className={
-                      "rounded-xl border bg-white/5 backdrop-blur-sm " +
+                      "rounded-xl border backdrop-blur-sm " +
+                      (evalTone ? evalTone.container + " " : "bg-white/5 ") +
                       (isPrimary ? "border-white/25" : "border-white/10")
                     }
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div className={"text-xs text-slate-400" + (isPrimary ? " font-medium" : "")}>{t(kpi.titleKey)}</div>
-                        {isSelected ? <div className="text-[11px] text-muted-foreground text-right">{focus}</div> : null}
+                        <div className={"text-[15px] font-medium text-slate-100" + (isPrimary ? "" : "")}>{t(kpi.titleKey)}</div>
+                        <div className="flex flex-col items-end gap-2">
+                          {isSelected ? <div className="text-[11px] text-muted-foreground text-right">{focus}</div> : null}
+                          {evalLevel ? (
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={
+                                  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium " +
+                                  kpiEvaluationTone(evalLevel).pill
+                                }
+                              >
+                                {safeT(`results.kpi.badgeLabels.${kpi.id}`)}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                {[0, 1, 2].map((i) => (
+                                  <span
+                                    key={i}
+                                    className={
+                                      "h-1.5 w-5 rounded-full " +
+                                      (i < levelSegments
+                                        ? kpiEvaluationTone(evalLevel).bar
+                                        : kpiEvaluationTone(evalLevel).barEmpty)
+                                    }
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="mt-1 text-lg font-semibold text-white">{kpi.value}</div>
                       <div className="mt-1 text-xs text-slate-400">{t(kpi.descriptionKey)}</div>
+                      {safeT(`results.kpi.consequence.${kpi.id}`) ? (
+                        <div className="mt-1 text-xs text-slate-500">
+                          {safeT(`results.kpi.consequence.${kpi.id}`)}
+                        </div>
+                      ) : null}
+
+                      {evalNote ? <div className="mt-2 text-xs text-muted-foreground">{evalNote}</div> : null}
 
                       {isSelected ? (
                         <div className="mt-2 text-xs text-muted-foreground">
-                          <div>{t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "role"))}</div>
-                          <div className="mt-1">{t(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "status"))}</div>
+                          <div>{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "role"))}</div>
+                          <div className="mt-1">{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "status"))}</div>
                           {note ? <div className="mt-1">{note}</div> : null}
                         </div>
                       ) : null}
@@ -1623,12 +1932,79 @@ export default function ResultsPage() {
               })}
             </div>
 
-            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base text-white">{t("results.goals.title")}</CardTitle>
-                <p className="mt-1 text-xs text-muted-foreground">{t("results.goals.subtitle")}</p>
+            <div className="mt-4 flex justify-center">
+              <div className="h-px w-48 bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+            </div>
+
+            <Card className="text-slate-100 flex flex-col gap-6 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-3 rounded-2xl border border-white/30 bg-gradient-to-b from-white/10 via-white/5 to-white/3 ring-1 ring-white/20 shadow-2xl shadow-black/60 backdrop-blur-sm px-5 sm:px-6 py-5 sm:py-6 mb-8">
+              <CardHeader className="pb-0">
+                <CardTitle className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
+                  {safeT("results.nextActions.title")}
+                </CardTitle>
+                <p className="mt-1 text-sm text-white/65 max-w-2xl">{safeT("results.nextActions.helperLine")}</p>
+                <p className="mt-1 text-sm text-white/65 max-w-2xl">{safeT("results.nextActions.subtitle")}</p>
+                <div className="mt-4 mb-6 border-b border-white/15" />
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 px-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {activeGoalMeta.actions.map((action) => {
+                    const isLocked = action.isPro && !isPro
+                    return (
+                      <div
+                        key={action.titleKey}
+                        className="rounded-xl border border-white/20 bg-white/8 px-4 py-3 sm:py-4 min-h-[72px] cursor-pointer transition-all duration-200 hover:bg-white/12 hover:border-white/40 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.01] active:scale-[0.99]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="text-sm font-semibold text-white leading-snug">
+                            {safeT(action.titleKey)}
+                          </div>
+                          <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                            {action.isPro ? safeT("results.nextActions.proBadge") : safeT("results.nextActions.freeBadge")}
+                          </span>
+                        </div>
+
+                        <div
+                          className={
+                            "mt-2 text-xs text-slate-300 leading-relaxed " +
+                            (isLocked ? "blur-[3px] select-none" : "")
+                          }
+                        >
+                          {safeT(action.descKey)}
+                        </div>
+
+                        {isLocked ? (
+                          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                            <Lock className="h-3.5 w-3.5" />
+                            <button
+                              type="button"
+                              className="hover:text-slate-200"
+                              onClick={handleUpgrade}
+                            >
+                              {safeT("results.nextActions.lockLine")}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+
+            <Card
+              id="goal-section"
+              className="text-slate-100 flex flex-col gap-6 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-0 rounded-2xl border border-white/30 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/15 shadow-xl shadow-black/40 backdrop-blur-sm px-5 sm:px-6 py-5 sm:py-6"
+            >
+              <CardHeader className="pb-0">
+                <CardTitle className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
+                  {t("results.goals.title")}
+                </CardTitle>
+                <p className="mt-1 text-sm text-white/65 max-w-2xl">{t("results.goals.subtitle")}</p>
+                <div className="mt-4 mb-6 border-b border-white/15" />
+              </CardHeader>
+              <CardContent className="pt-0 px-0">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {goalOptions.map((opt) => {
                     const isSelected = selectedGoal === opt.id
@@ -1638,16 +2014,24 @@ export default function ResultsPage() {
                         role="button"
                         tabIndex={0}
                         className={
-                          "select-none rounded-xl border px-3 py-2 text-sm transition-colors " +
+                          "select-none cursor-pointer min-h-[56px] flex items-center justify-center rounded-xl border px-3 py-3 text-sm sm:text-base font-medium transition-all duration-200 hover:bg-white/12 hover:border-white/30 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.01] active:scale-[0.99] " +
                           (isSelected
-                            ? "border-white/25 bg-white/10 text-white"
-                            : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10")
+                            ? "border-white/30 bg-white/6 text-white"
+                            : "border-white/15 bg-white/6 text-slate-200")
                         }
-                        onClick={() => setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))}
+                        onClick={() => {
+                          setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                          requestAnimationFrame(() => {
+                            scrollToKpiSection()
+                          })
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault()
                             setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                            requestAnimationFrame(() => {
+                              scrollToKpiSection()
+                            })
                           }
                         }}
                       >

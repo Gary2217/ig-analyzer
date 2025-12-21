@@ -38,7 +38,10 @@ export async function GET(req: NextRequest) {
   oauthUrl.searchParams.set("redirect_uri", redirectUri)
   oauthUrl.searchParams.set("state", state)
   oauthUrl.searchParams.set("response_type", "code")
-  oauthUrl.searchParams.set("scope", "email,public_profile")
+  oauthUrl.searchParams.set(
+    "scope",
+    "instagram_basic,instagram_manage_insights,pages_show_list",
+  )
 
   return NextResponse.redirect(oauthUrl, {
     headers: res.headers,

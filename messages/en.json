@@ -43,10 +43,191 @@
     "title": "Account Analysis Results",
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
     "proReminder": "Pro includes deeper post-level details and more actionable recommendations.",
+    "proBadge": "Pro",
+    "levelPill": {
+      "default": "Growing creator",
+      "growthStageAccount": "Growing creator",
+      "personalBrandBuilder": "Brand-building creator",
+      "trafficFocusedCreator": "Conversation-focused creator",
+      "highEngagementCommunity": "Community-first creator",
+      "serviceClientReady": "Client-ready creator",
+      "brandCollaborationProfile": "Brand-collaboration creator",
+      "fullTimeCreator": "Creator-system builder",
+      "monetizationFocusedAccount": "Monetization-focused creator"
+    },
+    "nextActions": {
+      "title": "The 3 things you should do next",
+      "subtitle": "Three practical moves you can do this week.",
+      "helperLine": "👉 These three actions most directly affect your growth in the next 30 days.",
+      "freeBadge": "Free",
+      "proBadge": "Pro",
+      "lockLine": "Upgrade to unlock",
+      "actions": {
+        "default": {
+          "1": {
+            "title": "👉 Pick one weekly theme",
+            "desc": "Choose one repeatable topic and publish it twice this week."
+          },
+          "2": {
+            "title": "👉 Improve your hook",
+            "desc": "Rewrite the first line to be specific and audience-first."
+          },
+          "3": {
+            "title": "👉 Copy what already works",
+            "desc": "Turn your best post into a 3-part mini series with the same angle."
+          }
+        },
+        "growthStageAccount": {
+          "1": {
+            "title": "👉 Lock a posting cadence",
+            "desc": "Aim for 2 posts this week with the same topic and format."
+          },
+          "2": {
+            "title": "👉 Clarify your niche",
+            "desc": "Write one sentence: who you help + what you share + why it matters."
+          },
+          "3": {
+            "title": "👉 Plan your next 10 posts",
+            "desc": "Draft 10 titles in one sitting so you never run out of ideas."
+          }
+        },
+        "personalBrandBuilder": {
+          "1": {
+            "title": "👉 Build a signature series",
+            "desc": "Pick one format and run it 3 times with a consistent message."
+          },
+          "2": {
+            "title": "👉 Tighten your profile",
+            "desc": "Make your bio and pinned posts say exactly what you’re about."
+          },
+          "3": {
+            "title": "👉 Create your content angles",
+            "desc": "Define 5 angles you want to be known for, then rotate them."
+          }
+        },
+        "trafficFocusedCreator": {
+          "1": {
+            "title": "👉 Ask one clear question",
+            "desc": "End every post with a simple question that invites replies."
+          },
+          "2": {
+            "title": "👉 Turn comments into content",
+            "desc": "Pick one common comment and answer it as your next post."
+          },
+          "3": {
+            "title": "👉 Build a reply script",
+            "desc": "Prepare quick reply templates to keep conversations flowing."
+          }
+        },
+        "highEngagementCommunity": {
+          "1": {
+            "title": "👉 Start a weekly ritual",
+            "desc": "Run a weekly prompt so your community expects to participate."
+          },
+          "2": {
+            "title": "👉 Feature your audience",
+            "desc": "Share 1 follower story or comment and respond with your take."
+          },
+          "3": {
+            "title": "👉 Map your community topics",
+            "desc": "List 8 discussion topics your audience loves and recycle them."
+          }
+        },
+        "serviceClientReady": {
+          "1": {
+            "title": "👉 Write a clear offer",
+            "desc": "Describe what you do in one line and who it’s for."
+          },
+          "2": {
+            "title": "👉 Add one proof post",
+            "desc": "Post a short case study: problem → process → result."
+          },
+          "3": {
+            "title": "👉 Set an inquiry path",
+            "desc": "Decide where inquiries go (DM or form) and mention it consistently."
+          }
+        },
+        "brandCollaborationProfile": {
+          "1": {
+            "title": "👉 Package 3 collaboration ideas",
+            "desc": "Write 3 brand-safe content ideas you can deliver this month."
+          },
+          "2": {
+            "title": "👉 Create a media kit outline",
+            "desc": "Summarize your niche, audience, and top posts in one page."
+          },
+          "3": {
+            "title": "👉 Draft your pitch message",
+            "desc": "Prepare a short pitch you can send to brands in under 30 seconds."
+          }
+        },
+        "fullTimeCreator": {
+          "1": {
+            "title": "👉 Systemize your workflow",
+            "desc": "Batch create: outline 5 posts today, film tomorrow, edit next."
+          },
+          "2": {
+            "title": "👉 Double down on winners",
+            "desc": "Repeat your top-performing format with a new angle."
+          },
+          "3": {
+            "title": "👉 Plan your content calendar",
+            "desc": "Build a simple 2-week calendar so your output stays consistent."
+          }
+        },
+        "monetizationFocusedAccount": {
+          "1": {
+            "title": "👉 Choose one monetization path",
+            "desc": "Pick one offer to focus on this month (service, product, or affiliate)."
+          },
+          "2": {
+            "title": "👉 Create a simple CTA",
+            "desc": "Add one consistent call-to-action in your posts and bio."
+          },
+          "3": {
+            "title": "👉 Build a conversion post",
+            "desc": "Write one post that explains the problem and your solution clearly."
+          }
+        }
+      }
+    },
+    "accountLevel": {
+      "title": "Account level",
+      "labels": {
+        "growthStage": "Growth stage",
+        "personalBrand": "Personal brand",
+        "stableCreator": "Stable creator",
+        "clientReady": "Client-ready",
+        "brandCollaboration": "Brand-collaboration ready"
+      },
+      "description": {
+        "growthStage": "You’re building your base. Focus on consistency and a clear topic so new people know why to follow.",
+        "personalBrand": "Your engagement is promising. Next step is packaging your message so it reaches more people.",
+        "stableCreator": "You’re showing up consistently with solid engagement. Keep your cadence and scale what’s working.",
+        "clientReady": "People are replying and talking with you. You can start turning attention into leads with a clear offer.",
+        "brandCollaboration": "You have both scale and strong engagement. You’re in a great spot to pitch and land brand partnerships."
+      }
+    },
+    "levels": {
+      "low": "Low",
+      "medium": "Medium",
+      "strong": "Strong"
+    },
     "proHint": {
       "rings": "Subscribe to see a detailed breakdown"
     },
     "positioning": {
+      "labels": {
+        "default": "Account level",
+        "growthStageAccount": "Growth-ready",
+        "personalBrandBuilder": "Brand-building",
+        "trafficFocusedCreator": "Conversation-driven",
+        "highEngagementCommunity": "Community-led",
+        "serviceClientReady": "Client-ready",
+        "brandCollaborationProfile": "Brand-partner ready",
+        "fullTimeCreator": "Creator-system",
+        "monetizationFocusedAccount": "Monetization-ready"
+      },
       "values": {
         "default": "Qualitative positioning",
         "growFollowers": "Growth-stage account",
@@ -88,32 +269,260 @@
     "kpis": {
       "followers": {
         "title": "Followers",
-        "description": "Current audience base"
+        "description": "This week: tighten your topic and ship consistently so your audience base can grow."
       },
       "engagementRate": {
         "title": "Engagement Rate",
-        "description": "Estimated vs similar-sized accounts"
+        "description": "Keep what’s working and simplify your message so more people engage faster."
       },
       "avgLikes": {
         "title": "Avg Likes",
-        "description": "Estimated from last 30 days"
+        "description": "Repeat the format that gets likes and turn it into a 3-post mini series."
       },
       "avgComments": {
         "title": "Avg Comments",
-        "description": "Conversation-driven signal"
+        "description": "End each post with one clear question to invite replies."
       },
       "engagementVolume": {
         "title": "Engagement Volume",
-        "description": "Total interactions per post (approx.)"
+        "description": "Double down on your best angle and post it again with a fresh hook."
       },
       "postsPerWeek": {
         "title": "Posts / Week",
-        "description": "Consistency supports distribution"
+        "description": "Pick a cadence you can keep and protect it for the next 2 weeks."
+      }
+    },
+    "kpi": {
+      "badgeLabels": {
+        "followers": "Not sure who you are",
+        "engagementRate": "They watch, don’t react",
+        "avgLikes": "Seen, not remembered",
+        "avgComments": "People don’t reply",
+        "engagementVolume": "Momentum isn’t there",
+        "postsPerWeek": "Hard to trust the rhythm"
+      },
+      "consequence": {
+        "followers": "If this stays flat, growth will feel slow even when you post more.",
+        "engagementRate": "If this stays the same, reach tends to plateau because signals stay weak.",
+        "avgLikes": "If this stays low, new viewers won’t get a clear reason to follow.",
+        "avgComments": "If this stays low, you’ll get fewer warm conversations and DMs.",
+        "engagementVolume": "If this stays flat, your best posts won’t compound over time.",
+        "postsPerWeek": "If this stays inconsistent, it’s harder for people (and algorithms) to expect you."
       }
     },
     "goals": {
       "title": "What's your current goal?",
       "subtitle": "Choose one focus to see how your current metrics support that goal.",
+      "evaluations": {
+        "growthStageAccount": {
+          "followers": {
+            "level": "strong",
+            "note": "A solid follower base helps your growth efforts compound."
+          },
+          "engagementRate": {
+            "level": "medium",
+            "note": "Engagement indicates whether new viewers convert into followers."
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "Likes help distribution, but consistency matters more for growth."
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "Comments signal stronger intent and can accelerate reach."
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "Total interactions show momentum that can drive discovery."
+          },
+          "postsPerWeek": {
+            "level": "strong",
+            "note": "A steady posting rhythm gives you more chances to grow."
+          }
+        },
+        "personalBrandBuilder": {
+          "followers": {
+            "level": "medium",
+            "note": "A growing audience helps your message reach more people."
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "High engagement suggests your positioning resonates."
+          },
+          "avgLikes": {
+            "level": "strong",
+            "note": "Likes reflect quick agreement and reinforce your brand cues."
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "Comments help deepen trust and clarify what people care about."
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "Momentum helps your ideas spread beyond your core followers."
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "Consistency helps your audience learn what you stand for."
+          }
+        },
+        "trafficFocusedCreator": {
+          "followers": {
+            "level": "medium",
+            "note": "Followers are useful, but conversations are what drive traffic."
+          },
+          "engagementRate": {
+            "level": "medium",
+            "note": "Engagement supports distribution, especially when comments are strong."
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "Likes help, but they don’t always translate to clicks or replies."
+          },
+          "avgComments": {
+            "level": "strong",
+            "note": "Comments indicate high intent and can boost reach significantly."
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "High interaction volume keeps posts circulating longer."
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "Posting regularly gives you more chances to invite action."
+          }
+        },
+        "highEngagementCommunity": {
+          "followers": {
+            "level": "medium",
+            "note": "Community growth is steady when people feel connected."
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "Engagement rate reflects community health and responsiveness."
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "Likes show lightweight support; comments show belonging."
+          },
+          "avgComments": {
+            "level": "strong",
+            "note": "Comments help your community interact with you and each other."
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "Consistent interaction volume signals strong community loops."
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "A predictable cadence keeps the community returning."
+          }
+        },
+        "serviceClientReady": {
+          "followers": {
+            "level": "medium",
+            "note": "Followers help credibility, but clarity converts clients."
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "Engagement suggests trust signals—important for inbound leads."
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "Likes reflect attention; combine with proof posts for conversion."
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "Comments can reveal objections you can address with content."
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "Momentum helps your expertise get seen by the right people."
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "Consistency builds trust and reduces perceived risk."
+          }
+        },
+        "brandCollaborationProfile": {
+          "followers": {
+            "level": "medium",
+            "note": "Audience size matters, but consistency and fit matter too."
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "Strong engagement is a common signal for brand partners."
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "Likes show broad appeal; keep content brand-safe and repeatable."
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "Comments can indicate trust and product relevance."
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "High interaction volume can improve partnership attractiveness."
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "Regular posting creates more partnership-ready examples."
+          }
+        },
+        "fullTimeCreator": {
+          "followers": {
+            "level": "medium",
+            "note": "Audience growth compounds, but systems keep you consistent."
+          },
+          "engagementRate": {
+            "level": "medium",
+            "note": "Engagement indicates whether your formats are working."
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "Likes provide fast feedback loops for iteration."
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "Comments can build retention and increase distribution."
+          },
+          "engagementVolume": {
+            "level": "medium",
+            "note": "Momentum helps you learn what to double down on."
+          },
+          "postsPerWeek": {
+            "level": "strong",
+            "note": "A repeatable publishing rhythm is key to full-time creation."
+          }
+        },
+        "monetizationFocusedAccount": {
+          "followers": {
+            "level": "medium",
+            "note": "A larger audience helps, but intent and trust drive revenue."
+          },
+          "engagementRate": {
+            "level": "strong",
+            "note": "Engagement signals trust—critical for monetization."
+          },
+          "avgLikes": {
+            "level": "medium",
+            "note": "Likes are attention; pair them with clear offers and proof."
+          },
+          "avgComments": {
+            "level": "medium",
+            "note": "Comments can reveal demand and questions you can convert."
+          },
+          "engagementVolume": {
+            "level": "strong",
+            "note": "High total interactions often correlate with higher intent."
+          },
+          "postsPerWeek": {
+            "level": "medium",
+            "note": "Consistency keeps your offer and message top of mind."
+          }
+        }
+      },
       "options": {
         "growthStageAccount": "Growth-stage account",
         "personalBrandBuilder": "Personal brand builder",
@@ -175,6 +584,311 @@
         }
       },
       "interpretations": {
+        "growthStageAccount": {
+          "followers": {
+            "focus": "Primary focus",
+            "role": "Followers show the size of your current audience base.",
+            "status": "Steady",
+            "note": "Make your profile and content theme consistent so new visitors know why to follow."
+          },
+          "engagementRate": {
+            "focus": "Quality check",
+            "role": "Engagement rate shows whether your content makes people want to react.",
+            "status": "Steady",
+            "note": "Use one clear hook and repeat what works for a week to improve consistency."
+          },
+          "avgLikes": {
+            "focus": "Fast feedback",
+            "role": "Likes are quick signals that your posts are easy to agree with.",
+            "status": "Steady",
+            "note": "Turn your best post style into a repeatable format people recognize."
+          },
+          "avgComments": {
+            "focus": "Intent signal",
+            "role": "Comments show deeper interest and can increase distribution.",
+            "status": "Steady",
+            "note": "End posts with one specific question to invite replies."
+          },
+          "engagementVolume": {
+            "focus": "Momentum",
+            "role": "Total interactions reflect whether your account is building momentum.",
+            "status": "Steady",
+            "note": "Aim for a consistent cadence and reuse winning topics to keep momentum up."
+          },
+          "postsPerWeek": {
+            "focus": "Growth lever",
+            "role": "Posting frequency gives you more chances to be discovered.",
+            "status": "Strong",
+            "note": "Keep a simple weekly schedule so you can improve through repetition."
+          }
+        },
+        "personalBrandBuilder": {
+          "followers": {
+            "focus": "Trust base",
+            "role": "Followers show how many people want to keep following your topics and style.",
+            "status": "Okay",
+            "note": "Stabilize 1–2 core themes so new visitors instantly understand who you are."
+          },
+          "engagementRate": {
+            "focus": "Resonance",
+            "role": "Engagement rate shows whether your content hits what your audience cares about.",
+            "status": "Very strong",
+            "note": "Keep the same content angle for a short series to strengthen recognition."
+          },
+          "avgLikes": {
+            "focus": "Fast feedback",
+            "role": "Average likes show whether people quickly agree with and remember your content.",
+            "status": "Very strong",
+            "note": "Turn your high-like format into a signature template and keep it consistent."
+          },
+          "avgComments": {
+            "focus": "Trust depth",
+            "role": "Comments show whether people are willing to spend time replying to you.",
+            "status": "Okay",
+            "note": "End posts with one clear question to invite real replies."
+          },
+          "engagementVolume": {
+            "focus": "Momentum",
+            "role": "Total interactions show whether your content is being discussed and shared a lot.",
+            "status": "Okay",
+            "note": "Choose one repeatable weekly topic to build discussion momentum."
+          },
+          "postsPerWeek": {
+            "focus": "Consistency rhythm",
+            "role": "Posting frequency affects whether people remember you and build trust over time.",
+            "status": "Okay",
+            "note": "Keep a predictable cadence so people know when to expect your content."
+          }
+        },
+        "trafficFocusedCreator": {
+          "followers": {
+            "focus": "Reach base",
+            "role": "Followers set the baseline reach for your traffic-driving posts.",
+            "status": "Steady",
+            "note": "Make your profile link and offer clear so traffic has a next step."
+          },
+          "engagementRate": {
+            "focus": "Distribution support",
+            "role": "Engagement rate affects how far your posts travel beyond followers.",
+            "status": "Steady",
+            "note": "Use clearer hooks and prompts so more viewers react and share."
+          },
+          "avgLikes": {
+            "focus": "Light interest",
+            "role": "Likes show attention, but not always action.",
+            "status": "Steady",
+            "note": "Pair value posts with one simple call-to-action to guide clicks or DMs."
+          },
+          "avgComments": {
+            "focus": "Action intent",
+            "role": "Comments often signal higher intent and can trigger more distribution.",
+            "status": "Strong",
+            "note": "Ask a specific question that leads to the next step you want."
+          },
+          "engagementVolume": {
+            "focus": "Sustained reach",
+            "role": "Total interactions help posts stay active and keep driving traffic.",
+            "status": "Strong",
+            "note": "Repeat your best traffic format weekly so momentum compounds."
+          },
+          "postsPerWeek": {
+            "focus": "Opportunities",
+            "role": "Posting frequency creates more chances to invite action.",
+            "status": "Steady",
+            "note": "Aim for a simple, sustainable posting rhythm you can maintain."
+          }
+        },
+        "highEngagementCommunity": {
+          "followers": {
+            "focus": "Community size",
+            "role": "Followers represent how many people are in your community.",
+            "status": "Steady",
+            "note": "Focus on making people feel seen so they stay and interact."
+          },
+          "engagementRate": {
+            "focus": "Community health",
+            "role": "Engagement rate shows how responsive your community is.",
+            "status": "Strong",
+            "note": "Keep content interactive so people want to reply and share."
+          },
+          "avgLikes": {
+            "focus": "Light support",
+            "role": "Likes show quick support; comments show real connection.",
+            "status": "Steady",
+            "note": "Use consistent formats that encourage saves and shares."
+          },
+          "avgComments": {
+            "focus": "Conversation",
+            "role": "Comments build belonging and keep the community active.",
+            "status": "Strong",
+            "note": "Use prompts that invite stories or specific opinions."
+          },
+          "engagementVolume": {
+            "focus": "Community loop",
+            "role": "High interaction volume signals a strong community loop.",
+            "status": "Strong",
+            "note": "Run a weekly recurring topic so members know what to expect."
+          },
+          "postsPerWeek": {
+            "focus": "Consistency",
+            "role": "Posting frequency helps your community return regularly.",
+            "status": "Steady",
+            "note": "Keep a predictable schedule that supports ongoing conversation."
+          }
+        },
+        "serviceClientReady": {
+          "followers": {
+            "focus": "Credibility",
+            "role": "Followers help trust, but clarity is what converts clients.",
+            "status": "Steady",
+            "note": "Make your offer and outcomes obvious in your bio and pinned posts."
+          },
+          "engagementRate": {
+            "focus": "Trust signal",
+            "role": "Engagement shows whether people trust your expertise.",
+            "status": "Strong",
+            "note": "Post helpful teaching content tied to one clear outcome."
+          },
+          "avgLikes": {
+            "focus": "Attention",
+            "role": "Likes show attention; proof posts turn attention into inquiries.",
+            "status": "Steady",
+            "note": "Add one proof or case-study style post this week."
+          },
+          "avgComments": {
+            "focus": "Objections",
+            "role": "Comments can reveal client questions you can address.",
+            "status": "Steady",
+            "note": "Turn common questions into a short FAQ post series."
+          },
+          "engagementVolume": {
+            "focus": "Visibility",
+            "role": "Total interactions help your expertise stay visible.",
+            "status": "Steady",
+            "note": "Focus on one client problem and repeat it across 3 posts."
+          },
+          "postsPerWeek": {
+            "focus": "Reliability",
+            "role": "Consistent posting reduces perceived risk for potential clients.",
+            "status": "Strong",
+            "note": "Use a simple weekly structure: teach, proof, and FAQ."
+          }
+        },
+        "brandCollaborationProfile": {
+          "followers": {
+            "focus": "Scale signal",
+            "role": "Followers give partners a quick sense of your reach.",
+            "status": "Steady",
+            "note": "Keep your content brand-safe and easy to understand at a glance."
+          },
+          "engagementRate": {
+            "focus": "Partner signal",
+            "role": "Engagement rate indicates audience quality and attention.",
+            "status": "Strong",
+            "note": "Keep a consistent niche so partners can quickly see your fit."
+          },
+          "avgLikes": {
+            "focus": "Broad appeal",
+            "role": "Likes show broad appeal, which helps partnership confidence.",
+            "status": "Steady",
+            "note": "Use repeatable formats and keep messaging clear."
+          },
+          "avgComments": {
+            "focus": "Trust",
+            "role": "Comments can show trust and product relevance.",
+            "status": "Steady",
+            "note": "Invite feedback on preferences to learn what resonates."
+          },
+          "engagementVolume": {
+            "focus": "Momentum",
+            "role": "High interaction volume makes you more attractive to partners.",
+            "status": "Strong",
+            "note": "Build a series that encourages saves and replies."
+          },
+          "postsPerWeek": {
+            "focus": "Portfolio",
+            "role": "Posting frequency creates more partnership-ready examples.",
+            "status": "Steady",
+            "note": "Maintain a consistent cadence so brands can review recent work."
+          }
+        },
+        "fullTimeCreator": {
+          "followers": {
+            "focus": "Base audience",
+            "role": "Followers show your base audience as you scale creation.",
+            "status": "Steady",
+            "note": "Build a repeatable content system so growth compounds."
+          },
+          "engagementRate": {
+            "focus": "Format fit",
+            "role": "Engagement rate shows whether your formats are working.",
+            "status": "Steady",
+            "note": "Run short experiments, then keep the winner for a week."
+          },
+          "avgLikes": {
+            "focus": "Feedback loop",
+            "role": "Likes give you fast feedback so you can iterate.",
+            "status": "Steady",
+            "note": "Turn your best-performing idea into a 3-part series."
+          },
+          "avgComments": {
+            "focus": "Retention",
+            "role": "Comments can increase retention and distribution.",
+            "status": "Steady",
+            "note": "Use one recurring question to invite replies each week."
+          },
+          "engagementVolume": {
+            "focus": "Momentum",
+            "role": "Total interactions show whether your system is producing momentum.",
+            "status": "Steady",
+            "note": "Keep a consistent cadence and reuse what already worked."
+          },
+          "postsPerWeek": {
+            "focus": "System health",
+            "role": "Posting frequency reflects whether you have a repeatable workflow.",
+            "status": "Strong",
+            "note": "Batch-create content so you can publish consistently without burnout."
+          }
+        },
+        "monetizationFocusedAccount": {
+          "followers": {
+            "focus": "Top-of-funnel",
+            "role": "Followers matter, but trust and intent drive revenue.",
+            "status": "Steady",
+            "note": "Make your offer easy to find and repeat it consistently."
+          },
+          "engagementRate": {
+            "focus": "Trust",
+            "role": "Engagement is a trust signal that supports monetization.",
+            "status": "Strong",
+            "note": "Teach one clear outcome and invite questions that lead to DMs."
+          },
+          "avgLikes": {
+            "focus": "Attention",
+            "role": "Likes show attention; clear proof turns attention into intent.",
+            "status": "Steady",
+            "note": "Post one proof story and one clear offer post this week."
+          },
+          "avgComments": {
+            "focus": "Demand",
+            "role": "Comments can reveal demand and objections you can address.",
+            "status": "Steady",
+            "note": "Turn the top questions into a short FAQ and pin it."
+          },
+          "engagementVolume": {
+            "focus": "Pipeline signal",
+            "role": "High interaction volume often correlates with stronger intent.",
+            "status": "Strong",
+            "note": "Repeat the posts that lead to the most saves, replies, or DMs."
+          },
+          "postsPerWeek": {
+            "focus": "Consistency",
+            "role": "Posting frequency keeps your offer and message top of mind.",
+            "status": "Steady",
+            "note": "Use a weekly structure so you always cover value, proof, and offer."
+          }
+        },
+
         "growFollowers": {
           "followers": {
             "focus": "Primary focus",
