@@ -23,15 +23,23 @@ const SECTION_IDS: Record<NavKey, string> = {
 }
 
 function scrollToId(id: string) {
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[results chips] click ->", id)
+  }
+
   const el = document.getElementById(id)
-  if (!el) return
+  if (!el) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[results chips] missing id:", id)
+    }
+    return
+  }
+
   el.scrollIntoView({ behavior: "smooth", block: "start" })
 }
 
 function guardedScrollToSectionId(id: string) {
-  const el = document.getElementById(id)
-  if (!el) return
-  el.scrollIntoView({ behavior: "smooth", block: "start" })
+  scrollToId(id)
 }
 
 function NavChip({ label, onClick }: { label: string; onClick: () => void }) {

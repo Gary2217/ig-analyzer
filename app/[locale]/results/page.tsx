@@ -1,10 +1,13 @@
 "use client"
 
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import ResultsPage from "../../results/page"
 import { useI18n } from "../../../components/locale-provider"
-import { Button } from "../../../components/ui/button"
 
 export default function LocaleResultsPage() {
+  const pathname = usePathname() || ""
+  const locale = pathname.split("/")[1] || "en"
   const { t } = useI18n()
 
   return (
@@ -42,10 +45,9 @@ export default function LocaleResultsPage() {
                 <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <div className="hidden lg:flex shrink-0 w-[420px] max-w-full">
                     <div className="w-full rounded-xl border border-white/10 bg-white/5 p-4">
-                      <button
-                        type="button"
-                        className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 px-4 py-4 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-                        onClick={() => console.log("open_full_analysis_top")}
+                      <Link
+                        href={`/${locale}/pricing`}
+                        className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 px-4 py-4 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 inline-flex"
                       >
                         <div className="flex flex-col items-center justify-center">
                           <div className="text-base font-semibold leading-tight">
@@ -55,17 +57,16 @@ export default function LocaleResultsPage() {
                             {t("results.actions.viewFullAnalysis")}
                           </div>
                         </div>
-                      </button>
+                      </Link>
                     </div>
                   </div>
 
                   {/* Mobile: show the same CTA below on small screens */}
                   <div className="lg:hidden mt-4">
                     <div className="w-full rounded-xl border border-white/10 bg-white/5 p-4">
-                      <button
-                        type="button"
-                        className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 px-4 py-4 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-                        onClick={() => console.log("open_full_analysis_top_mobile")}
+                      <Link
+                        href={`/${locale}/pricing`}
+                        className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 px-4 py-4 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 inline-flex"
                       >
                         <div className="flex flex-col items-center justify-center">
                           <div className="text-base font-semibold leading-tight">
@@ -75,7 +76,7 @@ export default function LocaleResultsPage() {
                             {t("results.actions.viewFullAnalysis")}
                           </div>
                         </div>
-                      </button>
+                      </Link>
                     </div>
                   </div>
                   <div className="mt-3 text-xs text-slate-400">{t("results.upgrade.trust")}</div>

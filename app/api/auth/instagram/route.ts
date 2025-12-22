@@ -3,6 +3,8 @@ import crypto from "crypto"
 
 export async function GET(req: NextRequest) {
   const locale = req.nextUrl.searchParams.get("locale") || "en"
+  const provider = req.nextUrl.searchParams.get("provider") || "instagram"
+  const next = req.nextUrl.searchParams.get("next") || ""
 
   const state = crypto.randomBytes(32).toString("hex")
 
@@ -23,6 +25,22 @@ export async function GET(req: NextRequest) {
     secure,
     path: "/",
   })
+
+  res.cookies.set("ig_oauth_provider", provider, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure,
+    path: "/",
+  })
+
+  if (next) {
+    res.cookies.set("ig_oauth_next", next, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+    })
+  }
 
   const baseUrl = process.env.APP_BASE_URL
   const appId = process.env.META_APP_ID

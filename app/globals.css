@@ -164,3 +164,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Fix: Immersive Translate (browser extension) overlays can block all clicks even when invisible */
+.immersive-translate-sheet-backdrop,
+.immersive-translate-sheet {
+  pointer-events: none !important;
+}
+
+/* Some builds use these helper containers; keep them from intercepting clicks */
+[class^="imt-"],
+[class*=" imt-"] {
+  pointer-events: none !important;
+}

@@ -1,0 +1,23 @@
+﻿Saved Context – Instagram OAuth Setup
+
+Project: ig-analyzer
+Framework: Next.js (App Router)
+Local dev port: 3000
+
+OAuth status:
+- Instagram Business Login enabled
+- Meta dashboard shows green check
+- OAuth redirect saved successfully
+
+Current Redirect URI:
+https://francis-encounter-insulin-simultaneously.trycloudflare.com/api/auth/instagram/callback
+
+Tunnel:
+cloudflared tunnel --url http://127.0.0.1:3000
+
+Note:
+Tunnel URL changes each session.
+Update Meta Redirect URI if tunnel URL changes.
+
+Resume later:
+Continue with Instagram data fetching after OAuth login.

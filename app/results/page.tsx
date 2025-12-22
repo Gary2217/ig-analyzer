@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useI18n } from "../../components/locale-provider"
@@ -883,7 +884,10 @@ export default function ResultsPage() {
           )}
           {igMeLoading || loading ? (
             <>
-              <main className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden">
+              <main
+                data-scroll-container
+                className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden"
+              >
                 <div className="text-center space-y-4">
                   <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
                   <p>{t("results.states.loading")}</p>
@@ -892,7 +896,10 @@ export default function ResultsPage() {
             </>
           ) : igMeUnauthorized ? (
             <>
-              <main className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden">
+              <main
+                data-scroll-container
+                className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden"
+              >
                 <Card className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="text-2xl sm:text-3xl font-bold text-white">
@@ -935,7 +942,10 @@ export default function ResultsPage() {
             </>
           ) : !hasResult ? (
             <>
-              <main className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden">
+              <main
+                data-scroll-container
+                className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden"
+              >
                 <Alert>
                   <AlertTitle>{t("results.states.noResultsTitle")}</AlertTitle>
                   <AlertDescription>{t("results.states.noResultsDesc")}</AlertDescription>
@@ -946,7 +956,10 @@ export default function ResultsPage() {
               </main>
             </>
           ) : (
-            <main className="w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
+            <main
+              data-scroll-container
+              className="w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden"
+            >
           <div className="border-b border-white/10 bg-[#0b1220]/60 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-4">
@@ -1363,47 +1376,49 @@ export default function ResultsPage() {
                   </CardContent>
                 </Card>
 
-                <Card id="insights-section" className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg scroll-mt-40">
-                  <CardHeader className="border-b border-white/10">
-                    <CardTitle className="text-xl lg:text-xl font-bold">{t("results.insights.title")}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 md:p-6">
-                    <div className="space-y-4 lg:space-y-3">
-                      <div className="grid grid-cols-2 gap-6 lg:gap-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountType")}</p>
-                          <p className="font-medium">{accountTypeLabel(safeResult.accountType)}</p>
+                <section id="account-insights-section" className="scroll-mt-40">
+                  <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
+                    <CardHeader className="border-b border-white/10">
+                      <CardTitle className="text-xl lg:text-xl font-bold">{t("results.insights.title")}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 md:p-6">
+                      <div className="space-y-4 lg:space-y-3">
+                        <div className="grid grid-cols-2 gap-6 lg:gap-4">
+                          <div>
+                            <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountType")}</p>
+                            <p className="font-medium">{accountTypeLabel(safeResult.accountType)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountAge")}</p>
+                            <p className="font-medium">{accountAgeLabel(safeResult.accountAge)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">{t("results.insights.fields.visibility")}</p>
+                            <p className="font-medium">{visibilityLabel(safeResult.visibility)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">{t("results.insights.fields.postingFrequency")}</p>
+                            <p className="font-medium">{postingFrequencyLabel(safeResult.postingFrequency)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountAge")}</p>
-                          <p className="font-medium">{accountAgeLabel(safeResult.accountAge)}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.visibility")}</p>
-                          <p className="font-medium">{visibilityLabel(safeResult.visibility)}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t("results.insights.fields.postingFrequency")}</p>
-                          <p className="font-medium">{postingFrequencyLabel(safeResult.postingFrequency)}</p>
-                        </div>
-                      </div>
 
-                      {safeResult.notes.length > 0 && (
-                        <div>
-                          <h3 className="text-sm font-medium mb-2">{t("results.insights.keyFindings")}</h3>
-                          <ul className="space-y-2 lg:space-y-1.5">
-                            {safeResult.notes.map((note, i) => (
-                              <li key={i} className="flex items-start">
-                                <span className="text-green-500 mr-2">•</span>
-                                <span className="leading-relaxed">{noteLabel(note)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                        {safeResult.notes.length > 0 && (
+                          <div>
+                            <h3 className="text-sm font-medium mb-2">{t("results.insights.keyFindings")}</h3>
+                            <ul className="space-y-2 lg:space-y-1.5">
+                              {safeResult.notes.map((note, i) => (
+                                <li key={i} className="flex items-start">
+                                  <span className="text-green-500 mr-2">•</span>
+                                  <span className="leading-relaxed">{noteLabel(note)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </section>
 
                 {/* Share Results Section - Moved to bottom of main content */}
               </div>
@@ -1662,15 +1677,10 @@ export default function ResultsPage() {
       )}
 
           {isProModalOpen && (
-            <div className="fixed inset-0 z-[70]">
-              <button
-                type="button"
-                aria-label="Close"
-                className="absolute inset-0 bg-black/60"
-                onClick={() => setIsProModalOpen(false)}
-              />
-              <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
-                <div className="p-4 md:p-6">
+            <div className="fixed inset-0 z-[70] pointer-events-none">
+              <div className="pointer-events-auto">
+                <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
+                  <div className="p-4 md:p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="mt-1 text-lg font-semibold text-white leading-snug">{t("results.footer.proModalTitle")}</div>
@@ -1717,6 +1727,7 @@ export default function ResultsPage() {
                     </Button>
                   </div>
                 </div>
+                </div>
               </div>
             </div>
           )}
@@ -1726,10 +1737,9 @@ export default function ResultsPage() {
         <>
           <div className="p-6 flex items-center justify-between gap-3">
             <div className="text-sm text-green-400">{t("results.instagram.connectedBadge")}</div>
-            <button
-              type="button"
-              className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 shadow-lg shadow-violet-500/20 border border-white/10"
-              onClick={() => console.log("open_full_analysis_top")}
+            <Link
+              href={`/${activeLocale}/pricing`}
+              className="shrink-0 inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 shadow-lg shadow-violet-500/20 border border-white/10"
             >
               <span className="inline-flex items-center gap-2">
                 {t("results.actions.viewFullAnalysis")}
@@ -1737,7 +1747,7 @@ export default function ResultsPage() {
                   {safeT("results.proBadge")}
                 </span>
               </span>
-            </button>
+            </Link>
           </div>
 
           <div className="px-6 pb-6">
@@ -2105,24 +2115,26 @@ export default function ResultsPage() {
               </CardContent>
             </Card>
 
-            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base text-white">{t("results.recommendations.title")}</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-3">
-                  {insights.map((insight) => (
-                    <div key={insight.title} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="text-sm font-semibold text-white">{insight.title}</div>
-                        <div className="text-xs text-muted-foreground text-right">{t("results.insights.proHint")}</div>
+            <section id="insights-section" className="mt-12 scroll-mt-32">
+              <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-white">{t("results.recommendations.title")}</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {insights.map((insight) => (
+                      <div key={insight.title} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="text-sm font-semibold text-white">{insight.title}</div>
+                          <div className="text-xs text-muted-foreground text-right">{t("results.insights.proHint")}</div>
+                        </div>
+                        <div className="mt-1 text-sm text-slate-300 leading-relaxed">{insight.description}</div>
                       </div>
-                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{insight.description}</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
 
             <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardContent className="p-6">
@@ -2154,15 +2166,10 @@ export default function ResultsPage() {
           </div>
 
           {isProModalOpen && (
-            <div className="fixed inset-0 z-[70]">
-              <button
-                type="button"
-                aria-label="Close"
-                className="absolute inset-0 bg-black/60"
-                onClick={() => setIsProModalOpen(false)}
-              />
-              <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
-                <div className="p-4 md:p-6">
+            <div className="fixed inset-0 z-[70] pointer-events-none">
+              <div className="pointer-events-auto">
+                <div className="absolute inset-x-4 sm:inset-x-6 md:inset-x-0 md:left-1/2 md:-translate-x-1/2 top-24 md:top-28 md:w-[640px] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur-md shadow-2xl">
+                  <div className="p-4 md:p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="mt-1 text-lg font-semibold text-white leading-snug">{t("results.footer.proModalTitle")}</div>
@@ -2208,6 +2215,7 @@ export default function ResultsPage() {
                       {t("results.footer.proModalPrimary")}
                     </Button>
                   </div>
+                </div>
                 </div>
               </div>
             </div>

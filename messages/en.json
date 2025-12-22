@@ -76,16 +76,24 @@
     },
     "upgrade": {
       "kicker": "Upgrade",
-      "title": "Go from snapshot to a repeatable growth system",
-      "subtitle": "Pro turns this preview into a post-level breakdown and a clear weekly plan.",
+      "title": "Pro Full Analysis",
+      "tagline": "Turn a preview into an actionable growth plan.",
+      "subtitle": "Turn a preview into an actionable growth plan.",
       "benefits": {
         "1": "See what actually drove performance (hook, caption, timing)",
         "2": "Copy patterns from your winners with reusable templates",
         "3": "Benchmark against peers to spot what to fix next"
       },
       "ctaTitle": "Ready to unlock Pro?",
-      "ctaNote": "UI only — billing not wired yet.",
+      "ctaNote": "UI preview only for now. Stripe subscription will be enabled next.",
       "cta": "Upgrade to Pro",
+      "note": "UI preview only for now. Stripe subscription will be enabled next.",
+      "bullets": {
+        "deepPosts": "Deep-dive post performance analysis",
+        "advancedInsights": "Advanced insights (best times / content strategy)",
+        "actionPlan": "Weekly action plan (goal-based)",
+        "export": "Downloadable report (PDF / Notion)"
+      },
       "trust": "Cancel anytime • No card required (for now)",
       "uiOnly": "This section is UI-only. Payments are not implemented."
     },

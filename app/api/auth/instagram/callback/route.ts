@@ -8,6 +8,8 @@ export async function GET(req: NextRequest) {
 
   const cookieState = req.cookies.get("ig_oauth_state")?.value
   const locale = req.cookies.get("ig_oauth_locale")?.value || "en"
+  const provider = req.cookies.get("ig_oauth_provider")?.value || "instagram"
+  const next = req.cookies.get("ig_oauth_next")?.value || ""
 
   const secure = process.env.NODE_ENV === "production"
 
@@ -21,8 +23,12 @@ export async function GET(req: NextRequest) {
   const clearCookies = (res: NextResponse) => {
     res.cookies.delete("ig_oauth_state")
     res.cookies.delete("ig_oauth_locale")
+    res.cookies.delete("ig_oauth_provider")
+    res.cookies.delete("ig_oauth_next")
     res.cookies.set("ig_oauth_state", "", { ...baseCookieOptions, maxAge: 0 })
     res.cookies.set("ig_oauth_locale", "", { ...baseCookieOptions, maxAge: 0 })
+    res.cookies.set("ig_oauth_provider", "", { ...baseCookieOptions, maxAge: 0 })
+    res.cookies.set("ig_oauth_next", "", { ...baseCookieOptions, maxAge: 0 })
   }
 
   if (!code || !state || !cookieState || state !== cookieState) {
@@ -67,7 +73,9 @@ export async function GET(req: NextRequest) {
       path: "/",
     })
 
-    const res = NextResponse.redirect(new URL(`/${locale}/results?connected=instagram`, url.origin))
+    const fallback = `/${locale}/results?connected=${provider}`
+    const target = next || fallback
+    const res = NextResponse.redirect(new URL(target, req.url))
 
     res.cookies.set("ig_access_token", accessToken, baseCookieOptions)
 
