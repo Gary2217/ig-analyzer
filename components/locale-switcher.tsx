@@ -56,15 +56,15 @@ export default function LocaleSwitcher() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-white/10 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+        className="inline-flex items-center justify-center h-11 w-11 rounded-lg border border-white/10 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
       >
-        <Globe className="h-4 w-4" />
+        <Globe size={30} />
       </button>
 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-40 rounded-xl border border-white/10 bg-[#0b1220]/90 backdrop-blur-md shadow-xl overflow-hidden z-50"
+          className="absolute right-0 mt-2 w-40 rounded-xl border border-white/10 bg-[#0b1220]/90 backdrop-blur-md shadow-xl overflow-hidden z-[999]"
         >
           {LOCALES.map((l) => (
             <button

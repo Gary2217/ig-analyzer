@@ -44,6 +44,51 @@
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
     "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
     "proBadge": "專業",
+    "subnav": {
+      "ariaLabel": "結果頁區段導覽",
+      "items": {
+        "overview": "總覽",
+        "kpis": "關鍵指標",
+        "topPosts": "最佳貼文",
+        "insights": "洞察",
+        "nextSteps": "下一步",
+        "goals": "目標",
+        "upgrade": "升級"
+      }
+    },
+    "profileUpgrade": {
+      "title": "想解鎖 Pro 嗎？",
+      "subtitle": "僅 UI 展示 — 尚未串接付款",
+      "button": "升級 Pro",
+      "trust": "隨時取消 · 目前不需信用卡（暫時）",
+      "badges": {
+        "professional": "專業",
+        "accountLevel": "帳號等級"
+      }
+    },
+    "effort": {
+      "low": "低成本",
+      "medium": "中成本",
+      "high": "高成本"
+    },
+    "nextSteps": {
+      "expectedOutcomePrefix": "預期效果："
+    },
+    "upgrade": {
+      "kicker": "升級",
+      "title": "從快照到可複製的成長系統",
+      "subtitle": "Pro 會把預覽變成貼文層級拆解，並整理成清楚的每週行動計畫。",
+      "benefits": {
+        "1": "看懂表現的真正原因（鉤子／內文／發文時間）",
+        "2": "把贏家模式做成可重複套用的模板",
+        "3": "用同級基準找出下一個該補強的地方"
+      },
+      "ctaTitle": "想解鎖 Pro 嗎？",
+      "ctaNote": "僅 UI 展示 — 尚未串接付款。",
+      "cta": "升級 Pro",
+      "trust": "隨時取消 · 目前不需信用卡（暫時）",
+      "uiOnly": "此區塊僅為 UI 展示，尚未實作付款功能。"
+    },
     "levelPill": {
       "default": "成長中創作者",
       "growthStageAccount": "成長中創作者",
@@ -1198,6 +1243,11 @@
     "topPosts": {
       "title": "表現最佳貼文",
       "description": "這些是你的高互動貼文。專業版將解鎖「為什麼表現好」：發文時段訊號、文案模式與可複製的鉤子。",
+      "proLocked": "Pro 已鎖定",
+      "chips": {
+        "preview": "預覽",
+        "caption": "內文"
+      },
       "card": {
         "likesLabel": "按讚",
         "commentsLabel": "留言",
@@ -1214,6 +1264,8 @@
       "trust": "僅唯讀授權 · 不會代發文 · 隨時可撤銷",
       "title": "解鎖完整報告（含貼文層級分析）",
       "intro": "你目前看到的是預覽版。專業版將解鎖：",
+      "unlockFullBreakdown": "解鎖完整拆解",
+      "unlockHelper": "解鎖：貼文內文 / 發文時間 / 可複製鉤子 / 同級基準",
       "bullets": {
         "1": "• 貼文層級分析：發文時間、互動來源、表現原因",
         "2": "• 內文分析：可複製的鉤子／句型與話題建議",
@@ -1275,6 +1327,7 @@
       "monetizationClear": "且具備明確的變現路徑",
       "monetizationUnderutilized": "但變現準備度尚未充分發揮",
       "automationAttention": "自動化風險訊號需要特別留意。",
+      "whyThisMatters": "為什麼重要：這些訊號會影響觸及、收藏，以及你能否穩定複製有效內容。",
       "proHint": "🔒 專業版提供更完整的原因解釋與可執行拆解",
       "items": {
         "0": {

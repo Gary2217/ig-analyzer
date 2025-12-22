@@ -83,6 +83,12 @@ export default function ResultsPage() {
   const searchParams = useSearchParams()
   const { t } = useI18n()
 
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[results page] file =", "app/results/page.tsx")
+    }
+  }, [])
+
   const safeT = (key: string) => {
     const v = t(key)
     return v === key ? "" : v
@@ -459,13 +465,12 @@ export default function ResultsPage() {
   }
 
   const scrollToKpiSection = () => {
-    const el = document.getElementById("kpi-section")
+    const el = document.getElementById("kpis-section")
     if (!el) return
 
     const y = el.getBoundingClientRect().top + window.scrollY
-    const offset = 140
-
-    window.scrollTo({ top: y - offset, behavior: "smooth" })
+    const targetY = y - 120
+    window.scrollTo({ top: targetY, behavior: "smooth" })
   }
 
   const handleConnect = () => {
@@ -877,15 +882,18 @@ export default function ResultsPage() {
             </div>
           )}
           {igMeLoading || loading ? (
-            <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
-              <div className="text-center space-y-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-                <p>{t("results.states.loading")}</p>
-              </div>
-            </main>
+            <>
+              <main className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden">
+                <div className="text-center space-y-4">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                  <p>{t("results.states.loading")}</p>
+                </div>
+              </main>
+            </>
           ) : igMeUnauthorized ? (
-            <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
-              <Card className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+            <>
+              <main className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden">
+                <Card className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="text-2xl sm:text-3xl font-bold text-white">
                     {t("results.instagram.connectGate.title")}
@@ -923,19 +931,22 @@ export default function ResultsPage() {
                   </div>
                 </CardContent>
               </Card>
-            </main>
+              </main>
+            </>
           ) : !hasResult ? (
-            <main className="min-h-screen w-full flex items-center justify-center bg-[#0b1220] px-4 overflow-x-hidden">
-              <Alert>
-                <AlertTitle>{t("results.states.noResultsTitle")}</AlertTitle>
-                <AlertDescription>{t("results.states.noResultsDesc")}</AlertDescription>
-                <Button className="mt-4" onClick={() => router.push(localePathname("/", activeLocale))}>
-                  {t("results.actions.backToHome")}
-                </Button>
-              </Alert>
-            </main>
+            <>
+              <main className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden">
+                <Alert>
+                  <AlertTitle>{t("results.states.noResultsTitle")}</AlertTitle>
+                  <AlertDescription>{t("results.states.noResultsDesc")}</AlertDescription>
+                  <Button className="mt-4" onClick={() => router.push(localePathname("/", activeLocale))}>
+                    {t("results.actions.backToHome")}
+                  </Button>
+                </Alert>
+              </main>
+            </>
           ) : (
-            <main className="min-h-screen w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
+            <main className="w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
           <div className="border-b border-white/10 bg-[#0b1220]/60 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-4">
@@ -1018,7 +1029,7 @@ export default function ResultsPage() {
               </div>
             )}
 
-          <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
+          <Card id="overview-section" className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg scroll-mt-40">
             <CardContent className="p-6 sm:p-8">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-2">
@@ -1197,7 +1208,7 @@ export default function ResultsPage() {
             </CardContent>
           </Card>
 
-          <div className="mt-10 space-y-12">
+          <div className="mt-6 sm:mt-10 space-y-8 sm:space-y-12">
             {isConnected && (
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
                 <CardHeader className="border-b border-white/10">
@@ -1352,7 +1363,7 @@ export default function ResultsPage() {
                   </CardContent>
                 </Card>
 
-                <Card id="results-section-insights" className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
+                <Card id="insights-section" className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg scroll-mt-40">
                   <CardHeader className="border-b border-white/10">
                     <CardTitle className="text-xl lg:text-xl font-bold">{t("results.insights.title")}</CardTitle>
                   </CardHeader>
@@ -1399,14 +1410,14 @@ export default function ResultsPage() {
 
               {hasSidebar && (
                 <div className="lg:col-span-1 w-full">
-                  <Card className="sticky top-4 max-h-[calc(100vh-6rem)] rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
+                  <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
                     <CardHeader className="border-b border-white/10">
                       <CardTitle className="text-base">{t("results.sidebar.title")}</CardTitle>
                       <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
                         {t("results.sidebar.subtitle")} @{displayUsername}
                       </p>
                     </CardHeader>
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 lg:overflow-y-auto">
                       <CardContent className="p-4 md:p-6 pb-6 lg:pb-4">
                         <GrowthPaths
                           result={{
@@ -1425,7 +1436,7 @@ export default function ResultsPage() {
               )}
             </div>
 
-            <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
+            <Card id="next-steps-section" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg scroll-mt-40">
               <CardHeader className="border-b border-white/10">
                 <CardTitle className="text-xl lg:text-xl font-bold">{t("results.next.title")}</CardTitle>
                 <p className="text-sm text-slate-400 mt-1">
@@ -1852,7 +1863,7 @@ export default function ResultsPage() {
               </div>
             </div>
 
-            <div id="kpi-section" className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 scroll-mt-40">
+            <div id="kpis-section" className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 scroll-mt-40">
               {kpis.map((kpi) => {
                 const isSelected = Boolean(selectedGoalConfig)
                 const focus = isSelected
@@ -1994,8 +2005,8 @@ export default function ResultsPage() {
             <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
 
             <Card
-              id="goal-section"
-              className="text-slate-100 flex flex-col gap-6 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-0 rounded-2xl border border-white/30 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/15 shadow-xl shadow-black/40 backdrop-blur-sm px-5 sm:px-6 py-5 sm:py-6"
+              id="goals-section"
+              className="text-slate-100 flex flex-col gap-6 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-0 rounded-2xl border border-white/30 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/15 shadow-xl shadow-black/40 backdrop-blur-sm px-5 sm:px-6 py-5 sm:py-6 scroll-mt-40"
             >
               <CardHeader className="pb-0">
                 <CardTitle className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
@@ -2043,7 +2054,7 @@ export default function ResultsPage() {
               </CardContent>
             </Card>
 
-            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+            <Card id="top-posts-section" className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base text-white">{t("results.topPosts.title")}</CardTitle>
                 <p className="mt-1 text-xs text-muted-foreground">

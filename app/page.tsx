@@ -172,7 +172,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#0b1220] px-4">
+    <main className="w-full flex items-center justify-center bg-[#0b1220] px-4">
       <Card className="w-full max-w-3xl">
         <CardHeader>
           {!showDemo && (

@@ -44,6 +44,51 @@
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
     "proReminder": "Pro includes deeper post-level details and more actionable recommendations.",
     "proBadge": "Pro",
+    "subnav": {
+      "ariaLabel": "Results section navigation",
+      "items": {
+        "overview": "Overview",
+        "kpis": "KPIs",
+        "topPosts": "Top Posts",
+        "insights": "Insights",
+        "nextSteps": "Next Steps",
+        "goals": "Goals",
+        "upgrade": "Upgrade"
+      }
+    },
+    "profileUpgrade": {
+      "title": "Want Pro insights?",
+      "subtitle": "UI only — billing not connected yet",
+      "button": "Upgrade Pro",
+      "trust": "Cancel anytime · No card required (for now)",
+      "badges": {
+        "professional": "Professional",
+        "accountLevel": "Account level"
+      }
+    },
+    "effort": {
+      "low": "Low effort",
+      "medium": "Medium effort",
+      "high": "High effort"
+    },
+    "nextSteps": {
+      "expectedOutcomePrefix": "Expected outcome:"
+    },
+    "upgrade": {
+      "kicker": "Upgrade",
+      "title": "Go from snapshot to a repeatable growth system",
+      "subtitle": "Pro turns this preview into a post-level breakdown and a clear weekly plan.",
+      "benefits": {
+        "1": "See what actually drove performance (hook, caption, timing)",
+        "2": "Copy patterns from your winners with reusable templates",
+        "3": "Benchmark against peers to spot what to fix next"
+      },
+      "ctaTitle": "Ready to unlock Pro?",
+      "ctaNote": "UI only — billing not wired yet.",
+      "cta": "Upgrade to Pro",
+      "trust": "Cancel anytime • No card required (for now)",
+      "uiOnly": "This section is UI-only. Payments are not implemented."
+    },
     "levelPill": {
       "default": "Growing creator",
       "growthStageAccount": "Growing creator",
@@ -1198,6 +1243,11 @@
     "topPosts": {
       "title": "Top Performing Posts",
       "description": "These are your strongest posts by engagement. Pro unlocks the “why” behind performance—timing signals, caption patterns, and repeatable hooks.",
+      "proLocked": "Pro locked",
+      "chips": {
+        "preview": "Preview",
+        "caption": "Caption"
+      },
       "card": {
         "likesLabel": "Likes",
         "commentsLabel": "Comments",
@@ -1214,6 +1264,8 @@
       "trust": "Read-only access · No posting on your behalf · Revoke anytime",
       "title": "Unlock the full report (including post-level analysis)",
       "intro": "You’re viewing a preview. Pro will unlock:",
+      "unlockFullBreakdown": "Unlock full breakdown",
+      "unlockHelper": "Unlock: captions, timing, repeatable hooks, peer benchmarks",
       "bullets": {
         "1": "• Post-level analysis: publish time, engagement drivers, and why it performed",
         "2": "• Caption analysis: repeatable hooks, structure patterns, and topic suggestions",
@@ -1275,6 +1327,7 @@
       "monetizationClear": "with clear monetization paths",
       "monetizationUnderutilized": "but monetization readiness is underutilized",
       "automationAttention": "Automation risk signals require attention.",
+      "whyThisMatters": "Why this matters: these signals affect reach, saves, and your ability to repeat what works.",
       "proHint": "🔒 Detailed explanation & actionable breakdown in Pro",
       "items": {
         "0": {

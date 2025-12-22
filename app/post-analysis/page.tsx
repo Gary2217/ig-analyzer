@@ -368,7 +368,7 @@ export default function PostAnalysisPage() {
   }
 
   return (
-    <main className="min-h-screen w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
+    <main className="w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
       <div aria-live="polite" className="sr-only">
         {toast ?? ""}
       </div>
