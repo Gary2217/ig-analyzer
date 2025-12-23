@@ -1584,6 +1584,14 @@
     "title": "Single Post Analysis",
     "subtitle": "Inferred insights from public signals. Official post metrics are only shown after explicit platform authorization.",
     "modeExplain": "A (Inferred): based on public observable signals and inferred models.\nC (Official): shown only after explicit platform authorization.",
+    "freeRemaining": "Free analyses remaining",
+    "freeRemainingCount": "{count}/{limit}",
+    "freeExhaustedTitle": "Free limit reached",
+    "freeExhaustedDesc": "Upgrade to continue unlimited post analysis.",
+    "freeExhaustedHint": "Free limit reached · Upgrade to unlock unlimited post & account analysis.",
+    "devBypass": "Dev mode: free limit bypassed",
+    "ctaUpgrade": "Upgrade to continue",
+    "ctaAnalyze": "Start analysis",
     "platform": {
       "instagram": "Instagram",
       "threads": "Threads"
@@ -1629,7 +1637,17 @@
         "3": "Timing and early interactions (official)"
       },
       "connect": "Connect Instagram Account",
-      "note": "Read-only authorization. No posting and no DM access."
+      "note": "Read-only authorization. No posting and no DM access.",
+      "cta": "Unlock Official Insights",
+      "preview": {
+        "items": {
+          "1": "Actual reach and impressions (official)",
+          "2": "Benchmarked vs your account baseline (official)",
+          "3": "Publishing time and early interaction impact (official)",
+          "4": "Official recommendations comparison (C mode)"
+        },
+        "note": "Subscribe to view complete official metrics and recommendations comparison."
+      }
     },
     "health": {
       "title": "Post Health Summary",
@@ -1794,7 +1812,7 @@
     }
   },
   "footer": {
-    "brand": "IG Analyzer",
+    "brand": "Social Analytics",
     "disclaimer": "This tool provides inferred/demo output and does not guarantee accuracy. Official metrics are shown only after explicit authorization. This tool is not affiliated with IG/Threads/Meta.",
     "compliance": "Please verify compliance requirements for your use case. Consider professional legal advice if needed.",
     "links": {

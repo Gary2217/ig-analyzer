@@ -158,7 +158,7 @@
   body {
     margin: 0;
     min-height: 100%;
-    background-color: #0b1220;
+    background-color: #070b14;
   }
   body {
     @apply bg-background text-foreground;
@@ -169,6 +169,53 @@
 .immersive-translate-sheet-backdrop,
 .immersive-translate-sheet {
   pointer-events: none !important;
+}
+
+.analytics-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.analytics-bg::before,
+.analytics-bg::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.9;
+  will-change: auto;
+}
+
+.analytics-bg::before {
+  background-image:
+    radial-gradient(circle at 22% 18%, rgba(148, 163, 184, 0.1), transparent 62%);
+  background-size: 160% 160%;
+  background-position: 0% 0%;
+  filter: blur(9px);
+}
+
+.analytics-bg::after {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .analytics-bg::before {
+    opacity: 0.55;
+  }
+  .analytics-bg::after {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analytics-bg::before,
+  .analytics-bg::after {
+    animation: none;
+  }
 }
 
 /* Some builds use these helper containers; keep them from intercepting clicks */

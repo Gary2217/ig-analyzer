@@ -176,7 +176,7 @@ export default function PricingPage() {
           </div>
         </section>
 
-        <div className="mt-6 text-center text-xs text-white/45">© {new Date().getFullYear()} IG Analyzer · Pro 訂閱即將推出</div>
+        <div className="mt-6 text-center text-xs text-white/45">© {new Date().getFullYear()} Social Analytics · Pro 訂閱即將推出</div>
       </div>
 
       {isOpen ? (

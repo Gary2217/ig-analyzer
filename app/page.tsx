@@ -13,8 +13,9 @@ export default function Home() {
     connectedRaw === "instagram" || connectedRaw === "threads" ? connectedRaw : undefined
 
   return (
-    <main className="min-h-screen bg-[#0b1220] text-white px-6 py-14 flex items-center justify-center">
-      <div className="w-full max-w-3xl">
+    <main className="relative min-h-screen bg-[#0b1220] text-white px-6 py-14 flex items-center justify-center overflow-hidden">
+      <div className="analytics-bg" aria-hidden="true" />
+      <div className="relative z-10 w-full max-w-3xl">
         <DemoToolPanel
           activeLocale={activeLocale}
           connectedProvider={connectedProvider}

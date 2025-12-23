@@ -164,7 +164,7 @@ export function ShareResults({ platform, username, monetizationGap }: ShareResul
             <Instagram className="h-3 w-3 text-blue-400 shrink-0" />
             <span className="leading-relaxed">@{username}</span>
           </span>
-          <span className="text-slate-500">Powered by IG Analyzer</span>
+          <span className="text-slate-500">Powered by Social Analytics</span>
         </div>
       </CardContent>
     </Card>

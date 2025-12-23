@@ -83,7 +83,7 @@ export default function AppHeader({ locale }: { locale: string }) {
               className="inline-flex items-center gap-2 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-md"
             >
               <Logo size={28} className="text-white" />
-              <span>IG Analyzer</span>
+              <span>Social Analytics</span>
             </Link>
 
             <div className="flex items-center justify-end">

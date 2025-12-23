@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
@@ -12,7 +12,7 @@ import GrowthPaths from "../../components/growth-paths"
 import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
-import ConnectedGate from "../[locale]/results/ConnectedGate"
+import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 
 type IgMeResponse = {
@@ -48,6 +48,11 @@ type FakeAnalysis = {
   disclaimer: string
 }
 
+function ConnectedGate(props: ComponentProps<typeof ConnectedGateBase>) {
+  console.log("[ConnectedGate] mounted")
+  return <ConnectedGateBase {...props} />
+}
+
 function ProgressRing({
   value,
   label,
@@ -55,7 +60,7 @@ function ProgressRing({
 }: {
   value: number
   label: string
-  subLabel?: string
+  subLabel?: ReactNode
 }) {
   const v = Math.max(0, Math.min(100, value))
   return (
@@ -79,10 +84,15 @@ function ProgressRing({
 }
 
 export default function ResultsPage() {
+  console.log("[LocaleResultsPage] mounted")
+
   const router = useRouter()
   const pathname = usePathname() || "/"
   const searchParams = useSearchParams()
   const { t } = useI18n()
+
+  const upgradeCardRef = useRef<HTMLDivElement | null>(null)
+  const [upgradeCardInView, setUpgradeCardInView] = useState(false)
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
@@ -99,6 +109,8 @@ export default function ResultsPage() {
 
   const [media, setMedia] = useState<Array<{ id: string; timestamp: string }>>([])
 
+  const [mediaLoaded, setMediaLoaded] = useState(false)
+
   const [selectedGoal, setSelectedGoal] = useState<
     | null
     | "growthStageAccount"
@@ -112,15 +124,22 @@ export default function ResultsPage() {
   >(null)
 
   useEffect(() => {
-    fetch("/api/instagram/media")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.data) {
-          setMedia(data.data)
+    const el = upgradeCardRef.current
+    if (!el || upgradeCardInView) return
+
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setUpgradeCardInView(true)
+          obs.disconnect()
         }
-      })
-      .catch(console.error)
-  }, [])
+      },
+      { threshold: 0.15 }
+    )
+
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [upgradeCardInView])
 
   const [result, setResult] = useState<FakeAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
@@ -142,7 +161,113 @@ export default function ResultsPage() {
 
   const isConnected = Boolean(igMe?.username)
 
+  useEffect(() => {
+    if (!isConnected) return
+
+    if (mediaLoaded) return
+
+    console.log("[media] fetch (from ConnectedGate)")
+    fetch("/api/instagram/media", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        setMedia(json.data)
+        setMediaLoaded(true)
+      })
+      .catch((err) => {
+        console.error("[media] fetch failed", err)
+      })
+  }, [isConnected, mediaLoaded])
+
   const displayUsername = isConnected ? igMe!.username : ""
+  const displayName = isConnected ? igMe?.username ?? "" : mockAnalysis.profile.displayName
+
+  const numOrNull = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null
+
+  const formatNum = (n: number | null) => (n === null ? "—" : n.toLocaleString())
+
+  const isPreview = (n: number | null) => isConnected && n === null
+
+  const kpiFollowers = numOrNull((igMe as any)?.followers_count)
+  const kpiFollowing = numOrNull((igMe as any)?.follows_count ?? (igMe as any)?.following_count)
+  const kpiMediaCount = numOrNull((igMe as any)?.media_count)
+  const kpiPostsFromMedia = isConnected && Array.isArray(media) ? media.length : null
+  const kpiPosts = kpiMediaCount ?? kpiPostsFromMedia
+
+  const clamp0to100 = (n: number) => Math.max(0, Math.min(100, n))
+  const safePercent = (n: number | null) => (n === null ? 0 : clamp0to100(n))
+  const formatPct = (n: number | null) => (n === null ? "—" : `${Math.round(n)}%`)
+
+  const engagementRate = (() => {
+    if (!isConnected) return null
+    if (kpiFollowers === null || kpiFollowers <= 0) return null
+    if (!Array.isArray(media) || media.length === 0) return null
+
+    const sample = media.slice(0, 12)
+    let total = 0
+    let count = 0
+
+    for (const m of sample) {
+      const likes = numOrNull((m as any)?.like_count)
+      const comments = numOrNull((m as any)?.comments_count)
+      if (likes === null && comments === null) continue
+      total += (likes ?? 0) + (comments ?? 0)
+      count += 1
+    }
+
+    if (count === 0) return null
+    const avg = total / count
+    return (avg / kpiFollowers) * 100
+  })()
+
+  const cadenceScore = (() => {
+    if (!isConnected) return null
+    if (!Array.isArray(media) || media.length === 0) return null
+
+    const now = Date.now()
+    const days30 = 30 * 24 * 60 * 60 * 1000
+
+    let c30 = 0
+    for (const m of media) {
+      const ts = (m as any)?.timestamp
+      if (!ts) continue
+      const tms = new Date(ts).getTime()
+      if (Number.isNaN(tms)) continue
+      if (now - tms <= days30) c30 += 1
+    }
+
+    const score = Math.round((Math.min(c30, 8) / 8) * 100)
+    return score
+  })()
+
+  const topPerformanceScore = (() => {
+    if (!isConnected) return null
+    if (!Array.isArray(media) || media.length === 0) return null
+
+    const sample = media.slice(0, 12)
+    const vals: number[] = []
+
+    for (const m of sample) {
+      const likes = numOrNull((m as any)?.like_count) ?? 0
+      const comments = numOrNull((m as any)?.comments_count) ?? 0
+      const v = likes + comments
+      if (v > 0) vals.push(v)
+    }
+
+    if (vals.length < 2) return null
+
+    const maxV = Math.max(...vals)
+    const avgV = vals.reduce((a, b) => a + b, 0) / vals.length
+    if (avgV <= 0) return null
+
+    const ratio = maxV / avgV
+    const score = Math.round(Math.max(35, Math.min(100, ratio * 50)))
+    return score
+  })()
+
+  const followers = isConnected ? kpiFollowers : mockAnalysis.profile.followers
+  const following = isConnected ? kpiFollowing : mockAnalysis.profile.following
+  const posts = isConnected ? kpiPosts : mockAnalysis.profile.posts
 
   const accountTypeLabel = (value: string) => {
     if (value === "Personal Account") return t("results.values.accountType.personal")
@@ -197,36 +322,39 @@ export default function ResultsPage() {
   }
 
   useEffect(() => {
-    // In a real app, you would fetch the analysis results here
-    // For demo purposes, we'll simulate a loading state and then set the result
+    if (isConnected) {
+      setLoading(false)
+      return
+    }
+
     const timer = setTimeout(() => {
       setResult({
-        platform: searchParams.get('platform') as "instagram" | "threads" || "instagram",
-        username: searchParams.get('username') || '',
-        accountType: searchParams.get('accountType') || 'Personal Account',
-        accountAge: 'Established account',
-        visibility: 'Public',
-        postingFrequency: 'High',
-        recentActivityTrend: 'Stable',
-        contentConsistency: 'Consistent',
-        engagementQuality: 'High',
-        interactionPattern: 'Mostly organic',
-        automationLikelihood: 'Low',
-        abnormalBehaviorRisk: 'Low',
+        platform: (searchParams.get("platform") as "instagram" | "threads") || "instagram",
+        username: searchParams.get("username") || "",
+        accountType: searchParams.get("accountType") || "Personal Account",
+        accountAge: "Established account",
+        visibility: "Public",
+        postingFrequency: "High",
+        recentActivityTrend: "Stable",
+        contentConsistency: "Consistent",
+        engagementQuality: "High",
+        interactionPattern: "Mostly organic",
+        automationLikelihood: "Low",
+        abnormalBehaviorRisk: "Low",
         notes: [
-          'Content cadence aligns with human posting windows.',
-          'Engagement appears organic and consistent.',
-          'No signs of automation detected.'
+          "Content cadence aligns with human posting windows.",
+          "Engagement appears organic and consistent.",
+          "No signs of automation detected.",
         ],
         confidenceScore: 92,
-        analysisType: t('results.demo.analysisType'),
-        disclaimer: t('results.demo.disclaimer')
+        analysisType: t("results.demo.analysisType"),
+        disclaimer: t("results.demo.disclaimer"),
       })
       setLoading(false)
     }, 1000)
 
     return () => clearTimeout(timer)
-  }, [searchParams, t])
+  }, [isConnected, searchParams, t])
 
   useEffect(() => {
     let cancelled = false
@@ -789,42 +917,49 @@ export default function ResultsPage() {
     titleKey: string
     descriptionKey: string
     value: string
+    preview?: boolean
   }> = [
     {
       id: "followers",
       titleKey: "results.kpis.followers.title",
       descriptionKey: "results.kpis.followers.description",
-      value: mockAnalysis.profile.followers.toLocaleString(),
+      value: isConnected ? formatNum(kpiFollowers) : mockAnalysis.profile.followers.toLocaleString(),
+      preview: isConnected ? isPreview(kpiFollowers) : false,
     },
     {
       id: "engagementRate",
       titleKey: "results.kpis.engagementRate.title",
       descriptionKey: "results.kpis.engagementRate.description",
-      value: `${(mockAnalysis.metrics.engagementRate * 100).toFixed(1)}%`,
+      value: isConnected ? "—" : `${(mockAnalysis.metrics.engagementRate * 100).toFixed(1)}%`,
+      preview: isConnected,
     },
     {
       id: "avgLikes",
       titleKey: "results.kpis.avgLikes.title",
       descriptionKey: "results.kpis.avgLikes.description",
-      value: mockAnalysis.metrics.avgLikes.toLocaleString(),
+      value: isConnected ? "—" : mockAnalysis.metrics.avgLikes.toLocaleString(),
+      preview: isConnected,
     },
     {
       id: "avgComments",
       titleKey: "results.kpis.avgComments.title",
       descriptionKey: "results.kpis.avgComments.description",
-      value: mockAnalysis.metrics.avgComments.toLocaleString(),
+      value: isConnected ? "—" : mockAnalysis.metrics.avgComments.toLocaleString(),
+      preview: isConnected,
     },
     {
       id: "engagementVolume",
       titleKey: "results.kpis.engagementVolume.title",
       descriptionKey: "results.kpis.engagementVolume.description",
-      value: (mockAnalysis.metrics.avgLikes + mockAnalysis.metrics.avgComments).toLocaleString(),
+      value: isConnected ? "—" : (mockAnalysis.metrics.avgLikes + mockAnalysis.metrics.avgComments).toLocaleString(),
+      preview: isConnected,
     },
     {
       id: "postsPerWeek",
       titleKey: "results.kpis.postsPerWeek.title",
       descriptionKey: "results.kpis.postsPerWeek.description",
-      value: mockAnalysis.metrics.postsPerWeek.toFixed(1),
+      value: isConnected ? "—" : mockAnalysis.metrics.postsPerWeek.toFixed(1),
+      preview: isConnected,
     },
   ]
 
@@ -882,6 +1017,27 @@ export default function ResultsPage() {
               </div>
             </div>
           )}
+
+          {igMeUnauthorized && (
+            <div className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 sm:px-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-white">Instagram 連線已失效</div>
+                  <div className="mt-1 text-[13px] text-white/70 leading-relaxed">
+                    請重新驗證登入後再查看帳號分析結果。
+                  </div>
+                </div>
+
+                <Link
+                  href={`/${activeLocale}/api/auth/instagram?provider=instagram&next=/${activeLocale}/results`}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_8px_20px_rgba(168,85,247,0.25)] hover:brightness-110 active:translate-y-[1px] transition w-full sm:w-auto"
+                >
+                  重新連線 Instagram
+                </Link>
+              </div>
+            </div>
+          )}
+
           {igMeLoading || loading ? (
             <>
               <main
@@ -1221,7 +1377,7 @@ export default function ResultsPage() {
             </CardContent>
           </Card>
 
-          <div className="mt-6 sm:mt-10 space-y-8 sm:space-y-12">
+          <div className="mt-6 sm:mt-10 space-y-6 sm:space-y-8">
             {isConnected && (
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
                 <CardHeader className="border-b border-white/10">
@@ -1654,16 +1810,31 @@ export default function ResultsPage() {
                 username={displayUsername}
                 monetizationGap={18}
               />
-              <div className={`rounded-xl border border-white/10 bg-white/5 px-4 md:px-6 py-4 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${upgradeHighlight ? "ring-2 ring-blue-500/50" : ""}`}>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div
+                ref={upgradeCardRef}
+                className={`rounded-2xl border border-white/10 bg-[#0b1220]/60 backdrop-blur-md px-5 md:px-6 py-5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] relative overflow-hidden transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
+                  upgradeHighlight ? "ring-2 ring-blue-500/50" : ""
+                } ${upgradeCardInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"} transition-[opacity,transform] duration-500 ease-out will-change-transform`}
+              >
+                <div className="absolute -inset-px rounded-2xl bg-gradient-to-r from-fuchsia-500/15 via-violet-500/10 to-indigo-500/15 pointer-events-none" />
+
+                <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-200 leading-relaxed">{t("results.footer.proPitchTitle")}</div>
-                    <div className="mt-1 text-xs text-slate-400 leading-relaxed">{t("results.footer.proPitchDesc")}</div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white leading-tight">{t("results.footer.proPitchTitle")}</div>
+                        <div className="mt-1 text-xs text-white/70 leading-relaxed">{t("results.footer.proPitchDesc")}</div>
+                      </div>
+                      <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white bg-white/10 border border-white/15">
+                        PRO
+                      </span>
+                    </div>
                   </div>
+
                   <Button
                     id="results-pro-upgrade"
                     variant="outline"
-                    className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 w-full md:w-auto"
+                    className="w-full md:w-auto border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
                     onClick={handleUpgrade}
                   >
                     {t("results.footer.upgrade")}
@@ -1735,19 +1906,30 @@ export default function ResultsPage() {
       }
       connectedUI={
         <>
-          <div className="p-6 flex items-center justify-between gap-3">
-            <div className="text-sm text-green-400">{t("results.instagram.connectedBadge")}</div>
-            <Link
-              href={`/${activeLocale}/pricing`}
-              className="shrink-0 inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-fuchsia-500 via-violet-500 to-indigo-500 hover:from-fuchsia-400 hover:via-violet-400 hover:to-indigo-400 shadow-lg shadow-violet-500/20 border border-white/10"
-            >
-              <span className="inline-flex items-center gap-2">
-                {t("results.actions.viewFullAnalysis")}
-                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-100">
-                  {safeT("results.proBadge")}
+          <div className="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="max-w-xl space-y-1">
+              <div className="text-sm text-green-400">{t("results.instagram.connectedBadge")}</div>
+            </div>
+            <div className="flex flex-col items-stretch gap-2 w-full sm:w-auto sm:min-w-[240px] justify-end">
+              <Link
+                href={`/${activeLocale}/pricing`}
+                className="w-full inline-flex items-center justify-center px-4 py-2 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_6px_18px_rgba(168,85,247,0.28)] hover:brightness-110 active:translate-y-[1px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60"
+              >
+                <span className="inline-flex items-center gap-2">
+                  {t("results.actions.viewFullAnalysis")}
+                  <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/90">
+                    {safeT("results.proBadge")}
+                  </span>
                 </span>
-              </span>
-            </Link>
+              </Link>
+
+              <Link
+                href={`/${activeLocale}/post-analysis`}
+                className="w-full inline-flex items-center justify-center px-4 py-2 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-emerald-400 to-sky-500 shadow-[0_10px_24px_rgba(16,185,129,0.22)] hover:brightness-110 active:translate-y-[1px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
+              >
+                {t("results.actions.analyzePost")}
+              </Link>
+            </div>
           </div>
 
           <div className="px-6 pb-6">
@@ -1769,7 +1951,7 @@ export default function ResultsPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={igMe.profile_picture_url}
-                        alt={`@${mockAnalysis.profile.username}`}
+                        alt={displayUsername ? `@${displayUsername}` : `@${mockAnalysis.profile.username}`}
                         className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-white/10 object-cover shrink-0"
                         referrerPolicy="no-referrer"
                       />
@@ -1779,9 +1961,11 @@ export default function ResultsPage() {
 
                     <div className="flex flex-col gap-1 min-w-0">
                       <div className="text-lg font-semibold text-white truncate">
-                        {mockAnalysis.profile.displayName}
+                        {displayName || mockAnalysis.profile.displayName}
                       </div>
-                      <div className="text-sm text-slate-300 truncate">@{mockAnalysis.profile.username}</div>
+                      <div className="text-sm text-slate-300 truncate">
+                        @{displayUsername || mockAnalysis.profile.username}
+                      </div>
                     </div>
                   </div>
 
@@ -1790,19 +1974,34 @@ export default function ResultsPage() {
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
                         <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          {mockAnalysis.profile.followers.toLocaleString()}
+                          <span>{formatNum(followers)}</span>
+                          {isPreview(kpiFollowers) && (
+                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                              預覽
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
                         <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          {mockAnalysis.profile.following.toLocaleString()}
+                          <span>{formatNum(following)}</span>
+                          {isPreview(kpiFollowing) && (
+                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                              預覽
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
                         <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          {mockAnalysis.profile.posts.toLocaleString()}
+                          <span>{formatNum(posts)}</span>
+                          {isPreview(kpiPosts) && (
+                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                              預覽
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1813,19 +2012,34 @@ export default function ResultsPage() {
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
                         <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          {mockAnalysis.profile.followers.toLocaleString()}
+                          <span>{formatNum(followers)}</span>
+                          {isPreview(kpiFollowers) && (
+                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                              預覽
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
                         <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          {mockAnalysis.profile.following.toLocaleString()}
+                          <span>{formatNum(following)}</span>
+                          {isPreview(kpiFollowing) && (
+                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                              預覽
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
                         <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          {mockAnalysis.profile.posts.toLocaleString()}
+                          <span>{formatNum(posts)}</span>
+                          {isPreview(kpiPosts) && (
+                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                              預覽
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1855,21 +2069,72 @@ export default function ResultsPage() {
               </div>
 
               <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
-                <ProgressRing
-                  value={Math.round((mockAnalysis.metrics.engagementRate ?? 0) * 100)}
-                  label={t("results.rings.engagementRate.label")}
-                  subLabel={t("results.rings.engagementRate.description")}
-                />
-                <ProgressRing
-                  value={Math.min(100, Math.round(((mockAnalysis.metrics.avgLikes ?? 0) / 1000) * 100))}
-                  label={t("results.rings.likeStrength.label")}
-                  subLabel={t("results.rings.likeStrength.description")}
-                />
-                <ProgressRing
-                  value={Math.min(100, Math.round(((mockAnalysis.metrics.avgComments ?? 0) / 100) * 100))}
-                  label={t("results.rings.commentStrength.label")}
-                  subLabel={t("results.rings.commentStrength.description")}
-                />
+                {(() => {
+                  const ring1Val = isConnected
+                    ? engagementRate
+                    : numOrNull(Math.round((mockAnalysis.metrics.engagementRate ?? 0) * 100))
+
+                  const ring2Val = isConnected
+                    ? cadenceScore
+                    : numOrNull(Math.min(100, Math.round(((mockAnalysis.metrics.avgLikes ?? 0) / 1000) * 100)))
+
+                  const ring3Val = isConnected
+                    ? topPerformanceScore
+                    : numOrNull(Math.min(100, Math.round(((mockAnalysis.metrics.avgComments ?? 0) / 100) * 100)))
+
+                  const previewBadge = (
+                    <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                      預覽
+                    </span>
+                  )
+
+                  return (
+                    <>
+                      <ProgressRing
+                        value={safePercent(ring1Val)}
+                        label={t("results.rings.engagementRate.label")}
+                        subLabel={
+                          isConnected ? (
+                            <>
+                              {formatPct(ring1Val)}
+                              {isPreview(ring1Val) ? previewBadge : null}
+                            </>
+                          ) : (
+                            t("results.rings.engagementRate.description")
+                          )
+                        }
+                      />
+                      <ProgressRing
+                        value={safePercent(ring2Val)}
+                        label={t("results.rings.likeStrength.label")}
+                        subLabel={
+                          isConnected ? (
+                            <>
+                              {formatPct(ring2Val)}
+                              {isPreview(ring2Val) ? previewBadge : null}
+                            </>
+                          ) : (
+                            t("results.rings.likeStrength.description")
+                          )
+                        }
+                      />
+                      <ProgressRing
+                        value={safePercent(ring3Val)}
+                        label={t("results.rings.commentStrength.label")}
+                        subLabel={
+                          isConnected ? (
+                            <>
+                              {formatPct(ring3Val)}
+                              {isPreview(ring3Val) ? previewBadge : null}
+                            </>
+                          ) : (
+                            t("results.rings.commentStrength.description")
+                          )
+                        }
+                      />
+                    </>
+                  )
+                })()}
               </div>
             </div>
 
@@ -1930,10 +2195,17 @@ export default function ResultsPage() {
                         </div>
                       </div>
 
-                      <div className="mt-1 text-lg font-semibold text-white">{kpi.value}</div>
-                      <div className="mt-1 text-xs text-slate-400">{t(kpi.descriptionKey)}</div>
+                      <div className="mt-1 text-2xl font-semibold text-white">
+                        <span>{kpi.value}</span>
+                        {kpi.preview ? (
+                          <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                            預覽
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-white/75">{t(kpi.descriptionKey)}</div>
                       {safeT(`results.kpi.consequence.${kpi.id}`) ? (
-                        <div className="mt-1 text-xs text-slate-500">
+                        <div className="mt-1 text-xs text-white/45">
                           {safeT(`results.kpi.consequence.${kpi.id}`)}
                         </div>
                       ) : null}
@@ -1964,50 +2236,76 @@ export default function ResultsPage() {
                 </CardTitle>
                 <p className="mt-1 text-sm text-white/65 max-w-2xl">{safeT("results.nextActions.helperLine")}</p>
                 <p className="mt-1 text-sm text-white/65 max-w-2xl">{safeT("results.nextActions.subtitle")}</p>
-                <div className="mt-4 mb-6 border-b border-white/15" />
+                <div className="mt-3 h-px w-full bg-white/10" />
               </CardHeader>
               <CardContent className="pt-0 px-0">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {activeGoalMeta.actions.map((action) => {
-                    const isLocked = action.isPro && !isPro
-                    return (
-                      <div
-                        key={action.titleKey}
-                        className="rounded-xl border border-white/20 bg-white/8 px-4 py-3 sm:py-4 min-h-[72px] cursor-pointer transition-all duration-200 hover:bg-white/12 hover:border-white/40 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.01] active:scale-[0.99]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm font-semibold text-white leading-snug">
-                            {safeT(action.titleKey)}
-                          </div>
-                          <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
-                            {action.isPro ? safeT("results.nextActions.proBadge") : safeT("results.nextActions.freeBadge")}
-                          </span>
-                        </div>
+                  {(() => {
+                    let proDividerInserted = false
+                    return activeGoalMeta.actions.flatMap((action) => {
+                      const isLocked = action.isPro && !isPro
+                      const shouldInsertDivider = action.isPro && !proDividerInserted
+                      if (shouldInsertDivider) proDividerInserted = true
+                      const nodes: ReactNode[] = []
 
+                      if (shouldInsertDivider) {
+                        nodes.push(
+                          <div key="pro-divider" className="my-6 flex items-center gap-3 md:col-span-3">
+                            <div className="h-px flex-1 bg-white/10" />
+                            <span className="text-xs font-semibold text-purple-300">專業版解鎖內容</span>
+                            <div className="h-px flex-1 bg-white/10" />
+                          </div>
+                        )
+                      }
+
+                      nodes.push(
                         <div
-                          className={
-                            "mt-2 text-xs text-slate-300 leading-relaxed " +
-                            (isLocked ? "blur-[3px] select-none" : "")
-                          }
+                          key={action.titleKey}
+                          className="flex flex-col gap-2 rounded-xl border border-white/20 bg-white/8 px-4 py-3 sm:py-4 transition-all hover:bg-white/12 hover:border-white/40"
                         >
-                          {safeT(action.descKey)}
-                        </div>
+                          <div className="flex items-start gap-2">
+                            <span className="mt-1 h-4 w-4 shrink-0 rounded border border-white/30 bg-black/20" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="text-sm font-semibold text-white leading-snug">
+                                  {safeT(action.titleKey)}
+                                </div>
+                                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                                  {action.isPro
+                                    ? safeT("results.nextActions.proBadge")
+                                    : safeT("results.nextActions.freeBadge")}
+                                </span>
+                              </div>
 
-                        {isLocked ? (
-                          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                            <Lock className="h-3.5 w-3.5" />
-                            <button
-                              type="button"
-                              className="hover:text-slate-200"
-                              onClick={handleUpgrade}
-                            >
-                              {safeT("results.nextActions.lockLine")}
-                            </button>
+                              <div
+                                className={
+                                  "mt-2 text-xs text-slate-300 leading-relaxed " +
+                                  (isLocked ? "blur-[3px] select-none" : "")
+                                }
+                              >
+                                {safeT(action.descKey)}
+                              </div>
+
+                              {isLocked ? (
+                                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Lock className="h-3.5 w-3.5" />
+                                  <button
+                                    type="button"
+                                    className="hover:text-slate-200"
+                                    onClick={handleUpgrade}
+                                  >
+                                    {safeT("results.nextActions.lockLine")}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
-                        ) : null}
-                      </div>
-                    )
-                  })}
+                        </div>
+                      )
+
+                      return nodes
+                    })
+                  })()}
                 </div>
               </CardContent>
             </Card>
@@ -2023,7 +2321,7 @@ export default function ResultsPage() {
                   {t("results.goals.title")}
                 </CardTitle>
                 <p className="mt-1 text-sm text-white/65 max-w-2xl">{t("results.goals.subtitle")}</p>
-                <div className="mt-4 mb-6 border-b border-white/15" />
+                <div className="mt-3 h-px w-full bg-white/10" />
               </CardHeader>
               <CardContent className="pt-0 px-0">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -2065,11 +2363,23 @@ export default function ResultsPage() {
             </Card>
 
             <Card id="top-posts-section" className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base text-white">{t("results.topPosts.title")}</CardTitle>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("results.topPosts.description")}
-                </p>
+              <CardHeader className="pb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <CardTitle className="text-base text-white">{t("results.topPosts.title")}</CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("results.topPosts.description")}
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={() => {
+                    router.push(`/${activeLocale}/post-analysis`)
+                  }}
+                  className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10"
+                >
+                  {activeLocale === "zh-TW" ? "分析貼文" : "Analyze Posts"}
+                </Button>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

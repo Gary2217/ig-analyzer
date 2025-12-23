@@ -1,11 +1,12 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Input } from "../../components/ui/input"
+import { Lock } from "lucide-react"
 
 type InferredStatus = "Good" | "Moderate" | "Needs Improvement"
 
@@ -37,6 +38,15 @@ function toneForStatus(status: InferredStatus): { label: string; classes: string
 export default function PostAnalysisPage() {
   const { locale, t } = useI18n()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const sectionCard =
+    "rounded-2xl border border-white/10 bg-white/[0.03] shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md"
+  const sectionInner = "p-4 sm:p-6"
+  const sectionInnerCompact = "p-4 sm:p-5"
+  const sectionSpaceCompact = "space-y-3 sm:space-y-4"
+  const subtleDivider = "border-t border-white/10"
+  const FREE_LIMIT = 3
+  const STORAGE_KEY = "sa_free_post_credits_v1"
   const [postUrl, setPostUrl] = useState("")
   const [hasAnalysis, setHasAnalysis] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -52,8 +62,76 @@ export default function PostAnalysisPage() {
     a3: false,
   })
 
+  const [freeUsed, setFreeUsed] = useState(0)
+
   const resultsRef = useRef<HTMLDivElement | null>(null)
   const toastTimerRef = useRef<number | null>(null)
+
+  const freeRemaining = Math.max(0, FREE_LIMIT - freeUsed)
+  const isDev = process.env.NODE_ENV === "development"
+  const bypass =
+    isDev ||
+    searchParams.get("debug") === "1" ||
+    searchParams.get("bypass") === "1"
+
+  const formatCount = (template: string, params: { count: number; limit: number }) => {
+    return template
+      .replace("{count}", String(params.count))
+      .replace("{limit}", String(params.limit))
+  }
+
+  const readFreeUsed = () => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY)
+      if (!raw) return 0
+      const parsed = JSON.parse(raw) as { used?: number } | null
+      const used = typeof parsed?.used === "number" ? parsed.used : 0
+      if (!Number.isFinite(used) || used < 0) return 0
+      return Math.min(FREE_LIMIT, Math.floor(used))
+    } catch {
+      return 0
+    }
+  }
+
+  const writeFreeUsed = (used: number) => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ used }))
+    } catch {
+      // ignore
+    }
+  }
+
+  const consumeFreeOnce = () => {
+    const used = readFreeUsed()
+    const nextUsed = Math.min(FREE_LIMIT, used + 1)
+    writeFreeUsed(nextUsed)
+    setFreeUsed(nextUsed)
+  }
+
+  const goPricingFreeLimit = () => {
+    router.push(`/${locale}/pricing?src=post-analysis&reason=free_limit`)
+  }
+
+  const guardAnalyze = () => {
+    if (isAnalyzing) return
+    if (!canAnalyze) return
+    if (freeRemaining <= 0) {
+      if (bypass) {
+        handleAnalyze()
+        return
+      }
+      goPricingFreeLimit()
+      return
+    }
+    consumeFreeOnce()
+    handleAnalyze()
+  }
+
+  useMemo(() => {
+    if (typeof window === "undefined") return
+    setFreeUsed(readFreeUsed())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const platformLabel = (platform: "instagram" | "threads") =>
     platform === "instagram" ? t("post.platform.instagram") : t("post.platform.threads")
@@ -382,33 +460,30 @@ export default function PostAnalysisPage() {
 
       <div className="sticky top-0 z-50 border-b border-white/10 bg-[#0b1220]/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/5 text-slate-200 border border-white/10">
+          <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col gap-2 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-white/70">
+                <span className="px-2 py-0.5 rounded-full border border-white/15 whitespace-nowrap">
                   {t("post.header.badge")}
                 </span>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
+
+                <span className="px-2 py-0.5 rounded-full border border-white/15 whitespace-nowrap">
                   {platformLabel(inferredPlatform)}
                 </span>
-                <span className="text-[11px] text-slate-300 truncate">{isConnected ? t("post.mode.official") : t("post.mode.inferred")}</span>
               </div>
-              <div className="text-sm font-semibold text-white truncate">{t("post.header.title")}</div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
               <Button
                 size="sm"
-                variant="outline"
-                className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_8px_24px_rgba(168,85,247,0.35)] hover:brightness-110 active:translate-y-[1px] transition"
                 onClick={handleBackToResults}
               >
-                {t("post.header.backToAccount")}
+                分析你的帳號
               </Button>
               <Button
                 size="sm"
-                variant="outline"
-                className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                className="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium text-white/90 bg-gradient-to-b from-[#1f2937] to-[#0b1220] border border-white/10 shadow-[0_4px_0_#020617] hover:brightness-110 active:translate-y-[1px] transition"
                 onClick={handleHeaderCopySummary}
                 aria-busy={headerCopied ? true : undefined}
               >
@@ -416,8 +491,7 @@ export default function PostAnalysisPage() {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
-                className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                className="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium text-white/90 bg-gradient-to-b from-[#1f2937] to-[#0b1220] border border-white/10 shadow-[0_4px_0_#020617] hover:brightness-110 active:translate-y-[1px] transition"
                 onClick={handleHeaderExport}
                 disabled={exporting}
                 aria-busy={exporting ? true : undefined}
@@ -426,8 +500,7 @@ export default function PostAnalysisPage() {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
-                className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                className="inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium text-white/90 bg-gradient-to-b from-[#1f2937] to-[#0b1220] border border-white/10 shadow-[0_4px_0_#020617] hover:brightness-110 active:translate-y-[1px] transition"
                 onClick={handleHeaderShare}
                 aria-busy={shareCopied ? true : undefined}
               >
@@ -447,39 +520,53 @@ export default function PostAnalysisPage() {
           <div className="text-xs text-slate-400 max-w-3xl">{t("post.modeExplain")}</div>
         </div>
 
-        <div className="mt-8 space-y-12">
-          <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-            <CardHeader className="border-b border-white/10">
-              <CardTitle className="text-xl font-bold text-white">{t("post.input.sectionTitle")}</CardTitle>
-              <p className="text-sm text-slate-400 mt-1">
-                {t("post.input.sectionSubtitle")}
-              </p>
-            </CardHeader>
-            <CardContent className="p-6 space-y-5">
+        <div className="mt-8 space-y-5 sm:space-y-7">
+          <Card className={sectionCard}>
+            <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
               <div className="space-y-2">
                 <div className="text-sm font-medium text-white">{t("post.input.label")}</div>
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-center">
                   <Input
                     value={postUrl}
                     onChange={(e) => setPostUrl(e.target.value)}
                     placeholder={t("post.input.placeholder")}
                     className="bg-white/5 border-white/10 text-slate-200 placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
                   />
-                  <Button
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full md:w-[168px] focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                    onClick={handleAnalyze}
-                    disabled={!canAnalyze || isAnalyzing}
-                    aria-busy={isAnalyzing ? true : undefined}
-                  >
-                    {isAnalyzing ? (
-                      <span className="inline-flex items-center gap-2">
-                        <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                        {t("post.input.analyzing")}
-                      </span>
-                    ) : (
-                      t("post.input.analyze")
-                    )}
-                  </Button>
+                  <div className="w-full md:w-[168px] flex flex-col gap-1">
+                    <div className="text-xs text-white/70 leading-relaxed">
+                      {bypass && freeRemaining <= 0 ? (
+                        <div className="text-xs text-white/60 leading-relaxed">
+                          {t("post.devBypass")}
+                        </div>
+                      ) : null}
+                      {freeRemaining > 0 ? (
+                        <span>
+                          {t("post.freeRemaining")} {formatCount(t("post.freeRemainingCount"), { count: freeRemaining, limit: FREE_LIMIT })}
+                        </span>
+                      ) : (
+                        <span>
+                          {t("post.freeExhaustedTitle")} · {t("post.freeExhaustedDesc")}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={guardAnalyze}
+                      disabled={!canAnalyze || isAnalyzing}
+                      aria-busy={isAnalyzing ? true : undefined}
+                    >
+                      {isAnalyzing ? (
+                        <span className="inline-flex items-center gap-2">
+                          <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                          {t("post.input.analyzing")}
+                        </span>
+                      ) : freeRemaining <= 0 ? (
+                        t("post.ctaUpgrade")
+                      ) : (
+                        t("post.ctaAnalyze")
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-xs text-slate-400">
                   {t("post.input.hint")}
@@ -496,12 +583,19 @@ export default function PostAnalysisPage() {
 
           {isAnalyzing && (
             <div className="space-y-6">
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">{t("post.loading.resultsTitle")}</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">{t("post.loading.resultsDesc")}</p>
-                </CardHeader>
-                <CardContent className="p-6">
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.loading.resultsTitle")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.loading.resultsDesc")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={subtleDivider} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-pulse">
                     <div className="rounded-xl border border-white/10 bg-white/5 p-5">
                       <div className="h-4 w-32 bg-white/10 rounded" />
@@ -522,25 +616,31 @@ export default function PostAnalysisPage() {
           )}
 
           {hasAnalysis && (
-            <div ref={resultsRef} className="space-y-12">
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <CardTitle className="text-xl font-bold text-white">{t("post.preview.title")}</CardTitle>
-                      <p className="text-sm text-slate-400 mt-1">{t("post.preview.subtitle")}</p>
+            <div ref={resultsRef} className="space-y-5 sm:space-y-7">
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.preview.title")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.preview.subtitle")}
+                      </p>
                     </div>
-                    <a
-                      href={postUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-200 hover:text-blue-100 underline underline-offset-4 shrink-0 mt-1 break-all"
-                    >
-                      {t("post.preview.openOriginal")}
-                    </a>
+
+                    <div className="shrink-0">
+                      <a
+                        href={postUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-200 hover:text-blue-100 underline underline-offset-4 break-all"
+                      >
+                        {t("post.preview.openOriginal")}
+                      </a>
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent className="p-6">
+                  <div className={subtleDivider} />
                   <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
                     <div className="w-full max-w-[260px]">
                       <div className="aspect-[4/5] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center relative overflow-hidden">
@@ -580,12 +680,19 @@ export default function PostAnalysisPage() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">{t("post.quick.title")}</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">{t("post.quick.subtitle")}</p>
-                </CardHeader>
-                <CardContent className="p-6">
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.quick.title")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.quick.subtitle")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={subtleDivider} />
                   <div className="space-y-3">
                     {([
                       {
@@ -609,7 +716,7 @@ export default function PostAnalysisPage() {
                         <div key={item.id} className="rounded-xl border border-white/10 bg-[#0b1220]/35">
                           <button
                             type="button"
-                            className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                            className="w-full flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] px-4 py-3 text-left hover:brightness-110 shadow-[0_6px_0_rgba(0,0,0,0.55)] active:translate-y-[1px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
                             onClick={() =>
                               setAccordionOpen((p) => ({
                                 ...p,
@@ -618,10 +725,19 @@ export default function PostAnalysisPage() {
                             }
                             aria-expanded={isOpen}
                           >
-                            <div className="text-sm font-medium text-white">{item.title}</div>
-                            <div className="text-xs text-slate-300">{isOpen ? t("post.quick.hide") : t("post.quick.show")}</div>
+                            <span className="mt-0.5 h-5 w-5 rounded-md border border-white/20 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-white">{item.title}</div>
+                            </div>
+                            <div className="text-xs text-slate-300 shrink-0">
+                              {isOpen ? t("post.quick.hide") : t("post.quick.show")}
+                            </div>
                           </button>
-                          {isOpen && <div className="px-4 pb-4 text-sm text-slate-200">{item.body}</div>}
+                          {isOpen && (
+                            <div className="mt-3 rounded-xl border border-white/10 bg-black/25 p-4 text-[13px] sm:text-sm text-white/75 leading-relaxed">
+                              {item.body}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -629,52 +745,89 @@ export default function PostAnalysisPage() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-xl font-bold text-white">{t("post.unlock.title")}</CardTitle>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-500/10 text-purple-200 border border-purple-400/20">
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-gradient-to-r from-purple-500/15 via-fuchsia-500/10 to-pink-500/10 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">{t("post.unlock.badge")}</div>
+                      <div className="text-[13px] text-white/70 max-w-[72ch] leading-relaxed">{t("post.unlock.preview.note")}</div>
+                    </div>
+                    <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold text-white bg-purple-500/20 border border-purple-400/30">
                       {t("post.unlock.badge")}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-400 mt-1">{t("post.unlock.subtitle")}</p>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-                    <div className="space-y-3">
-                      <ul className="text-sm text-slate-200 space-y-2">
-                        <li>{t("post.unlock.bullets.1")}</li>
-                        <li>{t("post.unlock.bullets.2")}</li>
-                        <li>{t("post.unlock.bullets.3")}</li>
-                      </ul>
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.unlock.title")}
+                        <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium text-white/80 bg-white/5 border border-white/10">
+                          {t("post.unlock.preview.note")}
+                        </span>
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.unlock.badge")}
+                      </p>
                     </div>
-                    <div className="space-y-2">
+
+                    <div className="shrink-0">
                       <Button
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                        onClick={() => setIsConnected(true)}
+                        size="sm"
+                        className="shrink-0 h-9 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-md shadow-purple-500/15 border border-white/10 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                        onClick={() => router.push(`/${locale}/pricing?src=official-insights`)}
                       >
-                        {t("post.unlock.connect")}
+                        {t("post.unlock.cta")}
                       </Button>
-                      <div className="text-xs text-slate-400">{t("post.unlock.note")}</div>
+                    </div>
+                  </div>
+                  <div className={subtleDivider} />
+
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0b1220]/35 px-4 py-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm text-slate-200 truncate">
+                            {t(`post.unlock.preview.items.${idx}`)}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-400">
+                            <span className="inline-block select-none blur-[1.5px] opacity-70">
+                              ▒▒▒▒▒▒ ▒▒▒▒ ▒▒▒
+                            </span>
+                          </div>
+                        </div>
+                        <Lock className="h-4 w-4 text-white/35 shrink-0" />
+                      </div>
+                    ))}
+
+                    <div className="pt-1 text-xs text-white/45 leading-relaxed">
+                      {t("post.unlock.preview.note")}
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-xl font-bold text-white">{t("post.health.title")}</CardTitle>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
-                      {t("post.health.badge")}
-                    </span>
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.health.title")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.health.subtitle")}
+                      </p>
+                      <p className="mt-1 text-xs text-white/45 max-w-[72ch] leading-relaxed">{t("post.health.note")}</p>
+                    </div>
+                    <div className="shrink-0">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
+                        {t("post.health.badge")}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {t("post.health.subtitle")}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">{t("post.health.note")}</p>
-                </CardHeader>
-                <CardContent className="p-6">
+                  <div className={subtleDivider} />
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {inferredMetrics.map((m) => {
                       const tone = toneForStatus(m.status)
@@ -699,14 +852,19 @@ export default function PostAnalysisPage() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">{t("post.underperform.title")}</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {t("post.underperform.subtitle")}
-                  </p>
-                </CardHeader>
-                <CardContent className="p-6">
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.underperform.title")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.underperform.subtitle")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={subtleDivider} />
                   <div className="space-y-3">
                     {underperformReasons.map((r, idx) => (
                       <div key={r} className="flex gap-3">
@@ -720,14 +878,19 @@ export default function PostAnalysisPage() {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">{t("post.rewrite.title")}</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {t("post.rewrite.subtitle")}
-                  </p>
-                </CardHeader>
-                <CardContent className="p-6">
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.rewrite.title")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.rewrite.subtitle")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={subtleDivider} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                       <CardHeader className="pb-3">
@@ -780,13 +943,20 @@ export default function PostAnalysisPage() {
               </Card>
 
               {isConnected && (
-                <div className="space-y-10">
-                  <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                    <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-xl font-bold text-white">{t("post.official.title")}</CardTitle>
-                      <p className="text-sm text-slate-400 mt-1">{t("post.official.subtitle")}</p>
-                    </CardHeader>
-                    <CardContent className="p-6">
+                <div className="space-y-6 sm:space-y-8">
+                  <Card className={sectionCard}>
+                    <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                            {t("post.official.title")}
+                          </h2>
+                          <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                            {t("post.official.subtitle")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={subtleDivider} />
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Card className="rounded-xl border border-white/10 bg-white/5 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                           <CardContent className="p-5">
@@ -834,12 +1004,19 @@ export default function PostAnalysisPage() {
                     </CardContent>
                   </Card>
 
-                  <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                    <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-xl font-bold text-white">{t("post.contrast.title")}</CardTitle>
-                      <p className="text-sm text-slate-400 mt-1">{t("post.contrast.subtitle")}</p>
-                    </CardHeader>
-                    <CardContent className="p-6">
+                  <Card className={sectionCard}>
+                    <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                            {t("post.contrast.title")}
+                          </h2>
+                          <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                            {t("post.contrast.subtitle")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={subtleDivider} />
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="rounded-xl border border-white/10 bg-white/5 p-5">
                           <div className="text-sm text-slate-300">{t("post.contrast.contentQuality")}</div>
@@ -858,12 +1035,19 @@ export default function PostAnalysisPage() {
                 </div>
               )}
 
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl font-bold text-white">{t("post.snapshot.title")}</CardTitle>
-                  <p className="text-sm text-slate-400 mt-1">{t("post.snapshot.subtitle")}</p>
-                </CardHeader>
-                <CardContent className="p-6">
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight">
+                        {t("post.snapshot.title")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.snapshot.subtitle")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={subtleDivider} />
                   <div className="flex items-center gap-2 mb-4">
                     <Button
                       type="button"

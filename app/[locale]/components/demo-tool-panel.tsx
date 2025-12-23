@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 
+import { Button } from "@/components/ui/button"
+import { Camera, MessageCircle } from "lucide-react"
+
 type Provider = "instagram" | "threads"
 
 type Props = {
@@ -63,43 +66,57 @@ export default function DemoToolPanel({ activeLocale, connectedProvider }: Props
 
       {/* provider tabs */}
       <div className="mt-5 flex gap-2">
-        <button
+        <Button
           type="button"
           onClick={() => setProvider("instagram")}
-          className={[
-            "rounded-xl border px-4 py-2 text-sm",
-            provider === "instagram" ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-transparent text-white/70 hover:bg-white/5",
-          ].join(" ")}
+          variant="pill"
+          size="pill"
+          active={provider === "instagram"}
+          platform="instagram"
+          className={
+            provider === "instagram"
+              ? "bg-black/60 text-white border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:bg-black/65"
+              : "bg-black/25 text-white/60 border border-white/10 hover:bg-black/30"
+          }
         >
+          <Camera className="h-4 w-4 opacity-80" />
           Instagram
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={() => setProvider("threads")}
-          className={[
-            "rounded-xl border px-4 py-2 text-sm",
-            provider === "threads" ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-transparent text-white/70 hover:bg-white/5",
-          ].join(" ")}
+          variant="pill"
+          size="pill"
+          active={provider === "threads"}
+          platform="threads"
+          className={
+            provider === "threads"
+              ? "bg-black/60 text-white border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:bg-black/65"
+              : "bg-black/25 text-white/60 border border-white/10 hover:bg-black/30"
+          }
         >
+          <MessageCircle className="h-4 w-4 opacity-80" />
           Threads
-        </button>
+        </Button>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <button
+        <Button
           type="button"
           onClick={onAnalyzeAccount}
-          className="rounded-xl bg-gradient-to-r from-blue-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white"
+          variant="primary"
+          size="lg-cta"
         >
-          分析帳號（會先驗證 API）
-        </button>
-        <button
+          分析帳號
+        </Button>
+        <Button
           type="button"
           onClick={onAnalyzePost}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/85 hover:bg-white/10"
+          variant="secondary"
+          size="lg-cta"
         >
           分析貼文
-        </button>
+        </Button>
       </div>
 
       {/* 已移除：首頁貼文連結輸入框。貼文連結一律在 /post-analysis 頁輸入 */}

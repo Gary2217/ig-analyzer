@@ -1584,6 +1584,14 @@
     "title": "單篇貼文分析",
     "subtitle": "以公開可觀察訊號進行推論；官方貼文指標僅於明確授權後顯示。",
     "modeExplain": "A（推論）：基於公開可觀察訊號與模型推論。\nC（官方）：需官方授權後，才顯示平台提供指標。",
+    "freeRemaining": "免費分析剩餘",
+    "freeRemainingCount": "{count}/{limit}",
+    "freeExhaustedTitle": "免費次數已用完",
+    "freeExhaustedDesc": "升級後即可無限次貼文分析。",
+    "freeExhaustedHint": "免費次數已用完 · 升級後即可無限次貼文及帳號分析。",
+    "devBypass": "開發模式：已略過免費次數限制",
+    "ctaUpgrade": "升級以繼續",
+    "ctaAnalyze": "開始分析",
     "platform": {
       "instagram": "Instagram",
       "threads": "Threads"
@@ -1629,7 +1637,17 @@
         "3": "發佈時段與初期互動影響（官方）"
       },
       "connect": "連結 Instagram 帳號",
-      "note": "僅唯讀授權，不會發文、不會讀取私訊。"
+      "note": "僅唯讀授權，不會發文、不會讀取私訊。",
+      "cta": "解鎖官方數據",
+      "preview": {
+        "items": {
+          "1": "實際觸及與曝光（官方）",
+          "2": "與帳號基準表現對比（官方）",
+          "3": "發佈時段與初期互動影響（官方）",
+          "4": "官方建議對照（C 模式）"
+        },
+        "note": "訂閱後可查看完整官方指標與建議對照。"
+      }
     },
     "health": {
       "title": "貼文健康度摘要",
@@ -1794,7 +1812,7 @@
     }
   },
   "footer": {
-    "brand": "IG Analyzer",
+    "brand": "Social Analytics",
     "disclaimer": "本工具提供推論與示範輸出，不保證正確；官方數據需使用者明確授權後才會讀取並顯示；本工具不隸屬 IG/Threads/Meta。",
     "compliance": "建議你依實際使用情境自行確認合規要求，必要時可諮詢專業法律意見。",
     "links": {
