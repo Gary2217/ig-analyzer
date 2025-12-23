@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { cookies } from "next/headers"
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const code = url.searchParams.get("code")
@@ -37,9 +40,10 @@ export async function GET(req: NextRequest) {
     return res
   }
 
-  const baseUrl = process.env.APP_BASE_URL
-  const appId = process.env.META_APP_ID
-  const appSecret = process.env.META_APP_SECRET
+  const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_BASE_URL
+  const appId = process.env.META_APP_ID || process.env.INSTAGRAM_APP_ID || process.env.META_CLIENT_ID
+  const appSecret =
+    process.env.META_APP_SECRET || process.env.INSTAGRAM_APP_SECRET || process.env.META_CLIENT_SECRET
 
   if (!baseUrl || !appId || !appSecret) {
     const res = NextResponse.redirect(new URL(`/${locale}/results?error=instagram_auth_failed`, url.origin))
@@ -48,7 +52,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const redirectUri = `${baseUrl}/api/auth/instagram/callback`
+    const redirectUri = `${baseUrl.replace(/\/$/, "")}/api/auth/instagram/callback`
     const tokenUrl = new URL("https://graph.facebook.com/v21.0/oauth/access_token")
     tokenUrl.searchParams.set("client_id", appId)
     tokenUrl.searchParams.set("client_secret", appSecret)
@@ -60,10 +64,34 @@ export async function GET(req: NextRequest) {
       throw new Error(`token_exchange_failed:${tokenRes.status}`)
     }
 
-    const data = (await tokenRes.json()) as { access_token?: string }
-    const accessToken = data.access_token
-    if (!accessToken) {
-      throw new Error("missing_access_token")
+    const tokenData = (await tokenRes.json()) as unknown
+
+    if (!tokenData || typeof (tokenData as any).access_token !== "string") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "invalid_token_response_from_graph",
+          debug: {
+            tokenDataKeys: tokenData && typeof tokenData === "object" ? Object.keys(tokenData as any) : null,
+          },
+        },
+        { status: 500 },
+      )
+    }
+
+    const accessToken = ((tokenData as any).access_token as string).trim()
+
+    if (accessToken.length < 20) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "access_token_too_short",
+          debug: {
+            tokenLen: accessToken.length,
+          },
+        },
+        { status: 500 },
+      )
     }
 
     const c = await cookies()

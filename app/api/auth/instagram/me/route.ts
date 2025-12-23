@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { cookies, headers } from "next/headers"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 type IgMediaItem = {
   id: string
@@ -24,9 +28,48 @@ type IgMeResponse = {
 }
 
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get("ig_access_token")?.value
+  const c = await cookies()
+  const h = await headers()
+
+  const cookieToken = c.get("ig_access_token")?.value ?? ""
+  const auth = h.get("authorization") ?? ""
+  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : ""
+
+  const token = (cookieToken || bearer || "").trim()
+
+  const mask = (v: string) =>
+    v && v.length >= 8 ? `${v.slice(0, 4)}...${v.slice(-4)}` : v ? `${v.slice(0, 2)}...` : ""
+
   if (!token) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "missing_token",
+        debug: {
+          cookieKeysPresent: c.getAll().map((x) => x.name),
+          hasAuthorizationHeader: !!auth,
+          note:
+            "若剛做完 OAuth 卻沒有 cookie token，請檢查 callback 設 cookie 是否在 localhost 被 secure 擋下，或 cookie key 名稱是否為 ig_access_token。",
+        },
+      },
+      { status: 400 },
+    )
+  }
+
+  const appId = process.env.META_APP_ID || ""
+  const appSecret = process.env.META_APP_SECRET || ""
+  let tokenDebug: unknown = null
+
+  if (appId && appSecret) {
+    try {
+      const debugUrl = new URL("https://graph.facebook.com/debug_token")
+      debugUrl.searchParams.set("input_token", token)
+      debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`)
+      const dbgRes = await fetch(debugUrl.toString(), { cache: "no-store" })
+      tokenDebug = await dbgRes.json()
+    } catch {
+      tokenDebug = { error: "debug_token_fetch_failed" }
+    }
   }
 
   try {
@@ -39,7 +82,22 @@ export async function GET(req: NextRequest) {
 
     const r = await fetch(graphUrl.toString(), { method: "GET", cache: "no-store" })
     if (!r.ok) {
-      return NextResponse.json({ error: "fetch_failed" }, { status: 502 })
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "upstream_fetch_failed",
+          debug: {
+            tokenLen: token.length,
+            tokenMasked: mask(token),
+            tokenSource: cookieToken ? "cookie" : bearer ? "bearer" : "none",
+            cookieKeysPresent: c.getAll().map((x) => x.name),
+            hasAuthorizationHeader: !!auth,
+            tokenDebug,
+            status: r.status,
+          },
+        },
+        { status: 400 },
+      )
     }
 
     const data = (await r.json()) as {
@@ -81,7 +139,22 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(payload)
-  } catch {
-    return NextResponse.json({ error: "unexpected" }, { status: 500 })
+  } catch (e: any) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "upstream_fetch_failed",
+        debug: {
+          tokenLen: token.length,
+          tokenMasked: mask(token),
+          tokenSource: cookieToken ? "cookie" : bearer ? "bearer" : "none",
+          cookieKeysPresent: c.getAll().map((x) => x.name),
+          hasAuthorizationHeader: !!auth,
+          tokenDebug,
+          message: e?.message || String(e),
+        },
+      },
+      { status: 400 },
+    )
   }
 }
