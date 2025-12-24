@@ -1,8 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+
+async function getPublicBaseUrl() {
+  const h = await headers()
+
+  const xfProto = h.get("x-forwarded-proto")
+  const xfHost = h.get("x-forwarded-host")
+  if (xfProto && xfHost) return `${xfProto}://${xfHost}`
+
+  const envBase = process.env.APP_BASE_URL
+  if (envBase) return envBase
+
+  const host = h.get("host")
+  return host ? `http://${host}` : "http://localhost:3000"
+}
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
@@ -35,7 +49,9 @@ export async function GET(req: NextRequest) {
   }
 
   if (!code || !state || !cookieState || state !== cookieState) {
-    const res = NextResponse.redirect(new URL(`/${locale}/results?error=instagram_auth_failed`, url.origin))
+    const res = NextResponse.redirect(
+      new URL(`/${locale}/results?error=instagram_auth_failed`, await getPublicBaseUrl()),
+    )
     clearCookies(res)
     return res
   }
@@ -46,7 +62,9 @@ export async function GET(req: NextRequest) {
     process.env.META_APP_SECRET || process.env.INSTAGRAM_APP_SECRET || process.env.META_CLIENT_SECRET
 
   if (!baseUrl || !appId || !appSecret) {
-    const res = NextResponse.redirect(new URL(`/${locale}/results?error=instagram_auth_failed`, url.origin))
+    const res = NextResponse.redirect(
+      new URL(`/${locale}/results?error=instagram_auth_failed`, await getPublicBaseUrl()),
+    )
     clearCookies(res)
     return res
   }
@@ -103,14 +121,16 @@ export async function GET(req: NextRequest) {
 
     const fallback = `/${locale}/results?connected=${provider}`
     const target = next || fallback
-    const res = NextResponse.redirect(new URL(target, req.url))
+    const res = NextResponse.redirect(new URL(target, await getPublicBaseUrl()))
 
     res.cookies.set("ig_access_token", accessToken, baseCookieOptions)
 
     clearCookies(res)
     return res
   } catch {
-    const res = NextResponse.redirect(new URL(`/${locale}/results?error=instagram_auth_failed`, url.origin))
+    const res = NextResponse.redirect(
+      new URL(`/${locale}/results?error=instagram_auth_failed`, await getPublicBaseUrl()),
+    )
     clearCookies(res)
     return res
   }

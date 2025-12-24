@@ -108,6 +108,7 @@ export default function ResultsPage() {
   const isPro = false // TODO: wire to real subscription state
 
   const [media, setMedia] = useState<Array<{ id: string; timestamp: string }>>([])
+  const [topPosts, setTopPosts] = useState<any[]>([])
 
   const [mediaLoaded, setMediaLoaded] = useState(false)
 
@@ -160,6 +161,10 @@ export default function ResultsPage() {
   const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
 
   const isConnected = Boolean(igMe?.username)
+  const connectedProvider = searchParams.get("connected")
+  const isConnectedInstagram = connectedProvider === "instagram"
+
+  const recentPosts = isConnectedInstagram && topPosts.length > 0 ? topPosts : igMe?.recent_media
 
   useEffect(() => {
     if (!isConnected) return
@@ -167,7 +172,7 @@ export default function ResultsPage() {
     if (mediaLoaded) return
 
     console.log("[media] fetch (from ConnectedGate)")
-    fetch("/api/instagram/media", { cache: "no-store" })
+    fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
       .then((res) => res.json())
       .then((json) => {
         setMedia(json.data)
@@ -176,7 +181,26 @@ export default function ResultsPage() {
       .catch((err) => {
         console.error("[media] fetch failed", err)
       })
-  }, [isConnected, mediaLoaded])
+  }, [isConnected])
+
+  useEffect(() => {
+    if (!isConnected) return
+    if (!isConnectedInstagram) return
+    if (topPosts.length > 0) return
+
+    fetch("/api/instagram/media?limit=25", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        const items = Array.isArray(json?.data) ? json.data : []
+        setTopPosts(
+          items
+            .filter((m: any) => ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
+            .sort((a: any, b: any) => (Number(b?.like_count || 0) || 0) - (Number(a?.like_count || 0) || 0))
+            .slice(0, 3),
+        )
+      })
+      .catch(() => {})
+  }, [isConnected, isConnectedInstagram, topPosts.length])
 
   const displayUsername = isConnected ? igMe!.username : ""
   const displayName = isConnected ? igMe?.username ?? "" : mockAnalysis.profile.displayName
@@ -193,6 +217,33 @@ export default function ResultsPage() {
   const kpiMediaCount = numOrNull((igMe as any)?.media_count)
   const kpiPostsFromMedia = isConnected && Array.isArray(media) ? media.length : null
   const kpiPosts = kpiMediaCount ?? kpiPostsFromMedia
+
+  const topPerformingPosts = (() => {
+    if (isConnected && Array.isArray(media) && media.length > 0) {
+      const items = media
+        .filter((m: any) => ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
+        .map((m: any) => {
+          const likes = Number(m?.like_count || 0) || 0
+          const comments = Number(m?.comments_count || 0) || 0
+          return {
+            id: String(m?.id || ""),
+            likes,
+            comments,
+            engagement: likes + comments,
+            permalink: typeof m?.permalink === "string" ? m.permalink : "",
+            media_url: typeof m?.media_url === "string" ? m.media_url : "",
+            thumbnail_url: typeof m?.thumbnail_url === "string" ? m.thumbnail_url : "",
+            timestamp: typeof m?.timestamp === "string" ? m.timestamp : "",
+          }
+        })
+        .filter((p) => Boolean(p.id))
+        .sort((a, b) => (b.likes + b.comments) - (a.likes + a.comments))
+
+      return items.slice(0, 3)
+    }
+
+    return mockAnalysis.topPosts.slice(0, 3).map((p) => ({ ...p, engagement: p.likes + p.comments }))
+  })()
 
   const clamp0to100 = (n: number) => Math.max(0, Math.min(100, n))
   const safePercent = (n: number | null) => (n === null ? 0 : clamp0to100(n))
@@ -1384,9 +1435,9 @@ export default function ResultsPage() {
                   <CardTitle className="text-xl font-bold text-white">{t("results.instagram.recentPostsTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 md:p-6">
-                  {Array.isArray(igMe?.recent_media) && igMe!.recent_media!.length > 0 ? (
+                  {Array.isArray(recentPosts) && recentPosts.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {igMe!.recent_media!.slice(0, 3).map((m) => {
+                      {recentPosts.slice(0, 3).map((m) => {
                         const caption = typeof m.caption === "string" ? m.caption : ""
                         const mediaUrl = typeof m.media_url === "string" ? m.media_url : ""
                         const ts = typeof m.timestamp === "string" ? m.timestamp : ""
@@ -2388,18 +2439,22 @@ export default function ResultsPage() {
                       <div className="grid grid-cols-3 gap-3">
                         <div>
                           <div className="text-xs text-slate-400">{t("results.topPosts.card.likesLabel")}</div>
-                          <div className="mt-1 text-lg font-semibold text-white">{p.likes.toLocaleString()}</div>
+                          <div className="mt-1 text-lg font-semibold text-white">
+                            {(topPerformingPosts[index]?.likes ?? p.likes).toLocaleString()}
+                          </div>
                         </div>
 
                         <div>
                           <div className="text-xs text-slate-400">{t("results.topPosts.card.commentsLabel")}</div>
-                          <div className="mt-1 text-lg font-semibold text-white">{p.comments.toLocaleString()}</div>
+                          <div className="mt-1 text-lg font-semibold text-white">
+                            {(topPerformingPosts[index]?.comments ?? p.comments).toLocaleString()}
+                          </div>
                         </div>
 
                         <div>
                           <div className="text-xs text-slate-400">{t("results.topPosts.card.engagementLabel")}</div>
                           <div className="mt-1 text-lg font-semibold text-white">
-                            {(p.likes + p.comments).toLocaleString()}
+                            {(topPerformingPosts[index]?.engagement ?? (p.likes + p.comments)).toLocaleString()}
                           </div>
                         </div>
                       </div>
