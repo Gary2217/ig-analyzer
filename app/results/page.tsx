@@ -164,6 +164,9 @@ export default function ResultsPage() {
   const connectedProvider = searchParams.get("connected")
   const isConnectedInstagram = connectedProvider === "instagram"
 
+  const hasRealProfile = Boolean(igMe?.username)
+  const allowDemoProfile = !hasRealProfile && !igMeLoading
+
   const recentPosts = isConnectedInstagram && topPosts.length > 0 ? topPosts : igMe?.recent_media
 
   useEffect(() => {
@@ -202,8 +205,19 @@ export default function ResultsPage() {
       .catch(() => {})
   }, [isConnected, isConnectedInstagram, topPosts.length])
 
-  const displayUsername = isConnected ? igMe!.username : ""
-  const displayName = isConnected ? igMe?.username ?? "" : mockAnalysis.profile.displayName
+  const displayUsername = hasRealProfile ? (typeof igMe?.username === "string" ? igMe.username.trim() : "") : ""
+
+  const displayName = (() => {
+    if (allowDemoProfile) return mockAnalysis.profile.displayName
+    const raw = (igMe as any)?.name ?? (igMe as any)?.display_name ?? (igMe as any)?.displayName
+    if (typeof raw === "string" && raw.trim()) return raw.trim()
+    return displayUsername ? displayUsername : "—"
+  })()
+
+  const displayHandle = (() => {
+    if (allowDemoProfile) return `@${mockAnalysis.profile.username}`
+    return displayUsername ? `@${displayUsername}` : "—"
+  })()
 
   const numOrNull = (v: unknown): number | null =>
     typeof v === "number" && Number.isFinite(v) ? v : null
@@ -215,8 +229,7 @@ export default function ResultsPage() {
   const kpiFollowers = numOrNull((igMe as any)?.followers_count)
   const kpiFollowing = numOrNull((igMe as any)?.follows_count ?? (igMe as any)?.following_count)
   const kpiMediaCount = numOrNull((igMe as any)?.media_count)
-  const kpiPostsFromMedia = isConnected && Array.isArray(media) ? media.length : null
-  const kpiPosts = kpiMediaCount ?? kpiPostsFromMedia
+  const kpiPosts = kpiMediaCount
 
   const topPerformingPosts = (() => {
     if (isConnected && Array.isArray(media) && media.length > 0) {
@@ -316,9 +329,9 @@ export default function ResultsPage() {
     return score
   })()
 
-  const followers = isConnected ? kpiFollowers : mockAnalysis.profile.followers
-  const following = isConnected ? kpiFollowing : mockAnalysis.profile.following
-  const posts = isConnected ? kpiPosts : mockAnalysis.profile.posts
+  const followers = allowDemoProfile ? mockAnalysis.profile.followers : kpiFollowers
+  const following = allowDemoProfile ? mockAnalysis.profile.following : kpiFollowing
+  const posts = allowDemoProfile ? mockAnalysis.profile.posts : kpiPosts
 
   const accountTypeLabel = (value: string) => {
     if (value === "Personal Account") return t("results.values.accountType.personal")
@@ -974,7 +987,7 @@ export default function ResultsPage() {
       id: "followers",
       titleKey: "results.kpis.followers.title",
       descriptionKey: "results.kpis.followers.description",
-      value: isConnected ? formatNum(kpiFollowers) : mockAnalysis.profile.followers.toLocaleString(),
+      value: allowDemoProfile ? mockAnalysis.profile.followers.toLocaleString() : formatNum(kpiFollowers),
       preview: isConnected ? isPreview(kpiFollowers) : false,
     },
     {
@@ -2002,7 +2015,7 @@ export default function ResultsPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={igMe.profile_picture_url}
-                        alt={displayUsername ? `@${displayUsername}` : `@${mockAnalysis.profile.username}`}
+                        alt={displayHandle}
                         className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-white/10 object-cover shrink-0"
                         referrerPolicy="no-referrer"
                       />
@@ -2012,10 +2025,10 @@ export default function ResultsPage() {
 
                     <div className="flex flex-col gap-1 min-w-0">
                       <div className="text-lg font-semibold text-white truncate">
-                        {displayName || mockAnalysis.profile.displayName}
+                        {displayName}
                       </div>
                       <div className="text-sm text-slate-300 truncate">
-                        @{displayUsername || mockAnalysis.profile.username}
+                        {displayHandle}
                       </div>
                     </div>
                   </div>

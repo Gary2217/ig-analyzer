@@ -4,20 +4,23 @@ import { cookies, headers } from "next/headers"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-type IgMediaItem = {
-  id: string
-  media_type?: string
-  media_url?: string
-  thumbnail_url?: string
-  caption?: string
-  timestamp?: string
-}
+const GRAPH_VERSION = "v24.0"
+
+// Must match /api/instagram/media fallback IDs (do NOT change media route behavior in this task)
+const FALLBACK_PAGE_ID = "851912424681350"
+const FALLBACK_IG_BUSINESS_ID = "17841404364250644"
+
+type ErrorStage = "read_cookie" | "exchange_page_token" | "fetch_ig_profile"
 
 type IgMeResponse = {
   username: string
+  name?: string
+  display_name?: string
   profile_picture_url?: string
   account_type?: string
   followers_count?: number
+  follows_count?: number
+  media_count?: number
   recent_media: Array<{
     id: string
     media_type?: string
@@ -27,6 +30,29 @@ type IgMeResponse = {
   }>
 }
 
+const getFbtraceId = (meta: any): string | undefined => {
+  const v = meta?.fbtrace_id ?? meta?.error?.fbtrace_id
+  return typeof v === "string" && v.trim() ? v : undefined
+}
+
+const fetchJson = async (url: string) => {
+  const res = await fetch(url, { method: "GET", cache: "no-store" })
+  const json = (await res.json().catch(() => null)) as any
+  return { res, json }
+}
+
+const jsonError = (
+  status: number,
+  stage: ErrorStage,
+  errorMessage: string,
+  extra?: {
+    upstreamStatus?: number
+    fbtrace_id?: string
+    page_id?: string
+    ig_id?: string
+  },
+) => NextResponse.json({ stage, errorMessage, ...(extra ?? {}) }, { status })
+
 export async function GET(req: NextRequest) {
   const c = await cookies()
   const h = await headers()
@@ -34,185 +60,122 @@ export async function GET(req: NextRequest) {
   const cookieToken = c.get("ig_access_token")?.value ?? ""
   const auth = h.get("authorization") ?? ""
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : ""
-
   const token = (cookieToken || bearer || "").trim()
 
-  const mask = (v: string) =>
-    v && v.length >= 8 ? `${v.slice(0, 4)}...${v.slice(-4)}` : v ? `${v.slice(0, 2)}...` : ""
-
   if (!token) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "missing_token",
-        debug: {
-          cookieKeysPresent: c.getAll().map((x) => x.name),
-          hasAuthorizationHeader: !!auth,
-          note:
-            "若剛做完 OAuth 卻沒有 cookie token，請檢查 callback 設 cookie 是否在 localhost 被 secure 擋下，或 cookie key 名稱是否為 ig_access_token。",
-        },
-      },
-      { status: 400 },
-    )
-  }
-
-  const appId = process.env.META_APP_ID || ""
-  const appSecret = process.env.META_APP_SECRET || ""
-  let tokenDebug: unknown = null
-
-  if (appId && appSecret) {
-    try {
-      const debugUrl = new URL("https://graph.facebook.com/debug_token")
-      debugUrl.searchParams.set("input_token", token)
-      debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`)
-      const dbgRes = await fetch(debugUrl.toString(), { cache: "no-store" })
-      tokenDebug = await dbgRes.json()
-    } catch {
-      tokenDebug = { error: "debug_token_fetch_failed" }
-    }
+    return jsonError(401, "read_cookie", "missing_token")
   }
 
   try {
-    // 1) Business Manager flow: User token -> businesses -> owned_pages (page token + ig business id)
-    const businessesUrl = new URL("https://graph.facebook.com/v24.0/me/businesses")
+    // Single path:
+    // read token -> BM discovery (optional) -> fallback ids -> exchange page token -> fetch ig profile -> success
+    let discoveredPageId: string | null = null
+    let discoveredIgId: string | null = null
+    let discoveredPageAccessToken: string | null = null
+
+    // (Optional) Business Manager discovery
+    const businessesUrl = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/me/businesses`)
     businessesUrl.searchParams.set("access_token", token)
+    const bmBusinesses = await fetchJson(businessesUrl.toString())
 
-    const businessesRes = await fetch(businessesUrl.toString(), { method: "GET", cache: "no-store" })
-    const businessesJson = (await businessesRes.json().catch(() => null)) as any
+    if (bmBusinesses.res.ok) {
+      const businesses = Array.isArray(bmBusinesses.json?.data) ? bmBusinesses.json.data : []
+      const businessId = businesses?.[0]?.id
 
-    if (!businessesRes.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "upstream_fetch_failed",
-          debug: {
-            step: "me_businesses",
-            status: businessesRes.status,
-            meta: businessesJson,
-            tokenLen: token.length,
-            tokenMasked: mask(token),
-            tokenSource: cookieToken ? "cookie" : bearer ? "bearer" : "none",
-            cookieKeysPresent: c.getAll().map((x) => x.name),
-            hasAuthorizationHeader: !!auth,
-            tokenDebug,
-          },
-        },
-        { status: 400 },
-      )
+      if (businessId) {
+        const ownedPagesUrl = new URL(
+          `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(String(businessId))}/owned_pages`,
+        )
+        ownedPagesUrl.searchParams.set("fields", "id,access_token,instagram_business_account{id}")
+        ownedPagesUrl.searchParams.set("access_token", token)
+
+        const ownedPages = await fetchJson(ownedPagesUrl.toString())
+        if (ownedPages.res.ok) {
+          const pages = Array.isArray(ownedPages.json?.data) ? ownedPages.json.data : []
+          const pageWithIg = pages.find((p: any) => p?.instagram_business_account?.id)
+
+          discoveredPageId = pageWithIg?.id ? String(pageWithIg.id) : null
+          discoveredIgId = pageWithIg?.instagram_business_account?.id
+            ? String(pageWithIg.instagram_business_account.id)
+            : null
+          discoveredPageAccessToken =
+            typeof pageWithIg?.access_token === "string" && pageWithIg.access_token
+              ? String(pageWithIg.access_token)
+              : null
+        }
+      }
     }
 
-    const businesses = Array.isArray(businessesJson?.data) ? businessesJson.data : []
-    const businessId = businesses[0]?.id
+    const pageId = discoveredPageId ?? FALLBACK_PAGE_ID
+    const igId = discoveredIgId ?? FALLBACK_IG_BUSINESS_ID
 
-    if (!businessId) {
-      const payload: IgMeResponse = { username: "", recent_media: [] }
-      return NextResponse.json(payload)
-    }
-
-    const ownedPagesUrl = new URL(
-      `https://graph.facebook.com/v24.0/${encodeURIComponent(String(businessId))}/owned_pages`,
-    )
-    ownedPagesUrl.searchParams.set(
-      "fields",
-      "id,name,access_token,instagram_business_account{id}",
-    )
-    ownedPagesUrl.searchParams.set("access_token", token)
-
-    const ownedPagesRes = await fetch(ownedPagesUrl.toString(), { method: "GET", cache: "no-store" })
-    const ownedPagesJson = (await ownedPagesRes.json().catch(() => null)) as any
-
-    if (!ownedPagesRes.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "upstream_fetch_failed",
-          debug: {
-            step: "owned_pages",
-            status: ownedPagesRes.status,
-            meta: ownedPagesJson,
-            tokenLen: token.length,
-            tokenMasked: mask(token),
-            tokenSource: cookieToken ? "cookie" : bearer ? "bearer" : "none",
-            cookieKeysPresent: c.getAll().map((x) => x.name),
-            hasAuthorizationHeader: !!auth,
-            tokenDebug,
-          },
-        },
-        { status: 400 },
-      )
-    }
-
-    const ownedPages = Array.isArray(ownedPagesJson?.data) ? ownedPagesJson.data : []
-    const pageWithIg = ownedPages.find((p: any) => p?.instagram_business_account?.id)
-    const pageId = pageWithIg?.id
-    const igId = pageWithIg?.instagram_business_account?.id
-
-    if (!pageId || !igId) {
-      const payload: IgMeResponse = { username: "", recent_media: [] }
-      return NextResponse.json(payload)
-    }
-
-    // owned_pages may or may not return access_token; if missing, fetch page access token via page node.
-    let pageAccessToken: string | null =
-      typeof pageWithIg?.access_token === "string" && pageWithIg.access_token ? pageWithIg.access_token : null
-
+    // Ensure page access token (if BM did not provide one)
+    let pageAccessToken: string | null = discoveredPageAccessToken
     if (!pageAccessToken) {
-      const pageTokenUrl = new URL(`https://graph.facebook.com/v24.0/${encodeURIComponent(String(pageId))}`)
+      const pageTokenUrl = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(String(pageId))}`)
       pageTokenUrl.searchParams.set("fields", "access_token")
       pageTokenUrl.searchParams.set("access_token", token)
 
-      const pageTokenRes = await fetch(pageTokenUrl.toString(), { method: "GET", cache: "no-store" })
-      const pageTokenJson = (await pageTokenRes.json().catch(() => null)) as any
-
-      if (!pageTokenRes.ok || typeof pageTokenJson?.access_token !== "string") {
-        const payload: IgMeResponse = { username: "", recent_media: [] }
-        return NextResponse.json(payload)
+      const pageToken = await fetchJson(pageTokenUrl.toString())
+      if (!pageToken.res.ok || typeof pageToken.json?.access_token !== "string" || !pageToken.json.access_token) {
+        return jsonError(pageToken.res.status || 400, "exchange_page_token", "failed_to_get_page_access_token", {
+          upstreamStatus: pageToken.res.status,
+          fbtrace_id: getFbtraceId(pageToken.json),
+          page_id: String(pageId),
+          ig_id: String(igId),
+        })
       }
-
-      pageAccessToken = pageTokenJson.access_token
+      pageAccessToken = String(pageToken.json.access_token)
     }
 
-    // 3) Use Page Access Token to fetch IG business profile fields.
-    const igUrl = new URL(`https://graph.facebook.com/v24.0/${encodeURIComponent(String(igId))}`)
-    igUrl.searchParams.set(
-      "fields",
-      "username,profile_picture_url,account_type,followers_count,media_count",
+    // Fetch IG profile via Page -> instagram_business_account (stable path)
+    const pageProfileUrl = new URL(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(String(pageId))}`,
     )
-    igUrl.searchParams.set("access_token", String(pageAccessToken))
+    pageProfileUrl.searchParams.set(
+      "fields",
+      "instagram_business_account{username,name,profile_picture_url,account_type,followers_count,follows_count,media_count}",
+    )
+    pageProfileUrl.searchParams.set("access_token", String(pageAccessToken))
 
-    const igRes = await fetch(igUrl.toString(), { method: "GET", cache: "no-store" })
-    const igJson = (await igRes.json().catch(() => null)) as any
+    const pageProfile = await fetchJson(pageProfileUrl.toString())
+    if (!pageProfile.res.ok) {
+      return jsonError(pageProfile.res.status || 400, "fetch_ig_profile", "failed_to_fetch_ig_profile", {
+        upstreamStatus: pageProfile.res.status,
+        fbtrace_id: getFbtraceId(pageProfile.json),
+        page_id: String(pageId),
+        ig_id: String(igId),
+      })
+    }
 
-    if (!igRes.ok || typeof igJson?.username !== "string" || !igJson.username.trim()) {
-      const payload: IgMeResponse = { username: "", recent_media: [] }
-      return NextResponse.json(payload)
+    const ig = pageProfile.json?.instagram_business_account
+    const username = typeof ig?.username === "string" ? ig.username.trim() : ""
+    if (!username) {
+      return jsonError(502, "fetch_ig_profile", "ig_profile_missing_username", {
+        upstreamStatus: pageProfile.res.status,
+        fbtrace_id: getFbtraceId(pageProfile.json),
+        page_id: String(pageId),
+        ig_id: String(igId),
+      })
     }
 
     const payload: IgMeResponse = {
-      username: igJson.username,
-      profile_picture_url: typeof igJson.profile_picture_url === "string" ? igJson.profile_picture_url : undefined,
-      account_type: typeof igJson.account_type === "string" ? igJson.account_type : undefined,
-      followers_count: typeof igJson.followers_count === "number" ? igJson.followers_count : undefined,
+      username,
+      name: typeof ig?.name === "string" ? ig.name : undefined,
+      profile_picture_url: typeof ig?.profile_picture_url === "string" ? ig.profile_picture_url : undefined,
+      account_type: typeof ig?.account_type === "string" ? ig.account_type : undefined,
+      followers_count: typeof ig?.followers_count === "number" ? ig.followers_count : undefined,
+      follows_count: typeof ig?.follows_count === "number" ? ig.follows_count : undefined,
+      media_count: typeof ig?.media_count === "number" ? ig.media_count : undefined,
       recent_media: [],
     }
 
     return NextResponse.json(payload)
   } catch (e: any) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "upstream_fetch_failed",
-        debug: {
-          tokenLen: token.length,
-          tokenMasked: mask(token),
-          tokenSource: cookieToken ? "cookie" : bearer ? "bearer" : "none",
-          cookieKeysPresent: c.getAll().map((x) => x.name),
-          hasAuthorizationHeader: !!auth,
-          tokenDebug,
-          message: e?.message || String(e),
-        },
-      },
-      { status: 400 },
-    )
+    return jsonError(500, "fetch_ig_profile", "server_error", {
+      upstreamStatus: 500,
+      page_id: FALLBACK_PAGE_ID,
+      ig_id: FALLBACK_IG_BUSINESS_ID,
+    })
   }
 }
