@@ -53,6 +53,7 @@ export async function GET(req: Request) {
       "caption",
       "media_type",
       "media_url",
+      "thumbnail_url",
       "permalink",
       "timestamp",
       "like_count",

@@ -1,12 +1,67 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Input } from "../../components/ui/input"
 import { Lock } from "lucide-react"
+
+const SA_PA_CACHE_TTL = 10 * 60_000
+const SA_PA_CACHE_KEY = (url: string) => `sa_cache_post_analysis_v1:${encodeURIComponent(url)}`
+
+function saReadPACache(url: string) {
+  try {
+    if (typeof window === "undefined") return null
+    const u = typeof url === "string" ? url.trim() : ""
+    if (!u) return null
+    const raw = window.sessionStorage.getItem(SA_PA_CACHE_KEY(u))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    const ts = parsed?.ts
+    const data = parsed?.data
+    if (typeof ts !== "number") return null
+    if (Date.now() - ts > SA_PA_CACHE_TTL) return null
+    return data ?? null
+  } catch {
+    return null
+  }
+}
+
+function saWritePACache(url: string, data: any) {
+  try {
+    if (typeof window === "undefined") return
+    const u = typeof url === "string" ? url.trim() : ""
+    if (!u) return
+    window.sessionStorage.setItem(SA_PA_CACHE_KEY(u), JSON.stringify({ ts: Date.now(), data }))
+  } catch {
+    // ignore
+  }
+}
+
+function saSleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+async function saFetchWithRetry(input: RequestInfo | URL, init?: RequestInit) {
+  let lastErr: unknown = null
+  const attempts: Array<{ delayMs: number }> = [{ delayMs: 0 }, { delayMs: 150 }, { delayMs: 400 }]
+
+  for (let i = 0; i < attempts.length; i++) {
+    if (attempts[i].delayMs) await saSleep(attempts[i].delayMs)
+    try {
+      const res = await fetch(input, init)
+      if (res.status === 401 || res.status === 403) return res
+      if (!res.ok) throw new Error(`http_${res.status}`)
+      return res
+    } catch (e) {
+      lastErr = e
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error("fetch_failed")
+}
 
 type InferredStatus = "Good" | "Moderate" | "Needs Improvement"
 
@@ -47,12 +102,18 @@ export default function PostAnalysisPage() {
   const subtleDivider = "border-t border-white/10"
   const FREE_LIMIT = 3
   const STORAGE_KEY = "sa_free_post_credits_v1"
+  const LS_USED = "sa_post_analysis_used"
+  const LS_REMAINING = "sa_post_analysis_remaining"
+  const LS_LIMIT = "sa_post_analysis_limit"
+  const LS_TOP_POSTS = "sa_top_posts_v1"
   const [postUrl, setPostUrl] = useState("")
   const [hasAnalysis, setHasAnalysis] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [summaryMode, setSummaryMode] = useState<"short" | "detailed">("short")
   const [toast, setToast] = useState<string | null>(null)
+  const [copyToast, setCopyToast] = useState<null | { ts: number; msg: string }>(null)
   const [headerCopied, setHeaderCopied] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -62,9 +123,35 @@ export default function PostAnalysisPage() {
     a3: false,
   })
 
+  const [quickTop3, setQuickTop3] = useState<any[]>([])
+  const [quickTop3Ts, setQuickTop3Ts] = useState<number | null>(null)
+  const [quickPickStatus, setQuickPickStatus] = useState<"loading" | "ready" | "empty">("loading")
+
+  const quickPickThumbSrc = useMemo(() => {
+    const url = typeof postUrl === "string" ? postUrl.trim() : ""
+    if (!url) return ""
+
+    const match = quickTop3.find((p: any) => {
+      const link = typeof p?.permalink === "string" ? p.permalink.trim() : ""
+      return link && link === url
+    })
+
+    const thumb = typeof match?.thumbnail_url === "string" ? match.thumbnail_url : ""
+    const media = typeof match?.media_url === "string" ? match.media_url : ""
+    return (thumb && thumb.trim()) || (media && media.trim()) || ""
+  }, [postUrl, quickTop3])
+
+  const previewThumbSrc = useMemo(() => {
+    const thumb = typeof (analysisResult as any)?.thumbnail_url === "string" ? String((analysisResult as any).thumbnail_url) : ""
+    const media = typeof (analysisResult as any)?.media_url === "string" ? String((analysisResult as any).media_url) : ""
+    return thumb.trim() || media.trim() || ""
+  }, [analysisResult])
+
   const [freeUsed, setFreeUsed] = useState(0)
 
   const resultsRef = useRef<HTMLDivElement | null>(null)
+  const urlSectionRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const toastTimerRef = useRef<number | null>(null)
 
   const freeRemaining = Math.max(0, FREE_LIMIT - freeUsed)
@@ -78,6 +165,26 @@ export default function PostAnalysisPage() {
     return template
       .replace("{count}", String(params.count))
       .replace("{limit}", String(params.limit))
+  }
+
+  const clampInt = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
+
+  const readInt = (key: string) => {
+    try {
+      const v = window.localStorage.getItem(key)
+      const n = Number.parseInt(v ?? "", 10)
+      return Number.isFinite(n) ? n : null
+    } catch {
+      return null
+    }
+  }
+
+  const writeInt = (key: string, n: number) => {
+    try {
+      window.localStorage.setItem(key, String(n))
+    } catch {
+      // ignore
+    }
   }
 
   const readFreeUsed = () => {
@@ -101,10 +208,24 @@ export default function PostAnalysisPage() {
     }
   }
 
+  const writeQuotaSnapshot = (used: number) => {
+    try {
+      const limit = FREE_LIMIT
+      const safeUsed = clampInt(used, 0, limit)
+      const remaining = Math.max(0, limit - safeUsed)
+      writeInt(LS_LIMIT, limit)
+      writeInt(LS_USED, safeUsed)
+      writeInt(LS_REMAINING, remaining)
+    } catch {
+      // ignore
+    }
+  }
+
   const consumeFreeOnce = () => {
     const used = readFreeUsed()
     const nextUsed = Math.min(FREE_LIMIT, used + 1)
     writeFreeUsed(nextUsed)
+    writeQuotaSnapshot(nextUsed)
     setFreeUsed(nextUsed)
   }
 
@@ -127,14 +248,90 @@ export default function PostAnalysisPage() {
     handleAnalyze()
   }
 
-  useMemo(() => {
+  useEffect(() => {
     if (typeof window === "undefined") return
-    setFreeUsed(readFreeUsed())
+
+    // Initialize legacy storage (existing behavior)
+    const legacyUsed = readFreeUsed()
+
+    // Prefer explicit post-analysis keys if present; otherwise use legacy.
+    const limit = readInt(LS_LIMIT) ?? FREE_LIMIT
+    const remainingFromLs = readInt(LS_REMAINING)
+    const usedFromLs = readInt(LS_USED)
+
+    const used = (() => {
+      if (remainingFromLs !== null) {
+        const r = clampInt(remainingFromLs, 0, limit)
+        return clampInt(limit - r, 0, limit)
+      }
+      if (usedFromLs !== null) return clampInt(usedFromLs, 0, limit)
+      return clampInt(legacyUsed, 0, limit)
+    })()
+
+    setFreeUsed(used)
+    writeQuotaSnapshot(used)
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const platformLabel = (platform: "instagram" | "threads") =>
-    platform === "instagram" ? t("post.platform.instagram") : t("post.platform.threads")
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const urlFromQuery = searchParams?.get("url") || ""
+    if (urlFromQuery) {
+      setPostUrl((prev) => {
+        const p = typeof prev === "string" ? prev.trim() : ""
+        const next = String(urlFromQuery).trim()
+        if (!next) return prev
+        if (!p) return next
+        if (p !== next) return next
+        return prev
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  // Read snapshot written by Results (SSOT). Fallback to legacy key to avoid empty state.
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+
+      const rawSnap = window.localStorage.getItem("sa_top_posts_snapshot_v1")
+      if (rawSnap) {
+        const parsed = JSON.parse(rawSnap)
+        const items = parsed?.items
+        const ts = parsed?.ts
+        if (Array.isArray(items) && items.length > 0) {
+          setQuickTop3(items.slice(0, 3))
+          setQuickTop3Ts(typeof ts === "number" ? ts : null)
+          setQuickPickStatus("ready")
+          return
+        }
+      }
+
+      // Legacy fallback (older builds): sa_top_posts_v1 was an array
+      const rawLegacy = window.localStorage.getItem("sa_top_posts_v1")
+      if (rawLegacy) {
+        const legacy = JSON.parse(rawLegacy)
+        if (Array.isArray(legacy) && legacy.length > 0) {
+          setQuickTop3(legacy.slice(0, 3))
+          setQuickTop3Ts(null)
+          setQuickPickStatus("ready")
+          return
+        }
+      }
+
+      setQuickTop3([])
+      setQuickTop3Ts(null)
+      setQuickPickStatus("empty")
+    } catch {
+      setQuickTop3([])
+      setQuickTop3Ts(null)
+      setQuickPickStatus("empty")
+    }
+  }, [])
+
+  const platformLabel = (platform: "instagram") => t("post.platform.instagram")
 
   const inferredStatusLabel = (status: InferredStatus) => {
     if (status === "Good") return t("post.health.status.good")
@@ -148,24 +345,18 @@ export default function PostAnalysisPage() {
     return t("post.level.low")
   }
 
-  const inferredPlatform = useMemo<"instagram" | "threads">(() => {
-    const u = postUrl.toLowerCase()
-    if (u.includes("threads.net")) return "threads"
-    if (u.includes("instagram.com")) return "instagram"
+  const inferredPlatform = useMemo<"instagram">(() => {
     return "instagram"
   }, [postUrl])
 
   const sourceDomain = useMemo(() => {
-    const u = postUrl.toLowerCase()
-    if (u.includes("threads.net")) return "threads.net"
-    if (u.includes("instagram.com")) return "instagram.com"
-    return t("post.preview.unknownSource")
+    return "instagram.com"
   }, [postUrl, t])
 
   const looksLikeSupportedUrl = useMemo(() => {
     const u = postUrl.toLowerCase().trim()
     if (!u) return true
-    return u.includes("instagram.com") || u.includes("threads.net")
+    return u.includes("instagram.com")
   }, [postUrl])
 
   const inferredMetrics: InferredMetric[] = useMemo(
@@ -348,21 +539,88 @@ export default function PostAnalysisPage() {
 
   const canAnalyze = postUrl.trim().length > 0
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const url = (postUrl || "").trim()
+
+    // No URL: reset to initial UI state
+    if (!url) {
+      setHasAnalysis(false)
+      setAnalysisResult(null)
+      return
+    }
+
+    const cached = saReadPACache(url)
+    const cachedHasAnalysis = cached?.hasAnalysis === true
+    const cachedResult = cached?.analysisResult
+
+    // Only hydrate analysisResult if it is a real payload for THIS exact URL.
+    const match =
+      cachedResult &&
+      typeof cachedResult === "object" &&
+      typeof cachedResult?.permalink === "string" &&
+      cachedResult.permalink.trim() === url
+
+    setHasAnalysis(cachedHasAnalysis)
+    setAnalysisResult(match ? cachedResult : null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postUrl])
+
   const handleAnalyze = () => {
     if (!canAnalyze || isAnalyzing) return
 
+    const url = postUrl.trim()
     setIsAnalyzing(true)
-    setHasAnalysis(false)
 
-    const delay = 800 + Math.floor(Math.random() * 401)
-    setTimeout(() => {
-      setIsAnalyzing(false)
+    // SWR: try cache first (seconds-fast), then revalidate in background.
+    const cached = saReadPACache(url)
+    const cachedResult = cached?.analysisResult
+    const cacheMatch =
+      cachedResult &&
+      typeof cachedResult === "object" &&
+      typeof cachedResult?.permalink === "string" &&
+      cachedResult.permalink.trim() === url
+
+    if (cacheMatch) {
       setHasAnalysis(true)
+      setAnalysisResult(cachedResult)
+    }
 
-      requestAnimationFrame(() => {
-        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-      })
-    }, delay)
+    ;(async () => {
+      try {
+        const res = await saFetchWithRetry("/api/post-analysis", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url }),
+        })
+
+        if (!res.ok) {
+          setIsAnalyzing(false)
+          return
+        }
+
+        const data = await res.json()
+        const match =
+          data &&
+          typeof data === "object" &&
+          typeof data?.permalink === "string" &&
+          data.permalink.trim() === url
+
+        if (match) {
+          setHasAnalysis(true)
+          setAnalysisResult(data)
+          saWritePACache(url, { hasAnalysis: true, analysisResult: data })
+        }
+
+        setIsAnalyzing(false)
+
+        requestAnimationFrame(() => {
+          resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+        })
+      } catch {
+        setIsAnalyzing(false)
+      }
+    })()
   }
 
   const showToast = (message: string) => {
@@ -447,6 +705,16 @@ export default function PostAnalysisPage() {
 
   return (
     <main className="w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden">
+      {copyToast && (
+        <div
+          className="fixed bottom-4 right-4 z-50 rounded-md bg-black/70 px-3 py-2 text-xs text-white shadow-lg max-w-[70vw] truncate whitespace-nowrap"
+          role="status"
+          aria-live="polite"
+        >
+          {copyToast.msg}
+        </div>
+      )}
+
       <div aria-live="polite" className="sr-only">
         {toast ?? ""}
       </div>
@@ -523,49 +791,59 @@ export default function PostAnalysisPage() {
         <div className="mt-8 space-y-5 sm:space-y-7">
           <Card className={sectionCard}>
             <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
-              <div className="space-y-2">
+              <div id="post-url-section" ref={urlSectionRef} className="min-w-0 space-y-2">
                 <div className="text-sm font-medium text-white">{t("post.input.label")}</div>
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-center">
                   <Input
+                    ref={inputRef}
                     value={postUrl}
                     onChange={(e) => setPostUrl(e.target.value)}
                     placeholder={t("post.input.placeholder")}
-                    className="bg-white/5 border-white/10 text-slate-200 placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                    className="min-w-0 truncate bg-white/5 border-white/10 text-slate-200 placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
                   />
-                  <div className="w-full md:w-[168px] flex flex-col gap-1">
-                    <div className="text-xs text-white/70 leading-relaxed">
+                  <div className="w-full md:w-[168px] flex flex-col gap-1 min-w-0">
+                    <div className="text-xs text-white/70 leading-relaxed min-w-0">
                       {bypass && freeRemaining <= 0 ? (
                         <div className="text-xs text-white/60 leading-relaxed">
                           {t("post.devBypass")}
                         </div>
                       ) : null}
                       {freeRemaining > 0 ? (
-                        <span>
+                        <span className="min-w-0">
                           {t("post.freeRemaining")} {formatCount(t("post.freeRemainingCount"), { count: freeRemaining, limit: FREE_LIMIT })}
                         </span>
                       ) : (
-                        <span>
+                        <span className="min-w-0">
                           {t("post.freeExhaustedTitle")} · {t("post.freeExhaustedDesc")}
                         </span>
                       )}
                     </div>
-                    <Button
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                      onClick={guardAnalyze}
-                      disabled={!canAnalyze || isAnalyzing}
-                      aria-busy={isAnalyzing ? true : undefined}
-                    >
-                      {isAnalyzing ? (
-                        <span className="inline-flex items-center gap-2">
-                          <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                          {t("post.input.analyzing")}
-                        </span>
-                      ) : freeRemaining <= 0 ? (
-                        t("post.ctaUpgrade")
-                      ) : (
-                        t("post.ctaAnalyze")
-                      )}
-                    </Button>
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <Button
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                        onClick={guardAnalyze}
+                        disabled={!canAnalyze || isAnalyzing}
+                        aria-busy={isAnalyzing ? true : undefined}
+                      >
+                        {isAnalyzing ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                            {t("post.input.analyzing")}
+                          </span>
+                        ) : freeRemaining <= 0 ? (
+                          t("post.ctaUpgrade")
+                        ) : (
+                          t("post.ctaAnalyze")
+                        )}
+                      </Button>
+
+                      <span
+                        className="min-w-0 text-xs text-white/70 tabular-nums overflow-hidden text-ellipsis whitespace-nowrap truncate"
+                        title={`免費剩餘 ${freeRemaining} / ${FREE_LIMIT}`}
+                      >
+                        免費剩餘 {freeRemaining} / {FREE_LIMIT}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="text-xs text-slate-400">
@@ -573,10 +851,158 @@ export default function PostAnalysisPage() {
                 </div>
                 {!looksLikeSupportedUrl && (
                   <div className="text-xs text-slate-400">
-                    {t("post.input.invalidUrl")}
+                    連結格式可能不正確：請確認包含 instagram.com。
                   </div>
                 )}
                 {!canAnalyze && <div className="text-xs text-slate-400">{t("post.input.pasteToBegin")}</div>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={sectionCard}>
+            <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+              <div className="space-y-2">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-white/90 truncate">🔥 從高互動貼文開始分析</div>
+                    <div className="mt-1 text-xs text-white/60 leading-relaxed">
+                      不知道該選哪一篇？直接從你表現最好的貼文開始。
+                      <br />
+                      （點「使用這篇」會自動填入，不影響既有分析結果）
+                    </div>
+                    <div className="mt-1 text-[10px] text-white/40 truncate">
+                      以下 3 篇與帳號分析頁顯示結果一致
+                      {quickTop3Ts ? ` · 更新於 ${new Date(quickTop3Ts).toLocaleString()}` : ""}
+                    </div>
+                  </div>
+                </div>
+
+                {quickPickStatus === "ready" ? (
+                  <div className="flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible">
+                    {quickTop3.map((p: any, idx: number) => {
+                      const link = typeof p?.permalink === "string" ? p.permalink : ""
+                      const thumb =
+                        (typeof p?.thumbnail_url === "string" && p.thumbnail_url ? p.thumbnail_url : "") ||
+                        (typeof p?.media_url === "string" && p.media_url ? p.media_url : "")
+                      const type = String(p?.media_type || "POST").toUpperCase()
+                      const likes = (p?.like_count ?? p?.likes) ?? "—"
+                      const comments = (p?.comments_count ?? p?.comments) ?? "—"
+                      const engagement = p?.engagement ?? "—"
+
+                      return (
+                        <div
+                          key={String(p?.id ?? link ?? idx)}
+                          className="min-w-[240px] sm:min-w-0 rounded-xl border border-white/10 bg-white/5 p-3"
+                        >
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white/5 border border-white/10">
+                              {thumb ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={thumb}
+                                  alt=""
+                                  className="absolute inset-0 h-full w-full object-cover"
+                                  loading="lazy"
+                                  decoding="async"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    ;(e.currentTarget as HTMLImageElement).style.display = "none"
+                                  }}
+                                />
+                              ) : null}
+                              <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/45 tabular-nums">
+                                {type}
+                              </div>
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/70 whitespace-nowrap">
+                                  {type}
+                                </span>
+                              </div>
+
+                              <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-white/40 truncate">按讚</div>
+                                  <div className="text-sm font-medium tabular-nums truncate">
+                                    {typeof likes === "number" && Number.isFinite(likes) ? Math.round(likes) : likes}
+                                  </div>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-white/40 truncate">留言</div>
+                                  <div className="text-sm font-medium tabular-nums truncate">
+                                    {typeof comments === "number" && Number.isFinite(comments) ? Math.round(comments) : comments}
+                                  </div>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-white/40 truncate">互動</div>
+                                  <div className="text-sm font-medium tabular-nums truncate">
+                                    {typeof engagement === "number" && Number.isFinite(engagement) ? Math.round(engagement) : engagement}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  className="h-8 rounded-md bg-white/10 px-3 text-xs text-white hover:bg-white/15 whitespace-nowrap"
+                                  onClick={() => {
+                                    if (!link) return
+                                    setPostUrl(link)
+                                    requestAnimationFrame(() => {
+                                      urlSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                                    })
+                                    window.setTimeout(() => inputRef.current?.focus?.(), 0)
+                                  }}
+                                  title="使用這篇"
+                                >
+                                  使用這篇
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="h-8 rounded-md border border-white/10 bg-white/5 px-3 text-xs text-white/80 hover:bg-white/10 whitespace-nowrap"
+                                  onClick={async () => {
+                                    if (!link) return
+                                    const ok = await copyToClipboard(link)
+                                    if (ok) {
+                                      const msg = typeof locale === "string" && locale.startsWith("zh") ? "已複製" : "Copied"
+                                      setCopyToast({ ts: Date.now(), msg })
+                                      window.setTimeout(() => setCopyToast(null), 1200)
+                                    }
+                                  }}
+                                  title="複製連結"
+                                >
+                                  複製連結
+                                </button>
+                              </div>
+
+                              <div className="mt-2 text-[10px] text-white/40 truncate">{link || "—"}</div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : quickPickStatus === "loading" ? (
+                  <div className="flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible">
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="min-w-[240px] sm:min-w-0 rounded-xl border border-white/10 bg-white/5 p-3"
+                      >
+                        <div className="h-14 w-14 rounded-lg bg-white/5 border border-white/10" />
+                        <div className="mt-3 h-4 w-32 rounded bg-white/5" />
+                        <div className="mt-2 h-8 w-40 rounded bg-white/5" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                    目前還沒有可用的最佳貼文。請先回到「帳號分析」頁等待貼文載入後，再回來這裡。
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -645,10 +1071,26 @@ export default function PostAnalysisPage() {
                     <div className="w-full max-w-[260px]">
                       <div className="aspect-[4/5] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
-                        <div className="relative text-slate-300">
-                          <div className="mx-auto h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
-                          <div className="mt-2 text-xs">{t("post.preview.thumbnail")}</div>
-                        </div>
+                        {previewThumbSrc ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewThumbSrc}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              ;(e.currentTarget as HTMLImageElement).style.display = "none"
+                            }}
+                          />
+                        ) : null}
+                        {!previewThumbSrc && (
+                          <div className="relative text-slate-300">
+                            <div className="mx-auto h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
+                            <div className="mt-2 text-xs">POST</div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-3">

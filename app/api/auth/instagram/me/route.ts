@@ -1,181 +1,205 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { cookies, headers } from "next/headers"
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const GRAPH_VERSION = "v24.0"
+const GRAPH_VERSION = "v21.0";
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
-// Must match /api/instagram/media fallback IDs (do NOT change media route behavior in this task)
-const FALLBACK_PAGE_ID = "851912424681350"
-const FALLBACK_IG_BUSINESS_ID = "17841404364250644"
+const PREFERRED_USERNAME = (process.env.IG_PREFERRED_USERNAME ?? "").trim();
 
-type ErrorStage = "read_cookie" | "exchange_page_token" | "fetch_ig_profile"
-
-type IgMeResponse = {
-  username: string
-  name?: string
-  display_name?: string
-  profile_picture_url?: string
-  account_type?: string
-  followers_count?: number
-  follows_count?: number
-  media_count?: number
-  recent_media: Array<{
-    id: string
-    media_type?: string
-    media_url?: string
-    caption?: string
-    timestamp?: string
-  }>
-}
-
-const getFbtraceId = (meta: any): string | undefined => {
-  const v = meta?.fbtrace_id ?? meta?.error?.fbtrace_id
-  return typeof v === "string" && v.trim() ? v : undefined
-}
-
-const fetchJson = async (url: string) => {
-  const res = await fetch(url, { method: "GET", cache: "no-store" })
-  const json = (await res.json().catch(() => null)) as any
-  return { res, json }
-}
-
-const jsonError = (
-  status: number,
-  stage: ErrorStage,
-  errorMessage: string,
-  extra?: {
-    upstreamStatus?: number
-    fbtrace_id?: string
-    page_id?: string
-    ig_id?: string
-  },
-) => NextResponse.json({ stage, errorMessage, ...(extra ?? {}) }, { status })
-
-export async function GET(req: NextRequest) {
-  const c = await cookies()
-  const h = await headers()
-
-  const cookieToken = c.get("ig_access_token")?.value ?? ""
-  const auth = h.get("authorization") ?? ""
-  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : ""
-  const token = (cookieToken || bearer || "").trim()
-
-  if (!token) {
-    return jsonError(401, "read_cookie", "missing_token")
-  }
-
+async function safeJson(res: Response) {
   try {
-    // Single path:
-    // read token -> BM discovery (optional) -> fallback ids -> exchange page token -> fetch ig profile -> success
-    let discoveredPageId: string | null = null
-    let discoveredIgId: string | null = null
-    let discoveredPageAccessToken: string | null = null
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
-    // (Optional) Business Manager discovery
-    const businessesUrl = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/me/businesses`)
-    businessesUrl.searchParams.set("access_token", token)
-    const bmBusinesses = await fetchJson(businessesUrl.toString())
+export async function GET() {
+  try {
+    const c = await cookies();
 
-    if (bmBusinesses.res.ok) {
-      const businesses = Array.isArray(bmBusinesses.json?.data) ? bmBusinesses.json.data : []
-      const businessId = businesses?.[0]?.id
+    const token = c.get("ig_access_token")?.value;
+    if (!token) {
+      return NextResponse.json(
+        { stage: "read_cookie", errorMessage: "missing_ig_access_token" },
+        { status: 401 },
+      );
+    }
 
-      if (businessId) {
-        const ownedPagesUrl = new URL(
-          `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(String(businessId))}/owned_pages`,
-        )
-        ownedPagesUrl.searchParams.set("fields", "id,access_token,instagram_business_account{id}")
-        ownedPagesUrl.searchParams.set("access_token", token)
+    // Preserve existing persisted ids if you already store them.
+    // Prefer reading from your current storage/wiring instead of hardcoding.
+    let page_id = c.get("ig_page_id")?.value || "";
+    let ig_id = c.get("ig_ig_id")?.value || "";
 
-        const ownedPages = await fetchJson(ownedPagesUrl.toString())
-        if (ownedPages.res.ok) {
-          const pages = Array.isArray(ownedPages.json?.data) ? ownedPages.json.data : []
-          const pageWithIg = pages.find((p: any) => p?.instagram_business_account?.id)
+    if (!page_id || !ig_id) {
+      const accountsUrl = `${GRAPH_BASE}/me/accounts?fields=name,instagram_business_account&access_token=${encodeURIComponent(
+        token,
+      )}`;
+      const accountsRes = await fetch(accountsUrl, { cache: "no-store" });
+      const accountsBody = await safeJson(accountsRes);
 
-          discoveredPageId = pageWithIg?.id ? String(pageWithIg.id) : null
-          discoveredIgId = pageWithIg?.instagram_business_account?.id
-            ? String(pageWithIg.instagram_business_account.id)
-            : null
-          discoveredPageAccessToken =
-            typeof pageWithIg?.access_token === "string" && pageWithIg.access_token
-              ? String(pageWithIg.access_token)
-              : null
+      if (!accountsRes.ok) {
+        return NextResponse.json(
+          {
+            stage: "load_ids",
+            errorMessage: "failed_to_load_accounts",
+            upstreamStatus: accountsRes.status,
+            upstreamBody: accountsBody,
+          },
+          { status: 400 },
+        );
+      }
+
+      const accounts = Array.isArray(accountsBody?.data) ? accountsBody.data : [];
+      const candidates = accounts.filter((p: any) => p?.instagram_business_account?.id);
+
+      let picked: any | undefined;
+      if (PREFERRED_USERNAME) {
+        const preferredLower = PREFERRED_USERNAME.toLowerCase();
+
+        for (const p of candidates) {
+          const candidatePageId = String(p?.id ?? "");
+          const candidateIgId = String(p?.instagram_business_account?.id ?? "");
+          if (!candidatePageId || !candidateIgId) continue;
+
+          // Exchange USER token -> PAGE token
+          const candidatePageTokenUrl = `${GRAPH_BASE}/${encodeURIComponent(
+            candidatePageId,
+          )}?fields=access_token&access_token=${encodeURIComponent(token)}`;
+          const candidatePageTokenRes = await fetch(candidatePageTokenUrl, { cache: "no-store" });
+          const candidatePageTokenBody = await safeJson(candidatePageTokenRes);
+
+          const candidatePageToken = candidatePageTokenBody?.access_token;
+          if (!candidatePageTokenRes.ok || typeof candidatePageToken !== "string" || !candidatePageToken) {
+            continue;
+          }
+
+          // Fetch IG username using PAGE token
+          const candidateUsernameUrl = `${GRAPH_BASE}/${encodeURIComponent(
+            candidateIgId,
+          )}?fields=username&access_token=${encodeURIComponent(candidatePageToken)}`;
+          const candidateUsernameRes = await fetch(candidateUsernameUrl, { cache: "no-store" });
+          const candidateUsernameBody = await safeJson(candidateUsernameRes);
+
+          const candidateUsername =
+            typeof candidateUsernameBody?.username === "string" ? candidateUsernameBody.username.trim() : "";
+          if (candidateUsername && candidateUsername.toLowerCase() === preferredLower) {
+            picked = p;
+            break;
+          }
         }
+
+        if (!picked) {
+          return NextResponse.json(
+            {
+              stage: "load_ids",
+              errorMessage: "preferred_username_not_found",
+              preferred_username: PREFERRED_USERNAME,
+            },
+            { status: 400 },
+          );
+        }
+      } else {
+        picked = candidates[0];
       }
-    }
 
-    const pageId = discoveredPageId ?? FALLBACK_PAGE_ID
-    const igId = discoveredIgId ?? FALLBACK_IG_BUSINESS_ID
-
-    // Ensure page access token (if BM did not provide one)
-    let pageAccessToken: string | null = discoveredPageAccessToken
-    if (!pageAccessToken) {
-      const pageTokenUrl = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(String(pageId))}`)
-      pageTokenUrl.searchParams.set("fields", "access_token")
-      pageTokenUrl.searchParams.set("access_token", token)
-
-      const pageToken = await fetchJson(pageTokenUrl.toString())
-      if (!pageToken.res.ok || typeof pageToken.json?.access_token !== "string" || !pageToken.json.access_token) {
-        return jsonError(pageToken.res.status || 400, "exchange_page_token", "failed_to_get_page_access_token", {
-          upstreamStatus: pageToken.res.status,
-          fbtrace_id: getFbtraceId(pageToken.json),
-          page_id: String(pageId),
-          ig_id: String(igId),
-        })
+      if (!picked?.id || !picked?.instagram_business_account?.id) {
+        return NextResponse.json(
+          { stage: "load_ids", errorMessage: "no_instagram_business_account" },
+          { status: 400 },
+        );
       }
-      pageAccessToken = String(pageToken.json.access_token)
+
+      page_id = String(picked.id);
+      ig_id = String(picked.instagram_business_account.id);
+
+      c.set("ig_page_id", page_id, { httpOnly: true, sameSite: "lax", path: "/" });
+      c.set("ig_ig_id", ig_id, { httpOnly: true, sameSite: "lax", path: "/" });
     }
 
-    // Fetch IG profile via Page -> instagram_business_account (stable path)
-    const pageProfileUrl = new URL(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(String(pageId))}`,
-    )
-    pageProfileUrl.searchParams.set(
-      "fields",
-      "instagram_business_account{username,name,profile_picture_url,account_type,followers_count,follows_count,media_count}",
-    )
-    pageProfileUrl.searchParams.set("access_token", String(pageAccessToken))
+    // 1) Exchange USER token -> PAGE token (required for IG Business Graph reads)
+    const pageTokenUrl = `${GRAPH_BASE}/${encodeURIComponent(
+      page_id,
+    )}?fields=access_token&access_token=${encodeURIComponent(token)}`;
+    const pageTokenRes = await fetch(pageTokenUrl, { cache: "no-store" });
+    const pageTokenBody = await safeJson(pageTokenRes);
 
-    const pageProfile = await fetchJson(pageProfileUrl.toString())
-    if (!pageProfile.res.ok) {
-      return jsonError(pageProfile.res.status || 400, "fetch_ig_profile", "failed_to_fetch_ig_profile", {
-        upstreamStatus: pageProfile.res.status,
-        fbtrace_id: getFbtraceId(pageProfile.json),
-        page_id: String(pageId),
-        ig_id: String(igId),
-      })
+    if (!pageTokenRes.ok || !pageTokenBody?.access_token) {
+      return NextResponse.json(
+        {
+          stage: "exchange_page_token",
+          errorMessage: "failed_to_exchange_page_token",
+          upstreamStatus: pageTokenRes.status,
+          upstreamBody: pageTokenBody,
+          page_id,
+        },
+        { status: 400 },
+      );
     }
 
-    const ig = pageProfile.json?.instagram_business_account
-    const username = typeof ig?.username === "string" ? ig.username.trim() : ""
-    if (!username) {
-      return jsonError(502, "fetch_ig_profile", "ig_profile_missing_username", {
-        upstreamStatus: pageProfile.res.status,
-        fbtrace_id: getFbtraceId(pageProfile.json),
-        page_id: String(pageId),
-        ig_id: String(igId),
-      })
+    const pageToken = pageTokenBody.access_token as string;
+
+    // 2) Fetch IG profile using PAGE token
+    const profileFields = [
+      "id",
+      "username",
+      "name",
+      "profile_picture_url",
+      "followers_count",
+      "follows_count",
+      "media_count",
+    ].join(",");
+
+    const igProfileUrl = `${GRAPH_BASE}/${encodeURIComponent(
+      ig_id,
+    )}?fields=${encodeURIComponent(profileFields)}&access_token=${encodeURIComponent(
+      pageToken,
+    )}`;
+
+    const igRes = await fetch(igProfileUrl, { cache: "no-store" });
+    const igBody = await safeJson(igRes);
+
+    if (!igRes.ok) {
+      return NextResponse.json(
+        {
+          stage: "fetch_ig_profile",
+          errorMessage: "failed_to_fetch_ig_profile",
+          upstreamStatus: igRes.status,
+          upstreamBody: igBody,
+          page_id,
+          ig_id,
+          fbtrace_id: igBody?.fbtrace_id,
+        },
+        { status: 400 },
+      );
     }
 
-    const payload: IgMeResponse = {
-      username,
-      name: typeof ig?.name === "string" ? ig.name : undefined,
-      profile_picture_url: typeof ig?.profile_picture_url === "string" ? ig.profile_picture_url : undefined,
-      account_type: typeof ig?.account_type === "string" ? ig.account_type : undefined,
-      followers_count: typeof ig?.followers_count === "number" ? ig.followers_count : undefined,
-      follows_count: typeof ig?.follows_count === "number" ? ig.follows_count : undefined,
-      media_count: typeof ig?.media_count === "number" ? ig.media_count : undefined,
-      recent_media: [],
-    }
-
-    return NextResponse.json(payload)
-  } catch (e: any) {
-    return jsonError(500, "fetch_ig_profile", "server_error", {
-      upstreamStatus: 500,
-      page_id: FALLBACK_PAGE_ID,
-      ig_id: FALLBACK_IG_BUSINESS_ID,
-    })
+    // Normalize to your UI's expected shape without touching i18n/UI blocks.
+    return NextResponse.json(
+      {
+        connected: true,
+        provider: "instagram",
+        profile: {
+          id: igBody?.id ?? ig_id,
+          username: igBody?.username ?? "",
+          name: igBody?.name ?? igBody?.username ?? "",
+          profile_picture_url: igBody?.profile_picture_url ?? "",
+          followers_count: igBody?.followers_count ?? null,
+          follows_count: igBody?.follows_count ?? null,
+          media_count: igBody?.media_count ?? null,
+        },
+        page_id,
+        ig_id,
+      },
+      { status: 200 },
+    );
+  } catch (err: any) {
+    return NextResponse.json(
+      { stage: "exception", errorMessage: "unexpected_error", detail: String(err) },
+      { status: 500 },
+    );
   }
 }

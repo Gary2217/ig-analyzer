@@ -15,11 +15,21 @@ import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 
+// Dev StrictMode can mount/unmount/mount causing useRef to reset.
+// Module-scope flag survives remount in the same session and prevents duplicate fetch.
+let __resultsMediaFetchedOnce = false
+let __resultsMeFetchedOnce = false
+
 type IgMeResponse = {
-  username: string
+  username?: string
+  name?: string
+  display_name?: string
   profile_picture_url?: string
   account_type?: string
   followers_count?: number
+  follows_count?: number
+  following_count?: number
+  media_count?: number
   recent_media?: Array<{
     id: string
     media_type?: string
@@ -27,6 +37,17 @@ type IgMeResponse = {
     caption?: string
     timestamp?: string
   }>
+  connected?: boolean
+  provider?: string
+  profile?: {
+    id?: string
+    username?: string
+    name?: string
+    profile_picture_url?: string
+    followers_count?: number | null
+    follows_count?: number | null
+    media_count?: number | null
+  }
 }
 
 type FakeAnalysis = {
@@ -57,14 +78,16 @@ function ProgressRing({
   value,
   label,
   subLabel,
+  centerText,
 }: {
   value: number
   label: string
   subLabel?: ReactNode
+  centerText?: string
 }) {
   const v = Math.max(0, Math.min(100, value))
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
       <div
         className="h-12 w-12 rounded-full"
         style={{
@@ -72,24 +95,112 @@ function ProgressRing({
         }}
       >
         <div className="m-[3px] h-[calc(100%-6px)] w-[calc(100%-6px)] rounded-full bg-[#0b1220]/90 flex items-center justify-center">
-          <span className="text-xs font-semibold text-white">{v}%</span>
+          <span className="text-[11px] sm:text-xs font-semibold text-white tabular-nums whitespace-nowrap">
+            {typeof centerText === "string" ? centerText : Math.round(v)}
+          </span>
         </div>
       </div>
-      <div className="leading-tight">
-        <div className="text-sm font-semibold text-white">{label}</div>
-        {subLabel ? <div className="text-xs text-white/60">{subLabel}</div> : null}
+      <div className="leading-tight min-w-0">
+        <div className="text-sm font-semibold text-white truncate">{label}</div>
+        {subLabel ? <div className="text-xs text-white/60 truncate">{subLabel}</div> : null}
       </div>
     </div>
   )
 }
 
+function normalizeMedia(raw: any):
+  Array<{
+    id: string
+    like_count?: number
+    comments_count?: number
+    timestamp?: string
+    media_type?: string
+    permalink?: string
+    media_url?: string
+    thumbnail_url?: string
+    caption?: string
+  }> {
+  const src =
+    Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.items) ? raw.items : []
+
+  return src
+    .map((m: any) => {
+      const id = typeof m?.id === "string" ? m.id : String(m?.id ?? "")
+      if (!id) return null
+
+      const like_count = Number(m?.like_count)
+      const comments_count = Number(m?.comments_count)
+
+      return {
+        id,
+        like_count: Number.isFinite(like_count) ? like_count : undefined,
+        comments_count: Number.isFinite(comments_count) ? comments_count : undefined,
+        timestamp: typeof m?.timestamp === "string" ? m.timestamp : undefined,
+        media_type: typeof m?.media_type === "string" ? m.media_type : undefined,
+        permalink: typeof m?.permalink === "string" ? m.permalink : undefined,
+        media_url: typeof m?.media_url === "string" ? m.media_url : undefined,
+        thumbnail_url: typeof m?.thumbnail_url === "string" ? m.thumbnail_url : undefined,
+        caption: typeof m?.caption === "string" ? m.caption : undefined,
+      }
+    })
+    .filter(Boolean) as any
+}
+
 export default function ResultsPage() {
   console.log("[LocaleResultsPage] mounted")
+
+  const __DEV__ = process.env.NODE_ENV !== "production"
 
   const router = useRouter()
   const pathname = usePathname() || "/"
   const searchParams = useSearchParams()
   const { t } = useI18n()
+
+  const getPostPermalink = (post: any): string => {
+    return (
+      (typeof post?.permalink === "string" ? post.permalink : "") ||
+      (typeof post?.url === "string" ? post.url : "") ||
+      (typeof post?.link === "string" ? post.link : "") ||
+      (typeof post?.post_url === "string" ? post.post_url : "") ||
+      ""
+    )
+  }
+
+  const safeCopyToClipboard = async (text: string) => {
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      try {
+        const ta = document.createElement("textarea")
+        ta.value = text
+        ta.style.position = "fixed"
+        ta.style.left = "-9999px"
+        ta.style.top = "-9999px"
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  /**
+   * NOTE (Hard constraints)
+   * - Only edit this file: app/results/page.tsx
+   * - UI-only: DO NOT change fetch/state/sort/calculation logic for posts
+   * - DO NOT modify i18n message files
+   * - MUST be responsive (mobile) + avoid overflow for zh/en and numbers:
+   *   use min-w-0, truncate, whitespace-nowrap, tabular-nums, max-w clamps.
+   *
+   * Goal:
+   * - Sync "Free remaining X / 3" display with post-analysis page quota.
+   * - We can't guarantee the exact storage key name here, so we read from a
+   *   small set of candidate keys (fallback strategy). This keeps risk low.
+   */
 
   const upgradeCardRef = useRef<HTMLDivElement | null>(null)
   const [upgradeCardInView, setUpgradeCardInView] = useState(false)
@@ -107,7 +218,127 @@ export default function ResultsPage() {
 
   const isPro = false // TODO: wire to real subscription state
 
-  const [media, setMedia] = useState<Array<{ id: string; timestamp: string }>>([])
+  // ---- Post analysis free quota (UI-only sync) -----------------------------
+  const FREE_POST_ANALYSIS_LIMIT = 3
+  const FREE_QUOTA_USED_KEYS = [
+    // Prefer your actual key if you already have one; keep these fallbacks:
+    "sa_post_analysis_used",
+    "sa_free_post_analysis_used",
+    "post_analysis_used",
+    "free_post_analysis_used",
+    "sa_post_used",
+    "free_post_used",
+  ]
+  const FREE_QUOTA_REMAIN_KEYS = [
+    "sa_post_analysis_remaining",
+    "sa_free_post_analysis_remaining",
+    "post_analysis_remaining",
+    "free_post_analysis_remaining",
+    "sa_post_remaining",
+    "free_post_remaining",
+  ]
+  const FREE_QUOTA_LIMIT_KEYS = [
+    "sa_post_analysis_limit",
+    "sa_free_post_analysis_limit",
+    "post_analysis_limit",
+    "free_post_analysis_limit",
+  ]
+
+  const safeParseInt = (v: unknown) => {
+    if (typeof v !== "string") return null
+    const n = Number.parseInt(v, 10)
+    return Number.isFinite(n) ? n : null
+  }
+
+  const readFirstNumberFromLocalStorage = (keys: string[]) => {
+    if (typeof window === "undefined") return null
+    try {
+      for (const k of keys) {
+        const raw = window.localStorage.getItem(k)
+        const n = safeParseInt(raw)
+        if (n !== null) return n
+      }
+    } catch {
+      // ignore (private mode / blocked storage)
+    }
+    return null
+  }
+
+  const computeFreeQuotaSnapshot = () => {
+    // priority: remaining -> used -> fallback
+    const limitFromLs = readFirstNumberFromLocalStorage(FREE_QUOTA_LIMIT_KEYS) ?? FREE_POST_ANALYSIS_LIMIT
+
+    const remainingFromLs = readFirstNumberFromLocalStorage(FREE_QUOTA_REMAIN_KEYS)
+    if (remainingFromLs !== null) {
+      const r = Math.max(0, Math.min(limitFromLs, remainingFromLs))
+      return { limit: limitFromLs, remaining: r }
+    }
+
+    const usedFromLs = readFirstNumberFromLocalStorage(FREE_QUOTA_USED_KEYS)
+    if (usedFromLs !== null) {
+      const used = Math.max(0, Math.min(limitFromLs, usedFromLs))
+      return { limit: limitFromLs, remaining: Math.max(0, limitFromLs - used) }
+    }
+
+    // final fallback: keep current UX default (do not break UI)
+    return { limit: FREE_POST_ANALYSIS_LIMIT, remaining: 2 }
+  }
+
+  const [freePostRemaining, setFreePostRemaining] = useState<number>(() => {
+    // SSR-safe default; will be replaced on mount
+    return 2
+  })
+  const [freePostLimit, setFreePostLimit] = useState<number>(() => {
+    return FREE_POST_ANALYSIS_LIMIT
+  })
+
+  useEffect(() => {
+    const sync = () => {
+      const snap = computeFreeQuotaSnapshot()
+      setFreePostLimit(snap.limit)
+      setFreePostRemaining(snap.remaining)
+    }
+
+    sync()
+
+    // Cross-tab sync: if post-analysis page updates localStorage, reflect here.
+    const watched = new Set([...FREE_QUOTA_USED_KEYS, ...FREE_QUOTA_REMAIN_KEYS, ...FREE_QUOTA_LIMIT_KEYS])
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return
+      if (watched.has(e.key)) sync()
+    }
+
+    // Same-tab sync (most common): when user comes back from post-analysis,
+    // refresh on focus/visibility.
+    const onFocus = () => sync()
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") sync()
+    }
+
+    window.addEventListener("storage", onStorage)
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+
+    return () => {
+      window.removeEventListener("storage", onStorage)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    // When user navigates back from post-analysis to results in the SAME tab,
+    // focus/visibility may NOT fire. Re-sync on pathname changes.
+    if (typeof pathname === "string" && pathname.endsWith("/results")) {
+      const snap = computeFreeQuotaSnapshot()
+      setFreePostLimit(snap.limit)
+      setFreePostRemaining(snap.remaining)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  const [media, setMedia] = useState<Array<ReturnType<typeof normalizeMedia>[number]>>([])
   const [topPosts, setTopPosts] = useState<any[]>([])
 
   const [mediaLoaded, setMediaLoaded] = useState(false)
@@ -158,27 +389,98 @@ export default function ResultsPage() {
   const [isProModalOpen, setIsProModalOpen] = useState(false)
   const [upgradeHighlight, setUpgradeHighlight] = useState(false)
 
-  const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
+  // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
+  const mediaLen = Array.isArray(media) ? media.length : 0
+  const topPostsLen = Array.isArray(topPosts) ? topPosts.length : 0
+  const igRecentLen = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media.length : 0
 
-  const isConnected = Boolean(igMe?.username)
+  // Profile stats (UI-only)
+  const followersCount = Number((igMe as any)?.followers_count ?? NaN)
+  const followsCount = Number((igMe as any)?.follows_count ?? NaN)
+  const mediaCount = Number((igMe as any)?.media_count ?? NaN)
+  const formatCompact = (n: number) => {
+    if (!Number.isFinite(n)) return "—"
+    try {
+      return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n)
+    } catch {
+      return String(n)
+    }
+  }
+
+  // Determine whether topPosts is real IG media (numeric id) — used for DEV logging only.
+  const topPostsFirstId = String((topPosts as any)?.[0]?.id ?? "")
+  const topPostsHasReal = topPostsLen > 0 && /^\d+$/.test(topPostsFirstId)
+
+  const hasFetchedMediaRef = useRef(false)
+  const hasFetchedMeRef = useRef(false)
+
+  const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
+  const isZh = activeLocale === "zh-TW"
+
+  const uiCopy = {
+    avgLikesLabel: isZh ? "平均按讚" : "Avg Likes",
+    avgCommentsLabel: isZh ? "平均留言" : "Avg Comments",
+    perPostLast25: isZh ? "每篇平均（最近 25 篇）" : "Per post (last 25)",
+    topPostsSortHint: isZh ? "依（按讚＋留言）排序（最近 25 篇）" : "Sorted by likes + comments (last 25)",
+  }
+
+  const igProfile = ((igMe as any)?.profile ?? igMe) as any
+  const isConnected = Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
   const connectedProvider = searchParams.get("connected")
   const isConnectedInstagram = connectedProvider === "instagram"
 
-  const hasRealProfile = Boolean(igMe?.username)
-  const allowDemoProfile = !hasRealProfile && !igMeLoading
+  const hasConnectedFlag = (igMe as any)?.connected === true
+  const hasRealProfile = Boolean(isConnected)
+  const allowDemoProfile = !hasConnectedFlag && !hasRealProfile && !igMeLoading
 
   const recentPosts = isConnectedInstagram && topPosts.length > 0 ? topPosts : igMe?.recent_media
+
+  // -------------------------------------------------
+  // DEV-ONLY: Verify Top Posts data source decision
+  // (Do NOT change logic; only log which branch is being used)
+  // -------------------------------------------------
+  useEffect(() => {
+    if (!__DEV__) return
+    const source = topPostsHasReal ? "topPosts(from /api/instagram/media)" : "igMe.recent_media(fallback)"
+    console.log(
+      "[top-posts] source:",
+      source,
+      "| topPosts.length:",
+      topPostsLen,
+      "| igMe.recent_media.length:",
+      igRecentLen,
+      "| mediaLength:",
+      mediaLen,
+      "| isConnected:",
+      isConnected,
+      "| isConnectedInstagram:",
+      isConnectedInstagram,
+    )
+  }, [__DEV__, isConnected, isConnectedInstagram, topPostsLen, igRecentLen, mediaLen])
 
   useEffect(() => {
     if (!isConnected) return
 
+    // Prevent duplicate fetch across StrictMode remounts in dev
+    if (__resultsMediaFetchedOnce) return
+
+    // Prevent duplicate fetch (StrictMode / re-render)
+    if (hasFetchedMediaRef.current) return
+
     if (mediaLoaded) return
+
+    __resultsMediaFetchedOnce = true
+    hasFetchedMediaRef.current = true
 
     console.log("[media] fetch (from ConnectedGate)")
     fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
       .then((res) => res.json())
       .then((json) => {
-        setMedia(json.data)
+        if (__DEV__) {
+          const rawLen = Array.isArray(json?.data) ? json.data.length : 0
+          console.log("[media] response received:", { hasDataArray: Array.isArray(json?.data), dataLength: rawLen, hasPaging: !!json?.paging })
+        }
+        setMedia(normalizeMedia(json))
         setMediaLoaded(true)
       })
       .catch((err) => {
@@ -186,49 +488,160 @@ export default function ResultsPage() {
       })
   }, [isConnected])
 
+  // -------------------------------------------------
+  // DEV-ONLY: Observe media state length after normalize + setMedia
+  // (No logic changes; helps confirm we actually stored media data)
+  // -------------------------------------------------
   useEffect(() => {
-    if (!isConnected) return
-    if (!isConnectedInstagram) return
-    if (topPosts.length > 0) return
+    if (!__DEV__) return
+    console.log("[media] state:", { mediaLoaded, mediaLength: mediaLen })
+  }, [__DEV__, mediaLoaded, mediaLen])
 
-    fetch("/api/instagram/media?limit=25", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((json) => {
-        const items = Array.isArray(json?.data) ? json.data : []
-        setTopPosts(
-          items
-            .filter((m: any) => ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
-            .sort((a: any, b: any) => (Number(b?.like_count || 0) || 0) - (Number(a?.like_count || 0) || 0))
-            .slice(0, 3),
-        )
+  useEffect(() => {
+    const firstId = String((topPosts as any)?.[0]?.id ?? "")
+    const hasRealTopPosts = topPostsLen > 0 && /^\d+$/.test(firstId)
+
+    if (__DEV__) {
+      console.log("[top-posts][compute] enter", {
+        isConnected,
+        isConnectedInstagram,
+        mediaLen,
+        topPostsLen,
+        firstId,
+        hasRealTopPosts,
       })
-      .catch(() => {})
-  }, [isConnected, isConnectedInstagram, topPosts.length])
+    }
 
-  const displayUsername = hasRealProfile ? (typeof igMe?.username === "string" ? igMe.username.trim() : "") : ""
+    if (!isConnected) return
+    if (mediaLen === 0) return
+    if (hasRealTopPosts) return
+
+    // Use existing `media` state only (trigger-only fix).
+    // Keep the exact same computation logic.
+    const items = media
+    setTopPosts(
+      items
+        .filter((m: any) => ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
+        .sort(
+          (a: any, b: any) =>
+            (Number(b?.like_count || 0) || 0) + (Number(b?.comments_count || 0) || 0) -
+            ((Number(a?.like_count || 0) || 0) + (Number(a?.comments_count || 0) || 0))
+        )
+        .slice(0, 3),
+    )
+    if (__DEV__) console.log("[top-posts][compute] setTopPosts from media", { mediaLen })
+  }, [isConnected, isConnectedInstagram, topPostsLen, mediaLen])
+
+  const displayUsername = hasRealProfile
+    ? (typeof igProfile?.username === "string" ? String(igProfile.username).trim() : "")
+    : ""
 
   const displayName = (() => {
     if (allowDemoProfile) return mockAnalysis.profile.displayName
-    const raw = (igMe as any)?.name ?? (igMe as any)?.display_name ?? (igMe as any)?.displayName
+    const raw = igProfile?.name ?? igProfile?.display_name ?? igProfile?.displayName
     if (typeof raw === "string" && raw.trim()) return raw.trim()
     return displayUsername ? displayUsername : "—"
   })()
+
+  const numOrNull = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null
+
+  const finiteNumOrNull = (v: unknown): number | null => {
+    const n = typeof v === "number" ? v : Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+
+  const computedMetrics = (() => {
+    if (!isConnected) return null
+
+    const followers = finiteNumOrNull(igProfile?.followers_count)
+    if (followers === null || followers <= 0) {
+      return {
+        engagementRatePct: null as number | null,
+        avgLikes: null as number | null,
+        avgComments: null as number | null,
+        engagementVolume: null as number | null,
+        postsPerWeek: null as number | null,
+      }
+    }
+
+    if (!Array.isArray(media) || media.length === 0) {
+      return {
+        engagementRatePct: null as number | null,
+        avgLikes: null as number | null,
+        avgComments: null as number | null,
+        engagementVolume: null as number | null,
+        postsPerWeek: null as number | null,
+      }
+    }
+
+    const posts = media
+      .slice(0, 25)
+      .map((p) => {
+        const likes = finiteNumOrNull((p as any)?.like_count) ?? 0
+        const comments = finiteNumOrNull((p as any)?.comments_count) ?? 0
+        const timestamp = typeof (p as any)?.timestamp === "string" ? String((p as any).timestamp) : null
+        return { likes, comments, timestamp }
+      })
+
+    if (posts.length === 0) {
+      return {
+        engagementRatePct: null as number | null,
+        avgLikes: null as number | null,
+        avgComments: null as number | null,
+        engagementVolume: null as number | null,
+        postsPerWeek: null as number | null,
+      }
+    }
+
+    const avgLikes = posts.reduce((a, b) => a + b.likes, 0) / posts.length
+    const avgComments = posts.reduce((a, b) => a + b.comments, 0) / posts.length
+    const avgEngagement = avgLikes + avgComments
+    const engagementRatePct = (avgEngagement / followers) * 100
+
+    const engagementVolume = posts.reduce((a, b) => a + b.likes + b.comments, 0)
+
+    const now = Date.now()
+    const days7 = 7 * 24 * 60 * 60 * 1000
+    let postsPerWeek: number | null = 0
+    let hasValidTs = false
+    for (const p of posts) {
+      if (!p.timestamp) continue
+      const tms = new Date(p.timestamp).getTime()
+      if (Number.isNaN(tms)) continue
+      hasValidTs = true
+      if (now - tms <= days7) postsPerWeek += 1
+    }
+    if (!hasValidTs) postsPerWeek = null
+
+    return {
+      engagementRatePct: Number.isFinite(engagementRatePct) ? engagementRatePct : null,
+      avgLikes: Number.isFinite(avgLikes) ? avgLikes : null,
+      avgComments: Number.isFinite(avgComments) ? avgComments : null,
+      engagementVolume: Number.isFinite(engagementVolume) ? engagementVolume : null,
+      postsPerWeek,
+    }
+  })()
+
+  const formatPct2 = (n: number | null) => (n === null ? "—" : `${n.toFixed(2)}%`)
+  const formatInt = (n: number | null) => (n === null ? "—" : Math.round(n).toLocaleString())
+
+  const engagementRatePctFormatted = isConnected ? formatPct2(computedMetrics?.engagementRatePct ?? null) : "—"
+  const avgLikesFormatted = isConnected ? formatInt(computedMetrics?.avgLikes ?? null) : "—"
+  const avgCommentsFormatted = isConnected ? formatInt(computedMetrics?.avgComments ?? null) : "—"
 
   const displayHandle = (() => {
     if (allowDemoProfile) return `@${mockAnalysis.profile.username}`
     return displayUsername ? `@${displayUsername}` : "—"
   })()
 
-  const numOrNull = (v: unknown): number | null =>
-    typeof v === "number" && Number.isFinite(v) ? v : null
-
   const formatNum = (n: number | null) => (n === null ? "—" : n.toLocaleString())
 
   const isPreview = (n: number | null) => isConnected && n === null
 
-  const kpiFollowers = numOrNull((igMe as any)?.followers_count)
-  const kpiFollowing = numOrNull((igMe as any)?.follows_count ?? (igMe as any)?.following_count)
-  const kpiMediaCount = numOrNull((igMe as any)?.media_count)
+  const kpiFollowers = numOrNull(igProfile?.followers_count)
+  const kpiFollowing = numOrNull(igProfile?.follows_count ?? igProfile?.following_count)
+  const kpiMediaCount = numOrNull(igProfile?.media_count)
   const kpiPosts = kpiMediaCount
 
   const topPerformingPosts = (() => {
@@ -240,6 +653,7 @@ export default function ResultsPage() {
           const comments = Number(m?.comments_count || 0) || 0
           return {
             id: String(m?.id || ""),
+            media_type: typeof m?.media_type === "string" ? m.media_type : "",
             likes,
             comments,
             engagement: likes + comments,
@@ -255,34 +669,46 @@ export default function ResultsPage() {
       return items.slice(0, 3)
     }
 
+    if (isConnected) return []
     return mockAnalysis.topPosts.slice(0, 3).map((p) => ({ ...p, engagement: p.likes + p.comments }))
   })()
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+      if (!Array.isArray(topPerformingPosts) || topPerformingPosts.length === 0) return
+      const top3 = topPerformingPosts.slice(0, 3).map((p: any) => ({
+        id: p?.id ?? "",
+        media_type: p?.media_type ?? "",
+        thumbnail_url: p?.thumbnail_url ?? "",
+        media_url: p?.media_url ?? "",
+        permalink: getPostPermalink(p),
+        likes: p?.likes ?? null,
+        comments: p?.comments ?? null,
+        engagement: p?.engagement ?? null,
+        timestamp: p?.timestamp ?? "",
+      }))
+      window.localStorage.setItem(
+        "sa_top_posts_snapshot_v1",
+        JSON.stringify({
+          ts: Date.now(),
+          source: "results",
+          items: top3,
+        })
+      )
+
+      // Legacy compatibility: keep old key as plain array so older quick-pick builds still work
+      window.localStorage.setItem("sa_top_posts_v1", JSON.stringify(top3))
+    } catch {
+      // ignore
+    }
+  }, [topPerformingPosts])
 
   const clamp0to100 = (n: number) => Math.max(0, Math.min(100, n))
   const safePercent = (n: number | null) => (n === null ? 0 : clamp0to100(n))
   const formatPct = (n: number | null) => (n === null ? "—" : `${Math.round(n)}%`)
 
-  const engagementRate = (() => {
-    if (!isConnected) return null
-    if (kpiFollowers === null || kpiFollowers <= 0) return null
-    if (!Array.isArray(media) || media.length === 0) return null
-
-    const sample = media.slice(0, 12)
-    let total = 0
-    let count = 0
-
-    for (const m of sample) {
-      const likes = numOrNull((m as any)?.like_count)
-      const comments = numOrNull((m as any)?.comments_count)
-      if (likes === null && comments === null) continue
-      total += (likes ?? 0) + (comments ?? 0)
-      count += 1
-    }
-
-    if (count === 0) return null
-    const avg = total / count
-    return (avg / kpiFollowers) * 100
-  })()
+  const engagementRate = isConnected ? (computedMetrics?.engagementRatePct ?? null) : null
 
   const cadenceScore = (() => {
     if (!isConnected) return null
@@ -421,6 +847,15 @@ export default function ResultsPage() {
   }, [isConnected, searchParams, t])
 
   useEffect(() => {
+    // Prevent duplicate fetch across StrictMode remounts in dev
+    if (__resultsMeFetchedOnce) return
+
+    // Prevent duplicate fetch in same mount
+    if (hasFetchedMeRef.current) return
+
+    __resultsMeFetchedOnce = true
+    hasFetchedMeRef.current = true
+
     let cancelled = false
     const run = async () => {
       setIgMeLoading(true)
@@ -441,8 +876,31 @@ export default function ResultsPage() {
           return
         }
 
-        const data = (await r.json()) as IgMeResponse
-        setIgMe(data?.username ? data : null)
+        const data = (await r.json()) as any
+        const normalized: IgMeResponse | null = (() => {
+          if (data?.connected === true && data?.profile) {
+            const p = data.profile
+            return {
+              connected: true,
+              provider: data?.provider,
+              profile: p,
+              username: typeof p?.username === "string" ? p.username : undefined,
+              name: typeof p?.name === "string" ? p.name : undefined,
+              profile_picture_url: typeof p?.profile_picture_url === "string" ? p.profile_picture_url : undefined,
+              followers_count: typeof p?.followers_count === "number" ? p.followers_count : undefined,
+              follows_count: typeof p?.follows_count === "number" ? p.follows_count : undefined,
+              media_count: typeof p?.media_count === "number" ? p.media_count : undefined,
+            }
+          }
+
+          if (typeof data?.username === "string" && data.username.trim()) {
+            return data as IgMeResponse
+          }
+
+          return null
+        })()
+
+        setIgMe(normalized)
       } catch {
         if (!cancelled) setIgMe(null)
       } finally {
@@ -994,36 +1452,38 @@ export default function ResultsPage() {
       id: "engagementRate",
       titleKey: "results.kpis.engagementRate.title",
       descriptionKey: "results.kpis.engagementRate.description",
-      value: isConnected ? "—" : `${(mockAnalysis.metrics.engagementRate * 100).toFixed(1)}%`,
-      preview: isConnected,
+      value: isConnected ? engagementRatePctFormatted : `${(mockAnalysis.metrics.engagementRate * 100).toFixed(1)}%`,
+      preview: isConnected ? computedMetrics?.engagementRatePct === null : false,
     },
     {
       id: "avgLikes",
       titleKey: "results.kpis.avgLikes.title",
       descriptionKey: "results.kpis.avgLikes.description",
-      value: isConnected ? "—" : mockAnalysis.metrics.avgLikes.toLocaleString(),
-      preview: isConnected,
+      value: isConnected ? avgLikesFormatted : mockAnalysis.metrics.avgLikes.toLocaleString(),
+      preview: isConnected ? computedMetrics?.avgLikes === null : false,
     },
     {
       id: "avgComments",
       titleKey: "results.kpis.avgComments.title",
       descriptionKey: "results.kpis.avgComments.description",
-      value: isConnected ? "—" : mockAnalysis.metrics.avgComments.toLocaleString(),
-      preview: isConnected,
+      value: isConnected ? avgCommentsFormatted : mockAnalysis.metrics.avgComments.toLocaleString(),
+      preview: isConnected ? computedMetrics?.avgComments === null : false,
     },
     {
       id: "engagementVolume",
       titleKey: "results.kpis.engagementVolume.title",
       descriptionKey: "results.kpis.engagementVolume.description",
-      value: isConnected ? "—" : (mockAnalysis.metrics.avgLikes + mockAnalysis.metrics.avgComments).toLocaleString(),
-      preview: isConnected,
+      value: isConnected
+        ? formatNum(computedMetrics?.engagementVolume ?? null)
+        : (mockAnalysis.metrics.avgLikes + mockAnalysis.metrics.avgComments).toLocaleString(),
+      preview: isConnected ? computedMetrics?.engagementVolume === null : false,
     },
     {
       id: "postsPerWeek",
       titleKey: "results.kpis.postsPerWeek.title",
       descriptionKey: "results.kpis.postsPerWeek.description",
-      value: isConnected ? "—" : mockAnalysis.metrics.postsPerWeek.toFixed(1),
-      preview: isConnected,
+      value: isConnected ? formatNum(computedMetrics?.postsPerWeek ?? null) : mockAnalysis.metrics.postsPerWeek.toFixed(1),
+      preview: isConnected ? computedMetrics?.postsPerWeek === null : false,
     },
   ]
 
@@ -1268,11 +1728,11 @@ export default function ResultsPage() {
                 <div className="space-y-2">
                   <div className="text-sm text-slate-300">{t("results.overview.kicker")}</div>
                   <div className="flex items-center gap-4 min-w-0">
-                    {isConnected && igMe?.profile_picture_url ? (
+                    {isConnected && igProfile?.profile_picture_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={igMe.profile_picture_url}
-                        alt={`@${igMe.username}`}
+                        src={String(igProfile.profile_picture_url)}
+                        alt={`@${String(igProfile?.username ?? "")}`}
                         className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border border-white/10 object-cover shrink-0"
                         referrerPolicy="no-referrer"
                       />
@@ -1303,12 +1763,12 @@ export default function ResultsPage() {
                       <div className="mt-1 inline-flex items-center gap-2 text-sm text-slate-300 min-w-0">
                         <AtSign className="h-4 w-4 shrink-0 text-slate-400" />
                         <span className="truncate">
-                          {isConnected ? `@${igMe!.username}` : t("results.instagram.connectPromptHandle")}
+                          {isConnected ? `@${String(igProfile?.username ?? "")}` : t("results.instagram.connectPromptHandle")}
                         </span>
                       </div>
-                      {isConnected && typeof igMe?.followers_count === "number" && (
+                      {isConnected && typeof igProfile?.followers_count === "number" && (
                         <div className="mt-1 text-sm text-slate-300">
-                          {t("results.instagram.followersLabel")}: {igMe.followers_count.toLocaleString()}
+                          {t("results.instagram.followersLabel")}: {Number(igProfile.followers_count).toLocaleString()}
                         </div>
                       )}
                     </div>
@@ -2011,10 +2471,10 @@ export default function ResultsPage() {
               <CardContent className="p-6">
                 <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {igMe?.profile_picture_url ? (
+                    {igProfile?.profile_picture_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={igMe.profile_picture_url}
+                        src={String(igProfile.profile_picture_url)}
                         alt={displayHandle}
                         className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-white/10 object-cover shrink-0"
                         referrerPolicy="no-referrer"
@@ -2030,15 +2490,38 @@ export default function ResultsPage() {
                       <div className="text-sm text-slate-300 truncate">
                         {displayHandle}
                       </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <div className="flex min-w-0 items-baseline gap-1">
+                          <span className="whitespace-nowrap">Followers</span>
+                          <span className="min-w-0 truncate font-medium tabular-nums text-foreground whitespace-nowrap">
+                            {formatCompact(followersCount)}
+                          </span>
+                        </div>
+                        <span className="text-muted-foreground/60">·</span>
+                        <div className="flex min-w-0 items-baseline gap-1">
+                          <span className="whitespace-nowrap">Following</span>
+                          <span className="min-w-0 truncate font-medium tabular-nums text-foreground whitespace-nowrap">
+                            {formatCompact(followsCount)}
+                          </span>
+                        </div>
+                        <span className="text-muted-foreground/60">·</span>
+                        <div className="flex min-w-0 items-baseline gap-1">
+                          <span className="whitespace-nowrap">Posts</span>
+                          <span className="min-w-0 truncate font-medium tabular-nums text-foreground whitespace-nowrap">
+                            {formatCompact(mediaCount)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 items-center justify-center">
                     <div className="grid grid-cols-3 gap-4 xl:gap-6 md:min-w-[360px] text-center">
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
-                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          <span>{formatNum(followers)}</span>
+                        <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? "粉絲數" : t("results.instagram.followersLabel")}</div>
+                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
+                          <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
                           {isPreview(kpiFollowers) && (
                             <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                               預覽
@@ -2048,8 +2531,8 @@ export default function ResultsPage() {
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
-                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          <span>{formatNum(following)}</span>
+                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
+                          <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
                           {isPreview(kpiFollowing) && (
                             <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                               預覽
@@ -2059,8 +2542,8 @@ export default function ResultsPage() {
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
-                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          <span>{formatNum(posts)}</span>
+                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
+                          <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
                           {isPreview(kpiPosts) && (
                             <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                               預覽
@@ -2074,9 +2557,9 @@ export default function ResultsPage() {
                   <div className="w-full md:w-auto lg:hidden md:flex-[1.2] md:flex md:justify-center">
                     <div className="grid grid-cols-3 gap-4 md:gap-6 md:min-w-[360px] text-center">
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{t("results.instagram.followersLabel")}</div>
-                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          <span>{formatNum(followers)}</span>
+                        <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? "粉絲數" : t("results.instagram.followersLabel")}</div>
+                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
+                          <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
                           {isPreview(kpiFollowers) && (
                             <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                               預覽
@@ -2086,8 +2569,8 @@ export default function ResultsPage() {
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
-                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          <span>{formatNum(following)}</span>
+                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
+                          <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
                           {isPreview(kpiFollowing) && (
                             <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                               預覽
@@ -2097,8 +2580,8 @@ export default function ResultsPage() {
                       </div>
                       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                         <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
-                        <div className="mt-1 text-2xl font-semibold text-white leading-none">
-                          <span>{formatNum(posts)}</span>
+                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
+                          <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
                           {isPreview(kpiPosts) && (
                             <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                               預覽
@@ -2132,18 +2615,22 @@ export default function ResultsPage() {
                 <div className="text-[11px] text-muted-foreground">{t("results.proHint.rings")}</div>
               </div>
 
-              <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {(() => {
                   const ring1Val = isConnected
                     ? engagementRate
                     : numOrNull(Math.round((mockAnalysis.metrics.engagementRate ?? 0) * 100))
 
                   const ring2Val = isConnected
-                    ? cadenceScore
+                    ? computedMetrics?.avgLikes === null
+                      ? null
+                      : numOrNull(Math.min(100, Math.round(((computedMetrics?.avgLikes ?? 0) / 1000) * 100)))
                     : numOrNull(Math.min(100, Math.round(((mockAnalysis.metrics.avgLikes ?? 0) / 1000) * 100)))
 
                   const ring3Val = isConnected
-                    ? topPerformanceScore
+                    ? computedMetrics?.avgComments === null
+                      ? null
+                      : numOrNull(Math.min(100, Math.round(((computedMetrics?.avgComments ?? 0) / 100) * 100)))
                     : numOrNull(Math.min(100, Math.round(((mockAnalysis.metrics.avgComments ?? 0) / 100) * 100)))
 
                   const previewBadge = (
@@ -2157,10 +2644,13 @@ export default function ResultsPage() {
                       <ProgressRing
                         value={safePercent(ring1Val)}
                         label={t("results.rings.engagementRate.label")}
+                        centerText={isConnected ? engagementRatePctFormatted : undefined}
                         subLabel={
                           isConnected ? (
                             <>
-                              {formatPct(ring1Val)}
+                              {computedMetrics?.engagementRatePct === null
+                                ? "—"
+                                : formatPct2(computedMetrics?.engagementRatePct ?? null)}
                               {isPreview(ring1Val) ? previewBadge : null}
                             </>
                           ) : (
@@ -2170,11 +2660,12 @@ export default function ResultsPage() {
                       />
                       <ProgressRing
                         value={safePercent(ring2Val)}
-                        label={t("results.rings.likeStrength.label")}
+                        label={uiCopy.avgLikesLabel}
+                        centerText={isConnected ? avgLikesFormatted : undefined}
                         subLabel={
                           isConnected ? (
                             <>
-                              {formatPct(ring2Val)}
+                              {uiCopy.perPostLast25}
                               {isPreview(ring2Val) ? previewBadge : null}
                             </>
                           ) : (
@@ -2184,11 +2675,12 @@ export default function ResultsPage() {
                       />
                       <ProgressRing
                         value={safePercent(ring3Val)}
-                        label={t("results.rings.commentStrength.label")}
+                        label={uiCopy.avgCommentsLabel}
+                        centerText={isConnected ? avgCommentsFormatted : undefined}
                         subLabel={
                           isConnected ? (
                             <>
-                              {formatPct(ring3Val)}
+                              {uiCopy.perPostLast25}
                               {isPreview(ring3Val) ? previewBadge : null}
                             </>
                           ) : (
@@ -2259,22 +2751,24 @@ export default function ResultsPage() {
                         </div>
                       </div>
 
-                      <div className="mt-1 text-2xl font-semibold text-white">
-                        <span>{kpi.value}</span>
+                      <div className="mt-1 text-[clamp(18px,5vw,32px)] sm:text-2xl font-semibold text-white min-w-0">
+                        <span className="tabular-nums whitespace-nowrap">{kpi.value}</span>
                         {kpi.preview ? (
                           <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
                             預覽
                           </span>
                         ) : null}
                       </div>
-                      <div className="mt-1 text-xs text-white/75">{t(kpi.descriptionKey)}</div>
+                      <div className="mt-1 text-[11px] sm:text-xs text-white/75 leading-tight line-clamp-2">{t(kpi.descriptionKey)}</div>
                       {safeT(`results.kpi.consequence.${kpi.id}`) ? (
-                        <div className="mt-1 text-xs text-white/45">
+                        <div className="mt-1 text-[11px] sm:text-xs text-white/45 leading-tight line-clamp-2">
                           {safeT(`results.kpi.consequence.${kpi.id}`)}
                         </div>
                       ) : null}
 
-                      {evalNote ? <div className="mt-2 text-xs text-muted-foreground">{evalNote}</div> : null}
+                      {evalNote ? (
+                        <div className="mt-2 text-[11px] sm:text-xs text-muted-foreground leading-tight line-clamp-3">{evalNote}</div>
+                      ) : null}
 
                       {isSelected ? (
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -2429,64 +2923,213 @@ export default function ResultsPage() {
             <Card id="top-posts-section" className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40">
               <CardHeader className="pb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <CardTitle className="text-base text-white">{t("results.topPosts.title")}</CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <CardTitle className="text-base text-white truncate">{t("results.topPosts.title")}</CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground leading-tight line-clamp-2">
                     {t("results.topPosts.description")}
                   </p>
+                  <p className="mt-1 text-xs text-muted-foreground leading-tight line-clamp-1">{uiCopy.topPostsSortHint}</p>
                 </div>
 
-                <Button
-                  type="button"
-                  onClick={() => {
-                    router.push(`/${activeLocale}/post-analysis`)
-                  }}
-                  className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10"
-                >
-                  {activeLocale === "zh-TW" ? "分析貼文" : "Analyze Posts"}
-                </Button>
+                <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      router.push(`/${activeLocale}/post-analysis`)
+                    }}
+                    className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10 w-full sm:w-auto shrink-0"
+                  >
+                    {activeLocale === "zh-TW" ? "前往貼文分析" : "Analyze Posts"}
+                  </Button>
+
+                  {!isPro ? (
+                    <span
+                      className="min-w-0 text-xs text-muted-foreground tabular-nums overflow-hidden text-ellipsis whitespace-nowrap sm:max-w-[220px]"
+                      title={
+                        activeLocale === "zh-TW"
+                          ? `免費剩餘 ${freePostRemaining} / ${freePostLimit}`
+                          : `Free left ${freePostRemaining} / ${freePostLimit}`
+                      }
+                    >
+                      {activeLocale === "zh-TW" ? "免費剩餘 " : "Free left "}
+                      <span className="font-medium tabular-nums">{freePostRemaining}</span> / {freePostLimit}
+                    </span>
+                  ) : null}
+                </div>
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {mockAnalysis.topPosts.slice(0, 3).map((p, index) => (
-                    <div key={p.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <div className="text-xs text-slate-400">{t("results.topPosts.card.likesLabel")}</div>
-                          <div className="mt-1 text-lg font-semibold text-white">
-                            {(topPerformingPosts[index]?.likes ?? p.likes).toLocaleString()}
+                  {(isConnected
+                    ? (topPerformingPosts.length > 0
+                        ? topPerformingPosts
+                        : Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` })))
+                    : mockAnalysis.topPosts.slice(0, 3)
+                  ).map((p: any, index: number) => (
+                    <div key={String(p?.id ?? index)} className="rounded-xl border border-white/10 bg-white/5 p-4 min-w-0">
+                      {(() => {
+                        const real = topPerformingPosts[index] as any
+
+                        const likes = typeof real?.likes === "number" ? real.likes : !isConnected ? Number(p?.likes ?? 0) : null
+                        const comments =
+                          typeof real?.comments === "number" ? real.comments : !isConnected ? Number(p?.comments ?? 0) : null
+                        const engagement =
+                          typeof real?.engagement === "number"
+                            ? real.engagement
+                            : !isConnected
+                              ? Number((p?.likes ?? 0) + (p?.comments ?? 0))
+                              : null
+
+                        const mediaType = typeof real?.media_type === "string" && real.media_type ? real.media_type : ""
+
+                        const ymd = (() => {
+                          const ts = typeof real?.timestamp === "string" ? real.timestamp : ""
+                          if (!ts) return "—"
+                          const d = new Date(ts)
+                          const tms = d.getTime()
+                          if (Number.isNaN(tms)) return "—"
+                          const y = d.getFullYear()
+                          const m = String(d.getMonth() + 1).padStart(2, "0")
+                          const day = String(d.getDate()).padStart(2, "0")
+                          return `${y}/${m}/${day}`
+                        })()
+
+                        const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
+                        const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
+
+                        const thumbSrc = (() => {
+                          const thumb = typeof real?.thumbnail_url === "string" && real.thumbnail_url ? real.thumbnail_url : ""
+                          if (thumb) return thumb
+
+                          // Only IMAGE/CAROUSEL should use media_url as an <img> source.
+                          // VIDEO/REELS media_url is often an mp4, which will break <img> and fall back to placeholder.
+                          const mu = typeof real?.media_url === "string" && real.media_url ? real.media_url : ""
+                          if (!mu) return ""
+                          if (mediaType === "IMAGE" || mediaType === "CAROUSEL_ALBUM") return mu
+                          return ""
+                        })()
+
+                        if (process.env.NODE_ENV !== "production" && !thumbSrc) {
+                          console.log("[top posts] missing thumbnail", {
+                            id: real?.id,
+                            media_type: real?.media_type,
+                            has_thumbnail_url: Boolean(real?.thumbnail_url),
+                            has_media_url: Boolean(real?.media_url),
+                          })
+                        }
+
+                        const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
+                        const videoLabel = mediaType === "REELS" ? "REELS" : "VIDEO"
+                        const analyzeHref = permalink
+                          ? `/${activeLocale}/post-analysis?url=${encodeURIComponent(permalink)}`
+                          : `/${activeLocale}/post-analysis`
+
+                        return (
+                          <div className="flex gap-3 min-w-0">
+                            <div className="h-16 w-16 sm:h-20 sm:w-20 shrink-0">
+                              <div className="relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
+                                <div className="absolute inset-0 bg-white/10" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
+                                    {mediaType ? mediaType : "POST"}
+                                  </span>
+                                </div>
+                                {thumbSrc ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={thumbSrc}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      // hide broken image to reveal placeholder underneath
+                                      e.currentTarget.style.display = "none"
+                                    }}
+                                  />
+                                ) : null}
+
+                                {isVideo ? (
+                                  <div className="absolute left-2 top-2 sm:hidden max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium leading-none text-white" title={videoLabel}>
+                                    <span className="truncate">{videoLabel}</span>
+                                  </div>
+                                ) : null}
+
+                                {isVideo ? (
+                                  <div className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center bg-black/0 opacity-0 group-hover:opacity-100 group-hover:bg-black/30 transition">
+                                    <div className="max-w-[90%] overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-2 rounded-full bg-black/70 px-3 py-1 text-[11px] sm:text-xs font-medium leading-none text-white" title={videoLabel}>
+                                      <span className="shrink-0">▶</span>
+                                      <span className="truncate">{videoLabel}</span>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2 min-w-0">
+                                <div className="min-w-0">
+                                  <div className="text-xs text-muted-foreground leading-tight truncate min-w-0">
+                                    <span className="whitespace-nowrap">{mediaType}</span>
+                                    <span className="mx-1">·</span>
+                                    <span className="tabular-nums whitespace-nowrap">{ymd}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <a
+                                    href={analyzeHref}
+                                    className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 whitespace-nowrap"
+                                    title={activeLocale === "zh-TW" ? "分析貼文" : "Analyze"}
+                                  >
+                                    {activeLocale === "zh-TW" ? "分析" : "Analyze"}
+                                  </a>
+                                </div>
+                              </div>
+
+                              {caption ? (
+                                <div className="mt-1 text-xs text-slate-200/85 leading-tight line-clamp-2 min-w-0">
+                                  {caption}
+                                </div>
+                              ) : null}
+
+                              <div className="mt-3 grid grid-cols-3 gap-3 min-w-0">
+                                <div className="min-w-0">
+                                  <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.likesLabel")}</div>
+                                  <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
+                                    <span className="tabular-nums whitespace-nowrap">
+                                      {typeof likes === "number" && Number.isFinite(likes) ? Math.round(likes).toLocaleString() : "—"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.commentsLabel")}</div>
+                                  <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
+                                    <span className="tabular-nums whitespace-nowrap">
+                                      {typeof comments === "number" && Number.isFinite(comments)
+                                        ? Math.round(comments).toLocaleString()
+                                        : "—"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.engagementLabel")}</div>
+                                  <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
+                                    <span className="tabular-nums whitespace-nowrap">
+                                      {typeof engagement === "number" && Number.isFinite(engagement)
+                                        ? Math.round(engagement).toLocaleString()
+                                        : "—"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 text-xs text-muted-foreground leading-tight line-clamp-2">
+                                {t("results.topPosts.card.proHintFull")}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-
-                        <div>
-                          <div className="text-xs text-slate-400">{t("results.topPosts.card.commentsLabel")}</div>
-                          <div className="mt-1 text-lg font-semibold text-white">
-                            {(topPerformingPosts[index]?.comments ?? p.comments).toLocaleString()}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-xs text-slate-400">{t("results.topPosts.card.engagementLabel")}</div>
-                          <div className="mt-1 text-lg font-semibold text-white">
-                            {(topPerformingPosts[index]?.engagement ?? (p.likes + p.comments)).toLocaleString()}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        {t("results.topPosts.card.proHintFull")}
-                      </div>
-
-                      <div className="mt-4 text-sm text-muted-foreground">
-                        {t("results.topPosts.card.proHint")}
-                      </div>
-
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {media[index]
-                          ? `Post ID: ${media[index].id} · ${new Date(
-                              media[index].timestamp
-                            ).toLocaleDateString()}`
-                          : t("results.topPosts.card.metadataFallback")}
-                      </div>
+                        )
+                      })()}
                     </div>
                   ))}
                 </div>

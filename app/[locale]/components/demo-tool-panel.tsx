@@ -1,12 +1,10 @@
 "use client"
 
-import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import { Camera, MessageCircle } from "lucide-react"
 
-type Provider = "instagram" | "threads"
+type Provider = "instagram"
 
 type Props = {
   activeLocale: string
@@ -15,11 +13,11 @@ type Props = {
 
 export default function DemoToolPanel({ activeLocale, connectedProvider }: Props) {
   const router = useRouter()
-  const [provider, setProvider] = useState<Provider>("instagram")
 
-  const isConnected = useMemo(() => {
-    return !!connectedProvider && connectedProvider === provider
-  }, [connectedProvider, provider])
+  // NOTE: Threads is not supported (API not complete). Lock provider to Instagram only.
+  const provider: Provider = "instagram"
+
+  const isConnected = !!connectedProvider && connectedProvider === provider
 
   const oauthBase = `/api/auth/instagram?provider=${provider}`
 
@@ -49,56 +47,16 @@ export default function DemoToolPanel({ activeLocale, connectedProvider }: Props
   return (
     <section className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="text-xs font-semibold tracking-widest text-white/60">DEMO TOOL</div>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight">Instagram 與 Threads 帳號分析器</h2>
-          <p className="mt-2 text-sm text-white/70">示範用模擬工具：不會存取任何 Instagram / Threads 真實資料。</p>
-        </div>
-
-        <div className="text-xs text-white/60">
-          {connectedProvider === "instagram"
-            ? "已連結 Instagram"
-            : connectedProvider === "threads"
-            ? "已連結 Threads"
-            : "未連結（點分析會先驗證）"}
+          <div className="mt-2 flex items-start justify-between gap-3 min-w-0">
+            <h2 className="text-2xl font-bold tracking-tight min-w-0 truncate leading-tight">Instagram 帳號分析器</h2>
+          </div>
         </div>
       </div>
 
       {/* provider tabs */}
-      <div className="mt-5 flex gap-2">
-        <Button
-          type="button"
-          onClick={() => setProvider("instagram")}
-          variant="pill"
-          size="pill"
-          active={provider === "instagram"}
-          platform="instagram"
-          className={
-            provider === "instagram"
-              ? "bg-black/60 text-white border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:bg-black/65"
-              : "bg-black/25 text-white/60 border border-white/10 hover:bg-black/30"
-          }
-        >
-          <Camera className="h-4 w-4 opacity-80" />
-          Instagram
-        </Button>
-        <Button
-          type="button"
-          onClick={() => setProvider("threads")}
-          variant="pill"
-          size="pill"
-          active={provider === "threads"}
-          platform="threads"
-          className={
-            provider === "threads"
-              ? "bg-black/60 text-white border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:bg-black/65"
-              : "bg-black/25 text-white/60 border border-white/10 hover:bg-black/30"
-          }
-        >
-          <MessageCircle className="h-4 w-4 opacity-80" />
-          Threads
-        </Button>
-      </div>
+      {/* Platform pills removed (Instagram / Threads) */}
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Button
