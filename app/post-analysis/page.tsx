@@ -8,6 +8,37 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Input } from "../../components/ui/input"
 import { Lock } from "lucide-react"
 
+const isValidPostUrl = (s: string) => /instagram\.com|threads\.net/i.test((s || "").trim())
+
+function coerceToUrlLike(raw: string) {
+  const s = (raw || "").trim()
+  if (!s) return s
+  if (/^(instagram\.com|www\.instagram\.com|m\.instagram\.com|threads\.net|www\.threads\.net)/i.test(s)) {
+    return `https://${s}`
+  }
+  return s
+}
+
+function normalizePermalink(raw: string) {
+  const s0 = coerceToUrlLike(raw)
+  try {
+    const u = new URL(s0)
+    const host = u.hostname.toLowerCase()
+    if (host === "instagram.com" || host === "m.instagram.com") {
+      u.hostname = "www.instagram.com"
+    }
+    if (host === "threads.net") {
+      u.hostname = "www.threads.net"
+    }
+    u.search = ""
+    u.hash = ""
+    if (!u.pathname.endsWith("/")) u.pathname += "/"
+    return u.toString()
+  } catch {
+    return (raw || "").trim()
+  }
+}
+
 const SA_PA_CACHE_TTL = 10 * 60_000
 const SA_PA_CACHE_KEY = (url: string) => `sa_cache_post_analysis_v1:${encodeURIComponent(url)}`
 
@@ -53,7 +84,16 @@ async function saFetchWithRetry(input: RequestInfo | URL, init?: RequestInit) {
     try {
       const res = await fetch(input, init)
       if (res.status === 401 || res.status === 403) return res
-      if (!res.ok) throw new Error(`http_${res.status}`)
+      if (!res.ok) {
+        const e: any = new Error(`http_${res.status}`)
+        e.status = res.status
+        try {
+          e.body = await res.text()
+        } catch {
+          // ignore
+        }
+        throw e
+      }
       return res
     } catch (e) {
       lastErr = e
@@ -113,6 +153,7 @@ export default function PostAnalysisPage() {
   const [isConnected, setIsConnected] = useState(false)
   const [summaryMode, setSummaryMode] = useState<"short" | "detailed">("short")
   const [toast, setToast] = useState<string | null>(null)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [copyToast, setCopyToast] = useState<null | { ts: number; msg: string }>(null)
   const [headerCopied, setHeaderCopied] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
@@ -126,6 +167,17 @@ export default function PostAnalysisPage() {
   const [quickTop3, setQuickTop3] = useState<any[]>([])
   const [quickTop3Ts, setQuickTop3Ts] = useState<number | null>(null)
   const [quickPickStatus, setQuickPickStatus] = useState<"loading" | "ready" | "empty">("loading")
+
+  const resolveNumericShortcut = (raw: string) => {
+    const s = (raw || "").trim()
+    if (!/^\d+$/.test(s)) return null
+    const n = Number(s)
+    if (!Number.isFinite(n)) return null
+    if (n < 1 || n > 3) return null
+    const picked = quickTop3?.[n - 1]
+    const link = typeof picked?.permalink === "string" ? picked.permalink.trim() : ""
+    return link || null
+  }
 
   const quickPickThumbSrc = useMemo(() => {
     const url = typeof postUrl === "string" ? postUrl.trim() : ""
@@ -153,13 +205,18 @@ export default function PostAnalysisPage() {
   const urlSectionRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const toastTimerRef = useRef<number | null>(null)
+  const imgErrorLoggedRef = useRef<Record<string, boolean>>({})
 
   const freeRemaining = Math.max(0, FREE_LIMIT - freeUsed)
-  const isDev = process.env.NODE_ENV === "development"
-  const bypass =
-    isDev ||
-    searchParams.get("debug") === "1" ||
-    searchParams.get("bypass") === "1"
+
+  const devBypass = useMemo(() => {
+    if (process.env.NODE_ENV !== "production") return true
+    if (typeof window === "undefined") return false
+    const host = window.location.hostname || ""
+    if (host.includes("localhost") || host.includes("trycloudflare.com")) return true
+    const sp = new URLSearchParams(window.location.search)
+    return sp.get("debug") === "1" || sp.get("bypass") === "1"
+  }, [])
 
   const formatCount = (template: string, params: { count: number; limit: number }) => {
     return template
@@ -236,16 +293,38 @@ export default function PostAnalysisPage() {
   const guardAnalyze = () => {
     if (isAnalyzing) return
     if (!canAnalyze) return
-    if (freeRemaining <= 0) {
-      if (bypass) {
-        handleAnalyze()
-        return
-      }
+
+    setAnalyzeError(null)
+
+    const base = normalizePermalink((postUrl || "").trim())
+    const picked = resolveNumericShortcut(base)
+    const url = normalizePermalink((picked || base).trim())
+
+    if (picked) {
+      setPostUrl(url)
+      requestAnimationFrame(() => {
+        urlSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+      window.setTimeout(() => inputRef.current?.focus?.(), 0)
+    }
+
+    if (!isValidPostUrl(url)) {
+      requestAnimationFrame(() => {
+        urlSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+      window.setTimeout(() => inputRef.current?.focus?.(), 0)
+      return
+    }
+
+    // Also update input so user sees the cleaned canonical link.
+    setPostUrl(url)
+
+    if (freeRemaining <= 0 && !devBypass) {
       goPricingFreeLimit()
       return
     }
-    consumeFreeOnce()
-    handleAnalyze()
+    if (!devBypass) consumeFreeOnce()
+    void handleAnalyze(url)
   }
 
   useEffect(() => {
@@ -283,6 +362,7 @@ export default function PostAnalysisPage() {
         const p = typeof prev === "string" ? prev.trim() : ""
         const next = String(urlFromQuery).trim()
         if (!next) return prev
+        if (!isValidPostUrl(next)) return prev
         if (!p) return next
         if (p !== next) return next
         return prev
@@ -356,7 +436,7 @@ export default function PostAnalysisPage() {
   const looksLikeSupportedUrl = useMemo(() => {
     const u = postUrl.toLowerCase().trim()
     if (!u) return true
-    return u.includes("instagram.com")
+    return isValidPostUrl(u)
   }, [postUrl])
 
   const inferredMetrics: InferredMetric[] = useMemo(
@@ -566,10 +646,16 @@ export default function PostAnalysisPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postUrl])
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async (forcedUrl?: string) => {
     if (!canAnalyze || isAnalyzing) return
 
-    const url = postUrl.trim()
+    setAnalyzeError(null)
+
+    const url = normalizePermalink(String(forcedUrl ?? postUrl).trim())
+
+    // guardAnalyze already validates; keep a minimal safety check.
+    if (!isValidPostUrl(url)) return
+
     setIsAnalyzing(true)
 
     // SWR: try cache first (seconds-fast), then revalidate in background.
@@ -586,41 +672,37 @@ export default function PostAnalysisPage() {
       setAnalysisResult(cachedResult)
     }
 
-    ;(async () => {
-      try {
-        const res = await saFetchWithRetry("/api/post-analysis", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ url }),
-        })
+    try {
+      const res = await saFetchWithRetry("/api/post-analysis", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      })
 
-        if (!res.ok) {
-          setIsAnalyzing(false)
-          return
-        }
+      if (!res.ok) return
 
-        const data = await res.json()
-        const match =
-          data &&
-          typeof data === "object" &&
-          typeof data?.permalink === "string" &&
-          data.permalink.trim() === url
+      const data = await res.json()
+      const match =
+        data &&
+        typeof data === "object" &&
+        typeof data?.permalink === "string" &&
+        data.permalink.trim() === url
 
-        if (match) {
-          setHasAnalysis(true)
-          setAnalysisResult(data)
-          saWritePACache(url, { hasAnalysis: true, analysisResult: data })
-        }
-
-        setIsAnalyzing(false)
-
-        requestAnimationFrame(() => {
-          resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-        })
-      } catch {
-        setIsAnalyzing(false)
+      if (match) {
+        setHasAnalysis(true)
+        setAnalysisResult(data)
+        saWritePACache(url, { hasAnalysis: true, analysisResult: data })
       }
-    })()
+
+      requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+    } catch (e: any) {
+      const status = e?.status ? ` (HTTP ${e.status})` : ""
+      setAnalyzeError(`分析失敗${status}。請確認連結可公開開啟，或稍後再試。`)
+    } finally {
+      setIsAnalyzing(false)
+    }
   }
 
   const showToast = (message: string) => {
@@ -666,7 +748,15 @@ export default function PostAnalysisPage() {
 
   const handleBackToResults = () => {
     const qs = typeof window !== "undefined" ? window.location.search : ""
-    router.push(`/${locale}/results${qs || ""}`)
+    const ts = Date.now()
+    const hasQ = typeof qs === "string" && qs.length > 0
+    const sep = hasQ ? (qs.includes("?") ? "&" : "?") : "?"
+    const url = `/${locale}/results${qs || ""}${sep}r=${ts}`
+    if (typeof window !== "undefined") {
+      window.location.assign(url)
+      return
+    }
+    router.push(url)
   }
 
   const handleHeaderCopySummary = async () => {
@@ -747,7 +837,7 @@ export default function PostAnalysisPage() {
                 className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_8px_24px_rgba(168,85,247,0.35)] hover:brightness-110 active:translate-y-[1px] transition"
                 onClick={handleBackToResults}
               >
-                分析你的帳號
+                {typeof locale === "string" && locale.startsWith("zh") ? "分析你的帳號" : "Analyze your account"}
               </Button>
               <Button
                 size="sm"
@@ -798,12 +888,23 @@ export default function PostAnalysisPage() {
                     ref={inputRef}
                     value={postUrl}
                     onChange={(e) => setPostUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        guardAnalyze()
+                      }
+                    }}
+                    inputMode="url"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     placeholder={t("post.input.placeholder")}
                     className="min-w-0 truncate bg-white/5 border-white/10 text-slate-200 placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
                   />
                   <div className="w-full md:w-[168px] flex flex-col gap-1 min-w-0">
                     <div className="text-xs text-white/70 leading-relaxed min-w-0">
-                      {bypass && freeRemaining <= 0 ? (
+                      {devBypass && freeRemaining <= 0 ? (
                         <div className="text-xs text-white/60 leading-relaxed">
                           {t("post.devBypass")}
                         </div>
@@ -830,7 +931,7 @@ export default function PostAnalysisPage() {
                             <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                             {t("post.input.analyzing")}
                           </span>
-                        ) : freeRemaining <= 0 ? (
+                        ) : freeRemaining <= 0 && !devBypass ? (
                           t("post.ctaUpgrade")
                         ) : (
                           t("post.ctaAnalyze")
@@ -906,6 +1007,17 @@ export default function PostAnalysisPage() {
                                   decoding="async"
                                   referrerPolicy="no-referrer"
                                   onError={(e) => {
+                                    if (process.env.NODE_ENV !== "production") {
+                                      const key = `${String(p?.id ?? idx)}|${thumb}`
+                                      if (!imgErrorLoggedRef.current[key]) {
+                                        imgErrorLoggedRef.current[key] = true
+                                        console.log("[post-analysis][quickpick][img error]", {
+                                          src: thumb,
+                                          id: p?.id,
+                                          media_type: p?.media_type,
+                                        })
+                                      }
+                                    }
                                     ;(e.currentTarget as HTMLImageElement).style.display = "none"
                                   }}
                                 />
@@ -1021,6 +1133,13 @@ export default function PostAnalysisPage() {
                       </p>
                     </div>
                   </div>
+
+                  {analyzeError ? (
+                    <div className="mt-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
+                      {analyzeError}
+                    </div>
+                  ) : null}
+
                   <div className={subtleDivider} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-pulse">
                     <div className="rounded-xl border border-white/10 bg-white/5 p-5">
@@ -1066,6 +1185,13 @@ export default function PostAnalysisPage() {
                       </a>
                     </div>
                   </div>
+
+                  {analyzeError ? (
+                    <div className="mt-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
+                      {analyzeError}
+                    </div>
+                  ) : null}
+
                   <div className={subtleDivider} />
                   <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
                     <div className="w-full max-w-[260px]">
@@ -1081,6 +1207,17 @@ export default function PostAnalysisPage() {
                             decoding="async"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
+                              if (process.env.NODE_ENV !== "production") {
+                                const key = `preview|${previewThumbSrc}`
+                                if (!imgErrorLoggedRef.current[key]) {
+                                  imgErrorLoggedRef.current[key] = true
+                                  console.log("[post-analysis][preview][img error]", {
+                                    src: previewThumbSrc,
+                                    id: (analysisResult as any)?.id,
+                                    media_type: (analysisResult as any)?.media_type,
+                                  })
+                                }
+                              }
                               ;(e.currentTarget as HTMLImageElement).style.display = "none"
                             }}
                           />

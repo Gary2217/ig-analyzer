@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
@@ -154,6 +154,7 @@ export default function ResultsPage() {
   const router = useRouter()
   const pathname = usePathname() || "/"
   const searchParams = useSearchParams()
+  const r = searchParams?.get("r") || ""
   const { t } = useI18n()
 
   const getPostPermalink = (post: any): string => {
@@ -414,6 +415,9 @@ export default function ResultsPage() {
   const hasFetchedMediaRef = useRef(false)
   const hasFetchedMeRef = useRef(false)
 
+  const [forceReloadTick, setForceReloadTick] = useState(0)
+  const lastRevalidateAtRef = useRef(0)
+
   const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
   const isZh = activeLocale === "zh-TW"
 
@@ -434,6 +438,42 @@ export default function ResultsPage() {
   const allowDemoProfile = !hasConnectedFlag && !hasRealProfile && !igMeLoading
 
   const recentPosts = isConnectedInstagram && topPosts.length > 0 ? topPosts : igMe?.recent_media
+
+  const needsDataRefetch = useMemo(() => {
+    const hasProfile = Boolean(igProfile && (igProfile?.id || igProfile?.username))
+    const hasMedia = Array.isArray(media) && media.length > 0
+    const hasTopPosts = Array.isArray(topPosts) && topPosts.length > 0
+    return !hasProfile || !hasMedia || !hasTopPosts
+  }, [igProfile, media, topPosts])
+
+  useEffect(() => {
+    if (!isConnected) return
+    if (!needsDataRefetch) return
+
+    const now = Date.now()
+    if (now - lastRevalidateAtRef.current < 2500) return
+    lastRevalidateAtRef.current = now
+
+    setForceReloadTick((x) => x + 1)
+    router.refresh()
+  }, [isConnected, needsDataRefetch, pathname, router])
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return
+      if (!isConnected) return
+      if (!needsDataRefetch) return
+
+      const now = Date.now()
+      if (now - lastRevalidateAtRef.current < 2500) return
+      lastRevalidateAtRef.current = now
+
+      setForceReloadTick((x) => x + 1)
+    }
+
+    document.addEventListener("visibilitychange", onVis)
+    return () => document.removeEventListener("visibilitychange", onVis)
+  }, [isConnected, needsDataRefetch])
 
   // -------------------------------------------------
   // DEV-ONLY: Verify Top Posts data source decision
@@ -461,13 +501,15 @@ export default function ResultsPage() {
   useEffect(() => {
     if (!isConnected) return
 
-    // Prevent duplicate fetch across StrictMode remounts in dev
-    if (__resultsMediaFetchedOnce) return
+    if (forceReloadTick === 0) {
+      // Prevent duplicate fetch across StrictMode remounts in dev
+      if (__resultsMediaFetchedOnce) return
 
-    // Prevent duplicate fetch (StrictMode / re-render)
-    if (hasFetchedMediaRef.current) return
+      // Prevent duplicate fetch (StrictMode / re-render)
+      if (hasFetchedMediaRef.current) return
 
-    if (mediaLoaded) return
+      if (mediaLoaded) return
+    }
 
     __resultsMediaFetchedOnce = true
     hasFetchedMediaRef.current = true
@@ -486,7 +528,20 @@ export default function ResultsPage() {
       .catch((err) => {
         console.error("[media] fetch failed", err)
       })
-  }, [isConnected])
+  }, [isConnected, pathname, forceReloadTick, r])
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (!isConnected) return
+      if (!needsDataRefetch) return
+      const now = Date.now()
+      if (now - lastRevalidateAtRef.current < 2500) return
+      lastRevalidateAtRef.current = now
+      setForceReloadTick((x) => x + 1)
+    }
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [isConnected, needsDataRefetch])
 
   // -------------------------------------------------
   // DEV-ONLY: Observe media state length after normalize + setMedia
@@ -848,10 +903,12 @@ export default function ResultsPage() {
 
   useEffect(() => {
     // Prevent duplicate fetch across StrictMode remounts in dev
-    if (__resultsMeFetchedOnce) return
+    if (forceReloadTick === 0) {
+      if (__resultsMeFetchedOnce) return
 
-    // Prevent duplicate fetch in same mount
-    if (hasFetchedMeRef.current) return
+      // Prevent duplicate fetch in same mount
+      if (hasFetchedMeRef.current) return
+    }
 
     __resultsMeFetchedOnce = true
     hasFetchedMeRef.current = true
@@ -911,7 +968,7 @@ export default function ResultsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [forceReloadTick])
 
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
