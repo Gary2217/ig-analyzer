@@ -204,8 +204,40 @@ export default function PostAnalysisPage() {
   const resultsRef = useRef<HTMLDivElement | null>(null)
   const urlSectionRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const postUrlInputRef = useRef<HTMLInputElement | null>(null)
   const toastTimerRef = useRef<number | null>(null)
   const imgErrorLoggedRef = useRef<Record<string, boolean>>({})
+
+  const scrollToPostUrl = () => {
+    const getStickyOffset = () => {
+      const candidates = [
+        document.querySelector("[data-sticky-header]"),
+        document.querySelector("header"),
+        document.querySelector("[role='banner']"),
+        document.querySelector(".sticky"),
+      ].filter(Boolean) as Element[]
+
+      for (const el of candidates) {
+        const rect = (el as HTMLElement).getBoundingClientRect()
+        const height = Math.round(rect.height || 0)
+        if (height >= 40 && height <= 200) return height + 12
+      }
+
+      return 96
+    }
+
+    const el = document.getElementById("post-url-section")
+    if (!el) return
+
+    const OFFSET = getStickyOffset()
+    const top = el.getBoundingClientRect().top + window.scrollY - OFFSET
+    window.scrollTo({ top, behavior: "smooth" })
+
+    window.setTimeout(() => {
+      postUrlInputRef.current?.focus()
+      postUrlInputRef.current?.select?.()
+    }, 200)
+  }
 
   const freeRemaining = Math.max(0, FREE_LIMIT - freeUsed)
 
@@ -411,7 +443,8 @@ export default function PostAnalysisPage() {
     }
   }, [])
 
-  const platformLabel = (platform: "instagram") => t("post.platform.instagram")
+  const platformLabel = (platform: "instagram" | "threads") =>
+    platform === "threads" ? t("post.platform.threads") : t("post.platform.instagram")
 
   const inferredStatusLabel = (status: InferredStatus) => {
     if (status === "Good") return t("post.health.status.good")
@@ -433,11 +466,217 @@ export default function PostAnalysisPage() {
     return "instagram.com"
   }, [postUrl, t])
 
+  const previewData = useMemo(() => {
+    const ar: any = analysisResult as any
+
+    const pickFirst = (...candidates: any[]) =>
+      (candidates.find((v) => v !== undefined && v !== null && v !== "") as any) || ""
+
+    const get = (obj: any, path: string) => {
+      try {
+        if (!obj || !path) return ""
+        const parts = String(path).split(".").filter(Boolean)
+        let cur: any = obj
+        for (const p of parts) {
+          if (cur === null || cur === undefined) return ""
+          cur = cur[p]
+        }
+        if (cur === undefined || cur === null) return ""
+        return cur
+      } catch {
+        return ""
+      }
+    }
+
+    const permalink = String(
+      pickFirst(
+        ar?.permalink,
+        ar?.ig_permalink,
+        ar?.url,
+        get(ar, "data.permalink"),
+        get(ar, "data.ig_permalink"),
+        get(ar, "post.permalink"),
+        get(ar, "post.ig_permalink"),
+        get(ar, "media.permalink"),
+        get(ar, "media.ig_permalink"),
+        postUrl,
+      ),
+    ).trim()
+
+    const mediaTypeRaw = String(
+      pickFirst(
+        ar?.media_type,
+        ar?.mediaType,
+        ar?.type,
+        ar?.media_product_type,
+        ar?.mediaProductType,
+        get(ar, "data.media_type"),
+        get(ar, "data.mediaProductType"),
+        get(ar, "data.media_product_type"),
+        get(ar, "post.media_type"),
+        get(ar, "post.mediaProductType"),
+        get(ar, "post.media_product_type"),
+        get(ar, "media.media_type"),
+        get(ar, "media.mediaProductType"),
+        get(ar, "media.media_product_type"),
+      ),
+    ).trim()
+
+    const mediaTypeNorm = mediaTypeRaw.toUpperCase()
+    const mediaTypeKey = (() => {
+      if (mediaTypeNorm === "REELS" || mediaTypeNorm.includes("REEL")) return "reel"
+      if (mediaTypeNorm === "VIDEO" || mediaTypeNorm.includes("VIDEO")) return "video"
+      if (mediaTypeNorm === "CAROUSEL_ALBUM" || mediaTypeNorm === "CAROUSEL" || mediaTypeNorm.includes("CAROUSEL")) return "carousel"
+      if (mediaTypeNorm === "IMAGE" || mediaTypeNorm.includes("IMAGE") || mediaTypeNorm.includes("PHOTO")) return "photo"
+      return ""
+    })()
+
+    const thumb = String(
+      pickFirst(ar?.thumbnail_url, ar?.thumbnailUrl, ar?.media_url, ar?.mediaUrl, ar?.image_url, ar?.imageUrl),
+    ).trim()
+
+    const caption = String(
+      pickFirst(
+        ar?.caption,
+        ar?.text,
+        ar?.message,
+        get(ar, "data.caption"),
+        get(ar, "post.caption"),
+        get(ar, "media.caption"),
+        get(ar, "data.text"),
+        get(ar, "post.text"),
+        get(ar, "media.text"),
+      ),
+    ).trim()
+
+    const timestampRaw = pickFirst(
+      ar?.timestamp,
+      ar?.created_time,
+      ar?.createdAt,
+      ar?.taken_at,
+      ar?.takenAt,
+      ar?.time,
+      get(ar, "data.timestamp"),
+      get(ar, "data.created_time"),
+      get(ar, "data.createdAt"),
+      get(ar, "data.taken_at"),
+      get(ar, "post.timestamp"),
+      get(ar, "post.created_time"),
+      get(ar, "post.createdAt"),
+      get(ar, "post.taken_at"),
+      get(ar, "media.timestamp"),
+      get(ar, "media.created_time"),
+      get(ar, "media.createdAt"),
+      get(ar, "media.taken_at"),
+    )
+    const tsMs = (() => {
+      if (timestampRaw === undefined || timestampRaw === null || timestampRaw === "") return null
+
+      if (typeof timestampRaw === "number" && Number.isFinite(timestampRaw)) {
+        return timestampRaw < 1e12 ? Math.round(timestampRaw * 1000) : Math.round(timestampRaw)
+      }
+
+      const s = String(timestampRaw).trim()
+      if (!s) return null
+
+      if (/^\d+$/.test(s)) {
+        const n = Number(s)
+        if (!Number.isFinite(n)) return null
+        return n < 1e12 ? Math.round(n * 1000) : Math.round(n)
+      }
+
+      const ms = Date.parse(s)
+      return Number.isFinite(ms) ? ms : null
+    })()
+
+    const timeLabel = (() => {
+      if (!tsMs) return t("post.preview.time.unknown")
+      const diff = Date.now() - tsMs
+      if (!Number.isFinite(diff) || diff < 0) return t("post.preview.time.unknown")
+
+      const hours = Math.floor(diff / 36e5)
+      if (hours < 48) {
+        const n = Math.max(1, hours)
+        return t("post.preview.time.hoursAgo").replace("{n}", String(n))
+      }
+
+      const days = Math.floor(hours / 24)
+      if (days < 14) {
+        const n = Math.max(1, days)
+        return t("post.preview.time.daysAgo").replace("{n}", String(n))
+      }
+
+      const d = new Date(tsMs)
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, "0")
+      const dd = String(d.getDate()).padStart(2, "0")
+      return `${y}/${m}/${dd}`
+    })()
+
+    const platformRaw = String(pickFirst(ar?.platform, ar?.provider, ar?.source)).trim().toLowerCase()
+    const platform = platformRaw === "threads" ? "threads" : "instagram"
+    const platformLabelText = platformLabel(platform)
+
+    const mediaTypeLabel = mediaTypeKey ? t(`post.preview.mediaType.${mediaTypeKey}`) : ""
+    const hasAny = Boolean(permalink || mediaTypeKey || thumb || tsMs)
+
+    return {
+      hasAny,
+      platform,
+      platformLabel: platformLabelText,
+      permalink,
+      permalinkRaw: permalink,
+      mediaTypeKey,
+      mediaTypeLabel,
+      thumb,
+      caption,
+      mediaTypeRaw,
+      timestampRaw,
+      tsMs,
+      timeLabel,
+    }
+  }, [analysisResult, postUrl, platformLabel, t])
+
   const looksLikeSupportedUrl = useMemo(() => {
     const u = postUrl.toLowerCase().trim()
     if (!u) return true
     return isValidPostUrl(u)
   }, [postUrl])
+
+  const normalizedPostUrl = useMemo(() => {
+    const raw = typeof postUrl === "string" ? postUrl : ""
+    return raw.trim()
+  }, [postUrl])
+
+  const isValidIgPostOrReelUrl = useMemo(() => {
+    const raw = normalizedPostUrl
+    if (!raw) return false
+
+    const coerceUrl = (s: string) => {
+      const v = s.trim()
+      if (!v) return null
+      try {
+        return new URL(v)
+      } catch {
+        try {
+          return new URL(`https://${v.replace(/^\/+/, "")}`)
+        } catch {
+          return null
+        }
+      }
+    }
+
+    const u = coerceUrl(raw)
+    if (!u) return false
+    const host = u.hostname.toLowerCase()
+    const pathname = u.pathname || ""
+
+    const isIgHost = host === "instagram.com" || host.endsWith(".instagram.com") || host === "instagr.am"
+    if (!isIgHost) return false
+
+    // Accept: /p/<code>, /reel/<code>, /reels/<code> (allow trailing slash)
+    return /^\/(p|reel|reels)\/[A-Za-z0-9_-]+\/?$/.test(pathname)
+  }, [normalizedPostUrl])
 
   const inferredMetrics: InferredMetric[] = useMemo(
     () => [
@@ -469,36 +708,6 @@ export default function PostAnalysisPage() {
     ],
     [t]
   )
-
-  const postPreview = useMemo(() => {
-    const postTypes = [
-      t("post.preview.postType.reel"),
-      t("post.preview.postType.carousel"),
-      t("post.preview.postType.photo"),
-    ] as const
-    const idx = Math.abs(postUrl.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)) % postTypes.length
-
-    const captions = [
-      t("post.preview.captions.1"),
-      t("post.preview.captions.2"),
-      t("post.preview.captions.3"),
-    ]
-    const cidx = Math.abs(postUrl.split("").reduce((acc, c) => acc + c.charCodeAt(0) * 3, 0)) % captions.length
-
-    const times = [
-      t("post.preview.times.1"),
-      t("post.preview.times.2"),
-      t("post.preview.times.3"),
-    ]
-    const tidx = Math.abs(postUrl.split("").reduce((acc, c) => acc + c.charCodeAt(0) * 7, 0)) % times.length
-
-    return {
-      platformLabel: platformLabel(inferredPlatform),
-      postType: postTypes[idx],
-      captionSnippet: captions[cidx],
-      postedTime: times[tidx],
-    }
-  }, [inferredPlatform, postUrl, platformLabel, t])
 
   const underperformReasons = useMemo(
     () => [
@@ -885,12 +1094,16 @@ export default function PostAnalysisPage() {
                 <div className="text-sm font-medium text-white">{t("post.input.label")}</div>
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-center">
                   <Input
-                    ref={inputRef}
+                    ref={(el) => {
+                      inputRef.current = el
+                      postUrlInputRef.current = el
+                    }}
                     value={postUrl}
                     onChange={(e) => setPostUrl(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault()
+                        if (!isValidIgPostOrReelUrl) return
                         guardAnalyze()
                       }
                     }}
@@ -900,7 +1113,7 @@ export default function PostAnalysisPage() {
                     autoCapitalize="off"
                     spellCheck={false}
                     placeholder={t("post.input.placeholder")}
-                    className="min-w-0 truncate bg-white/5 border-white/10 text-slate-200 placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
+                    className="min-w-0 truncate bg-white/5 border-white/10 text-slate-200 placeholder:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 select-text pointer-events-auto cursor-text selection:bg-white/25 selection:text-white caret-white"
                   />
                   <div className="w-full md:w-[168px] flex flex-col gap-1 min-w-0">
                     <div className="text-xs text-white/70 leading-relaxed min-w-0">
@@ -921,9 +1134,9 @@ export default function PostAnalysisPage() {
                     </div>
                     <div className="flex min-w-0 flex-col gap-1.5">
                       <Button
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={guardAnalyze}
-                        disabled={!canAnalyze || isAnalyzing}
+                        disabled={!isValidIgPostOrReelUrl || isAnalyzing}
                         aria-busy={isAnalyzing ? true : undefined}
                       >
                         {isAnalyzing ? (
@@ -947,15 +1160,13 @@ export default function PostAnalysisPage() {
                     </div>
                   </div>
                 </div>
-                <div className="text-xs text-slate-400">
-                  {t("post.input.hint")}
-                </div>
-                {!looksLikeSupportedUrl && (
-                  <div className="text-xs text-slate-400">
-                    連結格式可能不正確：請確認包含 instagram.com。
-                  </div>
+                {normalizedPostUrl ? (
+                  !isValidIgPostOrReelUrl ? (
+                    <div className="text-xs text-slate-400 leading-relaxed break-words min-w-0">{t("post.url.invalid")}</div>
+                  ) : null
+                ) : (
+                  <div className="text-xs text-slate-400 leading-relaxed break-words min-w-0">{t("post.url.hint")}</div>
                 )}
-                {!canAnalyze && <div className="text-xs text-slate-400">{t("post.input.pasteToBegin")}</div>}
               </div>
             </CardContent>
           </Card>
@@ -982,6 +1193,10 @@ export default function PostAnalysisPage() {
                   <div className="flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible">
                     {quickTop3.map((p: any, idx: number) => {
                       const link = typeof p?.permalink === "string" ? p.permalink : ""
+                      const igHref =
+                        (typeof p?.permalink === "string" && p.permalink ? p.permalink : "") ||
+                        (typeof p?.ig_permalink === "string" && p.ig_permalink ? p.ig_permalink : "") ||
+                        (typeof p?.shortcode === "string" && p.shortcode ? `https://www.instagram.com/p/${p.shortcode}/` : "")
                       const thumb =
                         (typeof p?.thumbnail_url === "string" && p.thumbnail_url ? p.thumbnail_url : "") ||
                         (typeof p?.media_url === "string" && p.media_url ? p.media_url : "")
@@ -996,36 +1211,74 @@ export default function PostAnalysisPage() {
                           className="min-w-[240px] sm:min-w-0 rounded-xl border border-white/10 bg-white/5 p-3"
                         >
                           <div className="flex min-w-0 items-start gap-3">
-                            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white/5 border border-white/10">
-                              {thumb ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={thumb}
-                                  alt=""
-                                  className="absolute inset-0 h-full w-full object-cover"
-                                  loading="lazy"
-                                  decoding="async"
-                                  referrerPolicy="no-referrer"
-                                  onError={(e) => {
-                                    if (process.env.NODE_ENV !== "production") {
-                                      const key = `${String(p?.id ?? idx)}|${thumb}`
-                                      if (!imgErrorLoggedRef.current[key]) {
-                                        imgErrorLoggedRef.current[key] = true
-                                        console.log("[post-analysis][quickpick][img error]", {
-                                          src: thumb,
-                                          id: p?.id,
-                                          media_type: p?.media_type,
-                                        })
+                            {igHref ? (
+                              <a
+                                href={igHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block shrink-0 relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white/5 border border-white/10"
+                              >
+                                {thumb ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={thumb}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      if (process.env.NODE_ENV !== "production") {
+                                        const key = `${String(p?.id ?? idx)}|${thumb}`
+                                        if (!imgErrorLoggedRef.current[key]) {
+                                          imgErrorLoggedRef.current[key] = true
+                                          console.log("[post-analysis][quickpick][img error]", {
+                                            src: thumb,
+                                            id: p?.id,
+                                            media_type: p?.media_type,
+                                          })
+                                        }
                                       }
-                                    }
-                                    ;(e.currentTarget as HTMLImageElement).style.display = "none"
-                                  }}
-                                />
-                              ) : null}
-                              <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/45 tabular-nums">
-                                {type}
+                                      ;(e.currentTarget as HTMLImageElement).style.display = "none"
+                                    }}
+                                  />
+                                ) : null}
+                                <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/45 tabular-nums">
+                                  {type}
+                                </div>
+                              </a>
+                            ) : (
+                              <div className="block shrink-0 relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white/5 border border-white/10">
+                                {thumb ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={thumb}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      if (process.env.NODE_ENV !== "production") {
+                                        const key = `${String(p?.id ?? idx)}|${thumb}`
+                                        if (!imgErrorLoggedRef.current[key]) {
+                                          imgErrorLoggedRef.current[key] = true
+                                          console.log("[post-analysis][quickpick][img error]", {
+                                            src: thumb,
+                                            id: p?.id,
+                                            media_type: p?.media_type,
+                                          })
+                                        }
+                                      }
+                                      ;(e.currentTarget as HTMLImageElement).style.display = "none"
+                                    }}
+                                  />
+                                ) : null}
+                                <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/45 tabular-nums">
+                                  {type}
+                                </div>
                               </div>
-                            </div>
+                            )}
 
                             <div className="min-w-0 flex-1">
                               <div className="flex min-w-0 items-center gap-2">
@@ -1062,10 +1315,8 @@ export default function PostAnalysisPage() {
                                   onClick={() => {
                                     if (!link) return
                                     setPostUrl(link)
-                                    requestAnimationFrame(() => {
-                                      urlSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-                                    })
-                                    window.setTimeout(() => inputRef.current?.focus?.(), 0)
+                                    window.setTimeout(scrollToPostUrl, 0)
+                                    window.setTimeout(scrollToPostUrl, 250)
                                   }}
                                   title="使用這篇"
                                 >
@@ -1176,7 +1427,7 @@ export default function PostAnalysisPage() {
 
                     <div className="shrink-0">
                       <a
-                        href={postUrl}
+                        href={previewData.permalink || postUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-blue-200 hover:text-blue-100 underline underline-offset-4 break-all"
@@ -1195,64 +1446,111 @@ export default function PostAnalysisPage() {
                   <div className={subtleDivider} />
                   <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 items-start">
                     <div className="w-full max-w-[260px]">
-                      <div className="aspect-[4/5] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
-                        {previewThumbSrc ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={previewThumbSrc}
-                            alt=""
-                            className="absolute inset-0 h-full w-full object-cover"
-                            loading="lazy"
-                            decoding="async"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              if (process.env.NODE_ENV !== "production") {
-                                const key = `preview|${previewThumbSrc}`
-                                if (!imgErrorLoggedRef.current[key]) {
-                                  imgErrorLoggedRef.current[key] = true
-                                  console.log("[post-analysis][preview][img error]", {
-                                    src: previewThumbSrc,
-                                    id: (analysisResult as any)?.id,
-                                    media_type: (analysisResult as any)?.media_type,
-                                  })
-                                }
-                              }
-                              ;(e.currentTarget as HTMLImageElement).style.display = "none"
-                            }}
-                          />
-                        ) : null}
-                        {!previewThumbSrc && (
-                          <div className="relative text-slate-300">
-                            <div className="mx-auto h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
-                            <div className="mt-2 text-xs">POST</div>
+                      {(() => {
+                        const igHref = previewData.permalink
+
+                        return igHref ? (
+                          <a
+                            href={igHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block aspect-[4/5] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center relative overflow-hidden"
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
+                            {previewThumbSrc ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={previewThumbSrc}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-cover"
+                                loading="lazy"
+                                decoding="async"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  if (process.env.NODE_ENV !== "production") {
+                                    const key = `preview|${previewThumbSrc}`
+                                    if (!imgErrorLoggedRef.current[key]) {
+                                      imgErrorLoggedRef.current[key] = true
+                                      console.log("[post-analysis][preview][img error]", {
+                                        src: previewThumbSrc,
+                                        id: (analysisResult as any)?.id,
+                                        media_type: (analysisResult as any)?.media_type,
+                                      })
+                                    }
+                                  }
+                                  ;(e.currentTarget as HTMLImageElement).style.display = "none"
+                                }}
+                              />
+                            ) : null}
+                            {!previewThumbSrc && (
+                              <div className="relative text-slate-300">
+                                <div className="mx-auto h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
+                                <div className="mt-2 text-xs">POST</div>
+                              </div>
+                            )}
+                          </a>
+                        ) : (
+                          <div className="block aspect-[4/5] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
+                            {previewThumbSrc ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={previewThumbSrc}
+                                alt=""
+                                className="absolute inset-0 h-full w-full object-cover"
+                                loading="lazy"
+                                decoding="async"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  if (process.env.NODE_ENV !== "production") {
+                                    const key = `preview|${previewThumbSrc}`
+                                    if (!imgErrorLoggedRef.current[key]) {
+                                      imgErrorLoggedRef.current[key] = true
+                                      console.log("[post-analysis][preview][img error]", {
+                                        src: previewThumbSrc,
+                                        id: (analysisResult as any)?.id,
+                                        media_type: (analysisResult as any)?.media_type,
+                                      })
+                                    }
+                                  }
+                                  ;(e.currentTarget as HTMLImageElement).style.display = "none"
+                                }}
+                              />
+                            ) : null}
+                            {!previewThumbSrc && (
+                              <div className="relative text-slate-300">
+                                <div className="mx-auto h-10 w-10 rounded-lg border border-white/10 bg-white/5" />
+                                <div className="mt-2 text-xs">POST</div>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        )
+                      })()}
                     </div>
                     <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold bg-blue-500/20 text-blue-100 border border-blue-400/30">
-                          {postPreview.platformLabel}
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold bg-blue-500/20 text-blue-100 border border-blue-400/30 whitespace-nowrap">
+                          {previewData.platformLabel}
                         </span>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/5 text-slate-200 border border-white/10">
-                          {postPreview.postType}
+                        {previewData.mediaTypeLabel ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/5 text-slate-200 border border-white/10 whitespace-nowrap tabular-nums shrink-0">
+                            {previewData.mediaTypeLabel}
+                          </span>
+                        ) : null}
+                        <span className="text-[11px] text-slate-400 tabular-nums whitespace-nowrap shrink-0">{previewData.timeLabel}</span>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        <span className="text-slate-500">{t("post.preview.source")}: </span> {sourceDomain}
+                      </div>
+                      <div className="text-xs text-slate-300 break-all min-w-0">{previewData.permalink || postUrl || t("post.copy.notProvided")}</div>
+                      <div className="text-sm text-slate-200 min-w-0">
+                        <span className="text-slate-400">{t("post.preview.captionLabel")} </span>
+                        <span className="block mt-1 text-slate-200/90 leading-relaxed line-clamp-2 sm:line-clamp-3">
+                          {previewData.caption || t("post.preview.noCaption")}
                         </span>
-                        <span className="text-[11px] text-slate-400">{postPreview.postedTime}</span>
                       </div>
                       <div className="text-xs text-slate-400">
-                        <span className="text-slate-500">{t("post.preview.source")}:</span> {sourceDomain}
-                      </div>
-                      <div className="text-xs text-slate-300 break-all">{postUrl || t("post.copy.notProvided")}</div>
-                      <div className="text-sm text-slate-200">
-                        <span className="text-slate-400">{t("post.preview.caption")} </span>
-                        {postPreview.captionSnippet}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {t("post.preview.note1")}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {t("post.preview.note2")}
+                        {previewData.hasAny ? t("post.preview.loadedHint") : t("post.preview.unavailable")}
                       </div>
                     </div>
                   </div>

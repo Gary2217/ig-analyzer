@@ -1185,7 +1185,9 @@ export default function ResultsPage() {
     const run = async () => {
       setConnectEnvError(null)
       try {
-        const r = await fetch(`/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`, {
+        const nextPath = `/${activeLocale}/results`
+        const oauthUrl = `/api/auth/instagram?provider=instagram&next=${encodeURIComponent(nextPath)}`
+        const r = await fetch(oauthUrl, {
           method: "GET",
           redirect: "manual",
           cache: "no-store",
@@ -1201,13 +1203,15 @@ export default function ResultsPage() {
 
         if (r.status >= 300 && r.status < 400) {
           const loc = r.headers.get("Location")
-          window.location.href = loc || `/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`
+          window.location.href = loc || oauthUrl
           return
         }
 
-        window.location.href = `/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`
+        window.location.href = oauthUrl
       } catch {
-        window.location.href = `/api/auth/instagram?locale=${encodeURIComponent(activeLocale)}`
+        const nextPath = `/${activeLocale}/results`
+        const oauthUrl = `/api/auth/instagram?provider=instagram&next=${encodeURIComponent(nextPath)}`
+        window.location.href = oauthUrl
       }
     }
 
@@ -1610,7 +1614,7 @@ export default function ResultsPage() {
                 </div>
 
                 <Link
-                  href={`/${activeLocale}/api/auth/instagram?provider=instagram&next=/${activeLocale}/results`}
+                  href={`/api/auth/instagram?provider=instagram&next=/${activeLocale}/results`}
                   className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_8px_20px_rgba(168,85,247,0.25)] hover:brightness-110 active:translate-y-[1px] transition w-full sm:w-auto"
                 >
                   重新連線 Instagram
@@ -3052,6 +3056,13 @@ export default function ResultsPage() {
                         const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
                         const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
 
+                        const igHref =
+                          (typeof real?.permalink === "string" && real.permalink ? real.permalink : "") ||
+                          (typeof real?.ig_permalink === "string" && real.ig_permalink ? real.ig_permalink : "") ||
+                          (typeof real?.shortcode === "string" && real.shortcode
+                            ? `https://www.instagram.com/p/${real.shortcode}/`
+                            : "")
+
                         const thumbSrc = (() => {
                           const thumb = typeof real?.thumbnail_url === "string" && real.thumbnail_url ? real.thumbnail_url : ""
                           if (thumb) return thumb
@@ -3082,42 +3093,98 @@ export default function ResultsPage() {
                         return (
                           <div className="flex gap-3 min-w-0">
                             <div className="h-16 w-16 sm:h-20 sm:w-20 shrink-0">
-                              <div className="relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                <div className="absolute inset-0 bg-white/10" />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
-                                    {mediaType ? mediaType : "POST"}
-                                  </span>
-                                </div>
-                                {thumbSrc ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={thumbSrc}
-                                    alt=""
-                                    className="absolute inset-0 h-full w-full object-cover"
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                      // hide broken image to reveal placeholder underneath
-                                      e.currentTarget.style.display = "none"
-                                    }}
-                                  />
-                                ) : null}
-
-                                {isVideo ? (
-                                  <div className="absolute left-2 top-2 sm:hidden max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium leading-none text-white" title={videoLabel}>
-                                    <span className="truncate">{videoLabel}</span>
+                              {igHref ? (
+                                <a
+                                  href={igHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full"
+                                >
+                                  <div className="absolute inset-0 bg-white/10" />
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
+                                      {mediaType ? mediaType : "POST"}
+                                    </span>
                                   </div>
-                                ) : null}
+                                  {thumbSrc ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={thumbSrc}
+                                      alt=""
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => {
+                                        // hide broken image to reveal placeholder underneath
+                                        e.currentTarget.style.display = "none"
+                                      }}
+                                    />
+                                  ) : null}
 
-                                {isVideo ? (
-                                  <div className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center bg-black/0 opacity-0 group-hover:opacity-100 group-hover:bg-black/30 transition">
-                                    <div className="max-w-[90%] overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-2 rounded-full bg-black/70 px-3 py-1 text-[11px] sm:text-xs font-medium leading-none text-white" title={videoLabel}>
-                                      <span className="shrink-0">▶</span>
+                                  {isVideo ? (
+                                    <div
+                                      className="absolute left-2 top-2 sm:hidden max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium leading-none text-white"
+                                      title={videoLabel}
+                                    >
                                       <span className="truncate">{videoLabel}</span>
                                     </div>
+                                  ) : null}
+
+                                  {isVideo ? (
+                                    <div className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center bg-black/0 opacity-0 group-hover:opacity-100 group-hover:bg-black/30 transition">
+                                      <div
+                                        className="max-w-[90%] overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-2 rounded-full bg-black/70 px-3 py-1 text-[11px] sm:text-xs font-medium leading-none text-white"
+                                        title={videoLabel}
+                                      >
+                                        <span className="shrink-0">▶</span>
+                                        <span className="truncate">{videoLabel}</span>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </a>
+                              ) : (
+                                <div className="block relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
+                                  <div className="absolute inset-0 bg-white/10" />
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
+                                      {mediaType ? mediaType : "POST"}
+                                    </span>
                                   </div>
-                                ) : null}
-                              </div>
+                                  {thumbSrc ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={thumbSrc}
+                                      alt=""
+                                      className="absolute inset-0 h-full w-full object-cover"
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => {
+                                        // hide broken image to reveal placeholder underneath
+                                        e.currentTarget.style.display = "none"
+                                      }}
+                                    />
+                                  ) : null}
+
+                                  {isVideo ? (
+                                    <div
+                                      className="absolute left-2 top-2 sm:hidden max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium leading-none text-white"
+                                      title={videoLabel}
+                                    >
+                                      <span className="truncate">{videoLabel}</span>
+                                    </div>
+                                  ) : null}
+
+                                  {isVideo ? (
+                                    <div className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center bg-black/0 opacity-0 group-hover:opacity-100 group-hover:bg-black/30 transition">
+                                      <div
+                                        className="max-w-[90%] overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-2 rounded-full bg-black/70 px-3 py-1 text-[11px] sm:text-xs font-medium leading-none text-white"
+                                        title={videoLabel}
+                                      >
+                                        <span className="shrink-0">▶</span>
+                                        <span className="truncate">{videoLabel}</span>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              )}
                             </div>
 
                             <div className="min-w-0 flex-1">
@@ -3147,8 +3214,8 @@ export default function ResultsPage() {
                                 </div>
                               ) : null}
 
-                              <div className="mt-3 grid grid-cols-3 gap-3 min-w-0">
-                                <div className="min-w-0">
+                              <div className="mt-3 flex items-center justify-center gap-x-10 sm:gap-x-12 pr-6 sm:pr-8 min-w-0">
+                                <div className="min-w-0 text-center">
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.likesLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
                                     <span className="tabular-nums whitespace-nowrap">
@@ -3157,7 +3224,7 @@ export default function ResultsPage() {
                                   </div>
                                 </div>
 
-                                <div className="min-w-0">
+                                <div className="min-w-0 text-center">
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.commentsLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
                                     <span className="tabular-nums whitespace-nowrap">
@@ -3168,7 +3235,7 @@ export default function ResultsPage() {
                                   </div>
                                 </div>
 
-                                <div className="min-w-0">
+                                <div className="min-w-0 text-center">
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.engagementLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
                                     <span className="tabular-nums whitespace-nowrap">

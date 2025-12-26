@@ -54,6 +54,7 @@ export async function POST(req: Request) {
       "thumbnail_url",
       "permalink",
       "timestamp",
+      "caption",
       "like_count",
       "comments_count",
     ].join(",");
@@ -91,6 +92,9 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             permalink: found.permalink,
+            media_type: typeof found?.media_type === "string" ? found.media_type : undefined,
+            timestamp: typeof found?.timestamp === "string" ? found.timestamp : undefined,
+            caption: typeof found?.caption === "string" ? found.caption : undefined,
             thumbnail_url: typeof found?.thumbnail_url === "string" ? found.thumbnail_url : undefined,
             media_url: typeof found?.media_url === "string" ? found.media_url : undefined,
             like_count,

@@ -1584,6 +1584,10 @@
     "title": "Single Post Analysis",
     "subtitle": "Inferred insights from public signals. Official post metrics are only shown after explicit platform authorization.",
     "modeExplain": "A (Inferred): based on public observable signals and inferred models.\nC (Official): shown only after explicit platform authorization.",
+    "url": {
+      "hint": "Paste an Instagram post or Reels link (instagram.com/p/... or instagram.com/reel/...)",
+      "invalid": "Invalid link. Please paste an Instagram post or Reels link."
+    },
     "freeRemaining": "Free analyses remaining",
     "freeRemainingCount": "{count}/{limit}",
     "freeExhaustedTitle": "Free limit reached",
@@ -1607,11 +1611,26 @@
     },
     "preview": {
       "title": "Post Preview",
-      "subtitle": "Preview (mock) derived from the provided link.",
+      "subtitle": "Shows a preview of public post info.",
       "openOriginal": "Open original",
       "thumbnail": "Thumbnail (mock)",
       "source": "Source",
       "caption": "Caption (mock):",
+      "captionLabel": "Caption",
+      "noCaption": "(No caption)",
+      "loadedHint": "Post info loaded (public)",
+      "unavailable": "Preview unavailable",
+      "mediaType": {
+        "photo": "Photo",
+        "video": "Video",
+        "reel": "Reels",
+        "carousel": "Carousel"
+      },
+      "time": {
+        "unknown": "Time unknown",
+        "daysAgo": "{n} days ago",
+        "hoursAgo": "{n} hours ago"
+      },
       "unknownSource": "(link)",
       "note1": "No image parsing is performed. This preview is a placeholder for UI flow.",
       "note2": "This preview is UI-only and does not fetch or parse the post content."
@@ -1802,7 +1821,7 @@
     "input": {
       "sectionTitle": "1) Input",
       "sectionSubtitle": "Paste an Instagram or Threads post link.",
-      "label": "Post Link",
+      "label": "Enter post link",
       "placeholder": "https://www.instagram.com/p/... or https://www.threads.net/...",
       "analyze": "Analyze Post",
       "analyzing": "Analyzing public signals…",

@@ -1584,6 +1584,10 @@
     "title": "單篇貼文分析",
     "subtitle": "以公開可觀察訊號進行推論；官方貼文指標僅於明確授權後顯示。",
     "modeExplain": "A（推論）：基於公開可觀察訊號與模型推論。\nC（官方）：需官方授權後，才顯示平台提供指標。",
+    "url": {
+      "hint": "貼上 IG 貼文或 Reels 連結（例如 instagram.com/p/... 或 instagram.com/reel/...）",
+      "invalid": "連結格式不正確，請貼上 IG 貼文或 Reels 連結"
+    },
     "freeRemaining": "免費分析剩餘",
     "freeRemainingCount": "{count}/{limit}",
     "freeExhaustedTitle": "免費次數已用完",
@@ -1607,11 +1611,26 @@
     },
     "preview": {
       "title": "貼文預覽",
-      "subtitle": "由你提供的連結推導出的預覽（示意）。",
+      "subtitle": "顯示貼文公開資訊預覽。",
       "openOriginal": "開啟原始貼文",
       "thumbnail": "縮圖（示意）",
       "source": "來源",
       "caption": "內文（示意）：",
+      "captionLabel": "內文",
+      "noCaption": "（無內文）",
+      "loadedHint": "已載入貼文資訊（公開）",
+      "unavailable": "無法載入預覽",
+      "mediaType": {
+        "photo": "照片",
+        "video": "影片",
+        "reel": "Reels",
+        "carousel": "輪播"
+      },
+      "time": {
+        "unknown": "時間未知",
+        "daysAgo": "{n} 天前",
+        "hoursAgo": "{n} 小時前"
+      },
       "unknownSource": "（連結）",
       "note1": "不進行圖片解析；此預覽僅為 UI 流程示意。",
       "note2": "此預覽僅為版型模擬，不會抓取或解析貼文內容。"
@@ -1802,7 +1821,7 @@
     "input": {
       "sectionTitle": "1）輸入",
       "sectionSubtitle": "貼上 Instagram 或 Threads 的貼文連結。",
-      "label": "貼文連結",
+      "label": "輸入貼文連結",
       "placeholder": "https://www.instagram.com/p/... 或 https://www.threads.net/...",
       "analyze": "開始分析",
       "analyzing": "正在分析公開訊號…",
