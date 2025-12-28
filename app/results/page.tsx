@@ -69,6 +69,192 @@ type FakeAnalysis = {
   disclaimer: string
 }
 
+type GateState = "loading" | "needs_connect" | "needs_setup" | "ready"
+
+type AccountTrendPoint = {
+  t: string
+  reach?: number
+  impressions?: number
+  engaged?: number
+  followerDelta?: number
+}
+
+const MOCK_ACCOUNT_TREND_7D: AccountTrendPoint[] = [
+  { t: "12/22", reach: 18200, impressions: 25400, engaged: 890, followerDelta: 12 },
+  { t: "12/23", reach: 20150, impressions: 27800, engaged: 960, followerDelta: 18 },
+  { t: "12/24", reach: 17500, impressions: 24100, engaged: 820, followerDelta: -3 },
+  { t: "12/25", reach: 22300, impressions: 30500, engaged: 1100, followerDelta: 25 },
+  { t: "12/26", reach: 21000, impressions: 28950, engaged: 1025, followerDelta: 9 },
+  { t: "12/27", reach: 23800, impressions: 33000, engaged: 1210, followerDelta: 31 },
+  { t: "12/28", reach: 25150, impressions: 34800, engaged: 1290, followerDelta: 22 },
+]
+
+function GateShell(props: { title: string; subtitle?: string; children: ReactNode }) {
+  return (
+    <main data-scroll-container className="w-full bg-[#0b1220] px-4 py-12 overflow-x-hidden">
+      <div className="mx-auto w-full max-w-3xl">
+        <Card className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl sm:text-2xl font-bold text-white min-w-0 break-words leading-tight">
+              {props.title}
+            </CardTitle>
+            {props.subtitle ? (
+              <div className="text-sm text-slate-300 mt-2 min-w-0 break-words leading-relaxed">{props.subtitle}</div>
+            ) : null}
+          </CardHeader>
+          <CardContent className="space-y-4">{props.children}</CardContent>
+        </Card>
+      </div>
+    </main>
+  )
+}
+
+function LoadingCard(props: {
+  isZh: boolean
+  isSlow: boolean
+  onRetry: () => void
+  onRefresh: () => void
+  onBack: () => void
+}) {
+  return (
+    <GateShell
+      title={props.isZh ? "正在同步你的 IG 資料" : "Syncing your IG data"}
+      subtitle={props.isZh ? "約 3–10 秒，請稍等一下。" : "This usually takes 3–10 seconds."}
+    >
+      <div className="flex items-center gap-3">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+        <div className="text-sm text-white/70">{props.isZh ? "連線中…" : "Connecting…"}</div>
+      </div>
+
+      {props.isSlow ? (
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-start">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/15 text-slate-200 hover:bg-white/5"
+            onClick={props.onRetry}
+          >
+            {props.isZh ? "重新嘗試" : "Retry"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/15 text-slate-200 hover:bg-white/5"
+            onClick={props.onRefresh}
+          >
+            {props.isZh ? "重新整理" : "Refresh"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/15 text-slate-200 hover:bg-white/5"
+            onClick={props.onBack}
+          >
+            {props.isZh ? "返回" : "Back"}
+          </Button>
+        </div>
+      ) : null}
+    </GateShell>
+  )
+}
+
+function ConnectCard(props: {
+  isZh: boolean
+  onConnect: () => void
+  onBack: () => void
+  connectEnvError: "missing_env" | null
+}) {
+  return (
+    <GateShell
+      title={props.isZh ? "連線 Instagram 以開始分析" : "Connect Instagram to start"}
+      subtitle={props.isZh ? "我們只會讀取你授權的帳號資料。" : "We only read the data you authorize."}
+    >
+      {props.connectEnvError === "missing_env" ? (
+        <Alert>
+          <AlertTitle>{props.isZh ? "缺少必要環境變數" : "Missing required env vars"}</AlertTitle>
+          <AlertDescription>
+            <div className="space-y-2">
+              <div>
+                {props.isZh
+                  ? "伺服器端缺少連線所需設定。請補齊環境變數並重啟服務。"
+                  : "Server is missing config required for connecting. Please set env vars and restart."}
+              </div>
+              <div className="font-mono text-xs break-all">APP_BASE_URL / META_APP_ID / META_APP_SECRET</div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Button
+          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full sm:w-auto"
+          onClick={props.onConnect}
+        >
+          {props.isZh ? "連線 Instagram" : "Connect Instagram"}
+        </Button>
+        <Button
+          variant="outline"
+          className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg w-full sm:w-auto"
+          onClick={props.onBack}
+        >
+          {props.isZh ? "返回" : "Back"}
+        </Button>
+      </div>
+
+      <div className="text-xs text-white/55 leading-relaxed min-w-0 break-words">
+        {props.isZh
+          ? "提示：若你是一般私人帳號，可能需要先切換成「專業帳號（商業／創作者）」才能被分析。"
+          : "Tip: Personal accounts may need to switch to a Professional account (Business/Creator) to be analyzed."}
+      </div>
+    </GateShell>
+  )
+}
+
+function SetupHelpCard(props: { isZh: boolean; onRetry: () => void; onReconnect: () => void }) {
+  return (
+    <GateShell
+      title={props.isZh ? "你的 Instagram 帳號目前無法被分析" : "We can’t analyze this account yet"}
+      subtitle={
+        props.isZh
+          ? "Meta 規則要求：IG 必須是專業帳號並綁定 Facebook 粉絲專頁。"
+          : "Meta requires a Professional IG account linked to a Facebook Page."
+      }
+    >
+      <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
+        <div className="font-medium mb-2">{props.isZh ? "一分鐘修正步驟" : "1-minute fix"}</div>
+        <ol className="list-decimal pl-5 space-y-1">
+          <li>{props.isZh ? "打開 Instagram → 設定與隱私 → 帳號類型與工具" : "Open Instagram → Settings and privacy → Account type and tools"}</li>
+          <li>{props.isZh ? "切換成「專業帳號」（商業或創作者）" : "Switch to a Professional account (Business or Creator)"}</li>
+          <li>{props.isZh ? "到 Meta Business Suite / 粉專設定，把 IG 帳號綁到你的粉絲專頁" : "In Meta Business Suite/Page settings, link your IG to your Facebook Page"}</li>
+          <li>{props.isZh ? "回到這裡按「重新抓取」" : "Come back here and click Retry"}</li>
+        </ol>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Button
+          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full sm:w-auto"
+          onClick={props.onRetry}
+        >
+          {props.isZh ? "我已完成設定，重新抓取" : "I’ve updated settings — Retry"}
+        </Button>
+        <Button
+          variant="outline"
+          className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg w-full sm:w-auto"
+          onClick={props.onReconnect}
+        >
+          {props.isZh ? "重新連線 Instagram" : "Reconnect Instagram"}
+        </Button>
+      </div>
+
+      <div className="text-xs text-white/55 leading-relaxed min-w-0 break-words">
+        {props.isZh
+          ? "若你剛完成綁定，可能需要等幾秒再重試一次（Meta 同步需要時間）。"
+          : "If you just linked it, wait a few seconds and try again (Meta sync can take time)."}
+      </div>
+    </GateShell>
+  )
+}
+
 function ConnectedGate(props: ComponentProps<typeof ConnectedGateBase>) {
   console.log("[ConnectedGate] mounted")
   return <ConnectedGateBase {...props} />
@@ -390,6 +576,13 @@ export default function ResultsPage() {
   const [isProModalOpen, setIsProModalOpen] = useState(false)
   const [upgradeHighlight, setUpgradeHighlight] = useState(false)
 
+  type AccountTrendMetricKey = "reach" | "impressions" | "engaged" | "followerDelta"
+  const [selectedAccountTrendMetrics, setSelectedAccountTrendMetrics] = useState<AccountTrendMetricKey[]>([
+    "reach",
+    "impressions",
+  ])
+  const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
+
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const mediaLen = Array.isArray(media) ? media.length : 0
   const topPostsLen = Array.isArray(topPosts) ? topPosts.length : 0
@@ -432,6 +625,131 @@ export default function ResultsPage() {
   const isConnected = Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
   const connectedProvider = searchParams.get("connected")
   const isConnectedInstagram = connectedProvider === "instagram"
+
+  const accountTrend7d = useMemo<AccountTrendPoint[]>(() => {
+    const isRec = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === "object")
+    const toNum = (v: unknown) => {
+      const n = typeof v === "number" ? v : Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+
+    const getPath = (obj: unknown, path: string): unknown => {
+      if (!isRec(obj)) return undefined
+      const parts = path.split(".").filter(Boolean)
+      let cur: unknown = obj
+      for (const p of parts) {
+        if (!isRec(cur)) return undefined
+        cur = (cur as Record<string, unknown>)[p]
+      }
+      return cur
+    }
+
+    const candidates: unknown[] = [
+      getPath(result, "account_timeline"),
+      getPath(result, "accountTimeline"),
+      getPath(result, "insights_daily"),
+      getPath(result, "insightsDaily"),
+      getPath(result, "insights.daily"),
+      getPath(result, "timeseries.daily"),
+      getPath(igMe, "account_timeline"),
+      getPath(igMe, "accountTimeline"),
+      getPath(igMe, "insights_daily"),
+      getPath(igMe, "insightsDaily"),
+      getPath(igMe, "insights.daily"),
+      getPath(igMe, "timeseries.daily"),
+      getPath(igProfile, "insights.daily"),
+    ]
+
+    const raw = candidates.find((c) => Array.isArray(c))
+    const arr = Array.isArray(raw) ? raw : null
+    if (!arr || arr.length < 2) {
+      return __DEV__ ? MOCK_ACCOUNT_TREND_7D : []
+    }
+
+    const points: Array<{ ts: number | null; p: AccountTrendPoint }> = arr
+      .map((it: unknown, idx: number) => {
+        if (!isRec(it)) return null
+
+        const dateRaw =
+          (typeof it.t === "string" ? it.t : null) ??
+          (typeof it.date === "string" ? it.date : null) ??
+          (typeof it.day === "string" ? it.day : null) ??
+          (typeof it.timestamp === "string" ? it.timestamp : null) ??
+          (typeof it.ts === "string" ? it.ts : null)
+
+        const ts = (() => {
+          if (!dateRaw) {
+            const n = toNum((it as Record<string, unknown>).ts)
+            if (typeof n === "number") return n
+            return null
+          }
+          const ms = Date.parse(String(dateRaw))
+          return Number.isFinite(ms) ? ms : null
+        })()
+
+        const label = (() => {
+          if (typeof dateRaw === "string" && dateRaw.trim()) {
+            const d = new Date(dateRaw)
+            if (!Number.isNaN(d.getTime())) {
+              const m = String(d.getMonth() + 1).padStart(2, "0")
+              const dd = String(d.getDate()).padStart(2, "0")
+              return `${m}/${dd}`
+            }
+            return dateRaw.trim()
+          }
+          if (ts !== null) {
+            const d = new Date(ts)
+            const m = String(d.getMonth() + 1).padStart(2, "0")
+            const dd = String(d.getDate()).padStart(2, "0")
+            return `${m}/${dd}`
+          }
+          return String(idx + 1)
+        })()
+
+        const reach = toNum((it as Record<string, unknown>).reach) ??
+          toNum((it as Record<string, unknown>).accounts_reached) ??
+          toNum((it as Record<string, unknown>).reachTotal) ??
+          null
+
+        const impressions = toNum((it as Record<string, unknown>).impressions) ??
+          toNum((it as Record<string, unknown>).views) ??
+          toNum((it as Record<string, unknown>).impressionsTotal) ??
+          null
+
+        const engaged = toNum((it as Record<string, unknown>).engaged) ??
+          toNum((it as Record<string, unknown>).engaged_accounts) ??
+          toNum((it as Record<string, unknown>).accounts_engaged) ??
+          toNum((it as Record<string, unknown>).engagedAccounts) ??
+          null
+
+        const followerDelta = toNum((it as Record<string, unknown>).followerDelta) ??
+          toNum((it as Record<string, unknown>).followers_delta) ??
+          toNum((it as Record<string, unknown>).followersDelta) ??
+          toNum((it as Record<string, unknown>).delta_followers) ??
+          null
+
+        const p: AccountTrendPoint = {
+          t: label,
+          reach: typeof reach === "number" ? reach : undefined,
+          impressions: typeof impressions === "number" ? impressions : undefined,
+          engaged: typeof engaged === "number" ? engaged : undefined,
+          followerDelta: typeof followerDelta === "number" ? followerDelta : undefined,
+        }
+
+        return { ts, p }
+      })
+      .filter(Boolean) as Array<{ ts: number | null; p: AccountTrendPoint }>
+
+    const sorted = [...points].sort((a, b) => {
+      if (a.ts === null && b.ts === null) return 0
+      if (a.ts === null) return 1
+      if (b.ts === null) return -1
+      return a.ts - b.ts
+    })
+
+    const last7 = sorted.slice(-7).map((x) => x.p)
+    return last7.length >= 2 ? last7 : (__DEV__ ? MOCK_ACCOUNT_TREND_7D : [])
+  }, [__DEV__, igMe, igProfile, result])
 
   const hasConnectedFlag = (igMe as any)?.connected === true
   const hasRealProfile = Boolean(isConnected)
@@ -514,10 +832,14 @@ export default function ResultsPage() {
     __resultsMediaFetchedOnce = true
     hasFetchedMediaRef.current = true
 
+    const controller = new AbortController()
+    let cancelled = false
+
     console.log("[media] fetch (from ConnectedGate)")
-    fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
+    fetch("/api/instagram/media", { cache: "no-store", credentials: "include", signal: controller.signal })
       .then((res) => res.json())
       .then((json) => {
+        if (cancelled) return
         if (__DEV__) {
           const rawLen = Array.isArray(json?.data) ? json.data.length : 0
           console.log("[media] response received:", { hasDataArray: Array.isArray(json?.data), dataLength: rawLen, hasPaging: !!json?.paging })
@@ -526,8 +848,19 @@ export default function ResultsPage() {
         setMediaLoaded(true)
       })
       .catch((err) => {
+        if (cancelled) return
+        if ((err as any)?.name === "AbortError") return
         console.error("[media] fetch failed", err)
+
+        // Avoid infinite loading when fetch fails.
+        setMedia([])
+        setMediaLoaded(true)
       })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [isConnected, pathname, forceReloadTick, r])
 
   useEffect(() => {
@@ -913,13 +1246,14 @@ export default function ResultsPage() {
     __resultsMeFetchedOnce = true
     hasFetchedMeRef.current = true
 
+    const controller = new AbortController()
     let cancelled = false
     const run = async () => {
       setIgMeLoading(true)
       setIgMeUnauthorized(false)
       setConnectEnvError(null)
       try {
-        const r = await fetch("/api/auth/instagram/me", { cache: "no-store" })
+        const r = await fetch("/api/auth/instagram/me", { cache: "no-store", signal: controller.signal })
         if (cancelled) return
 
         if (r.status === 401) {
@@ -958,8 +1292,10 @@ export default function ResultsPage() {
         })()
 
         setIgMe(normalized)
-      } catch {
-        if (!cancelled) setIgMe(null)
+      } catch (err) {
+        if (cancelled) return
+        if ((err as any)?.name === "AbortError") return
+        setIgMe(null)
       } finally {
         if (!cancelled) setIgMeLoading(false)
       }
@@ -967,8 +1303,22 @@ export default function ResultsPage() {
     run()
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [forceReloadTick])
+
+  const [gateIsSlow, setGateIsSlow] = useState(false)
+
+  useEffect(() => {
+    if (!(igMeLoading || (isConnected && !mediaLoaded))) {
+      setGateIsSlow(false)
+      return
+    }
+
+    setGateIsSlow(false)
+    const t = window.setTimeout(() => setGateIsSlow(true), 9000)
+    return () => window.clearTimeout(t)
+  }, [igMeLoading, isConnected, mediaLoaded])
 
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
@@ -1587,6 +1937,50 @@ export default function ResultsPage() {
       barEmpty: "bg-emerald-500/10",
     }
   }
+
+  const derivedGateState: GateState = (() => {
+    if (igMeLoading || (isConnected && !mediaLoaded)) return "loading"
+    if (igMeUnauthorized || !isConnected) return "needs_connect"
+    if (isConnected && mediaLoaded && media.length === 0 && topPosts.length === 0) return "needs_setup"
+    return "ready"
+  })()
+
+  if (derivedGateState === "loading")
+    return (
+      <LoadingCard
+        isZh={isZh}
+        isSlow={gateIsSlow}
+        onRetry={() => {
+          setGateIsSlow(false)
+          setForceReloadTick((x) => x + 1)
+          router.refresh()
+        }}
+        onRefresh={() => window.location.reload()}
+        onBack={() => router.push(localePathname("/", activeLocale))}
+      />
+    )
+
+  if (derivedGateState === "needs_connect")
+    return (
+      <ConnectCard
+        isZh={isZh}
+        onConnect={handleConnect}
+        onBack={() => router.push(localePathname("/", activeLocale))}
+        connectEnvError={connectEnvError}
+      />
+    )
+
+  if (derivedGateState === "needs_setup")
+    return (
+      <SetupHelpCard
+        isZh={isZh}
+        onRetry={() => {
+          setForceReloadTick((x) => x + 1)
+          router.refresh()
+        }}
+        onReconnect={handleConnect}
+      />
+    )
 
   return (
     <ConnectedGate
@@ -2847,6 +3241,251 @@ export default function ResultsPage() {
             <div className="mt-4 flex justify-center">
               <div className="h-px w-48 bg-gradient-to-r from-transparent via-white/25 to-transparent" />
             </div>
+
+            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardHeader className="border-b border-white/10">
+                <CardTitle className="text-xl lg:text-xl font-bold text-white min-w-0 truncate">帳號互動趨勢</CardTitle>
+                <p className="text-sm text-slate-400 mt-1 min-w-0 line-clamp-2 leading-tight">最近 7 天（可多選）</p>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap gap-2 items-center min-w-0">
+                    {(
+                      [
+                        { k: "reach" as const, label: "觸及", dot: "#34d399" },
+                        { k: "impressions" as const, label: "曝光", dot: "#38bdf8" },
+                        { k: "engaged" as const, label: "互動帳號", dot: "#e879f9" },
+                        { k: "followerDelta" as const, label: "粉絲變化", dot: "#fbbf24" },
+                      ] as const
+                    ).map((m) => {
+                      const pressed = selectedAccountTrendMetrics.includes(m.k)
+                      return (
+                        <button
+                          key={m.k}
+                          type="button"
+                          aria-pressed={pressed}
+                          onClick={() => {
+                            setSelectedAccountTrendMetrics((prev) => {
+                              const exists = prev.includes(m.k)
+                              if (exists) return prev.filter((x) => x !== m.k)
+                              return [...prev, m.k]
+                            })
+                          }}
+                          className={
+                            `inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors whitespace-nowrap ` +
+                            `focus:outline-none focus:ring-2 focus:ring-white/25 focus:ring-offset-0 ` +
+                            (pressed
+                              ? "bg-white/10 border-white/20 text-white"
+                              : "bg-white/5 border-white/10 text-white/70 hover:bg-white/8")
+                          }
+                        >
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: m.dot }} />
+                          <span className="truncate min-w-0">{m.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {(() => {
+                    const selected = selectedAccountTrendMetrics
+                    const data = accountTrend7d
+
+                    if (!data || data.length < 2) {
+                      return (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
+                          <div className="text-sm text-white/75 text-center leading-relaxed min-w-0">目前尚未取得最近 7 天趨勢資料</div>
+                        </div>
+                      )
+                    }
+
+                    if (!selected.length) {
+                      return (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
+                          <div className="text-sm text-white/75 text-center leading-relaxed min-w-0">請至少選擇一個指標</div>
+                        </div>
+                      )
+                    }
+
+                    const labelFor = (k: AccountTrendMetricKey) =>
+                      k === "reach" ? "觸及" : k === "impressions" ? "曝光" : k === "engaged" ? "互動帳號" : "粉絲變化"
+                    const colorFor = (k: AccountTrendMetricKey) =>
+                      k === "reach" ? "#34d399" : k === "impressions" ? "#38bdf8" : k === "engaged" ? "#e879f9" : "#fbbf24"
+
+                    const series = selected.map((k) => {
+                      const raw = data
+                        .map((p, i) => {
+                          const y = k === "reach" ? p.reach : k === "impressions" ? p.impressions : k === "engaged" ? p.engaged : p.followerDelta
+                          if (typeof y !== "number" || !Number.isFinite(y)) return null
+                          return { i, y }
+                        })
+                        .filter(Boolean) as Array<{ i: number; y: number }>
+
+                      const ys = raw.map((p) => p.y)
+                      const min = ys.length ? Math.min(...ys) : 0
+                      const max = ys.length ? Math.max(...ys) : 0
+                      const span = Math.max(max - min, 0)
+
+                      const points = raw.map((p) => {
+                        const norm = span > 0 ? ((p.y - min) / span) * 100 : 50
+                        return { i: p.i, yRaw: p.y, yNorm: Number.isFinite(norm) ? norm : 50 }
+                      })
+
+                      return { k, label: labelFor(k), color: colorFor(k), min, max, points }
+                    })
+
+                    const drawable = series.filter((s) => s.points.length >= 2)
+                    const allY = drawable.flatMap((s) => s.points.map((p) => p.yNorm))
+                    if (!drawable.length || allY.length < 2) {
+                      return (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
+                          <div className="text-sm text-white/75 text-center leading-relaxed min-w-0">目前尚未取得最近 7 天趨勢資料</div>
+                        </div>
+                      )
+                    }
+
+                    // Plot in normalized space (0..100). Each series is scaled independently.
+                    const yMin = 0
+                    const yMax = 100
+
+                    const w = 600
+                    const h = 220
+                    const padX = 18
+                    const padY = 18
+                    const spanX = Math.max(data.length - 1, 1)
+                    const spanY = Math.max(yMax - yMin, 1e-6)
+                    const sx = (i: number) => padX + (i / spanX) * (w - padX * 2)
+                    const sy = (y: number) => h - padY - ((y - yMin) / spanY) * (h - padY * 2)
+
+                    const clampedHoverIdx =
+                      typeof hoveredAccountTrendIndex === "number" ? Math.max(0, Math.min(data.length - 1, hoveredAccountTrendIndex)) : null
+
+                    const hoverPoint = clampedHoverIdx !== null ? data[clampedHoverIdx] : null
+
+                    const tooltipItems = hoverPoint
+                      ? selected
+                          .map((k) => {
+                            const val = k === "reach" ? hoverPoint.reach : k === "impressions" ? hoverPoint.impressions : k === "engaged" ? hoverPoint.engaged : hoverPoint.followerDelta
+                            if (typeof val !== "number" || !Number.isFinite(val)) return null
+                            return {
+                              label: labelFor(k),
+                              color: colorFor(k),
+                              value:
+                                k === "followerDelta"
+                                  ? `${val > 0 ? "+" : ""}${Math.round(val).toLocaleString()}`
+                                  : Math.round(val).toLocaleString(),
+                            }
+                          })
+                          .filter(Boolean) as Array<{ label: string; color: string; value: string }>
+                      : []
+
+                    return (
+                      <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
+                        <div className="relative min-w-0">
+                          <div className="h-[240px] w-full">
+                            <svg
+                              viewBox={`0 0 ${w} ${h}`}
+                              className="h-full w-full"
+                              preserveAspectRatio="none"
+                              onMouseLeave={() => setHoveredAccountTrendIndex(null)}
+                              onMouseMove={(e) => {
+                                const el = e.currentTarget
+                                const rect = el.getBoundingClientRect()
+                                const x = e.clientX - rect.left
+                                const ratio = rect.width > 0 ? x / rect.width : 0
+                                const idx = Math.round(ratio * (data.length - 1))
+                                setHoveredAccountTrendIndex(Math.max(0, Math.min(data.length - 1, idx)))
+                              }}
+                            >
+                              <line x1={padX} y1={h - padY} x2={w - padX} y2={h - padY} stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
+
+                              {drawable.map((s, si) => {
+                                const d = s.points
+                                  .map((p, i) => {
+                                    const x = sx(p.i)
+                                    const y = sy(p.yNorm)
+                                    if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                    return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`
+                                  })
+                                  .filter(Boolean)
+                                  .join(" ")
+
+                                return (
+                                  <path
+                                    key={`trend-series-${si}`}
+                                    d={d || ""}
+                                    fill="none"
+                                    stroke={s.color}
+                                    strokeWidth="3"
+                                    opacity="0.95"
+                                  />
+                                )
+                              })}
+
+                              {clampedHoverIdx !== null ? (
+                                <line x1={sx(clampedHoverIdx)} y1={padY} x2={sx(clampedHoverIdx)} y2={h - padY} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                              ) : null}
+
+                              {clampedHoverIdx !== null
+                                ? drawable.map((s, si) => {
+                                    const hit = s.points.find((p) => p.i === clampedHoverIdx)
+                                    if (!hit) return null
+                                    const cx = sx(hit.i)
+                                    const cy = sy(hit.yNorm)
+                                    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+                                    return (
+                                      <circle
+                                        key={`trend-dot-${si}`}
+                                        cx={cx}
+                                        cy={cy}
+                                        r={4.2}
+                                        fill={s.color}
+                                        stroke="rgba(255,255,255,0.35)"
+                                        strokeWidth={2}
+                                      />
+                                    )
+                                  })
+                                : null}
+
+                              {[0, Math.floor((data.length - 1) / 2), data.length - 1]
+                                .filter((v, i, arr) => arr.indexOf(v) === i)
+                                .map((i) => (
+                                  <text
+                                    key={`trend-xlab-${i}`}
+                                    x={sx(i)}
+                                    y={h - 4}
+                                    fontSize="10"
+                                    textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
+                                    fill="rgba(255,255,255,0.45)"
+                                  >
+                                    {data[i]?.t ?? ""}
+                                  </text>
+                                ))}
+                            </svg>
+                          </div>
+
+                          {clampedHoverIdx !== null && hoverPoint ? (
+                            <div className="pointer-events-none absolute top-2 left-2 rounded-lg border border-white/10 bg-[#0b1220]/85 backdrop-blur px-3 py-2 shadow-xl max-w-[min(280px,70vw)]">
+                              <div className="text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">{hoverPoint.t}</div>
+                              <div className="mt-1 space-y-1">
+                                {tooltipItems.map((it, i) => (
+                                  <div key={`trend-tip-${i}`} className="flex items-center justify-between gap-3 text-[11px] text-white/80">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: it.color }} />
+                                      <span className="truncate min-w-0">{it.label}</span>
+                                    </div>
+                                    <span className="tabular-nums whitespace-nowrap">{it.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
 
             <Card className="text-slate-100 flex flex-col gap-6 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-3 rounded-2xl border border-white/30 bg-gradient-to-b from-white/10 via-white/5 to-white/3 ring-1 ring-white/20 shadow-2xl shadow-black/60 backdrop-blur-sm px-5 sm:px-6 py-5 sm:py-6 mb-8">
               <CardHeader className="pb-0">

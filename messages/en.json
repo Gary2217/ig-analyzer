@@ -1621,10 +1621,13 @@
       "loadedHint": "Post info loaded (public)",
       "unavailable": "Preview unavailable",
       "mediaType": {
+        "image": "Image",
         "photo": "Photo",
         "video": "Video",
+        "reels": "Reels",
         "reel": "Reels",
-        "carousel": "Carousel"
+        "carousel": "Carousel",
+        "unknown": "Unknown"
       },
       "time": {
         "unknown": "Time unknown",
@@ -1635,9 +1638,36 @@
       "note1": "No image parsing is performed. This preview is a placeholder for UI flow.",
       "note2": "This preview is UI-only and does not fetch or parse the post content."
     },
+    "summary": {
+      "title": "TL;DR Summary",
+      "body": {
+        "success": "Content quality and actual performance are aligned — this is a successful post you can replicate.",
+        "okButLow": {
+          "hook": "Content quality is solid, but actual reach is lagging — the biggest bottleneck is the hook not grabbing attention fast enough.",
+          "clarity": "Content quality is solid, but actual reach is lagging — the main bottleneck is unclear messaging.",
+          "generic": "Content quality is solid, but actual reach is lagging — focus on the first 1–2 seconds and make the value obvious."
+        },
+        "low": {
+          "low": "Both content quality and actual performance are low — prioritize fixing the content fundamentals first.",
+          "hook": "Content quality needs improvement — start by tightening the hook so viewers understand the value immediately.",
+          "generic": "Content quality needs improvement — simplify the message and improve readability."
+        },
+        "neutral": "This post is in the middle — apply the top recommendation below for the fastest improvement."
+      }
+    },
     "quick": {
       "title": "Quick Recommendations",
       "subtitle": "Expandable suggestions based on inferred friction points.",
+      "tiers": {
+        "top": "Most important (do this first)",
+        "next": "Next best actions",
+        "later": "If you have time"
+      },
+      "fallback": {
+        "hook": "Make the hook explicit in the first seconds",
+        "cta": "Add one clear, specific call-to-action",
+        "visual": "Improve readability and contrast on mobile"
+      },
       "items": {
         "a1": "Make the hook explicit",
         "a2": "Add a specific CTA",
@@ -1738,11 +1768,30 @@
     "official": {
       "title": "Official Post Performance (C)",
       "subtitle": "Official platform-provided metrics",
+      "loading": "Official metrics loading…",
       "metrics": {
         "reach": "Reach",
         "impressions": "Impressions",
+        "plays": "Plays",
         "likes": "Likes",
         "comments": "Comments"
+        ,
+        "saves": "Saves",
+        "shares": "Shares"
+      },
+      "error": {
+        "unauthorized": "Connection expired. Please reconnect.",
+        "forbidden": "Permission missing. Please verify app permissions and IG business connection.",
+        "generic": "Unable to load official metrics right now."
+      },
+      "actions": {
+        "retry": "Retry",
+        "reconnect": "Reconnect"
+      },
+      "interpretation": {
+        "seenButLowRetention": "It was seen, but retention/engagement seems weak — the opening may not be holding attention.",
+        "distribution": "Quality looks OK, but reach is underwhelming — this may be timing/distribution rather than content.",
+        "content": "Reach and quality are both low — improving the content fundamentals will matter most."
       },
       "vsAvg": {
         "title": "Compared to account average",
@@ -1756,7 +1805,25 @@
       "subtitle": "A diagnostic contrast between inferred quality and observed outcomes",
       "contentQuality": "Content Quality",
       "actualReach": "Actual Reach",
-      "note": "This suggests distribution or timing constraints rather than content quality issues."
+      "note": "This suggests distribution or timing constraints rather than content quality issues.",
+      "conclusion": {
+        "label": "Verdict",
+        "badge": {
+          "distribution": "Distribution",
+          "content": "Content",
+          "success": "Success",
+          "mixed": "Mixed"
+        },
+        "body": {
+          "distribution": "High quality but low reach — focus on distribution and the first seconds of the hook.",
+          "content": "Quality and reach are both low — prioritize improving the core message and clarity.",
+          "success": "Quality and reach are both strong — document what worked and replicate it.",
+          "mixed": "Signals are mixed — apply the top recommendation first and re-check results."
+        }
+      }
+    },
+    "action": {
+      "closing": "If you only apply the single \"Most important\" recommendation above, performance usually improves noticeably."
     },
     "snapshot": {
       "title": "Copyable Snapshot",
@@ -1807,7 +1874,18 @@
       "summaryCopied": "Summary copied",
       "linkCopied": "Link copied",
       "exported": "Exported .txt",
+      "updated": "Up to date",
+      "busy": "Still analyzing — please wait a moment.",
+      "filledLink": "Link filled — click \"Analyze Post\" to start",
+      "invalidUrl": "Please paste a valid Instagram post link.",
+      "tooSoonConfirm": "This link was analyzed just now — click again to rerun.",
+      "tooSoon": "Same link analyzed recently — try again in a few seconds.",
       "copyFailed": "Copy failed"
+    },
+    "share": {
+      "reportTitle": "Post Analysis — Client Summary",
+      "officialVsInferred": "Official: {official} · Inferred quality: {inferred}",
+      "quickWins": "Top 2 quick wins"
     },
     "header": {
       "title": "Post Analysis Results",
