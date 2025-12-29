@@ -1,5 +1,7 @@
 "use client"
 
+// Density pass: tighten common headings/blocks inside Results page (UI-only)
+
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
@@ -99,7 +101,7 @@ function GateShell(props: { title: string; subtitle?: string; children: ReactNod
               {props.title}
             </CardTitle>
             {props.subtitle ? (
-              <div className="text-sm text-slate-300 mt-2 min-w-0 break-words leading-relaxed">{props.subtitle}</div>
+              <div className="text-sm text-slate-300 mt-2 min-w-0 break-words leading-snug">{props.subtitle}</div>
             ) : null}
           </CardHeader>
           <CardContent className="space-y-4">{props.children}</CardContent>
@@ -127,7 +129,7 @@ function LoadingCard(props: {
       </div>
 
       {props.isSlow ? (
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-start">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-start">
           <Button
             type="button"
             variant="outline"
@@ -201,7 +203,7 @@ function ConnectCard(props: {
         </Button>
       </div>
 
-      <div className="text-xs text-white/55 leading-relaxed min-w-0 break-words">
+      <div className="text-xs text-white/55 leading-snug min-w-0 break-words">
         {props.isZh
           ? "提示：若你是一般私人帳號，可能需要先切換成「專業帳號（商業／創作者）」才能被分析。"
           : "Tip: Personal accounts may need to switch to a Professional account (Business/Creator) to be analyzed."}
@@ -246,7 +248,7 @@ function SetupHelpCard(props: { isZh: boolean; onRetry: () => void; onReconnect:
         </Button>
       </div>
 
-      <div className="text-xs text-white/55 leading-relaxed min-w-0 break-words">
+      <div className="text-xs text-white/55 leading-snug min-w-0 break-words">
         {props.isZh
           ? "若你剛完成綁定，可能需要等幾秒再重試一次（Meta 同步需要時間）。"
           : "If you just linked it, wait a few seconds and try again (Meta sync can take time)."}
@@ -273,9 +275,9 @@ function ProgressRing({
 }) {
   const v = Math.max(0, Math.min(100, value))
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
+    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
       <div
-        className="h-12 w-12 rounded-full"
+        className="h-10 w-10 rounded-full"
         style={{
           background: `conic-gradient(#34d399 ${v}%, rgba(255,255,255,0.12) ${v}%)`,
         }}
@@ -286,8 +288,8 @@ function ProgressRing({
           </span>
         </div>
       </div>
-      <div className="leading-tight min-w-0">
-        <div className="text-sm font-semibold text-white truncate">{label}</div>
+      <div className="leading-snug min-w-0">
+        <div className="text-xs font-semibold text-white truncate">{label}</div>
         {subLabel ? <div className="text-xs text-white/60 truncate">{subLabel}</div> : null}
       </div>
     </div>
@@ -528,6 +530,15 @@ export default function ResultsPage() {
   const [media, setMedia] = useState<Array<ReturnType<typeof normalizeMedia>[number]>>([])
   const [topPosts, setTopPosts] = useState<any[]>([])
 
+  const [trendPoints, setTrendPoints] = useState<AccountTrendPoint[]>([])
+  const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
+    loading: false,
+    error: "",
+    lastDays: null,
+  })
+  const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
+  const [trendHasNewDay, setTrendHasNewDay] = useState(false)
+
   const [mediaLoaded, setMediaLoaded] = useState(false)
 
   const [selectedGoal, setSelectedGoal] = useState<
@@ -626,11 +637,26 @@ export default function ResultsPage() {
   const connectedProvider = searchParams.get("connected")
   const isConnectedInstagram = connectedProvider === "instagram"
 
-  const accountTrend7d = useMemo<AccountTrendPoint[]>(() => {
+  const formatDateTW = (d: Date) =>
+    `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
+  const formatTimeTW = (ms: number) => new Date(ms).toLocaleString("zh-TW", { hour12: false })
+
+  const allAccountTrend = useMemo<AccountTrendPoint[]>(() => {
     const isRec = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === "object")
     const toNum = (v: unknown) => {
       const n = typeof v === "number" ? v : Number(v)
       return Number.isFinite(n) ? n : null
+    }
+
+    const fmtLabel = (ts: number) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
+      } catch {
+        const d = new Date(ts)
+        const m = String(d.getMonth() + 1).padStart(2, "0")
+        const dd = String(d.getDate()).padStart(2, "0")
+        return `${m}/${dd}`
+      }
     }
 
     const getPath = (obj: unknown, path: string): unknown => {
@@ -642,6 +668,10 @@ export default function ResultsPage() {
         cur = (cur as Record<string, unknown>)[p]
       }
       return cur
+    }
+
+    if (Array.isArray(trendPoints) && trendPoints.length >= 2) {
+      return trendPoints
     }
 
     const candidates: unknown[] = [
@@ -687,24 +717,7 @@ export default function ResultsPage() {
           return Number.isFinite(ms) ? ms : null
         })()
 
-        const label = (() => {
-          if (typeof dateRaw === "string" && dateRaw.trim()) {
-            const d = new Date(dateRaw)
-            if (!Number.isNaN(d.getTime())) {
-              const m = String(d.getMonth() + 1).padStart(2, "0")
-              const dd = String(d.getDate()).padStart(2, "0")
-              return `${m}/${dd}`
-            }
-            return dateRaw.trim()
-          }
-          if (ts !== null) {
-            const d = new Date(ts)
-            const m = String(d.getMonth() + 1).padStart(2, "0")
-            const dd = String(d.getDate()).padStart(2, "0")
-            return `${m}/${dd}`
-          }
-          return String(idx + 1)
-        })()
+        const label = ts !== null ? fmtLabel(ts) : String(idx + 1)
 
         const reach = toNum((it as Record<string, unknown>).reach) ??
           toNum((it as Record<string, unknown>).accounts_reached) ??
@@ -747,9 +760,131 @@ export default function ResultsPage() {
       return a.ts - b.ts
     })
 
-    const last7 = sorted.slice(-7).map((x) => x.p)
-    return last7.length >= 2 ? last7 : (__DEV__ ? MOCK_ACCOUNT_TREND_7D : [])
-  }, [__DEV__, igMe, igProfile, result])
+    const all = sorted.map((x) => x.p)
+    return all.length >= 2 ? all : (__DEV__ ? MOCK_ACCOUNT_TREND_7D : [])
+  }, [__DEV__, igMe, igProfile, result, trendPoints])
+
+  const accountTrend = useMemo<AccountTrendPoint[]>(() => {
+    const data = allAccountTrend
+    if (!data.length) return []
+    return data.slice(-7)
+  }, [allAccountTrend])
+
+  const trendMeta = useMemo(() => {
+    if (!trendPoints || trendPoints.length === 0) return null
+    const first = trendPoints[0] as any
+    const last = trendPoints[trendPoints.length - 1] as any
+    const firstTs = typeof first?.ts === "number" && Number.isFinite(first.ts) ? first.ts : null
+    const lastTs = typeof last?.ts === "number" && Number.isFinite(last.ts) ? last.ts : null
+    if (firstTs === null || lastTs === null) return null
+
+    const firstDate = new Date(firstTs)
+    const lastDate = new Date(lastTs)
+    if (Number.isNaN(firstDate.getTime()) || Number.isNaN(lastDate.getTime())) return null
+
+    const endKey = `${lastDate.getFullYear()}-${lastDate.getMonth() + 1}-${lastDate.getDate()}`
+    const today = new Date()
+    const isToday =
+      lastDate.getFullYear() === today.getFullYear() &&
+      lastDate.getMonth() === today.getMonth() &&
+      lastDate.getDate() === today.getDate()
+
+    return {
+      startLabel: formatDateTW(firstDate),
+      endLabel: formatDateTW(lastDate),
+      endKey,
+      isToday,
+    }
+  }, [trendPoints])
+
+  useEffect(() => {
+    if (!isConnected) return
+
+    const daysWanted = 7
+    if (trendFetchStatus.lastDays === 7 && Array.isArray(trendPoints) && trendPoints.length >= 2) return
+
+    const controller = new AbortController()
+    let cancelled = false
+
+    const run = async () => {
+      try {
+        setTrendFetchStatus((s) => ({ ...s, loading: true, error: "", lastDays: daysWanted }))
+        const res = await fetch(`/api/instagram/trend?days=7`, {
+          cache: "no-store",
+          credentials: "include",
+          signal: controller.signal,
+        })
+
+        if (cancelled) return
+        if (!res.ok) {
+          setTrendFetchStatus((s) => ({ ...s, loading: false, error: `trend_api_failed_${res.status}` }))
+          return
+        }
+
+        const json = (await res.json()) as any
+        const pts = Array.isArray(json?.points) ? json.points : []
+        if (pts.length >= 2) {
+          setTrendPoints(
+            pts.map((p: any) => ({
+              ts: typeof p?.ts === "number" && Number.isFinite(p.ts) ? p.ts : undefined,
+              t:
+                typeof p?.t === "string" && p.t.trim()
+                  ? p.t
+                  : typeof p?.ts === "number" && Number.isFinite(p.ts)
+                    ? (() => {
+                        try {
+                          return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(
+                            new Date(p.ts)
+                          )
+                        } catch {
+                          const d = new Date(p.ts)
+                          const m = String(d.getMonth() + 1).padStart(2, "0")
+                          const dd = String(d.getDate()).padStart(2, "0")
+                          return `${m}/${dd}`
+                        }
+                      })()
+                    : "—",
+              reach: typeof p?.reach === "number" && Number.isFinite(p.reach) ? p.reach : null,
+              impressions: typeof p?.impressions === "number" && Number.isFinite(p.impressions) ? p.impressions : null,
+              engaged: typeof p?.engaged === "number" && Number.isFinite(p.engaged) ? p.engaged : null,
+              followerDelta: typeof p?.followerDelta === "number" && Number.isFinite(p.followerDelta) ? p.followerDelta : null,
+            }))
+          )
+          setTrendFetchedAt(Date.now())
+          setTrendFetchStatus((s) => ({ ...s, loading: false, error: "" }))
+        } else {
+          setTrendFetchStatus((s) => ({ ...s, loading: false, error: "trend_api_no_points" }))
+        }
+      } catch (err: any) {
+        if (cancelled) return
+        if (err?.name === "AbortError") return
+        setTrendFetchStatus((s) => ({ ...s, loading: false, error: "trend_api_exception" }))
+      }
+    }
+
+    run()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected])
+
+  useEffect(() => {
+    if (!trendMeta?.endKey) return
+    try {
+      const key = "ig_analyzer:last_trend_end_key"
+      const prev = localStorage.getItem(key)
+      if (prev && prev !== trendMeta.endKey) {
+        setTrendHasNewDay(true)
+      } else {
+        setTrendHasNewDay(false)
+      }
+      localStorage.setItem(key, trendMeta.endKey)
+    } catch {
+      // ignore
+    }
+  }, [trendMeta?.endKey])
 
   const hasConnectedFlag = (igMe as any)?.connected === true
   const hasRealProfile = Boolean(isConnected)
@@ -1595,6 +1730,101 @@ export default function ResultsPage() {
     },
   ]
 
+  const insightUiMeta = (
+    i: number
+  ): {
+    source: string
+    action: string
+    why: string
+  } => {
+    if (isZh) {
+      if (i === 0)
+        return {
+          source: "根據最近 3 天的互動帳號趨勢",
+          action: "👉 這週先把高互動主題做成 3 篇小系列",
+          why: "因為最近互動帳號上升，但延續性不夠",
+        }
+      if (i === 1)
+        return {
+          source: "根據最近一週的粉絲變化趨勢",
+          action: "👉 這週先把個人頁與置頂貼文做一次對齊",
+          why: "因為最近粉絲成長停滯，需要更清楚的追蹤理由",
+        }
+      return {
+        source: "根據最近 7 天的觸及趨勢",
+        action: "👉 這週先固定一個可維持的發文節奏",
+        why: "因為最近觸及有波動，穩定輸出能讓分發更連續",
+      }
+    }
+
+    if (i === 0)
+      return {
+        source: "Based on the last 3 days of engaged accounts trend",
+        action: "👉 This week, turn your high-engagement topic into a 3-post mini series",
+        why: "Because engaged accounts are rising, but the momentum isn’t consistent",
+      }
+    if (i === 1)
+      return {
+        source: "Based on the last week of follower change trend",
+        action: "👉 This week, align your profile + pinned posts in one pass",
+        why: "Because follower growth is stalling and the follow reason isn’t clear enough",
+      }
+    return {
+      source: "Based on the last 7 days of reach trend",
+      action: "👉 This week, lock a posting cadence you can sustain",
+      why: "Because reach is fluctuating—steady output helps distribution stay continuous",
+    }
+  }
+
+  const renderInsightsSection = (variant: "mobile" | "desktop") => {
+    const isMobile = variant === "mobile"
+    return (
+      <Card className={isMobile ? "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm" : "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm"}>
+        <CardHeader className={isMobile ? "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6" : "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6"}>
+          <CardTitle className={isMobile ? "text-base font-semibold text-white" : "text-sm text-white"}>
+            {t("results.recommendations.title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className={isMobile ? "space-y-2 sm:space-y-3" : "space-y-2 sm:space-y-3"}>
+            {insights.map((insight, idx) => {
+              const meta = insightUiMeta(idx)
+              return (
+                <div
+                  key={insight.title}
+                  className={
+                    "rounded-xl border border-white/10 bg-white/5 " +
+                    (isMobile ? "p-4" : "p-4")
+                  }
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className={isMobile ? "text-sm font-semibold text-white" : "text-xs font-semibold text-white"}>
+                      {insight.title}
+                    </div>
+                    <div className="text-xs text-muted-foreground text-right shrink-0">{t("results.insights.proHint")}</div>
+                  </div>
+
+                  <div className={isMobile ? "mt-1 text-xs text-white/55 leading-snug" : "mt-1 text-xs text-white/45 leading-snug"}>
+                    {meta.source}
+                  </div>
+
+                  <div className={isMobile ? "mt-2 space-y-2" : "mt-2 space-y-2"}>
+                    <div className={isMobile ? "text-sm font-semibold text-white leading-snug" : "text-sm font-semibold text-white leading-snug"}>
+                      {meta.action}
+                    </div>
+                    <div className={isMobile ? "text-xs text-slate-200/85 leading-snug" : "text-xs text-slate-300 leading-snug"}>
+                      {meta.why}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   const goalOptions: Array<{
     id: NonNullable<typeof selectedGoal>
     labelKey: string
@@ -2002,7 +2232,7 @@ export default function ResultsPage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-white">Instagram 連線已失效</div>
-                  <div className="mt-1 text-[13px] text-white/70 leading-relaxed">
+                  <div className="mt-1 text-[13px] text-white/70 leading-snug">
                     請重新驗證登入後再查看帳號分析結果。
                   </div>
                 </div>
@@ -2017,354 +2247,15 @@ export default function ResultsPage() {
             </div>
           )}
 
-          {igMeLoading || loading ? (
-            <>
-              <main
-                data-scroll-container
-                className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden"
-              >
-                <div className="text-center space-y-4">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-                  <p>{t("results.states.loading")}</p>
-                </div>
-              </main>
-            </>
-          ) : igMeUnauthorized ? (
-            <>
-              <main
-                data-scroll-container
-                className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden"
-              >
-                <Card className="w-full max-w-2xl rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-2xl sm:text-3xl font-bold text-white">
-                    {t("results.instagram.connectGate.title")}
-                  </CardTitle>
-                  <p className="text-sm text-slate-300 mt-2">{t("results.instagram.connectGate.desc")}</p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {connectEnvError === "missing_env" && (
-                    <Alert>
-                      <AlertTitle>{t("results.instagram.missingEnv.title")}</AlertTitle>
-                      <AlertDescription>
-                        <div className="space-y-2">
-                          <div>{t("results.instagram.missingEnv.desc")}</div>
-                          <div className="font-mono text-xs break-all">APP_BASE_URL / META_APP_ID / META_APP_SECRET</div>
-                          <div>{t("results.instagram.missingEnv.restartHint")}</div>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <Button
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg"
-                      onClick={handleConnect}
-                      disabled={igMeLoading}
-                    >
-                      {t("results.instagram.connectGate.cta")}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg"
-                      onClick={() => router.push(localePathname("/", activeLocale))}
-                    >
-                      {t("results.instagram.connectGate.back")}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-              </main>
-            </>
-          ) : !hasResult ? (
-            <>
-              <main
-                data-scroll-container
-                className="w-full flex items-center justify-center bg-[#0b1220] px-4 py-16 overflow-x-hidden"
-              >
-                <Alert>
-                  <AlertTitle>{t("results.states.noResultsTitle")}</AlertTitle>
-                  <AlertDescription>{t("results.states.noResultsDesc")}</AlertDescription>
-                  <Button className="mt-4" onClick={() => router.push(localePathname("/", activeLocale))}>
-                    {t("results.actions.backToHome")}
-                  </Button>
-                </Alert>
-              </main>
-            </>
-          ) : (
-            <main
-              data-scroll-container
-              className="w-full bg-gradient-to-b from-[#0b1220]/100 via-[#0b1220]/95 to-[#0b1220]/90 overflow-x-hidden"
-            >
-          <div className="border-b border-white/10 bg-[#0b1220]/60 backdrop-blur-md">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    {!isConnected && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/5 text-slate-200 border border-white/10">
-                        {t("results.badges.demo")}
-                      </span>
-                    )}
-                    {isConnected && (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-200 border border-emerald-400/20">
-                        {t("results.instagram.connectedBadge")}
-                      </span>
-                    )}
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20">
-                      {safeResult.platform === "instagram"
-                        ? t("results.platform.instagram")
-                        : t("results.platform.threads")}
-                    </span>
-                    {!isConnected && (
-                      <span
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-200 border border-emerald-400/20"
-                        title={t("results.badges.modeHint")}
-                      >
-                        {t("results.badges.inferredA")}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm font-semibold text-white truncate">{t("results.title")}</div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 justify-end">
-                  {!isConnected && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                      onClick={() => router.push(localePathname("/post-analysis", activeLocale))}
-                    >
-                      {t("results.actions.analyzePost")}
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                    onClick={handleExport}
-                    disabled={exporting}
-                    aria-busy={exporting ? true : undefined}
-                  >
-                    {t("results.actions.export")}
-                  </Button>
-                  {displayUsername && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-white/15 text-slate-200 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                      onClick={handleShare}
-                      aria-busy={shareCopied ? true : undefined}
-                    >
-                      {shareCopied ? t("results.actions.copied") : t("results.actions.share")}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
-            {!isConnected && (
-              <div className="space-y-2">
-                <h1 className="text-2xl sm:text-3xl font-bold text-white">{t("results.title")}</h1>
-                <p className="text-sm text-slate-300 max-w-2xl">
-                  {t("results.subtitle")}
-                </p>
-                <div className="text-xs text-slate-400 max-w-3xl">
-                  <span className="font-medium text-slate-300">{t("results.badges.inferredA")}</span> {t("results.badges.inferredDesc")}
-                </div>
-              </div>
-            )}
-
-          <Card id="overview-section" className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg scroll-mt-40">
-            <CardContent className="p-6 sm:p-8">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                <div className="space-y-2">
-                  <div className="text-sm text-slate-300">{t("results.overview.kicker")}</div>
-                  <div className="flex items-center gap-4 min-w-0">
-                    {isConnected && igProfile?.profile_picture_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={String(igProfile.profile_picture_url)}
-                        alt={`@${String(igProfile?.username ?? "")}`}
-                        className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border border-white/10 object-cover shrink-0"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-gradient-to-br from-blue-500/40 to-purple-600/40 border border-white/10 flex items-center justify-center shrink-0">
-                        <Instagram className="h-5 w-5 text-slate-100" />
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="text-2xl sm:text-3xl font-bold text-white tracking-tight min-w-0 truncate">
-                          {isConnected ? `@${igMe!.username}` : t("results.instagram.connectPromptTitle")}
-                        </div>
-                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-200 border border-blue-400/20 shrink-0">
-                          {safeResult.platform === "instagram" ? (
-                            <Instagram className="h-3.5 w-3.5 shrink-0" />
-                          ) : (
-                            <span className="h-3.5 w-3.5 rounded-full bg-blue-200/80 shrink-0" />
-                          )}
-                          {safeResult.platform === "instagram" ? t("results.platform.instagram") : t("results.platform.threads")}
-                        </span>
-                        {isConnected && igMe?.account_type && (
-                          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-white/5 text-slate-200 border border-white/10 shrink-0">
-                            {igMe.account_type}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1 inline-flex items-center gap-2 text-sm text-slate-300 min-w-0">
-                        <AtSign className="h-4 w-4 shrink-0 text-slate-400" />
-                        <span className="truncate">
-                          {isConnected ? `@${String(igProfile?.username ?? "")}` : t("results.instagram.connectPromptHandle")}
-                        </span>
-                      </div>
-                      {isConnected && typeof igProfile?.followers_count === "number" && (
-                        <div className="mt-1 text-sm text-slate-300">
-                          {t("results.instagram.followersLabel")}: {Number(igProfile.followers_count).toLocaleString()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {!isConnected && (
-                    <div className="text-sm text-slate-300 max-w-2xl">{t("results.instagram.connectPromptDesc")}</div>
-                  )}
-                  {isConnected && (
-                    <div className="text-sm text-slate-300 max-w-2xl">{headerInsight}</div>
-                  )}
-                  {safeResult.platform === "threads" && (
-                    <div className="text-xs text-slate-400 max-w-2xl">
-                      {t("results.overview.threadsNote")}
-                    </div>
-                  )}
-                  {isConnected && (
-                    <div className="text-sm text-slate-200/90 max-w-3xl">
-                      {reportSummaryLine}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {!isConnected && (
-                    <Button
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                      onClick={handleConnect}
-                      disabled={igMeLoading}
-                    >
-                      {t("results.instagram.connectCta")}
-                    </Button>
-                  )}
-                  {false && (
-                    <Button
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0"
-                      onClick={handleUpgrade}
-                    >
-                      {t("results.actions.upgrade")}
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {(() => {
-                  const tone = metricTone(authenticityStatus)
-                  return (
-                    <Card
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => focusKpi("authenticity")}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") focusKpi("authenticity")
-                      }}
-                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 ${activeKpi === "authenticity" ? "ring-2 ring-blue-500/40" : ""}`}
-                    >
-                      <CardContent className="p-5 h-full flex flex-col justify-between">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-200">{t("results.metrics.authenticity.title")}</div>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
-                          >
-                            {toneLabel(tone.label)}
-                          </span>
-                        </div>
-                        <div className="mt-3 text-3xl font-bold text-white">{safeResult.confidenceScore}%</div>
-                        <div className="mt-1 text-sm text-slate-300">{t("results.metrics.authenticity.desc")}</div>
-                        <div className="mt-1 text-xs text-slate-400">{t("results.metrics.authenticity.note")}</div>
-                      </CardContent>
-                    </Card>
-                  )
-                })()}
-
-                {(() => {
-                  const tone = metricTone(engagementStatus)
-                  return (
-                    <Card
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => focusKpi("engagement")}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") focusKpi("engagement")
-                      }}
-                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 ${activeKpi === "engagement" ? "ring-2 ring-blue-500/40" : ""}`}
-                    >
-                      <CardContent className="p-5 h-full flex flex-col justify-between">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-200">{t("results.metrics.engagement.title")}</div>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
-                          >
-                            {toneLabel(tone.label)}
-                          </span>
-                        </div>
-                        <div className="mt-3 text-3xl font-bold text-white">{engagementPercent}%</div>
-                        <div className="mt-1 text-sm text-slate-300">{t("results.metrics.engagement.desc")}</div>
-                      </CardContent>
-                    </Card>
-                  )
-                })()}
-
-                {(() => {
-                  const tone = metricTone(automationStatus)
-                  return (
-                    <Card
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => focusKpi("automation")}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") focusKpi("automation")
-                      }}
-                      className={`rounded-xl border ${tone.border} ${tone.bg} h-full cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 ${activeKpi === "automation" ? "ring-2 ring-blue-500/40" : ""}`}
-                    >
-                      <CardContent className="p-5 h-full flex flex-col justify-between">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-200">{t("results.metrics.automation.title")}</div>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
-                          >
-                            {toneLabel(tone.label)}
-                          </span>
-                        </div>
-                        <div className="mt-3 text-3xl font-bold text-white">{automationRiskPercent}%</div>
-                        <div className="mt-1 text-sm text-slate-300">{t("results.metrics.automation.desc")}</div>
-                      </CardContent>
-                    </Card>
-                  )
-                })()}
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="mt-6 sm:mt-10 space-y-6 sm:space-y-8">
+          <div className="mt-3 sm:mt-4 space-y-4 sm:space-y-4">
             {isConnected && (
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                <CardHeader className="border-b border-white/10">
+                <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
                   <CardTitle className="text-xl font-bold text-white">{t("results.instagram.recentPostsTitle")}</CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 md:p-6">
+                <CardContent className="p-4 md:p-5 lg:p-5">
                   {Array.isArray(recentPosts) && recentPosts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                       {recentPosts.slice(0, 3).map((m) => {
                         const caption = typeof m.caption === "string" ? m.caption : ""
                         const mediaUrl = typeof m.media_url === "string" ? m.media_url : ""
@@ -2372,7 +2263,7 @@ export default function ResultsPage() {
                         const dateLabel = ts ? new Date(ts).toLocaleString() : ""
 
                         return (
-                          <div key={m.id} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                          <div key={m.id} className="rounded-xl border border-white/10 bg-white/5 overflow-visible">
                             <div className="aspect-square bg-black/20">
                               {mediaUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
@@ -2406,10 +2297,10 @@ export default function ResultsPage() {
                 </CardContent>
               </Card>
             )}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between w-full">
               <div>
                 <div className="text-sm text-slate-300">{t("results.performance.kicker")}</div>
-                <h2 className="text-xl sm:text-2xl font-semibold text-white">{t("results.performance.title")}</h2>
+                <h2 className="text-lg font-semibold text-white">{t("results.performance.title")}</h2>
               </div>
               <Button
                 variant="ghost"
@@ -2417,26 +2308,22 @@ export default function ResultsPage() {
                 className="text-slate-200 hover:bg-white/5 inline-flex items-center gap-3"
               >
                 <ArrowLeft className="h-4 w-4 shrink-0" />
-                <span className="leading-relaxed">{t("results.actions.back")}</span>
+                <span className="leading-snug">{t("results.actions.back")}</span>
               </Button>
             </div>
 
             {/* Responsive grid: 手機 1 欄；有 sidebar 時 md+ 並排，無 sidebar 則單欄撐滿 */}
-            <div className="grid grid-cols-1 gap-8 lg:gap-6">
-              <div className="w-full lg:col-span-2 space-y-6 lg:space-y-4">
+            <div className="grid grid-cols-1 gap-4 lg:gap-4">
+              <div className="w-full lg:col-span-2 space-y-4 lg:space-y-4">
                 <Card id="results-section-performance" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                  <CardHeader className="border-b border-white/10">
-                    <CardTitle className="text-2xl lg:text-2xl font-bold flex items-center justify-between gap-3 min-w-0">
-                      <span className="min-w-0 truncate">{t("results.performance.cardTitle")}</span>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/50 text-blue-300 border border-blue-800/50 shrink-0">
-                        {safeResult.platform === "instagram"
-                          ? t("results.platform.instagram")
-                          : t("results.platform.threads")}
-                      </span>
-                    </CardTitle>
+                  <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+                    <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.performance.cardTitle")}</CardTitle>
+                    <p className="text-sm text-slate-400 mt-1 min-w-0 line-clamp-2 leading-snug">
+                      {t("results.performance.radarDesc")}
+                    </p>
                   </CardHeader>
-                  <CardContent className="p-4 md:p-6">
-                    <div className="space-y-4">
+                  <CardContent className="p-4 md:p-5 lg:p-5">
+                    <div className="space-y-4 md:space-y-5">
                       <div>
                         <div className="text-sm font-medium text-white">{t("results.performance.radarTitle")}</div>
                         <div className="text-sm text-slate-300">{t("results.performance.radarDesc")}</div>
@@ -2449,14 +2336,14 @@ export default function ResultsPage() {
                 </Card>
 
                 <Card id="results-section-monetization" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                  <CardHeader className="border-b border-white/10">
-                    <CardTitle className="text-xl lg:text-xl font-bold">{t("results.monetization.title")}</CardTitle>
+                  <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+                    <CardTitle className="text-xl font-bold">{t("results.monetization.title")}</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4 md:p-6">
+                  <CardContent className="p-4 md:p-5 lg:p-5">
                     <p className="text-xs text-slate-400 mb-3">
                       {t("results.monetization.subtitle")}
                     </p>
-                    <div className="relative rounded-xl border border-white/10 bg-white/5 p-4 md:p-6">
+                    <div className="relative rounded-xl border border-white/8 bg-white/5 p-3">
                       <div className={!isSubscribed ? "blur-sm pointer-events-none select-none" : undefined}>
                         <MonetizationSection 
                           monetizationGap={18} // This would be calculated from the analysis in a real app
@@ -2466,13 +2353,13 @@ export default function ResultsPage() {
 
                       {!isSubscribed && (
                         <div className="absolute inset-0 flex items-center justify-center p-4">
-                          <div className="w-full max-w-3xl rounded-xl border border-white/10 bg-[#0b1220]/80 backdrop-blur-sm p-4 md:p-6">
-                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                          <div className="w-full max-w-3xl rounded-xl border border-white/10 bg-[#0b1220]/80 backdrop-blur-sm p-4">
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                               <div className="space-y-3">
                                 <div className="text-sm text-slate-200">
                                   {t("results.monetization.paywall.stat")}
                                 </div>
-                                <div className="text-sm text-slate-300">
+                                <div className="text-sm text-slate-300 leading-snug">
                                   {t("results.monetization.paywall.desc")}
                                 </div>
                                 <div className="pt-2">
@@ -2513,12 +2400,12 @@ export default function ResultsPage() {
 
                 <section id="account-insights-section" className="scroll-mt-40">
                   <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                    <CardHeader className="border-b border-white/10">
-                      <CardTitle className="text-xl lg:text-xl font-bold">{t("results.insights.title")}</CardTitle>
+                    <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+                      <CardTitle className="text-xl font-bold">{t("results.insights.title")}</CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 md:p-6">
-                      <div className="space-y-4 lg:space-y-3">
-                        <div className="grid grid-cols-2 gap-6 lg:gap-4">
+                    <CardContent className="p-4 lg:p-6">
+                      <div className="space-y-2 sm:space-y-3">
+                        <div className="grid grid-cols-2 gap-4 lg:gap-4">
                           <div>
                             <p className="text-sm text-muted-foreground">{t("results.insights.fields.accountType")}</p>
                             <p className="font-medium">{accountTypeLabel(safeResult.accountType)}</p>
@@ -2544,7 +2431,7 @@ export default function ResultsPage() {
                               {safeResult.notes.map((note, i) => (
                                 <li key={i} className="flex items-start">
                                   <span className="text-green-500 mr-2">•</span>
-                                  <span className="leading-relaxed">{noteLabel(note)}</span>
+                                  <span className="leading-snug">{noteLabel(note)}</span>
                                 </li>
                               ))}
                             </ul>
@@ -2561,14 +2448,14 @@ export default function ResultsPage() {
               {hasSidebar && (
                 <div className="lg:col-span-1 w-full">
                   <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                    <CardHeader className="border-b border-white/10">
+                    <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
                       <CardTitle className="text-base">{t("results.sidebar.title")}</CardTitle>
                       <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
                         {t("results.sidebar.subtitle")} @{displayUsername}
                       </p>
                     </CardHeader>
                     <div className="flex-1 lg:overflow-y-auto">
-                      <CardContent className="p-4 md:p-6 pb-6 lg:pb-4">
+                      <CardContent className="p-4 lg:p-6 pb-4 lg:pb-6">
                         <GrowthPaths
                           result={{
                             handle: displayUsername,
@@ -2587,13 +2474,13 @@ export default function ResultsPage() {
             </div>
 
             <Card id="next-steps-section" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg scroll-mt-40">
-              <CardHeader className="border-b border-white/10">
-                <CardTitle className="text-xl lg:text-xl font-bold">{t("results.next.title")}</CardTitle>
+              <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+                <CardTitle className="text-xl font-bold">{t("results.next.title")}</CardTitle>
                 <p className="text-sm text-slate-400 mt-1">
                   {t("results.next.subtitle")}
                 </p>
               </CardHeader>
-              <CardContent className="p-4 md:p-6">
+              <CardContent className="p-4 lg:p-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   {(() => {
                     const status =
@@ -2622,8 +2509,8 @@ export default function ResultsPage() {
                           activeNextId === "next-1" ? "ring-2 ring-blue-500/40" : ""
                         }`}
                       >
-                        <CardContent className="p-4 md:p-6 h-full">
-                          <div className="flex items-center justify-between">
+                        <CardContent className="p-4 h-full">
+                          <div className="flex items-center justify-between w-full">
                             <div className="text-sm font-medium text-white">{t("results.next.step1")}</div>
                             <span
                               className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
@@ -2631,7 +2518,7 @@ export default function ResultsPage() {
                               {priority}
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-300 leading-relaxed">{t("results.next.desc1")}</div>
+                          <div className="mt-3 text-sm text-slate-300 leading-snug">{t("results.next.desc1")}</div>
                         </CardContent>
                       </Card>
                     )
@@ -2659,8 +2546,8 @@ export default function ResultsPage() {
                           activeNextId === "next-2" ? "ring-2 ring-blue-500/40" : ""
                         }`}
                       >
-                        <CardContent className="p-4 md:p-6 h-full">
-                          <div className="flex items-center justify-between">
+                        <CardContent className="p-4 h-full">
+                          <div className="flex items-center justify-between w-full">
                             <div className="text-sm font-medium text-white">{t("results.next.step2")}</div>
                             <span
                               className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
@@ -2668,7 +2555,7 @@ export default function ResultsPage() {
                               {priority}
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-300 leading-relaxed">{t("results.next.desc2")}</div>
+                          <div className="mt-3 text-sm text-slate-300 leading-snug">{t("results.next.desc2")}</div>
                         </CardContent>
                       </Card>
                     )
@@ -2696,8 +2583,8 @@ export default function ResultsPage() {
                           activeNextId === "next-3" ? "ring-2 ring-blue-500/40" : ""
                         }`}
                       >
-                        <CardContent className="p-4 md:p-6 h-full">
-                          <div className="flex items-center justify-between">
+                        <CardContent className="p-4 h-full">
+                          <div className="flex items-center justify-between w-full">
                             <div className="text-sm font-medium text-white">{t("results.next.step3")}</div>
                             <span
                               className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
@@ -2705,24 +2592,24 @@ export default function ResultsPage() {
                               {priority}
                             </span>
                           </div>
-                          <div className="mt-3 text-sm text-slate-300 leading-relaxed">{t("results.next.desc3")}</div>
+                          <div className="mt-3 text-sm text-slate-300 leading-snug">{t("results.next.desc3")}</div>
                         </CardContent>
                       </Card>
                     )
                   })()}
                 </div>
 
-                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <Card
                     id="next-1"
                     className={`rounded-xl border border-white/10 bg-white/5 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
                       activeNextId === "next-1" ? "ring-2 ring-blue-500/40" : ""
                     }`}
                   >
-                    <CardContent className="p-4 md:p-6">
+                    <CardContent className="p-4">
                       <div className="text-sm font-semibold text-white">{t("results.next.s1.title")}</div>
-                      <div className="mt-2 text-sm text-slate-300 leading-relaxed">{t("results.next.s1.line1")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.next.s1.line2")}</div>
+                      <div className="mt-2 text-sm text-slate-300 leading-snug">{t("results.next.s1.line1")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.next.s1.line2")}</div>
                     </CardContent>
                   </Card>
                   <Card
@@ -2731,10 +2618,10 @@ export default function ResultsPage() {
                       activeNextId === "next-2" ? "ring-2 ring-blue-500/40" : ""
                     }`}
                   >
-                    <CardContent className="p-4 md:p-6">
+                    <CardContent className="p-4">
                       <div className="text-sm font-semibold text-white">{t("results.next.s2.title")}</div>
-                      <div className="mt-2 text-sm text-slate-300 leading-relaxed">{t("results.next.s2.line1")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.next.s2.line2")}</div>
+                      <div className="mt-2 text-sm text-slate-300 leading-snug">{t("results.next.s2.line1")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.next.s2.line2")}</div>
                     </CardContent>
                   </Card>
                   <Card
@@ -2743,25 +2630,67 @@ export default function ResultsPage() {
                       activeNextId === "next-3" ? "ring-2 ring-blue-500/40" : ""
                     }`}
                   >
-                    <CardContent className="p-4 md:p-6">
+                    <CardContent className="p-4">
                       <div className="text-sm font-semibold text-white">{t("results.next.s3.title")}</div>
-                      <div className="mt-2 text-sm text-slate-300 leading-relaxed">{t("results.next.s3.line1")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.next.s3.line2")}</div>
+                      <div className="mt-2 text-sm text-slate-300 leading-snug">{t("results.next.s3.line1")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.next.s3.line2")}</div>
                     </CardContent>
                   </Card>
                 </div>
               </CardContent>
             </Card>
 
+            <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 text-center">
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? "粉絲數" : t("results.instagram.followersLabel")}</div>
+                    <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
+                      <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
+                      {isPreview(kpiFollowers) && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                          預覽
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
+                    <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
+                      <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
+                      {isPreview(kpiFollowing) && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                          預覽
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
+                    <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
+                      <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
+                      {isPreview(kpiPosts) && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                          預覽
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {false && (
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-xl lg:text-xl font-bold">{t("results.copyable.title")}</CardTitle>
+                <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+                  <CardTitle className="text-xl font-bold">{t("results.copyable.title")}</CardTitle>
                   <p className="text-sm text-slate-400 mt-1">
                     {t("results.copyable.subtitle")}
                   </p>
                 </CardHeader>
-                <CardContent className="p-4 md:p-6">
+                <CardContent className="p-4 lg:p-6">
                   <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
                     <textarea
                       className="w-full min-h-[180px] rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200 outline-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
@@ -2776,14 +2705,14 @@ export default function ResultsPage() {
                       {t("results.copyable.copy")}
                     </Button>
                   </div>
-                  <p className="mt-3 text-xs text-slate-400 leading-relaxed">
+                  <p className="mt-3 text-xs text-slate-400 leading-snug">
                     {t("results.copyable.disclaimer")}
                   </p>
                 </CardContent>
               </Card>
             )}
 
-            <div className="mt-12 lg:mt-8 space-y-6">
+            <div className="mt-4 lg:mt-4 space-y-4">
               <ShareResults 
                 platform={safeResult.platform === 'instagram' ? 'Instagram' : 'Threads'}
                 username={displayUsername}
@@ -2802,7 +2731,7 @@ export default function ResultsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-white leading-tight">{t("results.footer.proPitchTitle")}</div>
-                        <div className="mt-1 text-xs text-white/70 leading-relaxed">{t("results.footer.proPitchDesc")}</div>
+                        <div className="mt-1 text-xs text-white/70 leading-snug">{t("results.footer.proPitchDesc")}</div>
                       </div>
                       <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white bg-white/10 border border-white/15">
                         PRO
@@ -2822,10 +2751,6 @@ export default function ResultsPage() {
               </div>
             </div>
           </div>
-          </div>
-        </main>
-      )}
-
           {isProModalOpen && (
             <div className="fixed inset-0 z-[70] pointer-events-none">
               <div className="pointer-events-auto">
@@ -2834,7 +2759,7 @@ export default function ResultsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="mt-1 text-lg font-semibold text-white leading-snug">{t("results.footer.proModalTitle")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.footer.proModalDesc")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.footer.proModalDesc")}</div>
                     </div>
                     <Button
                       type="button"
@@ -2846,7 +2771,7 @@ export default function ResultsPage() {
                     </Button>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
                     <div className="text-sm font-medium text-white">{t("results.footer.proModalBulletsTitle")}</div>
                     <ul className="mt-2 text-sm text-slate-200 space-y-1.5">
                       <li>{t("results.footer.proModalBullets.1")}</li>
@@ -2885,7 +2810,7 @@ export default function ResultsPage() {
       }
       connectedUI={
         <>
-          <div className="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-5">
             <div className="max-w-xl space-y-1">
               <div className="text-sm text-green-400">{t("results.instagram.connectedBadge")}</div>
             </div>
@@ -2911,42 +2836,43 @@ export default function ResultsPage() {
             </div>
           </div>
 
-          <div className="px-6 pb-6">
+          <div className="max-w-6xl mx-auto px-4 md:px-6 pb-4">
             <div className="mb-4">
               <h2 className="text-sm font-medium text-muted-foreground">
                 {t("results.preview.heading")}
               </h2>
 
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground leading-snug">
                 {t("results.preview.description")}
               </p>
             </div>
 
             <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+              <CardContent className="p-4 md:p-4 lg:p-4">
+                <div className="relative flex flex-col gap-2 md:gap-3">
+                  {/* Row 1: avatar + name */}
+                  <div className="flex items-center gap-3 min-w-0">
                     {igProfile?.profile_picture_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={String(igProfile.profile_picture_url)}
                         alt={displayHandle}
-                        className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-white/10 object-cover shrink-0"
+                        className="h-20 w-20 md:h-24 md:w-24 rounded-full border border-white/10 object-cover shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full border border-white/10 bg-white/10 shrink-0" />
+                      <div className="h-20 w-20 md:h-24 md:w-24 rounded-full border border-white/10 bg-white/10 shrink-0" />
                     )}
 
                     <div className="flex flex-col gap-1 min-w-0">
-                      <div className="text-lg font-semibold text-white truncate">
+                      <div className="text-base font-semibold text-white truncate">
                         {displayName}
                       </div>
-                      <div className="text-sm text-slate-300 truncate">
+                      <div className="text-xs text-slate-300 truncate">
                         {displayHandle}
                       </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <div className="hidden mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground leading-snug">
                         <div className="flex min-w-0 items-baseline gap-1">
                           <span className="whitespace-nowrap">Followers</span>
                           <span className="min-w-0 truncate font-medium tabular-nums text-foreground whitespace-nowrap">
@@ -2971,83 +2897,66 @@ export default function ResultsPage() {
                     </div>
                   </div>
 
-                  <div className="hidden lg:flex absolute left-1/2 -translate-x-1/2 items-center justify-center">
-                    <div className="grid grid-cols-3 gap-4 xl:gap-6 md:min-w-[360px] text-center">
-                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? "粉絲數" : t("results.instagram.followersLabel")}</div>
-                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
-                          <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
-                          {isPreview(kpiFollowers) && (
-                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                              預覽
-                            </span>
-                          )}
+                  {/* Row 2: stats (true center) */}
+                  <div className="w-full flex justify-center mt-1 md:mt-0">
+                    <div className="w-full max-w-[560px] mx-auto">
+                      <div className="sm:hidden -mx-4 px-4 overflow-x-auto overscroll-x-contain">
+                        <div className="flex gap-4 min-w-max pr-4">
+                          <div className="w-[220px] shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
+                            <div className="text-xs text-white/60 whitespace-nowrap">粉絲數</div>
+                            <div className="mt-2 text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500">
+                              {formatCompact(followersCount) ?? "—"}
+                            </div>
+                          </div>
+
+                          <div className="w-[220px] shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
+                            <div className="text-xs text-white/60 whitespace-nowrap">關注數</div>
+                            <div className="mt-2 text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
+                              {formatCompact(followsCount) ?? "—"}
+                            </div>
+                          </div>
+
+                          <div className="w-[220px] shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
+                            <div className="text-xs text-white/60 whitespace-nowrap">貼文數</div>
+                            <div className="mt-2 text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
+                              {formatCompact(mediaCount) ?? "—"}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
-                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
-                          <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
-                          {isPreview(kpiFollowing) && (
-                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                              預覽
-                            </span>
-                          )}
+
+                      <div className="hidden sm:flex justify-center gap-4 md:gap-5">
+                        <div className="w-[160px] md:w-[170px]">
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:p-5 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
+                            <div className="text-xs text-white/60 whitespace-nowrap">粉絲數</div>
+                            <div className="mt-2 text-2xl md:text-3xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500">
+                              {formatCompact(followersCount) ?? "—"}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
-                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
-                          <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
-                          {isPreview(kpiPosts) && (
-                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                              預覽
-                            </span>
-                          )}
+
+                        <div className="w-[160px] md:w-[170px]">
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:p-5 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
+                            <div className="text-xs text-white/60 whitespace-nowrap">關注數</div>
+                            <div className="mt-2 text-2xl md:text-3xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
+                              {formatCompact(followsCount) ?? "—"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="w-[160px] md:w-[170px]">
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:p-5 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
+                            <div className="text-xs text-white/60 whitespace-nowrap">貼文數</div>
+                            <div className="mt-2 text-2xl md:text-3xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
+                              {formatCompact(mediaCount) ?? "—"}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="w-full md:w-auto lg:hidden md:flex-[1.2] md:flex md:justify-center">
-                    <div className="grid grid-cols-3 gap-4 md:gap-6 md:min-w-[360px] text-center">
-                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? "粉絲數" : t("results.instagram.followersLabel")}</div>
-                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
-                          <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
-                          {isPreview(kpiFollowers) && (
-                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                              預覽
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
-                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
-                          <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
-                          {isPreview(kpiFollowing) && (
-                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                              預覽
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                        <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
-                        <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-2xl font-semibold text-white leading-none min-w-0">
-                          <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
-                          {isPreview(kpiPosts) && (
-                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                              預覽
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="hidden lg:flex flex-col justify-center max-w-[360px] min-w-[220px] text-right px-1 sm:px-2">
+                  <div className="absolute right-4 top-4 md:right-5 md:top-5">
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
                         {safeT("results.proBadge")}
@@ -3070,7 +2979,7 @@ export default function ResultsPage() {
                 <div className="text-[11px] text-muted-foreground">{t("results.proHint.rings")}</div>
               </div>
 
-              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
                 {(() => {
                   const ring1Val = isConnected
                     ? engagementRate
@@ -3149,7 +3058,7 @@ export default function ResultsPage() {
               </div>
             </div>
 
-            <div id="kpis-section" className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 scroll-mt-40">
+            <div id="kpis-section" className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 scroll-mt-40">
               {kpis.map((kpi) => {
                 const isSelected = Boolean(selectedGoalConfig)
                 const focus = isSelected
@@ -3175,7 +3084,7 @@ export default function ResultsPage() {
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div className={"text-[15px] font-medium text-slate-100" + (isPrimary ? "" : "")}>{t(kpi.titleKey)}</div>
+                        <div className={"text-sm font-medium text-slate-100" + (isPrimary ? "" : "")}>{t(kpi.titleKey)}</div>
                         <div className="flex flex-col items-end gap-2">
                           {isSelected ? <div className="text-[11px] text-muted-foreground text-right">{focus}</div> : null}
                           {evalLevel ? (
@@ -3206,7 +3115,7 @@ export default function ResultsPage() {
                         </div>
                       </div>
 
-                      <div className="mt-1 text-[clamp(18px,5vw,32px)] sm:text-2xl font-semibold text-white min-w-0">
+                      <div className="mt-1 text-[clamp(18px,5vw,28px)] sm:text-lg font-semibold text-white min-w-0">
                         <span className="tabular-nums whitespace-nowrap">{kpi.value}</span>
                         {kpi.preview ? (
                           <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
@@ -3214,15 +3123,15 @@ export default function ResultsPage() {
                           </span>
                         ) : null}
                       </div>
-                      <div className="mt-1 text-[11px] sm:text-xs text-white/75 leading-tight line-clamp-2">{t(kpi.descriptionKey)}</div>
+                      <div className="mt-1 text-[11px] sm:text-xs text-white/75 leading-snug">{t(kpi.descriptionKey)}</div>
                       {safeT(`results.kpi.consequence.${kpi.id}`) ? (
-                        <div className="mt-1 text-[11px] sm:text-xs text-white/45 leading-tight line-clamp-2">
+                        <div className="mt-1 text-[11px] sm:text-xs text-white/45 leading-snug">
                           {safeT(`results.kpi.consequence.${kpi.id}`)}
                         </div>
                       ) : null}
 
                       {evalNote ? (
-                        <div className="mt-2 text-[11px] sm:text-xs text-muted-foreground leading-tight line-clamp-3">{evalNote}</div>
+                        <div className="mt-2 text-[11px] sm:text-xs text-muted-foreground leading-snug">{evalNote}</div>
                       ) : null}
 
                       {isSelected ? (
@@ -3242,13 +3151,62 @@ export default function ResultsPage() {
               <div className="h-px w-48 bg-gradient-to-r from-transparent via-white/25 to-transparent" />
             </div>
 
-            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-              <CardHeader className="border-b border-white/10">
-                <CardTitle className="text-xl lg:text-xl font-bold text-white min-w-0 truncate">帳號互動趨勢</CardTitle>
-                <p className="text-sm text-slate-400 mt-1 min-w-0 line-clamp-2 leading-tight">最近 7 天（可多選）</p>
+            <section className="mt-3 scroll-mt-32 sm:hidden">
+              {renderInsightsSection("mobile")}
+            </section>
+
+            <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+              <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+                <CardTitle className="text-xl font-bold text-white min-w-0 truncate">帳號互動趨勢</CardTitle>
+                <p className="text-sm text-slate-400 mt-1 min-w-0 line-clamp-2 leading-snug">
+                  {isZh
+                    ? "最近 7 天（系統會每日自動累積，之後可查看更長區間）"
+                    : "Last 7 days (we’ll auto-build history daily; longer ranges coming soon)"}
+                </p>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent className="p-4 lg:p-6">
                 <div className="min-w-0">
+                  <div className="mb-3 flex items-center justify-between gap-2 min-w-0">
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 whitespace-nowrap">
+                      7D
+                    </span>
+                    <div className="text-[11px] text-white/45 tabular-nums whitespace-nowrap shrink-0">
+                      {isZh ? "目前可用：7 天" : "Available: 7 days"}
+                    </div>
+                  </div>
+
+                  {trendMeta ? (
+                    <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-white/60 min-w-0">
+                      <span className="inline-flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-white/80 whitespace-nowrap shrink-0">{isZh ? "趨勢區間" : "Range"}</span>
+                        <span className="tabular-nums whitespace-nowrap truncate min-w-0">
+                          {trendMeta.startLabel} – {trendMeta.endLabel}
+                        </span>
+                      </span>
+
+                      <span className="opacity-40 shrink-0">•</span>
+
+                      <span className="inline-flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-white/80 whitespace-nowrap shrink-0">{isZh ? "更新" : "Updated"}</span>
+                        <span className="tabular-nums whitespace-nowrap truncate min-w-0">
+                          {trendFetchedAt ? formatTimeTW(trendFetchedAt) : "—"}
+                        </span>
+                      </span>
+
+                      {trendMeta.isToday ? (
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/75 whitespace-nowrap shrink-0">
+                          {t("results.trend.today")}
+                        </span>
+                      ) : null}
+
+                      {trendHasNewDay ? (
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/75 whitespace-nowrap shrink-0">
+                          {t("results.trend.new")}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-wrap gap-2 items-center min-w-0">
                     {(
                       [
@@ -3288,20 +3246,12 @@ export default function ResultsPage() {
 
                   {(() => {
                     const selected = selectedAccountTrendMetrics
-                    const data = accountTrend7d
-
-                    if (!data || data.length < 2) {
-                      return (
-                        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
-                          <div className="text-sm text-white/75 text-center leading-relaxed min-w-0">目前尚未取得最近 7 天趨勢資料</div>
-                        </div>
-                      )
-                    }
+                    const dataForChart = accountTrend
 
                     if (!selected.length) {
                       return (
-                        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
-                          <div className="text-sm text-white/75 text-center leading-relaxed min-w-0">請至少選擇一個指標</div>
+                        <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
+                          <div className="text-sm text-white/75 text-center leading-snug min-w-0">請至少選擇一個指標</div>
                         </div>
                       )
                     }
@@ -3312,7 +3262,7 @@ export default function ResultsPage() {
                       k === "reach" ? "#34d399" : k === "impressions" ? "#38bdf8" : k === "engaged" ? "#e879f9" : "#fbbf24"
 
                     const series = selected.map((k) => {
-                      const raw = data
+                      const raw = dataForChart
                         .map((p, i) => {
                           const y = k === "reach" ? p.reach : k === "impressions" ? p.impressions : k === "engaged" ? p.engaged : p.followerDelta
                           if (typeof y !== "number" || !Number.isFinite(y)) return null
@@ -3334,16 +3284,6 @@ export default function ResultsPage() {
                     })
 
                     const drawable = series.filter((s) => s.points.length >= 2)
-                    const allY = drawable.flatMap((s) => s.points.map((p) => p.yNorm))
-                    if (!drawable.length || allY.length < 2) {
-                      return (
-                        <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
-                          <div className="text-sm text-white/75 text-center leading-relaxed min-w-0">目前尚未取得最近 7 天趨勢資料</div>
-                        </div>
-                      )
-                    }
-
-                    // Plot in normalized space (0..100). Each series is scaled independently.
                     const yMin = 0
                     const yMax = 100
 
@@ -3351,15 +3291,17 @@ export default function ResultsPage() {
                     const h = 220
                     const padX = 18
                     const padY = 18
-                    const spanX = Math.max(data.length - 1, 1)
+                    const spanX = Math.max(dataForChart.length - 1, 1)
                     const spanY = Math.max(yMax - yMin, 1e-6)
                     const sx = (i: number) => padX + (i / spanX) * (w - padX * 2)
                     const sy = (y: number) => h - padY - ((y - yMin) / spanY) * (h - padY * 2)
 
                     const clampedHoverIdx =
-                      typeof hoveredAccountTrendIndex === "number" ? Math.max(0, Math.min(data.length - 1, hoveredAccountTrendIndex)) : null
+                      typeof hoveredAccountTrendIndex === "number"
+                        ? Math.max(0, Math.min(dataForChart.length - 1, hoveredAccountTrendIndex))
+                        : null
 
-                    const hoverPoint = clampedHoverIdx !== null ? data[clampedHoverIdx] : null
+                    const hoverPoint = clampedHoverIdx !== null ? dataForChart[clampedHoverIdx] : null
 
                     const tooltipItems = hoverPoint
                       ? selected
@@ -3379,251 +3321,241 @@ export default function ResultsPage() {
                       : []
 
                     return (
-                      <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-6">
-                        <div className="relative min-w-0">
-                          <div className="h-[240px] w-full">
-                            <svg
-                              viewBox={`0 0 ${w} ${h}`}
-                              className="h-full w-full"
-                              preserveAspectRatio="none"
-                              onMouseLeave={() => setHoveredAccountTrendIndex(null)}
-                              onMouseMove={(e) => {
-                                const el = e.currentTarget
-                                const rect = el.getBoundingClientRect()
-                                const x = e.clientX - rect.left
-                                const ratio = rect.width > 0 ? x / rect.width : 0
-                                const idx = Math.round(ratio * (data.length - 1))
-                                setHoveredAccountTrendIndex(Math.max(0, Math.min(data.length - 1, idx)))
-                              }}
-                            >
-                              <line x1={padX} y1={h - padY} x2={w - padX} y2={h - padY} stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
-
-                              {drawable.map((s, si) => {
-                                const d = s.points
-                                  .map((p, i) => {
-                                    const x = sx(p.i)
-                                    const y = sy(p.yNorm)
-                                    if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-                                    return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`
-                                  })
-                                  .filter(Boolean)
-                                  .join(" ")
-
-                                return (
-                                  <path
-                                    key={`trend-series-${si}`}
-                                    d={d || ""}
-                                    fill="none"
-                                    stroke={s.color}
-                                    strokeWidth="3"
-                                    opacity="0.95"
-                                  />
-                                )
-                              })}
-
-                              {clampedHoverIdx !== null ? (
-                                <line x1={sx(clampedHoverIdx)} y1={padY} x2={sx(clampedHoverIdx)} y2={h - padY} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-                              ) : null}
-
-                              {clampedHoverIdx !== null
-                                ? drawable.map((s, si) => {
-                                    const hit = s.points.find((p) => p.i === clampedHoverIdx)
-                                    if (!hit) return null
-                                    const cx = sx(hit.i)
-                                    const cy = sy(hit.yNorm)
-                                    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
-                                    return (
-                                      <circle
-                                        key={`trend-dot-${si}`}
-                                        cx={cx}
-                                        cy={cy}
-                                        r={4.2}
-                                        fill={s.color}
-                                        stroke="rgba(255,255,255,0.35)"
-                                        strokeWidth={2}
-                                      />
-                                    )
-                                  })
-                                : null}
-
-                              {[0, Math.floor((data.length - 1) / 2), data.length - 1]
-                                .filter((v, i, arr) => arr.indexOf(v) === i)
-                                .map((i) => (
-                                  <text
-                                    key={`trend-xlab-${i}`}
-                                    x={sx(i)}
-                                    y={h - 4}
-                                    fontSize="10"
-                                    textAnchor={i === 0 ? "start" : i === data.length - 1 ? "end" : "middle"}
-                                    fill="rgba(255,255,255,0.45)"
-                                  >
-                                    {data[i]?.t ?? ""}
-                                  </text>
-                                ))}
-                            </svg>
-                          </div>
-
-                          {clampedHoverIdx !== null && hoverPoint ? (
-                            <div className="pointer-events-none absolute top-2 left-2 rounded-lg border border-white/10 bg-[#0b1220]/85 backdrop-blur px-3 py-2 shadow-xl max-w-[min(280px,70vw)]">
-                              <div className="text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">{hoverPoint.t}</div>
-                              <div className="mt-1 space-y-1">
-                                {tooltipItems.map((it, i) => (
-                                  <div key={`trend-tip-${i}`} className="flex items-center justify-between gap-3 text-[11px] text-white/80">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: it.color }} />
-                                      <span className="truncate min-w-0">{it.label}</span>
-                                    </div>
-                                    <span className="tabular-nums whitespace-nowrap">{it.value}</span>
-                                  </div>
-                                ))}
-                              </div>
+                      <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
+                        {dataForChart.length < 2 ? (
+                          <div className="rounded-xl border border-white/8 bg-white/5 p-3">
+                            <div className="text-sm text-white/75 text-center leading-snug min-w-0">
+                              {isZh ? "尚無趨勢資料" : "No trend data yet"}
                             </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="text-slate-100 flex flex-col gap-6 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-3 rounded-2xl border border-white/30 bg-gradient-to-b from-white/10 via-white/5 to-white/3 ring-1 ring-white/20 shadow-2xl shadow-black/60 backdrop-blur-sm px-5 sm:px-6 py-5 sm:py-6 mb-8">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
-                  {safeT("results.nextActions.title")}
-                </CardTitle>
-                <p className="mt-1 text-sm text-white/65 max-w-2xl">{safeT("results.nextActions.helperLine")}</p>
-                <p className="mt-1 text-sm text-white/65 max-w-2xl">{safeT("results.nextActions.subtitle")}</p>
-                <div className="mt-3 h-px w-full bg-white/10" />
-              </CardHeader>
-              <CardContent className="pt-0 px-0">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {(() => {
-                    let proDividerInserted = false
-                    return activeGoalMeta.actions.flatMap((action) => {
-                      const isLocked = action.isPro && !isPro
-                      const shouldInsertDivider = action.isPro && !proDividerInserted
-                      if (shouldInsertDivider) proDividerInserted = true
-                      const nodes: ReactNode[] = []
-
-                      if (shouldInsertDivider) {
-                        nodes.push(
-                          <div key="pro-divider" className="my-6 flex items-center gap-3 md:col-span-3">
-                            <div className="h-px flex-1 bg-white/10" />
-                            <span className="text-xs font-semibold text-purple-300">專業版解鎖內容</span>
-                            <div className="h-px flex-1 bg-white/10" />
                           </div>
-                        )
-                      }
-
-                      nodes.push(
-                        <div
-                          key={action.titleKey}
-                          className="flex flex-col gap-2 rounded-xl border border-white/20 bg-white/8 px-4 py-3 sm:py-4 transition-all hover:bg-white/12 hover:border-white/40"
-                        >
-                          <div className="flex items-start gap-2">
-                            <span className="mt-1 h-4 w-4 shrink-0 rounded border border-white/30 bg-black/20" />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="text-sm font-semibold text-white leading-snug">
-                                  {safeT(action.titleKey)}
-                                </div>
-                                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
-                                  {action.isPro
-                                    ? safeT("results.nextActions.proBadge")
-                                    : safeT("results.nextActions.freeBadge")}
-                                </span>
-                              </div>
-
-                              <div
-                                className={
-                                  "mt-2 text-xs text-slate-300 leading-relaxed " +
-                                  (isLocked ? "blur-[3px] select-none" : "")
-                                }
+                        ) : (
+                          <div className="relative min-w-0">
+                            <div className="h-[140px] sm:h-[180px] w-full">
+                              <svg
+                                viewBox={`0 0 ${w} ${h}`}
+                                className="h-full w-full"
+                                preserveAspectRatio="none"
+                                onMouseLeave={() => setHoveredAccountTrendIndex(null)}
+                                onMouseMove={(e) => {
+                                  const el = e.currentTarget
+                                  const rect = el.getBoundingClientRect()
+                                  const x = e.clientX - rect.left
+                                  const ratio = rect.width > 0 ? x / rect.width : 0
+                                  const idx = Math.round(ratio * (dataForChart.length - 1))
+                                  setHoveredAccountTrendIndex(Math.max(0, Math.min(dataForChart.length - 1, idx)))
+                                }}
                               >
-                                {safeT(action.descKey)}
-                              </div>
+                                <line x1={padX} y1={h - padY} x2={w - padX} y2={h - padY} stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
 
-                              {isLocked ? (
-                                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                                  <Lock className="h-3.5 w-3.5" />
-                                  <button
-                                    type="button"
-                                    className="hover:text-slate-200"
-                                    onClick={handleUpgrade}
-                                  >
-                                    {safeT("results.nextActions.lockLine")}
-                                  </button>
-                                </div>
-                              ) : null}
+                                {drawable.map((s, si) => {
+                                  const d = s.points
+                                    .map((p, i) => {
+                                      const x = sx(p.i)
+                                      const y = sy(p.yNorm)
+                                      if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`
+                                    })
+                                    .filter(Boolean)
+                                    .join(" ")
+
+                                  return (
+                                    <path
+                                      key={`trend-series-${si}`}
+                                      d={d || ""}
+                                      fill="none"
+                                      stroke={s.color}
+                                      strokeWidth="3"
+                                      opacity="0.95"
+                                    />
+                                  )
+                                })}
+
+                                {clampedHoverIdx !== null ? (
+                                  <line x1={sx(clampedHoverIdx)} y1={padY} x2={sx(clampedHoverIdx)} y2={h - padY} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                                ) : null}
+
+                                {clampedHoverIdx !== null
+                                  ? drawable.map((s, si) => {
+                                      const hit = s.points.find((p) => p.i === clampedHoverIdx)
+                                      if (!hit) return null
+                                      const cx = sx(hit.i)
+                                      const cy = sy(hit.yNorm)
+                                      if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+                                      return (
+                                        <circle
+                                          key={`trend-dot-${si}`}
+                                          cx={cx}
+                                          cy={cy}
+                                          r={4.2}
+                                          fill={s.color}
+                                          stroke="rgba(255,255,255,0.35)"
+                                          strokeWidth={2}
+                                        />
+                                      )
+                                    })
+                                  : null}
+
+                                {trendMeta?.isToday
+                                  ? (() => {
+                                      const lastIdx = dataForChart.length - 1
+                                      if (lastIdx < 0) return null
+                                      const s0 = drawable.find((s) => s.points.some((p) => p.i === lastIdx))
+                                      if (!s0) return null
+                                      const hit = s0.points.find((p) => p.i === lastIdx)
+                                      if (!hit) return null
+                                      const cx = sx(lastIdx)
+                                      const cy = sy(hit.yNorm)
+                                      if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+                                      return (
+                                        <g key="trend-today-highlight" className="trend-today-pulse">
+                                          <circle
+                                            cx={cx}
+                                            cy={cy}
+                                            r={7}
+                                            fill="none"
+                                            stroke="rgba(255,255,255,0.40)"
+                                            strokeWidth={2}
+                                          />
+                                          <circle cx={cx} cy={cy} r={4} fill="rgba(255,255,255,1)" />
+                                          <text
+                                            x={cx}
+                                            y={Math.max(12, cy - 12)}
+                                            textAnchor="middle"
+                                            fill="rgba(255,255,255,0.70)"
+                                            fontSize={10}
+                                            fontWeight={600}
+                                          >
+                                            {t("results.trend.today")}
+                                          </text>
+                                        </g>
+                                      )
+                                    })()
+                                  : null}
+
+                                {(() => {
+                                  const n = dataForChart.length
+                                  if (n <= 0) return null
+                                  const last = n - 1
+                                  const mid = Math.floor(last / 2)
+                                  const step = n <= 8 ? 2 : n <= 16 ? 3 : 4
+                                  const showLabel = (i: number) => i === 0 || i === last || i === mid || i % step === 0
+                                  const anchorFor = (i: number) => (i === 0 ? "start" : i === last ? "end" : "middle")
+                                  const topY = padY
+                                  const bottomY = h - padY
+
+                                  return (
+                                    <g key="trend-x-axis-upgrade">
+                                      {Array.from({ length: n }).map((_, i) => {
+                                        const x = sx(i)
+                                        if (!Number.isFinite(x)) return null
+                                        return (
+                                          <g key={`trend-xt-${i}`}>
+                                            <line
+                                              x1={x}
+                                              x2={x}
+                                              y1={topY}
+                                              y2={bottomY}
+                                              stroke="rgba(255,255,255,0.06)"
+                                              strokeWidth={1}
+                                            />
+                                            <line
+                                              x1={x}
+                                              x2={x}
+                                              y1={bottomY}
+                                              y2={Math.min(h - 2, bottomY + 6)}
+                                              stroke="rgba(255,255,255,0.18)"
+                                              strokeWidth={1}
+                                            />
+                                          </g>
+                                        )
+                                      })}
+
+                                      {Array.from({ length: n })
+                                        .map((_, i) => i)
+                                        .filter(showLabel)
+                                        .map((i) => {
+                                          const x = sx(i)
+                                          if (!Number.isFinite(x)) return null
+                                          const label = dataForChart[i]?.t ?? ""
+                                          return (
+                                            <text
+                                              key={`trend-xlab-${i}`}
+                                              x={x}
+                                              y={h - 4}
+                                              textAnchor={anchorFor(i) as any}
+                                              fill="rgba(255,255,255,0.34)"
+                                              fontSize={10}
+                                              fontWeight={500}
+                                              style={{ fontVariantNumeric: "tabular-nums" as any }}
+                                            >
+                                              {label}
+                                            </text>
+                                          )
+                                        })}
+                                    </g>
+                                  )
+                                })()}
+                              </svg>
+                              {/* ultra-subtle pulse for Today marker (scoped to this component) */}
+                              <style jsx>{`
+                                .trend-today-pulse circle:first-child {
+                                  transform-box: fill-box;
+                                  transform-origin: center;
+                                  animation: trendTodayPulse 1.8s ease-in-out infinite;
+                                }
+                                @keyframes trendTodayPulse {
+                                  0% {
+                                    opacity: 0.25;
+                                    transform: scale(1);
+                                  }
+                                  50% {
+                                    opacity: 0.55;
+                                    transform: scale(1.18);
+                                  }
+                                  100% {
+                                    opacity: 0.25;
+                                    transform: scale(1);
+                                  }
+                                }
+                                @media (prefers-reduced-motion: reduce) {
+                                  .trend-today-pulse circle:first-child {
+                                    animation: none;
+                                  }
+                                }
+                              `}</style>
                             </div>
-                          </div>
-                        </div>
-                      )
 
-                      return nodes
-                    })
+                            {clampedHoverIdx !== null && hoverPoint ? (
+                              <div
+                                className="pointer-events-none absolute top-2 left-2 rounded-lg border border-white/10 bg-[#0b1220]/85 backdrop-blur px-3 py-2 shadow-xl max-w-[min(280px,70vw)]"
+                              >
+                                <div className="text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">{hoverPoint.t}</div>
+                                <div className="mt-1 space-y-1">
+                                  {tooltipItems.map((it, i) => (
+                                    <div key={`trend-tip-${i}`} className="flex items-center justify-between gap-3 text-[11px] text-white/80">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: it.color }} />
+                                        <span className="truncate min-w-0">{it.label}</span>
+                                      </div>
+                                      <span className="tabular-nums whitespace-nowrap">{it.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    )
                   })()}
                 </div>
               </CardContent>
             </Card>
 
-            <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-
-            <Card
-              id="goals-section"
-              className="text-slate-100 flex flex-col gap-6 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-0 rounded-2xl border border-white/30 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/15 shadow-xl shadow-black/40 backdrop-blur-sm px-5 sm:px-6 py-5 sm:py-6 scroll-mt-40"
-            >
-              <CardHeader className="pb-0">
-                <CardTitle className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
-                  {t("results.goals.title")}
-                </CardTitle>
-                <p className="mt-1 text-sm text-white/65 max-w-2xl">{t("results.goals.subtitle")}</p>
-                <div className="mt-3 h-px w-full bg-white/10" />
-              </CardHeader>
-              <CardContent className="pt-0 px-0">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {goalOptions.map((opt) => {
-                    const isSelected = selectedGoal === opt.id
-                    return (
-                      <div
-                        key={opt.id}
-                        role="button"
-                        tabIndex={0}
-                        className={
-                          "select-none cursor-pointer min-h-[56px] flex items-center justify-center rounded-xl border px-3 py-3 text-sm sm:text-base font-medium transition-all duration-200 hover:bg-white/12 hover:border-white/30 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.01] active:scale-[0.99] " +
-                          (isSelected
-                            ? "border-white/30 bg-white/6 text-white"
-                            : "border-white/15 bg-white/6 text-slate-200")
-                        }
-                        onClick={() => {
-                          setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
-                          requestAnimationFrame(() => {
-                            scrollToKpiSection()
-                          })
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault()
-                            setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
-                            requestAnimationFrame(() => {
-                              scrollToKpiSection()
-                            })
-                          }
-                        }}
-                      >
-                        {t(opt.labelKey)}
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card id="top-posts-section" className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40">
+            <Card id="top-posts-section" className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40">
               <CardHeader className="pb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <CardTitle className="text-base text-white truncate">{t("results.topPosts.title")}</CardTitle>
+                  <CardTitle className="text-sm text-white truncate">{t("results.topPosts.title")}</CardTitle>
                   <p className="mt-1 text-xs text-muted-foreground leading-tight line-clamp-2">
                     {t("results.topPosts.description")}
                   </p>
@@ -3657,14 +3589,14 @@ export default function ResultsPage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {(isConnected
                     ? (topPerformingPosts.length > 0
                         ? topPerformingPosts
                         : Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` })))
                     : mockAnalysis.topPosts.slice(0, 3)
                   ).map((p: any, index: number) => (
-                    <div key={String(p?.id ?? index)} className="rounded-xl border border-white/10 bg-white/5 p-4 min-w-0">
+                    <div key={String(p?.id ?? index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
                       {(() => {
                         const real = topPerformingPosts[index] as any
 
@@ -3730,8 +3662,8 @@ export default function ResultsPage() {
                           : `/${activeLocale}/post-analysis`
 
                         return (
-                          <div className="flex gap-3 min-w-0">
-                            <div className="h-16 w-16 sm:h-20 sm:w-20 shrink-0">
+                          <div className="flex gap-2 min-w-0">
+                            <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               {igHref ? (
                                 <a
                                   href={igHref}
@@ -3899,37 +3831,153 @@ export default function ResultsPage() {
               </CardContent>
             </Card>
 
-            <section id="insights-section" className="mt-12 scroll-mt-32">
-              <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base text-white">{t("results.recommendations.title")}</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-3">
-                    {insights.map((insight) => (
-                      <div key={insight.title} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="text-sm font-semibold text-white">{insight.title}</div>
-                          <div className="text-xs text-muted-foreground text-right">{t("results.insights.proHint")}</div>
+            <Card className="text-slate-100 flex flex-col gap-4 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-3 rounded-2xl border border-white/30 bg-gradient-to-b from-white/10 via-white/5 to-white/3 ring-1 ring-white/20 shadow-2xl shadow-black/60 backdrop-blur-sm px-4 py-4 mb-8">
+              <CardHeader className="pb-0">
+                <CardTitle className="text-lg sm:text-xl font-semibold tracking-tight text-white">
+                  {safeT("results.nextActions.title")}
+                </CardTitle>
+                <p className="mt-1 text-xs text-white/65 max-w-2xl leading-snug">{safeT("results.nextActions.helperLine")}</p>
+                <p className="mt-1 text-xs text-white/65 max-w-2xl leading-snug">{safeT("results.nextActions.subtitle")}</p>
+                <div className="mt-3 h-px w-full bg-white/10" />
+              </CardHeader>
+              <CardContent className="pt-0 px-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {(() => {
+                    let proDividerInserted = false
+                    return activeGoalMeta.actions.flatMap((action) => {
+                      const isLocked = action.isPro && !isPro
+                      const shouldInsertDivider = action.isPro && !proDividerInserted
+                      if (shouldInsertDivider) proDividerInserted = true
+                      const nodes: ReactNode[] = []
+
+                      if (shouldInsertDivider) {
+                        nodes.push(
+                          <div key="pro-divider" className="my-6 flex items-center gap-3 md:col-span-3">
+                            <div className="h-px flex-1 bg-white/10" />
+                            <span className="text-xs font-semibold text-purple-300">專業版解鎖內容</span>
+                            <div className="h-px flex-1 bg-white/10" />
+                          </div>
+                        )
+                      }
+
+                      nodes.push(
+                        <div
+                          key={action.titleKey}
+                          className="flex flex-col gap-2 rounded-xl border border-white/20 bg-white/8 px-4 py-3 transition-all hover:bg-white/12 hover:border-white/40"
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="mt-1 h-4 w-4 shrink-0 rounded border border-white/30 bg-black/20" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="text-sm font-semibold text-white leading-snug">
+                                  {safeT(action.titleKey)}
+                                </div>
+                                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                                  {action.isPro
+                                    ? safeT("results.nextActions.proBadge")
+                                    : safeT("results.nextActions.freeBadge")}
+                                </span>
+                              </div>
+
+                              <div
+                                className={
+                                  "mt-2 text-xs text-slate-300 leading-snug " +
+                                  (isLocked ? "blur-[3px] select-none" : "")
+                                }
+                              >
+                                {safeT(action.descKey)}
+                              </div>
+
+                              {isLocked ? (
+                                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Lock className="h-3.5 w-3.5" />
+                                  <button
+                                    type="button"
+                                    className="hover:text-slate-200"
+                                    onClick={handleUpgrade}
+                                  >
+                                    {safeT("results.nextActions.lockLine")}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-1 text-sm text-slate-300 leading-relaxed">{insight.description}</div>
+                      )
+
+                      return nodes
+                    })
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+
+            <Card
+              id="goals-section"
+              className="text-slate-100 flex flex-col gap-4 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-0 rounded-2xl border border-white/30 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/15 shadow-xl shadow-black/40 backdrop-blur-sm px-4 py-4 scroll-mt-40"
+            >
+              <CardHeader className="pb-0">
+                <CardTitle className="text-lg sm:text-xl font-semibold tracking-tight text-white">
+                  {t("results.goals.title")}
+                </CardTitle>
+                <p className="mt-1 text-xs text-white/65 max-w-2xl leading-snug">{t("results.goals.subtitle")}</p>
+                <div className="mt-3 h-px w-full bg-white/10" />
+              </CardHeader>
+              <CardContent className="pt-0 px-0">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {goalOptions.map((opt) => {
+                    const isSelected = selectedGoal === opt.id
+                    return (
+                      <div
+                        key={opt.id}
+                        role="button"
+                        tabIndex={0}
+                        className={
+                          "select-none cursor-pointer min-h-[56px] flex items-center justify-center rounded-xl border px-3 py-3 text-sm lg:text-base font-medium transition-all duration-200 hover:bg-white/12 hover:border-white/30 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.01] active:scale-[0.99] " +
+                          (isSelected
+                            ? "border-white/30 bg-white/6 text-white"
+                            : "border-white/15 bg-white/6 text-slate-200")
+                        }
+                        onClick={() => {
+                          setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                          requestAnimationFrame(() => {
+                            scrollToKpiSection()
+                          })
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                            requestAnimationFrame(() => {
+                              scrollToKpiSection()
+                            })
+                          }
+                        }}
+                      >
+                        {t(opt.labelKey)}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <section id="insights-section" className="mt-3 scroll-mt-32 hidden sm:block">
+              {renderInsightsSection("desktop")}
             </section>
 
             <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-              <CardContent className="p-6">
+              <CardContent className="p-4">
                 <div className="text-xs text-muted-foreground">{t("results.cta.trust")}</div>
 
-                <h2 className="mt-2 text-xl font-semibold">{t("results.cta.title")}</h2>
+                <h2 className="mt-2 text-lg font-semibold">{t("results.cta.title")}</h2>
 
-                <div className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                <div className="mt-2 text-xs text-muted-foreground leading-snug">
                   {t("results.cta.intro")}
                 </div>
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                   <li>{t("results.cta.bullets.1")}</li>
                   <li>{t("results.cta.bullets.2")}</li>
                   <li>{t("results.cta.bullets.3")}</li>
@@ -3957,7 +4005,7 @@ export default function ResultsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="mt-1 text-lg font-semibold text-white leading-snug">{t("results.footer.proModalTitle")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-relaxed">{t("results.footer.proModalDesc")}</div>
+                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.footer.proModalDesc")}</div>
                     </div>
                     <Button
                       type="button"
@@ -3969,7 +4017,7 @@ export default function ResultsPage() {
                     </Button>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
                     <div className="text-sm font-medium text-white">{t("results.footer.proModalBulletsTitle")}</div>
                     <ul className="mt-2 text-sm text-slate-200 space-y-1.5">
                       <li>{t("results.footer.proModalBullets.1")}</li>

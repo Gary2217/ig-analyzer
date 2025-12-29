@@ -44,6 +44,29 @@
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
     "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
     "proBadge": "專業",
+    "trend": {
+      "title": "帳號互動趨勢",
+      "subtitle7d": "最近 7 天（可多選）",
+      "empty": "目前尚未取得最近 7 天趨勢資料",
+      "selectAtLeastOne": "請至少選擇一個指標",
+      "lastSynced": "最後同步",
+      "today": "今日",
+      "new": "新",
+      "metrics": {
+        "reach": "觸及",
+        "impressions": "曝光",
+        "engaged": "互動帳號",
+        "followerDelta": "粉絲變化"
+      },
+      "summary": {
+        "reach": "7 天總觸及",
+        "impressions": "7 天總曝光",
+        "engagements": "互動總數（按讚＋留言）",
+        "avgPerDay": "日均",
+        "followerChange": "粉絲變化",
+        "topPost": "最佳貼文（7 天）"
+      }
+    },
     "subnav": {
       "ariaLabel": "結果頁區段導覽",
       "items": {

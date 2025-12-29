@@ -44,6 +44,29 @@
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
     "proReminder": "Pro includes deeper post-level details and more actionable recommendations.",
     "proBadge": "Pro",
+    "trend": {
+      "title": "Account engagement trend",
+      "subtitle7d": "Last 7 days (multi-select)",
+      "empty": "Trend data for the last 7 days isn’t available yet.",
+      "selectAtLeastOne": "Please select at least one metric.",
+      "lastSynced": "Last synced",
+      "today": "Today",
+      "new": "New",
+      "metrics": {
+        "reach": "Reach",
+        "impressions": "Impressions",
+        "engaged": "Engaged accounts",
+        "followerDelta": "Follower change"
+      },
+      "summary": {
+        "reach": "7-day reach",
+        "impressions": "7-day impressions",
+        "engagements": "Engagements (likes + comments)",
+        "avgPerDay": "Avg / day",
+        "followerChange": "Follower change",
+        "topPost": "Top post (7d)"
+      }
+    },
     "subnav": {
       "ariaLabel": "Results section navigation",
       "items": {
