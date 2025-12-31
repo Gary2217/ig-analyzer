@@ -92,13 +92,13 @@ export async function GET(req: Request) {
     }
     const rawCookieHeader = req.headers.get("cookie") || ""
 
-    // ✅ 先用 next/headers cookies()（正規）
+    // [OK] 先用 next/headers cookies()（正規）
     // ⚠️ 這三個 key 名稱「必須」跟 app/api/instagram/media/route.ts 一致
     const tokenFromCookies = typeof c?.get === "function" ? c.get("ig_access_token")?.value || "" : ""
     const pageIdFromCookies = typeof c?.get === "function" ? c.get("ig_page_id")?.value || "" : ""
     const igIdFromCookies = typeof c?.get === "function" ? c.get("ig_ig_id")?.value || "" : ""
 
-    // ✅ 再用 header regex 當 fallback（避免 cookie() 取不到）
+    // [OK] 再用 header regex 當 fallback（避免 cookie() 取不到）
     const tokenFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_access_token")
     const pageIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_page_id")
     const igIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_ig_id")

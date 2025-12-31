@@ -2,12 +2,14 @@
 
 import * as React from "react"
 import { useState } from "react"
+import { CheckIcon, DashIcon } from "../../../components/ui/plan-feature-icons"
 
 export default function PricingPage({
   params,
 }: {
   params: Promise<{ locale: string }>
 }) {
+  
   const [isOpen, setIsOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [submitted, setSubmitted] = useState(false)
@@ -77,31 +79,31 @@ export default function PricingPage({
 
             <ul className="mt-6 flex-1 space-y-3 text-sm text-white/90">
               <li className="flex items-start gap-2">
-                <span className="leading-6">✅</span>
+                <CheckIcon className="w-4 h-4 text-white/35 mt-0.5 shrink-0" />
                 <span>{isZh ? "基本資料（追蹤者 / 貼文數）" : "Basics (followers / posts)"}</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="leading-6">✅</span>
+                <CheckIcon className="w-4 h-4 text-white/35 mt-0.5 shrink-0" />
                 <span>{isZh ? "KPI 摘要（互動率 / 按讚 / 留言）" : "KPI summary (ER / likes / comments)"}</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="leading-6">✅</span>
+                <CheckIcon className="w-4 h-4 text-white/35 mt-0.5 shrink-0" />
                 <span>{isZh ? "Top Posts（僅 Top 3）" : "Top posts (Top 3 only)"}</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="leading-6">✅</span>
+                <CheckIcon className="w-4 h-4 text-white/35 mt-0.5 shrink-0" />
                 <span>{isZh ? "洞察與建議（摘要）" : "Insights & recommendations (summary)"}</span>
               </li>
               <li className="flex items-start gap-2 text-white/35 line-through">
-                <span className="leading-6">⛔</span>
+                <DashIcon className="w-4 h-4 text-white/25 mt-0.5 shrink-0" />
                 <span>{isZh ? "深度貼文診斷（逐篇）" : "Deep post-level diagnosis"}</span>
               </li>
               <li className="flex items-start gap-2 text-white/35 line-through">
-                <span className="leading-6">⛔</span>
+                <DashIcon className="w-4 h-4 text-white/25 mt-0.5 shrink-0" />
                 <span>{isZh ? "一週成長行動清單（依目標）" : "Weekly action checklist (by goal)"}</span>
               </li>
               <li className="flex items-start gap-2 text-white/35 line-through">
-                <span className="leading-6">⛔</span>
+                <DashIcon className="w-4 h-4 text-white/25 mt-0.5 shrink-0" />
                 <span>{isZh ? "下載報告（PDF / Notion）" : "Downloadable report (PDF / Notion)"}</span>
               </li>
             </ul>
@@ -134,31 +136,31 @@ export default function PricingPage({
             <div className="flex flex-col flex-1">
               <ul className="flex-1 space-y-3 text-sm text-white/90">
                 <li className="flex items-start gap-2">
-                  <span className="leading-6">✅</span>
+                  <CheckIcon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                   <span>{isZh ? "基本資料（追蹤者 / 貼文數）" : "Basics (followers / posts)"}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="leading-6">✅</span>
+                  <CheckIcon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                   <span>{isZh ? "KPI 摘要（互動率 / 按讚 / 留言）" : "KPI summary (ER / likes / comments)"}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="leading-6">✅</span>
+                  <CheckIcon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                   <span>{isZh ? "Top Posts（僅 Top 3）" : "Top posts (Top 3 only)"}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="leading-6">✅</span>
+                  <CheckIcon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                   <span>{isZh ? "洞察與建議（摘要）" : "Insights & recommendations (summary)"}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="leading-6">✅</span>
+                  <CheckIcon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                   <span>{isZh ? "深度貼文診斷（逐篇）" : "Deep post-level diagnosis"}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="leading-6">✅</span>
+                  <CheckIcon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                   <span>{isZh ? "一週成長行動清單（依目標）" : "Weekly action checklist (by goal)"}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="leading-6">✅</span>
+                  <CheckIcon className="w-4 h-4 text-violet-400 mt-0.5 shrink-0" />
                   <span>{isZh ? "下載報告（PDF / Notion）" : "Downloadable report (PDF / Notion)"}</span>
                 </li>
               </ul>
