@@ -1,12 +1,13 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Input } from "../../components/ui/input"
 import { Info, Lock } from "lucide-react"
+import { useRefetchTick } from "../lib/useRefetchTick"
 
 const isValidPostUrl = (s: string) => /instagram\.com|threads\.net/i.test((s || "").trim())
 
@@ -142,7 +143,11 @@ function toneForStatus(status: InferredStatus): { label: string; classes: string
 export default function PostAnalysisClient() {
   const { locale, t } = useI18n()
   const router = useRouter()
+  const pathname = usePathname() || ""
   const searchParams = useSearchParams()
+
+  const refetchTick = useRefetchTick({ enabled: true, throttleMs: 900 })
+  const [manualRefreshTick, setManualRefreshTick] = useState(0)
 
   const isZh = typeof locale === "string" && locale.startsWith("zh")
 
@@ -1459,9 +1464,10 @@ export default function PostAnalysisClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const controller = new AbortController()
 
+    const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), 8_000)
+
     fetch("/api/auth/instagram/me", { method: "GET", cache: "no-store", signal: controller.signal })
       .then((res) => {
         setIsConnected(res.ok)
@@ -1476,7 +1482,7 @@ export default function PostAnalysisClient() {
       controller.abort()
       window.clearTimeout(timeoutId)
     }
-  }, [])
+  }, [pathname, refetchTick, manualRefreshTick])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -2243,7 +2249,7 @@ export default function PostAnalysisClient() {
                           size="sm"
                           variant="outline"
                           className="w-full sm:w-auto border-white/15 text-slate-200 hover:bg-white/5 whitespace-nowrap"
-                          onClick={() => window.location.reload()}
+                          onClick={() => setManualRefreshTick((x) => x + 1)}
                         >
                           {copy.refresh}
                         </Button>
@@ -2667,7 +2673,7 @@ export default function PostAnalysisClient() {
                             size="sm"
                             variant="outline"
                             className="w-full sm:w-auto border-white/15 text-slate-200 hover:bg-white/5 whitespace-nowrap"
-                            onClick={() => window.location.reload()}
+                            onClick={() => setManualRefreshTick((x) => x + 1)}
                           >
                             {copy.refresh}
                           </Button>
@@ -2690,7 +2696,7 @@ export default function PostAnalysisClient() {
                             size="sm"
                             variant="outline"
                             className="w-full sm:w-auto border-white/15 text-slate-200 hover:bg-white/5 whitespace-nowrap"
-                            onClick={() => window.location.reload()}
+                            onClick={() => setManualRefreshTick((x) => x + 1)}
                           >
                             {copy.refresh}
                           </Button>

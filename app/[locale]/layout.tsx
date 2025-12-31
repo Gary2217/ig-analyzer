@@ -20,7 +20,7 @@ export default async function LocaleLayout({
       <div className="w-full flex flex-col">
         <AppHeader locale={locale} />
 
-        <main className="flex-1">{children}</main>
+        <div className="flex-1">{children}</div>
       </div>
     </LocaleProvider>
   )

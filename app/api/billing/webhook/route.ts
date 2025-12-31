@@ -1,3 +1,5 @@
-// TODO:
-// - Handle Stripe webhook events
-// - Verify signature
+export const runtime = "nodejs"
+
+export async function POST(_req: Request) {
+  return new Response("ok")
+}

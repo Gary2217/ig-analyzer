@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 
-type Provider = "instagram"
+type Provider = "instagram" | "threads"
 
 type Props = {
   activeLocale: string

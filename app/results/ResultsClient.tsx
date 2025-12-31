@@ -13,6 +13,7 @@ import { ArrowLeft, Instagram, AtSign, Lock } from "lucide-react"
 import GrowthPaths from "../../components/growth-paths"
 import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
+import { useRefetchTick } from "../lib/useRefetchTick"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
@@ -93,7 +94,7 @@ const MOCK_ACCOUNT_TREND_7D: AccountTrendPoint[] = [
 
 function GateShell(props: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <main data-scroll-container className="w-full bg-[#0b1220] px-4 py-12 overflow-x-hidden">
+    <section className="w-full bg-[#0b1220] px-4 py-12 overflow-x-hidden">
       <div className="mx-auto w-full max-w-3xl">
         <Card className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden">
           <CardHeader className="pb-3">
@@ -107,7 +108,7 @@ function GateShell(props: { title: string; subtitle?: string; children: ReactNod
           <CardContent className="space-y-4">{props.children}</CardContent>
         </Card>
       </div>
-    </main>
+    </section>
   )
 }
 
@@ -277,7 +278,7 @@ function ProgressRing({
   return (
     <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
       <div
-        className="h-10 w-10 rounded-full"
+        className="h-10 w-10 rounded-full shrink-0"
         style={{
           background: `conic-gradient(#34d399 ${v}%, rgba(255,255,255,0.12) ${v}%)`,
         }}
@@ -289,8 +290,8 @@ function ProgressRing({
         </div>
       </div>
       <div className="leading-snug min-w-0">
-        <div className="text-xs font-semibold text-white truncate">{label}</div>
-        {subLabel ? <div className="text-xs text-white/60 truncate">{subLabel}</div> : null}
+        <div className="text-[11px] leading-tight sm:text-xs font-semibold text-white truncate">{label}</div>
+        {subLabel ? <div className="text-[11px] leading-tight sm:text-xs text-white/60 truncate">{subLabel}</div> : null}
       </div>
     </div>
   )
@@ -335,7 +336,9 @@ function normalizeMedia(raw: any):
 }
 
 export default function ResultsClient() {
-  console.log("[LocaleResultsPage] mounted")
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[LocaleResultsPage] mounted")
+  }
 
   const __DEV__ = process.env.NODE_ENV !== "production"
 
@@ -635,10 +638,23 @@ export default function ResultsClient() {
     topPostsSortHint: isZh ? "依（按讚＋留言）排序（最近 25 篇）" : "Sorted by likes + comments (last 25)",
   }
 
+  const safeFlexRow = "flex min-w-0 items-center gap-2"
+  const safeText = "min-w-0 overflow-hidden"
+  const clampTitleMobile = "min-w-0 overflow-hidden line-clamp-2"
+  const clampBodyMobile = "min-w-0 overflow-hidden line-clamp-2 text-[11px] leading-snug"
+  const numMono = "tabular-nums whitespace-nowrap"
+
   const igProfile = ((igMe as any)?.profile ?? igMe) as any
   const isConnected = Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
   const connectedProvider = searchParams.get("connected")
-  const isConnectedInstagram = connectedProvider === "instagram"
+  const isConnectedInstagram = Boolean((igMe as any)?.connected === true) || connectedProvider === "instagram"
+
+  const refetchTick = useRefetchTick({ enabled: isConnectedInstagram, throttleMs: 900 })
+
+  useEffect(() => {
+    if (!isConnectedInstagram) return
+    setForceReloadTick((x) => x + 1)
+  }, [isConnectedInstagram, refetchTick])
 
   const formatDateTW = (d: Date) =>
     `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
@@ -801,10 +817,10 @@ export default function ResultsClient() {
   }, [trendPoints])
 
   useEffect(() => {
-    if (!isConnected) return
+    if (!isConnectedInstagram) return
 
     const daysWanted = 7
-    if (trendFetchStatus.lastDays === 7 && Array.isArray(trendPoints) && trendPoints.length >= 2) return
+    if (forceReloadTick === 0 && trendFetchStatus.lastDays === 7 && Array.isArray(trendPoints) && trendPoints.length >= 2) return
 
     const controller = new AbortController()
     let cancelled = false
@@ -871,7 +887,7 @@ export default function ResultsClient() {
       controller.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected])
+  }, [isConnectedInstagram, pathname, forceReloadTick])
 
   useEffect(() => {
     if (!trendMeta?.endKey) return
@@ -911,7 +927,6 @@ export default function ResultsClient() {
     lastRevalidateAtRef.current = now
 
     setForceReloadTick((x) => x + 1)
-    router.refresh()
   }, [isConnected, needsDataRefetch, pathname, router])
 
   useEffect(() => {
@@ -999,7 +1014,7 @@ export default function ResultsClient() {
       cancelled = true
       controller.abort()
     }
-  }, [isConnected, pathname, forceReloadTick, r])
+  }, [isConnectedInstagram, pathname, forceReloadTick, r])
 
   useEffect(() => {
     const onFocus = () => {
@@ -1733,6 +1748,38 @@ export default function ResultsClient() {
     },
   ]
 
+  const [insightsExpanded, setInsightsExpanded] = useState(false)
+  const [kpiExpanded, setKpiExpanded] = useState(false)
+  const [nextActionsExpanded, setNextActionsExpanded] = useState(false)
+  const [isSmUpViewport, setIsSmUpViewport] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const mq = window.matchMedia("(min-width: 640px)")
+    const sync = () => setIsSmUpViewport(mq.matches)
+    sync()
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", sync)
+      return () => mq.removeEventListener("change", sync)
+    }
+    mq.addListener(sync)
+    return () => mq.removeListener(sync)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const mq = window.matchMedia("(max-width: 639px)")
+    const sync = () => setIsMobile(mq.matches)
+    sync()
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", sync)
+      return () => mq.removeEventListener("change", sync)
+    }
+    mq.addListener(sync)
+    return () => mq.removeListener(sync)
+  }, [])
+
   const insightUiMeta = (
     i: number
   ): {
@@ -1781,49 +1828,111 @@ export default function ResultsClient() {
 
   const renderInsightsSection = (variant: "mobile" | "desktop") => {
     const isMobile = variant === "mobile"
+    const shownInsights = isMobile ? (insightsExpanded ? insights.slice(0, 3) : []) : insights
     return (
       <Card className={isMobile ? "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm" : "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm"}>
-        <CardHeader className={isMobile ? "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6" : "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6"}>
-          <CardTitle className={isMobile ? "text-base font-semibold text-white" : "text-sm text-white"}>
-            {t("results.recommendations.title")}
-          </CardTitle>
+        <CardHeader
+          className={
+            isMobile
+              ? (insightsExpanded
+                  ? "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6 cursor-pointer"
+                  : "px-3 py-2 sm:px-4 sm:pt-4 sm:pb-2 lg:px-6 lg:pt-6 cursor-pointer")
+              : "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6"
+          }
+          onClick={
+            isMobile
+              ? () => {
+                  setInsightsExpanded((v) => !v)
+                }
+              : undefined
+          }
+        >
+          {isMobile ? (
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="min-w-0">
+                <CardTitle className="text-base font-semibold text-white">{t("results.recommendations.title")}</CardTitle>
+                {!insightsExpanded ? (
+                  <div className="mt-0.5 text-[11px] leading-tight text-white/55">
+                    {isZh ? `${insights.length} 個洞察 · 點擊展開` : `${insights.length} insights · tap to expand`}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setInsightsExpanded((v) => !v)
+                }}
+                className="text-xs text-white/70 hover:text-white whitespace-nowrap shrink-0"
+              >
+                {insightsExpanded ? "收合" : "展開"}
+              </button>
+            </div>
+          ) : (
+            <CardTitle className="text-sm text-white">{t("results.recommendations.title")}</CardTitle>
+          )}
         </CardHeader>
-        <CardContent className="pt-0">
-          <div className={isMobile ? "space-y-2 sm:space-y-3" : "space-y-2 sm:space-y-3"}>
-            {insights.map((insight, idx) => {
-              const meta = insightUiMeta(idx)
-              return (
-                <div
-                  key={insight.title}
-                  className={
-                    "rounded-xl border border-white/10 bg-white/5 " +
-                    (isMobile ? "p-4" : "p-4")
-                  }
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className={isMobile ? "text-sm font-semibold text-white" : "text-xs font-semibold text-white"}>
-                      {insight.title}
+        {(!isMobile || insightsExpanded) ? (
+          <CardContent className="pt-0">
+            <div className={isMobile ? "space-y-2" : "space-y-2 sm:space-y-3"}>
+              {shownInsights.map((insight, idx) => {
+                const meta = insightUiMeta(idx)
+                return (
+                  <div
+                    key={insight.title}
+                    className={
+                      "rounded-xl border border-white/10 bg-white/5 min-w-0 overflow-hidden " +
+                      (isMobile ? "p-3" : "p-4")
+                    }
+                  >
+                    <div className={safeFlexRow + " items-start"}>
+                      <div
+                        className={
+                          isMobile
+                            ? "text-sm font-semibold text-white leading-snug " + clampTitleMobile
+                            : "min-w-0 text-xs font-semibold text-white leading-snug"
+                        }
+                      >
+                        {insight.title}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground text-right shrink-0">{t("results.insights.proHint")}</div>
-                  </div>
 
-                  <div className={isMobile ? "mt-1 text-xs text-white/55 leading-snug" : "mt-1 text-xs text-white/45 leading-snug"}>
-                    {meta.source}
-                  </div>
+                    <div
+                      className={
+                        isMobile
+                          ? "mt-1 text-white/55 " + clampBodyMobile
+                          : "mt-1 text-xs text-white/45 leading-snug"
+                      }
+                    >
+                      {meta.source}
+                    </div>
 
-                  <div className={isMobile ? "mt-2 space-y-2" : "mt-2 space-y-2"}>
-                    <div className={isMobile ? "text-sm font-semibold text-white leading-snug" : "text-sm font-semibold text-white leading-snug"}>
-                      {meta.action}
-                    </div>
-                    <div className={isMobile ? "text-xs text-slate-200/85 leading-snug" : "text-xs text-slate-300 leading-snug"}>
-                      {meta.why}
+                    <div className={isMobile ? "mt-2 space-y-1.5" : "mt-2 space-y-2"}>
+                      <div
+                        className={
+                          isMobile
+                            ? "font-semibold text-white " + clampBodyMobile
+                            : "text-sm font-semibold text-white leading-snug"
+                        }
+                      >
+                        {meta.action}
+                      </div>
+                      <div
+                        className={
+                          isMobile
+                            ? "text-slate-200/85 " + clampBodyMobile
+                            : "text-xs text-slate-300 leading-snug"
+                        }
+                      >
+                        {meta.why}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
+                )
+              })}
+            </div>
+          </CardContent>
+        ) : null}
       </Card>
     )
   }
@@ -2086,6 +2195,7 @@ export default function ResultsClient() {
   const kpis: Array<{
     id: "followers" | "engagementRate" | "avgLikes" | "avgComments" | "engagementVolume" | "postsPerWeek"
     titleKey: string
+    descriptionKey: string
     value: string
     preview?: boolean
   }> = [
@@ -2190,9 +2300,8 @@ export default function ResultsClient() {
         onRetry={() => {
           setGateIsSlow(false)
           setForceReloadTick((x) => x + 1)
-          router.refresh()
         }}
-        onRefresh={() => window.location.reload()}
+        onRefresh={() => setForceReloadTick((x) => x + 1)}
         onBack={() => router.push(localePathname("/", activeLocale))}
       />
     )
@@ -2213,7 +2322,6 @@ export default function ResultsClient() {
         isZh={isZh}
         onRetry={() => {
           setForceReloadTick((x) => x + 1)
-          router.refresh()
         }}
         onReconnect={handleConnect}
       />
@@ -2857,7 +2965,7 @@ export default function ResultsClient() {
             <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardContent className="p-3 md:p-4">
                 <div className="relative">
-                  <div className="hidden sm:flex items-center gap-6">
+                  <div className="hidden sm:flex items-center gap-6 min-w-0">
                     <div className="flex items-center gap-4 min-w-0">
                       {igProfile?.profile_picture_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -2881,7 +2989,7 @@ export default function ResultsClient() {
                       </div>
                     </div>
 
-                    <div className="flex-1 flex items-center justify-center gap-3 md:gap-4 self-center">
+                    <div className="flex-1 flex items-center justify-center gap-3 md:gap-4 self-center min-w-0">
                       <div className="w-[160px] md:w-[170px]">
                         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
                           <div className="text-xs text-white/60 whitespace-nowrap">粉絲數</div>
@@ -2914,7 +3022,7 @@ export default function ResultsClient() {
                       <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
                         {safeT("results.proBadge")}
                       </span>
-                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70">
+                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70 max-w-[160px] min-w-0 truncate">
                         {t(
                           selectedGoal
                             ? `results.positioning.labels.${selectedGoal}`
@@ -2947,11 +3055,11 @@ export default function ResultsClient() {
                         </div>
                       </div>
 
-                      <div className="ml-auto flex items-center gap-2 shrink-0">
+                      <div className="ml-auto flex items-center gap-2 shrink-0 min-w-0">
                         <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
                           {safeT("results.proBadge")}
                         </span>
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70">
+                        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70 max-w-[160px] min-w-0 truncate">
                           {t(
                             selectedGoal
                               ? `results.positioning.labels.${selectedGoal}`
@@ -2961,27 +3069,25 @@ export default function ResultsClient() {
                       </div>
                     </div>
 
-                    <div className="-mx-4 px-4 overflow-x-auto overscroll-x-contain">
-                      <div className="flex gap-4 min-w-max pr-4 pb-1">
-                        <div className="w-[220px] shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">粉絲數</div>
-                          <div className="mt-1 text-xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            {formatCompact(followersCount) ?? "—"}
-                          </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
+                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">粉絲數</div>
+                        <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                          {formatCompact(followersCount) ?? "—"}
                         </div>
+                      </div>
 
-                        <div className="w-[220px] shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">關注數</div>
-                          <div className="mt-1 text-xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
-                            {formatCompact(followsCount) ?? "—"}
-                          </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
+                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">關注數</div>
+                        <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
+                          {formatCompact(followsCount) ?? "—"}
                         </div>
+                      </div>
 
-                        <div className="w-[220px] shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">貼文數</div>
-                          <div className="mt-1 text-xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-                            {formatCompact(mediaCount) ?? "—"}
-                          </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
+                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">貼文數</div>
+                        <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
+                          {formatCompact(mediaCount) ?? "—"}
                         </div>
                       </div>
                     </div>
@@ -2991,11 +3097,7 @@ export default function ResultsClient() {
             </Card>
 
             <div className="mt-4">
-              <div className="flex justify-end">
-                <div className="text-[11px] text-muted-foreground">{t("results.proHint.rings")}</div>
-              </div>
-
-              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-2 xl:grid-cols-3">
                 {(() => {
                   const ring1Val = isConnected
                     ? engagementRate
@@ -3053,114 +3155,27 @@ export default function ResultsClient() {
                           )
                         }
                       />
-                      <ProgressRing
-                        value={safePercent(ring3Val)}
-                        label={uiCopy.avgCommentsLabel}
-                        centerText={isConnected ? avgCommentsFormatted : undefined}
-                        subLabel={
-                          isConnected ? (
-                            <>
-                              {uiCopy.perPostLast25}
-                              {isPreview(ring3Val) ? previewBadge : null}
-                            </>
-                          ) : (
-                            t("results.rings.commentStrength.description")
-                          )
-                        }
-                      />
+                      <div className="col-span-2 sm:col-span-1">
+                        <ProgressRing
+                          value={safePercent(ring3Val)}
+                          label={uiCopy.avgCommentsLabel}
+                          centerText={isConnected ? avgCommentsFormatted : undefined}
+                          subLabel={
+                            isConnected ? (
+                              <>
+                                {uiCopy.perPostLast25}
+                                {isPreview(ring3Val) ? previewBadge : null}
+                              </>
+                            ) : (
+                              t("results.rings.commentStrength.description")
+                            )
+                          }
+                        />
+                      </div>
                     </>
                   )
                 })()}
               </div>
-            </div>
-
-            <div id="kpis-section" className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 scroll-mt-40">
-              {kpis.map((kpi) => {
-                const isSelected = Boolean(selectedGoalConfig)
-                const focus = isSelected
-                  ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "focus"))
-                  : ""
-                const isPrimary = isSelected && selectedGoalConfig!.primaryKpi === kpi.id
-                const note = isSelected ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "note")) : ""
-
-                const evalLevel = isSelected ? kpiEvaluationLevel(selectedGoalConfig!.id, kpi.id) : null
-                const evalTone = evalLevel ? kpiEvaluationTone(evalLevel) : null
-                const evalNote = isSelected ? t(`results.goals.evaluations.${selectedGoalConfig!.id}.${kpi.id}.note`) : ""
-
-                const levelSegments = evalLevel === "low" ? 1 : evalLevel === "medium" ? 2 : 3
-
-                return (
-                  <Card
-                    key={kpi.id}
-                    className={
-                      "rounded-xl border backdrop-blur-sm " +
-                      (evalTone ? evalTone.container + " " : "bg-white/5 ") +
-                      (isPrimary ? "border-white/25" : "border-white/10")
-                    }
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className={"text-sm font-medium text-slate-100" + (isPrimary ? "" : "")}>{t(kpi.titleKey)}</div>
-                        <div className="flex flex-col items-end gap-2">
-                          {isSelected ? <div className="text-[11px] text-muted-foreground text-right">{focus}</div> : null}
-                          {evalLevel ? (
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={
-                                  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium " +
-                                  kpiEvaluationTone(evalLevel).pill
-                                }
-                              >
-                                {safeT(`results.kpi.badgeLabels.${kpi.id}`)}
-                              </span>
-                              <div className="flex items-center gap-1">
-                                {[0, 1, 2].map((i) => (
-                                  <span
-                                    key={i}
-                                    className={
-                                      "h-1.5 w-5 rounded-full " +
-                                      (i < levelSegments
-                                        ? kpiEvaluationTone(evalLevel).bar
-                                        : kpiEvaluationTone(evalLevel).barEmpty)
-                                    }
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="mt-1 text-[clamp(18px,5vw,28px)] sm:text-lg font-semibold text-white min-w-0">
-                        <span className="tabular-nums whitespace-nowrap">{kpi.value}</span>
-                        {kpi.preview ? (
-                          <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                            預覽
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-[11px] sm:text-xs text-white/75 leading-snug">{t(kpi.descriptionKey)}</div>
-                      {safeT(`results.kpi.consequence.${kpi.id}`) ? (
-                        <div className="mt-1 text-[11px] sm:text-xs text-white/45 leading-snug">
-                          {safeT(`results.kpi.consequence.${kpi.id}`)}
-                        </div>
-                      ) : null}
-
-                      {evalNote ? (
-                        <div className="mt-2 text-[11px] sm:text-xs text-muted-foreground leading-snug">{evalNote}</div>
-                      ) : null}
-
-                      {isSelected ? (
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          <div>{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "role"))}</div>
-                          <div className="mt-1">{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "status"))}</div>
-                          {note ? <div className="mt-1">{note}</div> : null}
-                        </div>
-                      ) : null}
-                    </CardContent>
-                  </Card>
-                )
-              })}
             </div>
 
             <div className="mt-4 flex justify-center">
@@ -3181,16 +3196,22 @@ export default function ResultsClient() {
                 </p>
               </CardHeader>
               <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
-                <div className="mt-2 flex items-center gap-3 justify-between min-w-0">
-                  <div className="shrink-0">
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 whitespace-nowrap">
-                      7D
-                    </span>
+                <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                  <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
+                    <div className="shrink-0">
+                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 whitespace-nowrap">
+                        7天
+                      </span>
+                    </div>
+
+                    <div className="shrink-0 whitespace-nowrap tabular-nums min-w-0 overflow-hidden text-ellipsis text-[10px] text-white/45 sm:text-xs sm:text-white/55">
+                      {isZh ? "目前可用：7 天" : "Available: 7 days"}
+                    </div>
                   </div>
 
-                  <div className="flex-1 min-w-0 flex justify-center">
-                    <div className="max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
-                      <div className="inline-flex items-center gap-2 whitespace-nowrap min-w-0">
+                  <div className="min-w-0 sm:flex-1 sm:flex sm:justify-center">
+                    <div className="max-w-full sm:overflow-x-auto sm:whitespace-nowrap sm:overscroll-x-contain sm:[-webkit-overflow-scrolling:touch]">
+                      <div className="flex flex-wrap items-center gap-2 sm:inline-flex sm:flex-nowrap sm:whitespace-nowrap sm:min-w-max">
                         {(
                           [
                             { k: "reach" as const, label: "觸及", dot: "#34d399" },
@@ -3209,11 +3230,11 @@ export default function ResultsClient() {
                                 setFocusedAccountTrendMetric(m.k)
                               }}
                               className={
-                                `inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-semibold border transition-colors whitespace-nowrap ` +
+                                `inline-flex items-center gap-2 rounded-full h-6 px-2 text-[11px] leading-none sm:h-auto sm:px-2.5 sm:py-1 sm:text-xs sm:leading-none font-semibold border transition-colors whitespace-nowrap ` +
                                 `focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 ` +
                                 (pressed
                                   ? "bg-white/8 border-white/18 text-white"
-                                  : "bg-white/[0.03] border-white/8 text-white/60 hover:bg-white/6")
+                                  : "bg-white/[0.02] border-white/6 text-white/55 hover:bg-white/4 sm:bg-white/[0.03] sm:border-white/8 sm:text-white/60 sm:hover:bg-white/6")
                               }
                             >
                               <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: m.dot }} />
@@ -3223,10 +3244,6 @@ export default function ResultsClient() {
                         })}
                       </div>
                     </div>
-                  </div>
-
-                  <div className="shrink-0 whitespace-nowrap text-xs text-white/55 tabular-nums min-w-0 overflow-hidden text-ellipsis">
-                    {isZh ? "目前可用：7 天" : "Available: 7 days"}
                   </div>
                 </div>
 
@@ -3302,6 +3319,8 @@ export default function ResultsClient() {
                   const yMin = 0
                   const yMax = 100
 
+                  const isSmUp = isSmUpViewport
+
                   const w = 600
                   const h = 220
                   const padX = 26
@@ -3352,7 +3371,7 @@ export default function ResultsClient() {
                         </div>
                       ) : (
                         <div className="w-full mt-2 relative min-w-0">
-                          <div className="h-[260px] sm:h-[480px] min-h-[240px] sm:min-h-[440px] w-full">
+                          <div className="h-[220px] sm:h-[280px] lg:h-[320px] w-full">
                             <svg
                               viewBox={`0 0 ${w} ${h}`}
                               className="h-full w-full"
@@ -3362,6 +3381,26 @@ export default function ResultsClient() {
                                 const el = e.currentTarget
                                 const rect = el.getBoundingClientRect()
                                 const x = e.clientX - rect.left
+                                const ratio = rect.width > 0 ? x / rect.width : 0
+                                const idx = Math.round(ratio * (dataForChart.length - 1))
+                                setHoveredAccountTrendIndex(Math.max(0, Math.min(dataForChart.length - 1, idx)))
+                              }}
+                              onTouchStart={(e) => {
+                                const el = e.currentTarget
+                                const rect = el.getBoundingClientRect()
+                                const t = e.touches?.[0]
+                                if (!t) return
+                                const x = t.clientX - rect.left
+                                const ratio = rect.width > 0 ? x / rect.width : 0
+                                const idx = Math.round(ratio * (dataForChart.length - 1))
+                                setHoveredAccountTrendIndex(Math.max(0, Math.min(dataForChart.length - 1, idx)))
+                              }}
+                              onTouchMove={(e) => {
+                                const el = e.currentTarget
+                                const rect = el.getBoundingClientRect()
+                                const t = e.touches?.[0]
+                                if (!t) return
+                                const x = t.clientX - rect.left
                                 const ratio = rect.width > 0 ? x / rect.width : 0
                                 const idx = Math.round(ratio * (dataForChart.length - 1))
                                 setHoveredAccountTrendIndex(Math.max(0, Math.min(dataForChart.length - 1, idx)))
@@ -3408,12 +3447,13 @@ export default function ResultsClient() {
                                     const cx = sx(p.i)
                                     const cy = sy(p.yNorm)
                                     if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+                                    const r = isSmUp ? 2.9 : 4.2
                                     return (
                                       <circle
                                         key={`trend-focus-pt-${p.i}`}
                                         cx={cx}
                                         cy={cy}
-                                        r={2.9}
+                                        r={r}
                                         fill={focus.color}
                                         opacity={0.95}
                                         stroke="rgba(255,255,255,0.35)"
@@ -3436,12 +3476,13 @@ export default function ResultsClient() {
                                       const cx = sx(hit.i)
                                       const cy = sy(hit.yNorm)
                                       if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+                                      const r = isSmUp ? 4.2 : 6
                                       return (
                                         <circle
                                           key={`trend-dot-focus`}
                                           cx={cx}
                                           cy={cy}
-                                          r={4.2}
+                                          r={r}
                                           fill={s.color}
                                           stroke="rgba(255,255,255,0.35)"
                                           strokeWidth={2}
@@ -3461,17 +3502,19 @@ export default function ResultsClient() {
                                       const cx = sx(lastIdx)
                                       const cy = sy(hit.yNorm)
                                       if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+                                      const outerR = isSmUp ? 7 : 9
+                                      const innerR = isSmUp ? 4 : 5
                                       return (
                                         <g key="trend-today-highlight" className="trend-today-pulse">
                                           <circle
                                             cx={cx}
                                             cy={cy}
-                                            r={7}
+                                            r={outerR}
                                             fill="none"
                                             stroke="rgba(255,255,255,0.40)"
                                             strokeWidth={2}
                                           />
-                                          <circle cx={cx} cy={cy} r={4} fill="rgba(255,255,255,1)" />
+                                          <circle cx={cx} cy={cy} r={innerR} fill="rgba(255,255,255,1)" />
                                           <text
                                             x={cx}
                                             y={Math.max(12, cy - 12)}
@@ -3493,7 +3536,8 @@ export default function ResultsClient() {
                                   const last = n - 1
                                   const mid = Math.floor(last / 2)
                                   const step = n <= 8 ? 3 : n <= 16 ? 4 : 5
-                                  const showLabel = (i: number) => i === 0 || i === last || i === mid || i % step === 0
+                                  const showLabel = (i: number) =>
+                                    !isSmUp ? i === 0 || i === last || i === mid : i === 0 || i === last || i === mid || i % step === 0
                                   const anchorFor = (i: number) => (i === 0 ? "start" : i === last ? "end" : "middle")
                                   const topY = padY
                                   const bottomY = h - padY
@@ -3511,7 +3555,7 @@ export default function ResultsClient() {
                                               y1={topY}
                                               y2={bottomY}
                                               stroke="rgba(255,255,255,0.06)"
-                                              strokeWidth={1}
+                                              strokeWidth="1"
                                             />
                                             <line
                                               x1={x}
@@ -3519,7 +3563,7 @@ export default function ResultsClient() {
                                               y1={bottomY}
                                               y2={Math.min(h - 2, bottomY + 6)}
                                               stroke="rgba(255,255,255,0.18)"
-                                              strokeWidth={1}
+                                              strokeWidth="1"
                                             />
                                           </g>
                                         )
@@ -3606,30 +3650,30 @@ export default function ResultsClient() {
               </CardContent>
             </Card>
 
-            <Card id="top-posts-section" className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40">
-              <CardHeader className="pb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <Card id="top-posts-section" className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40 overflow-hidden">
+              <CardHeader className="border-b border-white/10 px-3 pt-4 pb-1 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-center justify-between gap-3 min-w-0">
                 <div className="min-w-0">
                   <CardTitle className="text-sm text-white truncate">{t("results.topPosts.title")}</CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground leading-tight line-clamp-2">
+                  <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-2">
                     {t("results.topPosts.description")}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground leading-tight line-clamp-1">{uiCopy.topPostsSortHint}</p>
+                  <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-1">{uiCopy.topPostsSortHint}</p>
                 </div>
 
-                <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                <div className="flex flex-col items-end gap-1 shrink-0 sm:flex-row sm:items-center sm:gap-2">
                   <Button
                     type="button"
                     onClick={() => {
                       router.push(`/${activeLocale}/post-analysis`)
                     }}
-                    className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10 w-full sm:w-auto shrink-0"
+                    className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10 w-auto shrink-0"
                   >
                     {activeLocale === "zh-TW" ? "前往貼文分析" : "Analyze Posts"}
                   </Button>
 
                   {!isPro ? (
                     <span
-                      className="min-w-0 text-xs text-muted-foreground tabular-nums overflow-hidden text-ellipsis whitespace-nowrap sm:max-w-[220px]"
+                      className="min-w-0 tabular-nums overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-white/55 sm:text-xs sm:text-muted-foreground sm:max-w-[220px]"
                       title={
                         activeLocale === "zh-TW"
                           ? `免費剩餘 ${freePostRemaining} / ${freePostLimit}`
@@ -3642,29 +3686,32 @@ export default function ResultsClient() {
                   ) : null}
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {(isConnected
-                    ? (topPerformingPosts.length > 0
-                        ? topPerformingPosts
-                        : Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` })))
-                    : mockAnalysis.topPosts.slice(0, 3)
-                  ).map((p: any, index: number) => (
-                    <div key={String(p?.id ?? index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
-                      {(() => {
-                        const real = topPerformingPosts[index] as any
+                  {(() => {
+                    const src = isConnected
+                      ? (topPerformingPosts.length > 0
+                          ? topPerformingPosts
+                          : Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` })))
+                      : mockAnalysis.topPosts.slice(0, 3)
 
-                        const likes = typeof real?.likes === "number" ? real.likes : !isConnected ? Number(p?.likes ?? 0) : null
-                        const comments =
-                          typeof real?.comments === "number" ? real.comments : !isConnected ? Number(p?.comments ?? 0) : null
-                        const engagement =
-                          typeof real?.engagement === "number"
-                            ? real.engagement
-                            : !isConnected
-                              ? Number((p?.likes ?? 0) + (p?.comments ?? 0))
-                              : null
+                    const shown = !isSmUpViewport ? (src as any[]).slice(0, 3) : (src as any[])
+                    return shown.map((p: any, index: number) => (
+                      <div key={String(p?.id ?? index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
+                        {(() => {
+                          const real = topPerformingPosts[index] as any
 
-                        const mediaType = typeof real?.media_type === "string" && real.media_type ? real.media_type : ""
+                          const likes = typeof real?.likes === "number" ? real.likes : !isConnected ? Number(p?.likes ?? 0) : null
+                          const comments =
+                            typeof real?.comments === "number" ? real.comments : !isConnected ? Number(p?.comments ?? 0) : null
+                          const engagement =
+                            typeof real?.engagement === "number"
+                              ? real.engagement
+                              : !isConnected
+                                ? Number((p?.likes ?? 0) + (p?.comments ?? 0))
+                                : null
+
+                          const mediaType = typeof real?.media_type === "string" && real.media_type ? real.media_type : ""
 
                         const ymd = (() => {
                           const ts = typeof real?.timestamp === "string" ? real.timestamp : ""
@@ -3818,7 +3865,7 @@ export default function ResultsClient() {
                                   <div className="text-xs text-muted-foreground leading-tight truncate min-w-0">
                                     <span className="whitespace-nowrap">{mediaType}</span>
                                     <span className="mx-1">·</span>
-                                    <span className="tabular-nums whitespace-nowrap">{ymd}</span>
+                                    <span className={numMono}>{ymd}</span>
                                   </div>
                                 </div>
 
@@ -3834,16 +3881,43 @@ export default function ResultsClient() {
                               </div>
 
                               {caption ? (
-                                <div className="mt-1 text-xs text-slate-200/85 leading-tight line-clamp-2 min-w-0">
+                                <div className="mt-1 hidden sm:block text-xs text-slate-200/85 leading-tight line-clamp-2 min-w-0">
                                   {caption}
                                 </div>
                               ) : null}
 
-                              <div className="mt-3 flex items-center justify-center gap-x-10 sm:gap-x-12 pr-6 sm:pr-8 min-w-0">
+                              <div className="mt-2 sm:hidden text-[11px] leading-tight text-white/60 min-w-0 truncate">
+                                <span className="whitespace-nowrap">{t("results.topPosts.card.likesLabel")}</span>
+                                <span className="ml-1 mr-2 inline-flex items-center">
+                                  <span className={numMono}>
+                                    {typeof likes === "number" && Number.isFinite(likes) ? Math.round(likes).toLocaleString() : "—"}
+                                  </span>
+                                </span>
+                                <span className="opacity-50">·</span>
+                                <span className="ml-2 whitespace-nowrap">{t("results.topPosts.card.commentsLabel")}</span>
+                                <span className="ml-1 mr-2 inline-flex items-center">
+                                  <span className={numMono}>
+                                    {typeof comments === "number" && Number.isFinite(comments)
+                                      ? Math.round(comments).toLocaleString()
+                                      : "—"}
+                                  </span>
+                                </span>
+                                <span className="opacity-50">·</span>
+                                <span className="ml-2 whitespace-nowrap">{t("results.topPosts.card.engagementLabel")}</span>
+                                <span className="ml-1 inline-flex items-center">
+                                  <span className={numMono}>
+                                    {typeof engagement === "number" && Number.isFinite(engagement)
+                                      ? Math.round(engagement).toLocaleString()
+                                      : "—"}
+                                  </span>
+                                </span>
+                              </div>
+
+                              <div className="mt-2.5 hidden sm:flex items-center justify-center gap-x-8 sm:gap-x-10 pr-4 sm:pr-6 min-w-0 overflow-hidden">
                                 <div className="min-w-0 text-center">
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.likesLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
-                                    <span className="tabular-nums whitespace-nowrap">
+                                    <span className={numMono}>
                                       {typeof likes === "number" && Number.isFinite(likes) ? Math.round(likes).toLocaleString() : "—"}
                                     </span>
                                   </div>
@@ -3852,7 +3926,7 @@ export default function ResultsClient() {
                                 <div className="min-w-0 text-center">
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.commentsLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
-                                    <span className="tabular-nums whitespace-nowrap">
+                                    <span className={numMono}>
                                       {typeof comments === "number" && Number.isFinite(comments)
                                         ? Math.round(comments).toLocaleString()
                                         : "—"}
@@ -3863,7 +3937,7 @@ export default function ResultsClient() {
                                 <div className="min-w-0 text-center">
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.engagementLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
-                                    <span className="tabular-nums whitespace-nowrap">
+                                    <span className={numMono}>
                                       {typeof engagement === "number" && Number.isFinite(engagement)
                                         ? Math.round(engagement).toLocaleString()
                                         : "—"}
@@ -3877,25 +3951,447 @@ export default function ResultsClient() {
                         )
                       })()}
                     </div>
-                  ))}
+                    ))
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+            <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+
+            <div id="kpis-section" className="mt-4 scroll-mt-40">
+              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm sm:hidden overflow-hidden">
+                <CardHeader
+                  className={
+                    isMobile
+                      ? "px-3 pt-3 pb-2"
+                      : kpiExpanded
+                        ? "px-3 pt-3 pb-2 cursor-pointer"
+                        : "px-3 py-2 cursor-pointer"
+                  }
+                  onClick={() => {
+                    if (isMobile) return
+                    setKpiExpanded((v) => !v)
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <div className="min-w-0">
+                      <CardTitle className="text-base font-semibold text-white">關鍵指標</CardTitle>
+                      {!isMobile && !kpiExpanded ? (
+                        <div className="mt-0.5 text-[11px] leading-tight text-white/55">6 個指標 · 點擊展開</div>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setKpiExpanded((v) => !v)
+                      }}
+                      className="text-xs text-white/70 hover:text-white whitespace-nowrap shrink-0 hidden sm:inline-flex"
+                    >
+                      {kpiExpanded ? "收合" : "展開"}
+                    </button>
+                  </div>
+                </CardHeader>
+                {isMobile || kpiExpanded ? (
+                  <CardContent className="pt-0 px-3 pb-3">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                      {kpis.map((kpi) => {
+                        const isSelected = Boolean(selectedGoalConfig)
+                        const focus = isSelected
+                          ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "focus"))
+                          : ""
+                        const isPrimary = isSelected && selectedGoalConfig!.primaryKpi === kpi.id
+                        const note = isSelected ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "note")) : ""
+
+                        const evalLevel = isSelected ? kpiEvaluationLevel(selectedGoalConfig!.id, kpi.id) : null
+                        const evalTone = evalLevel ? kpiEvaluationTone(evalLevel) : null
+                        const evalNote = isSelected ? t(`results.goals.evaluations.${selectedGoalConfig!.id}.${kpi.id}.note`) : ""
+
+                        const levelSegments = evalLevel === "low" ? 1 : evalLevel === "medium" ? 2 : 3
+
+                        return (
+                          <Card
+                            key={kpi.id}
+                            className={
+                              "rounded-xl border backdrop-blur-sm min-w-0 overflow-hidden " +
+                              (evalTone ? evalTone.container + " " : "bg-white/5 ") +
+                              (isPrimary ? "border-white/25" : "border-white/10")
+                            }
+                          >
+                            <CardContent className="p-3 sm:p-4 flex h-full flex-col justify-between min-w-0 min-h-[120px] sm:min-h-0">
+                              <div className="flex items-start justify-between gap-3 min-w-0">
+                                <div className={"text-xs sm:text-sm leading-tight font-medium text-slate-100 min-w-0 whitespace-normal break-words line-clamp-2 sm:whitespace-nowrap sm:truncate sm:line-clamp-none" + (isPrimary ? "" : "")}>{t(kpi.titleKey)}</div>
+                                <div className="flex flex-col items-end gap-2 min-w-0">
+                                  {isSelected ? (
+                                    <div className="text-[11px] text-muted-foreground text-right min-w-0 line-clamp-2 leading-snug">{focus}</div>
+                                  ) : null}
+                                  {evalLevel ? (
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1">
+                                        {[0, 1, 2].map((i) => (
+                                          <span
+                                            key={i}
+                                            className={
+                                              "h-1.5 w-5 rounded-full " +
+                                              (i < levelSegments
+                                                ? kpiEvaluationTone(evalLevel).bar
+                                                : kpiEvaluationTone(evalLevel).barEmpty)
+                                            }
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              <div className="mt-1 text-2xl sm:text-3xl font-semibold text-white min-w-0 tabular-nums whitespace-nowrap">
+                                <span className={numMono}>{kpi.value}</span>
+                                {kpi.preview ? (
+                                  <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                                    預覽
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="mt-1 text-[11px] leading-snug text-white/75 min-w-0 overflow-hidden break-words line-clamp-1 sm:line-clamp-none min-h-[16px] sm:min-h-0">
+                                {t(kpi.descriptionKey)}
+                              </p>
+                              {safeT(`results.kpi.consequence.${kpi.id}`) ? (
+                                <p className="hidden sm:block mt-1 text-xs text-white/45 leading-snug">
+                                  {safeT(`results.kpi.consequence.${kpi.id}`)}
+                                </p>
+                              ) : null}
+                              {evalNote ? (
+                                <div className="mt-1 text-[10px] text-muted-foreground leading-tight line-clamp-1 min-w-0">
+                                  {evalNote}
+                                </div>
+                              ) : null}
+
+                              {isSelected ? (
+                                <div className="mt-2 text-xs text-muted-foreground hidden sm:block">
+                                  <div>{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "role"))}</div>
+                                  <div className="mt-1">{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "status"))}</div>
+                                  {note ? <div className="mt-1">{note}</div> : null}
+                                </div>
+                              ) : null}
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  </CardContent>
+                ) : null}
+              </Card>
+
+              <div className="hidden sm:grid sm:grid-cols-2 sm:gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                {kpis.map((kpi) => {
+                  const isSelected = Boolean(selectedGoalConfig)
+                  const focus = isSelected
+                    ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "focus"))
+                    : ""
+                  const isPrimary = isSelected && selectedGoalConfig!.primaryKpi === kpi.id
+                  const note = isSelected ? safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "note")) : ""
+
+                  const evalLevel = isSelected ? kpiEvaluationLevel(selectedGoalConfig!.id, kpi.id) : null
+                  const evalTone = evalLevel ? kpiEvaluationTone(evalLevel) : null
+                  const evalNote = isSelected ? t(`results.goals.evaluations.${selectedGoalConfig!.id}.${kpi.id}.note`) : ""
+
+                  const levelSegments = evalLevel === "low" ? 1 : evalLevel === "medium" ? 2 : 3
+
+                  return (
+                    <Card
+                      key={kpi.id}
+                      className={
+                        "rounded-xl border backdrop-blur-sm min-w-0 overflow-hidden " +
+                        (evalTone ? evalTone.container + " " : "bg-white/5 ") +
+                        (isPrimary ? "border-white/25" : "border-white/10")
+                      }
+                    >
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex items-start justify-between gap-3 min-w-0">
+                          <div className={"text-[11px] leading-tight sm:text-sm font-medium text-slate-100 min-w-0 truncate" + (isPrimary ? "" : "")}>{t(kpi.titleKey)}</div>
+                          <div className="flex flex-col items-end gap-2 min-w-0">
+                            {isSelected ? (
+                              <div className="text-[11px] text-muted-foreground text-right min-w-0 line-clamp-2 leading-snug">{focus}</div>
+                            ) : null}
+                            {evalLevel ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1">
+                                  {[0, 1, 2].map((i) => (
+                                    <span
+                                      key={i}
+                                      className={
+                                        "h-1.5 w-5 rounded-full " +
+                                        (i < levelSegments
+                                          ? kpiEvaluationTone(evalLevel).bar
+                                          : kpiEvaluationTone(evalLevel).barEmpty)
+                                      }
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="mt-1 text-[clamp(18px,5vw,22px)] sm:text-lg font-semibold text-white min-w-0">
+                          <span className={numMono}>{kpi.value}</span>
+                          {kpi.preview ? (
+                            <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                              預覽
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-snug text-white/75 min-w-0 overflow-hidden line-clamp-1 sm:line-clamp-none sm:text-xs">
+                          {t(kpi.descriptionKey)}
+                        </p>
+                        {safeT(`results.kpi.consequence.${kpi.id}`) ? (
+                          <p className="hidden sm:block mt-1 text-xs text-white/45 leading-snug">
+                            {safeT(`results.kpi.consequence.${kpi.id}`)}
+                          </p>
+                        ) : null}
+
+                        {evalNote ? (
+                          <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground leading-tight line-clamp-1 min-w-0">
+                            {evalNote}
+                          </div>
+                        ) : null}
+
+                        {isSelected ? (
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            <div>{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "role"))}</div>
+                            <div className="mt-1">{safeT(kpiInterpretationKey(selectedGoalConfig!.id, kpi.id, "status"))}</div>
+                            {note ? <div className="mt-1">{note}</div> : null}
+                          </div>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+
+            <Card
+              id="goals-section"
+              className="text-slate-100 flex flex-col gap-3 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/30 hover:shadow-xl mt-4 sm:mt-6 rounded-2xl border border-white/24 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/10 shadow-lg shadow-black/35 backdrop-blur-sm px-3 py-3 sm:px-3 sm:py-3.5 scroll-mt-40 min-w-0 overflow-hidden"
+            >
+              <CardHeader className="pt-3 pb-0 min-w-0">
+                <CardTitle className="text-sm sm:text-base font-semibold tracking-tight text-white leading-tight">
+                  {t("results.goals.title")}
+                </CardTitle>
+                <p className={"mt-0.5 text-white/65 max-w-2xl line-clamp-1 " + clampBodyMobile + " sm:text-xs sm:text-white/65 sm:line-clamp-none"}>{t("results.goals.subtitle")}</p>
+                <div className="mt-2 h-px w-full bg-white/10" />
+              </CardHeader>
+              <CardContent className="pt-0 px-0">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 min-w-0">
+                  {goalOptions.map((opt) => {
+                    const isSelected = selectedGoal === opt.id
+                    return (
+                      <div
+                        key={opt.id}
+                        role="button"
+                        tabIndex={0}
+                        className={
+                          "select-none cursor-pointer w-full min-w-0 truncate rounded-full px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 hover:bg-white/12 hover:border-white/30 hover:shadow-lg hover:shadow-black/30 active:scale-[0.99] max-w-full border " +
+                          (isSelected
+                            ? "border-white/30 bg-white/6 text-white"
+                            : "border-white/15 bg-white/6 text-slate-200")
+                        }
+                        onClick={() => {
+                          setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                          }
+                        }}
+                      >
+                        {t(opt.labelKey)}
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="text-slate-100 flex flex-col gap-2 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/25 hover:shadow-xl mt-3 rounded-xl border border-white/15 bg-gradient-to-b from-white/8 via-white/4 to-white/2 ring-1 ring-white/10 shadow-xl shadow-black/40 backdrop-blur-sm px-4 py-2.5 mb-5">
-              <CardHeader className="pb-0">
+            <Card className="text-slate-100 flex flex-col gap-1.5 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg mt-3 rounded-xl border border-white/12 bg-gradient-to-b from-white/8 via-white/4 to-white/2 ring-1 ring-white/8 shadow-lg shadow-black/35 backdrop-blur-sm px-2 py-2 sm:px-3 sm:py-3 mb-5">
+              <CardHeader className="pb-0 py-2">
                 <CardTitle className="text-lg sm:text-xl font-semibold tracking-tight text-white">
                   {safeT("results.nextActions.title")}
                 </CardTitle>
-                <p className="mt-0.5 text-[11px] text-white/65 max-w-3xl leading-tight min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
+                <p className="mt-0.5 text-[10px] leading-tight text-white/65 max-w-3xl min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
                   <span className="truncate">{safeT("results.nextActions.helperLine")}</span>
                   <span className="mx-1 opacity-60">·</span>
                   <span className="truncate">{safeT("results.nextActions.subtitle")}</span>
                 </p>
               </CardHeader>
               <CardContent className="pt-0 px-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-1.5">
                   {(() => {
+                    if (!isSmUpViewport) {
+                      const actions = activeGoalMeta.actions
+                      const visibleActions = nextActionsExpanded ? actions.slice(0, 3) : actions.slice(0, 1)
+                      const hiddenCount = Math.max(0, Math.min(3, actions.length) - visibleActions.length)
+                      let proDividerInserted = false
+                      const nodes: ReactNode[] = []
+
+                      visibleActions.forEach((action) => {
+                        const isLocked = action.isPro && !isPro
+                        const shouldInsertDivider = action.isPro && !proDividerInserted
+                        if (shouldInsertDivider) proDividerInserted = true
+
+                        if (shouldInsertDivider) {
+                          nodes.push(
+                            <div key="pro-divider" className="md:col-span-3 flex items-center">
+                              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-purple-200">
+                                專業版內容
+                              </span>
+                            </div>
+                          )
+                        }
+
+                        nodes.push(
+                          <div
+                            key={action.titleKey}
+                            role={!isLocked ? "button" : undefined}
+                            tabIndex={!isLocked ? 0 : undefined}
+                            className={
+                              "flex flex-col gap-1 rounded-xl border px-2.5 py-2 sm:px-3 sm:py-2.5 transition-all min-w-0 overflow-hidden " +
+                              (isLocked
+                                ? "border-white/20 bg-white/8"
+                                : checkedNextActions[action.titleKey]
+                                  ? "cursor-pointer border-white/12 bg-white/6 hover:bg-white/7 hover:border-white/25"
+                                  : "cursor-pointer border-white/20 bg-white/8 hover:bg-white/12 hover:border-white/40")
+                            }
+                            onClick={() => {
+                              if (isLocked) return
+                              toggleNextActionChecked(action.titleKey)
+                            }}
+                            onKeyDown={(e) => {
+                              if (isLocked) return
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault()
+                                toggleNextActionChecked(action.titleKey)
+                              }
+                            }}
+                          >
+                            <div className="flex items-start gap-2 min-w-0">
+                              <button
+                                type="button"
+                                aria-label="toggle"
+                                role="checkbox"
+                                aria-checked={!!checkedNextActions[action.titleKey]}
+                                disabled={isLocked}
+                                className={
+                                  "mt-[1px] h-4 w-4 shrink-0 rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40 " +
+                                  (isLocked
+                                    ? "cursor-not-allowed border-white/25 bg-black/20"
+                                    : checkedNextActions[action.titleKey]
+                                      ? "border-emerald-300/60 bg-emerald-400/25"
+                                      : "border-white/30 bg-black/20 hover:bg-white/8")
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (isLocked) return
+                                  toggleNextActionChecked(action.titleKey)
+                                }}
+                              />
+                              <div className="min-w-0 flex-1 overflow-hidden">
+                                <div className="flex items-start justify-between gap-2 min-w-0">
+                                  <div
+                                    className={
+                                      "text-xs font-semibold leading-snug line-clamp-1 min-w-0 " +
+                                      (isLocked
+                                        ? "text-white"
+                                        : checkedNextActions[action.titleKey]
+                                          ? "text-white/60 line-through decoration-white/30"
+                                          : "text-white")
+                                    }
+                                  >
+                                    {safeT(action.titleKey)}
+                                  </div>
+                                  <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
+                                    {action.isPro ? safeT("results.nextActions.proBadge") : safeT("results.nextActions.freeBadge")}
+                                  </span>
+                                </div>
+
+                                <div
+                                  className={
+                                    "mt-1 text-[11px] leading-snug line-clamp-2 min-w-0 " +
+                                    (isLocked
+                                      ? "text-slate-300 blur-[3px] select-none"
+                                      : checkedNextActions[action.titleKey]
+                                        ? "text-slate-300/70"
+                                        : "text-slate-300")
+                                  }
+                                >
+                                  {safeT(action.descKey)}
+                                </div>
+
+                                {isLocked ? (
+                                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                    <Lock className="h-3.5 w-3.5" />
+                                    <button
+                                      type="button"
+                                      className="hover:text-slate-200"
+                                      onClick={handleUpgrade}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClickCapture={(e) => e.stopPropagation()}
+                                    >
+                                      {safeT("results.nextActions.lockLine")}
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })
+
+                      if (!nextActionsExpanded && hiddenCount > 0) {
+                        nodes.push(
+                          <div
+                            key="next-actions-see-more"
+                            role="button"
+                            tabIndex={0}
+                            className="cursor-pointer rounded-xl border border-white/20 bg-white/6 px-2.5 py-2 text-xs font-semibold text-white/85 hover:bg-white/8 hover:border-white/30"
+                            onClick={() => setNextActionsExpanded(true)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault()
+                                setNextActionsExpanded(true)
+                              }
+                            }}
+                          >
+                            {activeLocale === "zh-TW" ? `查看更多（${hiddenCount}）` : `See more (${hiddenCount})`}
+                          </div>
+                        )
+                      }
+
+                      if (nextActionsExpanded) {
+                        nodes.push(
+                          <div
+                            key="next-actions-collapse"
+                            role="button"
+                            tabIndex={0}
+                            className="cursor-pointer rounded-xl border border-white/20 bg-white/6 px-2.5 py-2 text-xs font-semibold text-white/70 hover:bg-white/8 hover:border-white/30"
+                            onClick={() => setNextActionsExpanded(false)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault()
+                                setNextActionsExpanded(false)
+                              }
+                            }}
+                          >
+                            {activeLocale === "zh-TW" ? "收合" : "Collapse"}
+                          </div>
+                        )
+                      }
+
+                      return nodes
+                    }
+
                     let proDividerInserted = false
                     return activeGoalMeta.actions.flatMap((action) => {
                       const isLocked = action.isPro && !isPro
@@ -3919,7 +4415,7 @@ export default function ResultsClient() {
                           role={!isLocked ? "button" : undefined}
                           tabIndex={!isLocked ? 0 : undefined}
                           className={
-                            "flex flex-col gap-1.5 rounded-xl border px-3 py-2.5 transition-all " +
+                            "flex flex-col gap-1 rounded-xl border px-2.5 py-2 sm:px-3 sm:py-2.5 transition-all min-w-0 overflow-hidden " +
                             (isLocked
                               ? "border-white/20 bg-white/8"
                               : checkedNextActions[action.titleKey]
@@ -3938,7 +4434,7 @@ export default function ResultsClient() {
                             }
                           }}
                         >
-                          <div className="flex items-start gap-2">
+                          <div className="flex items-start gap-2 min-w-0">
                             <button
                               type="button"
                               aria-label="toggle"
@@ -3946,7 +4442,7 @@ export default function ResultsClient() {
                               aria-checked={!!checkedNextActions[action.titleKey]}
                               disabled={isLocked}
                               className={
-                                "mt-1 h-4 w-4 shrink-0 rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40 " +
+                                "mt-[1px] h-4 w-4 shrink-0 rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40 " +
                                 (isLocked
                                   ? "cursor-not-allowed border-white/25 bg-black/20"
                                   : checkedNextActions[action.titleKey]
@@ -3959,11 +4455,11 @@ export default function ResultsClient() {
                                 toggleNextActionChecked(action.titleKey)
                               }}
                             />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1 overflow-hidden">
+                              <div className="flex items-start justify-between gap-2 min-w-0">
                                 <div
                                   className={
-                                    "text-sm font-semibold leading-snug " +
+                                    "text-xs font-semibold leading-snug line-clamp-1 min-w-0 " +
                                     (isLocked
                                       ? "text-white"
                                       : checkedNextActions[action.titleKey]
@@ -3973,7 +4469,7 @@ export default function ResultsClient() {
                                 >
                                   {safeT(action.titleKey)}
                                 </div>
-                                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
                                   {action.isPro
                                     ? safeT("results.nextActions.proBadge")
                                     : safeT("results.nextActions.freeBadge")}
@@ -3982,7 +4478,7 @@ export default function ResultsClient() {
 
                               <div
                                 className={
-                                  "mt-2 text-xs leading-snug " +
+                                  "mt-1 text-[11px] leading-snug line-clamp-2 min-w-0 " +
                                   (isLocked
                                     ? "text-slate-300 blur-[3px] select-none"
                                     : checkedNextActions[action.titleKey]
@@ -4019,89 +4515,39 @@ export default function ResultsClient() {
               </CardContent>
             </Card>
 
-            <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-
-            <Card
-              id="goals-section"
-              className="text-slate-100 flex flex-col gap-4 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/35 hover:shadow-2xl mt-0 rounded-2xl border border-white/30 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/15 shadow-xl shadow-black/40 backdrop-blur-sm px-4 py-4 scroll-mt-40"
-            >
-              <CardHeader className="pb-0">
-                <CardTitle className="text-lg sm:text-xl font-semibold tracking-tight text-white">
-                  {t("results.goals.title")}
-                </CardTitle>
-                <p className="mt-1 text-xs text-white/65 max-w-2xl leading-snug">{t("results.goals.subtitle")}</p>
-                <div className="mt-3 h-px w-full bg-white/10" />
-              </CardHeader>
-              <CardContent className="pt-0 px-0">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {goalOptions.map((opt) => {
-                    const isSelected = selectedGoal === opt.id
-                    return (
-                      <div
-                        key={opt.id}
-                        role="button"
-                        tabIndex={0}
-                        className={
-                          "select-none cursor-pointer min-h-[56px] flex items-center justify-center rounded-xl border px-3 py-3 text-sm lg:text-base font-medium transition-all duration-200 hover:bg-white/12 hover:border-white/30 hover:shadow-lg hover:shadow-black/30 hover:scale-[1.01] active:scale-[0.99] " +
-                          (isSelected
-                            ? "border-white/30 bg-white/6 text-white"
-                            : "border-white/15 bg-white/6 text-slate-200")
-                        }
-                        onClick={() => {
-                          setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
-                          requestAnimationFrame(() => {
-                            scrollToKpiSection()
-                          })
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault()
-                            setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
-                            requestAnimationFrame(() => {
-                              scrollToKpiSection()
-                            })
-                          }
-                        }}
-                      >
-                        {t(opt.labelKey)}
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
             <section id="insights-section" className="mt-3 scroll-mt-32 hidden sm:block">
               {renderInsightsSection("desktop")}
             </section>
 
-            <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-              <CardContent className="p-4">
-                <div className="text-xs text-muted-foreground">{t("results.cta.trust")}</div>
+            <div className="hidden sm:block">
+              <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                <CardContent className="p-4">
+                  <div className="text-xs text-muted-foreground">{t("results.cta.trust")}</div>
 
-                <h2 className="mt-2 text-lg font-semibold">{t("results.cta.title")}</h2>
+                  <h2 className="mt-2 text-lg font-semibold">{t("results.cta.title")}</h2>
 
-                <div className="mt-2 text-xs text-muted-foreground leading-snug">
-                  {t("results.cta.intro")}
-                </div>
-                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                  <li>{t("results.cta.bullets.1")}</li>
-                  <li>{t("results.cta.bullets.2")}</li>
-                  <li>{t("results.cta.bullets.3")}</li>
-                  <li>{t("results.cta.bullets.4")}</li>
-                </ul>
+                  <div className="mt-2 text-xs text-muted-foreground leading-snug">
+                    {t("results.cta.intro")}
+                  </div>
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <li>{t("results.cta.bullets.1")}</li>
+                    <li>{t("results.cta.bullets.2")}</li>
+                    <li>{t("results.cta.bullets.3")}</li>
+                    <li>{t("results.cta.bullets.4")}</li>
+                  </ul>
 
-                <Button
-                  type="button"
-                  className="mt-4 bg-emerald-500 hover:bg-emerald-600"
-                  onClick={() => {
-                    window.open("https://forms.gle/REPLACE_WITH_YOUR_FORM", "_blank")
-                  }}
-                >
-                  {t("results.cta.button")}
-                </Button>
-              </CardContent>
-            </Card>
+                  <Button
+                    type="button"
+                    className="mt-4 bg-emerald-500 hover:bg-emerald-600"
+                    onClick={() => {
+                      window.open("https://forms.gle/REPLACE_WITH_YOUR_FORM", "_blank")
+                    }}
+                  >
+                    {t("results.cta.button")}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {isProModalOpen && (

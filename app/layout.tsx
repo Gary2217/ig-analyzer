@@ -27,12 +27,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0b1220] text-foreground`}
       >
-        <div className="min-h-[100dvh] w-full flex flex-col">
-          <main className="flex-1 w-full py-8 px-4 sm:px-6">
+        <div className="min-h-dvh w-full flex flex-col">
+          <main className="w-full py-8 px-4 sm:px-6">
             <div className="w-full max-w-none mx-auto">{children}</div>
           </main>
 
-          <footer className="border-t border-white/10 bg-[#0b1220]/70 backdrop-blur-md">
+          <footer className="mt-auto border-t border-white/10 bg-[#0b1220]/70 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-start">
                 <div className="space-y-3">
