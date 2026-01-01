@@ -44,11 +44,27 @@
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
     "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
     "proBadge": "專業",
+    "syncingTitle": "正在同步你的 IG 資料",
+    "syncingHint": "通常需要 3–10 秒，請稍等一下。",
+    "updating": "更新中…",
+    "updateSlow": "更新時間較久，可能是網路或授權狀態異常。",
+    "retry": "重新嘗試",
+    "showCurrentData": "先顯示目前資料",
+    "back": "返回",
+    "common": {
+      "preview": "預覽"
+    },
     "trend": {
       "title": "帳號互動趨勢",
       "subtitle7d": "最近 7 天（可多選）",
       "empty": "目前尚未取得最近 7 天趨勢資料",
       "selectAtLeastOne": "請至少選擇一個指標",
+      "legend": {
+        "reach": "觸及",
+        "impressions": "曝光",
+        "engagedAccounts": "互動帳號",
+        "followerChange": "粉絲變化"
+      },
       "lastSynced": "最後同步",
       "today": "今日",
       "new": "新",
@@ -325,6 +341,9 @@
       "pro": "專業版可解鎖貼文層級拆解、文案模式線索，以及依目標整理的行動計畫。"
     },
     "profile": {
+      "followers": "粉絲數",
+      "following": "關注數",
+      "posts": "貼文數",
       "followingLabel": "追蹤中",
       "postsLabel": "貼文"
     },

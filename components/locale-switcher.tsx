@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { Check, Globe } from "lucide-react"
 import type { Locale } from "../lib/i18n"
 import { useI18n } from "./locale-provider"
@@ -14,8 +14,8 @@ function setLocaleCookie(locale: Locale) {
 
 export default function LocaleSwitcher() {
   const { t } = useI18n()
-  const router = useRouter()
   const pathname = usePathname() || "/"
+  const searchParams = useSearchParams()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -36,7 +36,22 @@ export default function LocaleSwitcher() {
     if (next === current) return
     setLocaleCookie(next)
     setOpen(false)
-    router.push(`/${next}${restPath || "/"}`)
+
+    const params = new URLSearchParams(searchParams?.toString() || "")
+    params.delete("connected")
+    params.delete("sync")
+    params.delete("next")
+    params.delete("fromOAuth")
+
+    const qs = params.toString()
+    const pathWithoutLocale = restPath || "/"
+
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    const destUrl = `${origin}/${next}${pathWithoutLocale}${qs ? `?${qs}` : ""}`
+
+    if (typeof window !== "undefined") {
+      window.location.assign(destUrl)
+    }
   }
 
   useEffect(() => {

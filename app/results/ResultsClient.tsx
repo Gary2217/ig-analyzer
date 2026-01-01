@@ -92,6 +92,62 @@ const MOCK_ACCOUNT_TREND_7D: AccountTrendPoint[] = [
   { t: "12/28", reach: 25150, impressions: 34800, engaged: 1290, followerDelta: 22 },
 ]
 
+type ResultsCachePayloadV1 = {
+  ts: number
+  igMe: IgMeResponse | null
+  media: Array<{
+    id: string
+    like_count?: number
+    comments_count?: number
+    timestamp?: string
+    media_type?: string
+    permalink?: string
+    media_url?: string
+    thumbnail_url?: string
+    caption?: string
+  }>
+  trendPoints: AccountTrendPoint[]
+  trendFetchedAt: number | null
+}
+
+const RESULTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const __resultsCacheMem: Record<string, ResultsCachePayloadV1> = {}
+
+function saReadResultsCache(key: string): ResultsCachePayloadV1 | null {
+  try {
+    const mem = __resultsCacheMem[key]
+    if (mem && typeof mem.ts === "number" && Date.now() - mem.ts <= RESULTS_CACHE_TTL_MS) return mem
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (typeof window === "undefined") return null
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed.ts !== "number") return null
+    if (Date.now() - parsed.ts > RESULTS_CACHE_TTL_MS) return null
+    return parsed as ResultsCachePayloadV1
+  } catch {
+    return null
+  }
+}
+
+function saWriteResultsCache(key: string, payload: ResultsCachePayloadV1) {
+  try {
+    __resultsCacheMem[key] = payload
+  } catch {
+    // ignore
+  }
+  try {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(key, JSON.stringify(payload))
+  } catch {
+    // ignore
+  }
+}
+
 function GateShell(props: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <section className="w-full bg-[#0b1220] px-4 py-12 overflow-x-hidden">
@@ -113,20 +169,17 @@ function GateShell(props: { title: string; subtitle?: string; children: ReactNod
 }
 
 function LoadingCard(props: {
-  isZh: boolean
+  t: (key: string) => string
   isSlow: boolean
   onRetry: () => void
   onRefresh: () => void
   onBack: () => void
 }) {
   return (
-    <GateShell
-      title={props.isZh ? "正在同步你的 IG 資料" : "Syncing your IG data"}
-      subtitle={props.isZh ? "約 3–10 秒，請稍等一下。" : "This usually takes 3–10 seconds."}
-    >
+    <GateShell title={props.t("results.syncingTitle")} subtitle={props.t("results.syncingHint")}>
       <div className="flex items-center gap-3">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-        <div className="text-sm text-white/70">{props.isZh ? "連線中…" : "Connecting…"}</div>
+        <div className="text-sm text-white/70">{props.t("results.updating")}</div>
       </div>
 
       {props.isSlow ? (
@@ -137,7 +190,7 @@ function LoadingCard(props: {
             className="border-white/15 text-slate-200 hover:bg-white/5"
             onClick={props.onRetry}
           >
-            {props.isZh ? "重新嘗試" : "Retry"}
+            {props.t("results.retry")}
           </Button>
           <Button
             type="button"
@@ -145,7 +198,7 @@ function LoadingCard(props: {
             className="border-white/15 text-slate-200 hover:bg-white/5"
             onClick={props.onRefresh}
           >
-            {props.isZh ? "重新整理" : "Refresh"}
+            {props.t("results.retry")}
           </Button>
           <Button
             type="button"
@@ -153,7 +206,7 @@ function LoadingCard(props: {
             className="border-white/15 text-slate-200 hover:bg-white/5"
             onClick={props.onBack}
           >
-            {props.isZh ? "返回" : "Back"}
+            {props.t("results.back")}
           </Button>
         </div>
       ) : null}
@@ -544,6 +597,12 @@ export default function ResultsClient() {
 
   const [mediaLoaded, setMediaLoaded] = useState(false)
 
+  const [hasCachedData, setHasCachedData] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateSlow, setUpdateSlow] = useState(false)
+  const [loadTimedOut, setLoadTimedOut] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+
   const [selectedGoal, setSelectedGoal] = useState<
     | null
     | "growthStageAccount"
@@ -631,6 +690,71 @@ export default function ResultsClient() {
   const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
   const isZh = activeLocale === "zh-TW"
 
+  const igCacheId = String(((igMe as any)?.profile?.id ?? (igMe as any)?.profile?.username ?? (igMe as any)?.username ?? "me") || "me")
+  const resultsCacheKey = `results_cache:${igCacheId}:7`
+
+  useEffect(() => {
+    const legacyKeySameLocale = `results_cache:${igCacheId}:7:${activeLocale}`
+    const legacyKeyOtherLocale = `results_cache:${igCacheId}:7:${activeLocale === "zh-TW" ? "en" : "zh-TW"}`
+
+    const cached =
+      saReadResultsCache(resultsCacheKey) ??
+      saReadResultsCache(legacyKeySameLocale) ??
+      saReadResultsCache(legacyKeyOtherLocale)
+
+    if (!cached) {
+      setHasCachedData(false)
+      return
+    }
+
+    setHasCachedData(true)
+    if (cached.igMe) setIgMe(cached.igMe)
+    if (Array.isArray(cached.media)) {
+      setMedia(cached.media)
+      setMediaLoaded(true)
+    }
+    if (Array.isArray(cached.trendPoints)) setTrendPoints(cached.trendPoints)
+    if (typeof cached.trendFetchedAt === "number" || cached.trendFetchedAt === null) setTrendFetchedAt(cached.trendFetchedAt)
+
+    // Migrate legacy locale-specific cache to the locale-agnostic key.
+    saWriteResultsCache(resultsCacheKey, cached)
+  }, [resultsCacheKey])
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams?.toString() || "")
+    const hadTransient =
+      params.has("connected") || params.has("sync") || params.has("next") || params.has("fromOAuth")
+    if (!hadTransient) return
+
+    // Once we have data (cache or loaded), drop transient params so they can't re-trigger gating.
+    const hasDataNow = Boolean(
+      igMe ||
+        (Array.isArray(media) && media.length > 0) ||
+        (Array.isArray(trendPoints) && trendPoints.length > 0)
+    )
+    if (!hasDataNow && igMeLoading) return
+
+    params.delete("connected")
+    params.delete("sync")
+    params.delete("next")
+    params.delete("fromOAuth")
+    const qs = params.toString()
+    router.replace(`${pathname}${qs ? `?${qs}` : ""}`)
+  }, [igMe, igMeLoading, media, pathname, router, searchParams, trendPoints])
+
+  useEffect(() => {
+    if (!mediaLoaded && !igMe && trendPoints.length === 0) return
+
+    const payload: ResultsCachePayloadV1 = {
+      ts: Date.now(),
+      igMe: igMe ?? null,
+      media: Array.isArray(media) ? media : [],
+      trendPoints: Array.isArray(trendPoints) ? trendPoints : [],
+      trendFetchedAt: trendFetchedAt ?? null,
+    }
+    saWriteResultsCache(resultsCacheKey, payload)
+  }, [resultsCacheKey, igMe, media, mediaLoaded, trendFetchedAt, trendPoints])
+
   const uiCopy = {
     avgLikesLabel: isZh ? "平均按讚" : "Avg Likes",
     avgCommentsLabel: isZh ? "平均留言" : "Avg Comments",
@@ -648,6 +772,8 @@ export default function ResultsClient() {
   const isConnected = Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
   const connectedProvider = searchParams.get("connected")
   const isConnectedInstagram = Boolean((igMe as any)?.connected === true) || connectedProvider === "instagram"
+
+  const hasAnyResultsData = Boolean(mediaLen > 0 || trendPoints.length > 0 || igMe)
 
   const refetchTick = useRefetchTick({ enabled: isConnectedInstagram, throttleMs: 900 })
 
@@ -1004,6 +1130,8 @@ export default function ResultsClient() {
         if (cancelled) return
         if ((err as any)?.name === "AbortError") return
         console.error("[media] fetch failed", err)
+
+        setLoadError(true)
 
         // Avoid infinite loading when fetch fails.
         setMedia([])
@@ -1405,6 +1533,7 @@ export default function ResultsClient() {
       setIgMeLoading(true)
       setIgMeUnauthorized(false)
       setConnectEnvError(null)
+      setLoadError(false)
       try {
         const r = await fetch("/api/auth/instagram/me", { cache: "no-store", signal: controller.signal })
         if (cancelled) return
@@ -1417,6 +1546,7 @@ export default function ResultsClient() {
 
         if (!r.ok) {
           setIgMe(null)
+          setLoadError(true)
           return
         }
 
@@ -1449,6 +1579,7 @@ export default function ResultsClient() {
         if (cancelled) return
         if ((err as any)?.name === "AbortError") return
         setIgMe(null)
+        setLoadError(true)
       } finally {
         if (!cancelled) setIgMeLoading(false)
       }
@@ -1465,13 +1596,43 @@ export default function ResultsClient() {
   useEffect(() => {
     if (!(igMeLoading || (isConnected && !mediaLoaded))) {
       setGateIsSlow(false)
+      setLoadTimedOut(false)
       return
     }
 
     setGateIsSlow(false)
-    const t = window.setTimeout(() => setGateIsSlow(true), 9000)
+    const t = window.setTimeout(() => setGateIsSlow(true), 12_000)
     return () => window.clearTimeout(t)
   }, [igMeLoading, isConnected, mediaLoaded])
+
+  useEffect(() => {
+    if (!(igMeLoading || (isConnected && !mediaLoaded))) {
+      setLoadTimedOut(false)
+      return
+    }
+    if (hasAnyResultsData) {
+      setLoadTimedOut(false)
+      return
+    }
+    setLoadTimedOut(false)
+    const tt = window.setTimeout(() => setLoadTimedOut(true), 12_000)
+    return () => window.clearTimeout(tt)
+  }, [igMeLoading, isConnected, mediaLoaded, hasAnyResultsData])
+
+  useEffect(() => {
+    const active = (igMeLoading || trendFetchStatus.loading || (isConnected && !mediaLoaded)) && hasAnyResultsData
+    setIsUpdating(active)
+  }, [hasAnyResultsData, igMeLoading, isConnected, mediaLoaded, trendFetchStatus.loading])
+
+  useEffect(() => {
+    if (!isUpdating) {
+      setUpdateSlow(false)
+      return
+    }
+    setUpdateSlow(false)
+    const tt = window.setTimeout(() => setUpdateSlow(true), 12_000)
+    return () => window.clearTimeout(tt)
+  }, [isUpdating])
 
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
@@ -2286,7 +2447,8 @@ export default function ResultsClient() {
   }
 
   const derivedGateState: GateState = (() => {
-    if (igMeLoading || (isConnected && !mediaLoaded)) return "loading"
+    if (loadTimedOut) return "ready"
+    if ((igMeLoading || (isConnected && !mediaLoaded)) && !hasAnyResultsData) return "loading"
     if (igMeUnauthorized || !isConnected) return "needs_connect"
     if (isConnected && mediaLoaded && media.length === 0 && topPosts.length === 0) return "needs_setup"
     return "ready"
@@ -2295,15 +2457,50 @@ export default function ResultsClient() {
   if (derivedGateState === "loading")
     return (
       <LoadingCard
-        isZh={isZh}
+        t={t}
         isSlow={gateIsSlow}
         onRetry={() => {
           setGateIsSlow(false)
+          setLoadTimedOut(false)
+          setLoadError(false)
           setForceReloadTick((x) => x + 1)
         }}
-        onRefresh={() => setForceReloadTick((x) => x + 1)}
+        onRefresh={() => {
+          setLoadTimedOut(false)
+          setLoadError(false)
+          setForceReloadTick((x) => x + 1)
+        }}
         onBack={() => router.push(localePathname("/", activeLocale))}
       />
+    )
+
+  if (loadTimedOut && !hasAnyResultsData)
+    return (
+      <GateShell title={t("results.syncingTitle")} subtitle={t("results.updateSlow")}>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setLoadTimedOut(false)
+                setLoadError(false)
+                setForceReloadTick((x) => x + 1)
+              }}
+            >
+              {t("results.retry")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/15 text-slate-200 hover:bg-white/5 w-full sm:w-auto"
+              onClick={() => router.push(localePathname("/", activeLocale))}
+            >
+              {t("results.back")}
+            </Button>
+          </div>
+        </div>
+      </GateShell>
     )
 
   if (derivedGateState === "needs_connect")
@@ -2331,6 +2528,17 @@ export default function ResultsClient() {
     <ConnectedGate
       notConnectedUI={
         <>
+          {hasAnyResultsData && isUpdating && (
+            <div className="sticky top-[56px] sm:top-[60px] z-40 w-full border-b border-white/10 bg-[#0b1220]/85 backdrop-blur-md">
+              <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                  <div className="text-[12px] sm:text-xs text-white/70 min-w-0 truncate">{t("results.updating")}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div aria-live="polite" className="sr-only">
             {toast ?? ""}
           </div>
@@ -2338,6 +2546,40 @@ export default function ResultsClient() {
             <div className="fixed top-4 right-4 z-[60]">
               <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-4 py-3 text-sm text-slate-200 shadow-xl">
                 {toast}
+              </div>
+            </div>
+          )}
+
+          {hasAnyResultsData && updateSlow && (
+            <div className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 sm:px-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-white min-w-0 truncate">{t("results.updateSlow")}</div>
+                  <div className="mt-1 text-[13px] text-white/70 leading-snug min-w-0 break-words">
+                    {t("results.showCurrentData")}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 shrink-0 w-full sm:w-auto">
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto"
+                    onClick={() => {
+                      setUpdateSlow(false)
+                      setForceReloadTick((x) => x + 1)
+                    }}
+                  >
+                    {t("results.retry")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-white/15 text-slate-200 hover:bg-white/5 w-full sm:w-auto"
+                    onClick={() => setUpdateSlow(false)}
+                  >
+                    {t("results.showCurrentData")}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -2759,12 +3001,12 @@ export default function ResultsClient() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 text-center">
                   <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? "粉絲數" : t("results.instagram.followersLabel")}</div>
+                    <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? t("results.profile.followers") : t("results.instagram.followersLabel")}</div>
                     <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
                       <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
                       {isPreview(kpiFollowers) && (
                         <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                          預覽
+                          {t("results.common.preview")}
                         </span>
                       )}
                     </div>
@@ -2776,7 +3018,7 @@ export default function ResultsClient() {
                       <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
                       {isPreview(kpiFollowing) && (
                         <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                          預覽
+                          {t("results.common.preview")}
                         </span>
                       )}
                     </div>
@@ -2788,7 +3030,7 @@ export default function ResultsClient() {
                       <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
                       {isPreview(kpiPosts) && (
                         <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                          預覽
+                          {t("results.common.preview")}
                         </span>
                       )}
                     </div>
@@ -2992,7 +3234,7 @@ export default function ResultsClient() {
                     <div className="flex-1 flex items-center justify-center gap-3 md:gap-4 self-center min-w-0">
                       <div className="w-[160px] md:w-[170px]">
                         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">粉絲數</div>
+                          <div className="text-xs text-white/60 whitespace-nowrap">{t("results.profile.followers")}</div>
                           <div className="mt-1 text-xl md:text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500">
                             {formatCompact(followersCount) ?? "—"}
                           </div>
@@ -3001,7 +3243,7 @@ export default function ResultsClient() {
 
                       <div className="w-[160px] md:w-[170px]">
                         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">關注數</div>
+                          <div className="text-xs text-white/60 whitespace-nowrap">{t("results.profile.following")}</div>
                           <div className="mt-1 text-xl md:text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
                             {formatCompact(followsCount) ?? "—"}
                           </div>
@@ -3010,7 +3252,7 @@ export default function ResultsClient() {
 
                       <div className="w-[160px] md:w-[170px]">
                         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">貼文數</div>
+                          <div className="text-xs text-white/60 whitespace-nowrap">{t("results.profile.posts")}</div>
                           <div className="mt-1 text-xl md:text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
                             {formatCompact(mediaCount) ?? "—"}
                           </div>
@@ -3071,21 +3313,21 @@ export default function ResultsClient() {
 
                     <div className="grid grid-cols-3 gap-2">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
-                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">粉絲數</div>
+                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">{t("results.profile.followers")}</div>
                         <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
                           {formatCompact(followersCount) ?? "—"}
                         </div>
                       </div>
 
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
-                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">關注數</div>
+                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">{t("results.profile.following")}</div>
                         <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
                           {formatCompact(followsCount) ?? "—"}
                         </div>
                       </div>
 
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
-                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">貼文數</div>
+                        <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">{t("results.profile.posts")}</div>
                         <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
                           {formatCompact(mediaCount) ?? "—"}
                         </div>
@@ -3117,7 +3359,7 @@ export default function ResultsClient() {
 
                   const previewBadge = (
                     <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                      預覽
+                      {t("results.common.preview")}
                     </span>
                   )
 
@@ -3188,7 +3430,7 @@ export default function ResultsClient() {
 
             <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardHeader className="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-start sm:items-center justify-between gap-3 min-w-0">
-                <CardTitle className="text-xl font-bold text-white min-w-0 truncate shrink-0">帳號互動趨勢</CardTitle>
+                <CardTitle className="text-xl font-bold text-white min-w-0 truncate shrink-0">{t("results.trend.title")}</CardTitle>
                 <p className="text-[11px] sm:text-sm text-slate-400 min-w-0 leading-snug sm:leading-none sm:whitespace-nowrap sm:truncate text-left sm:text-right">
                   {isZh
                     ? "最近 7 天（系統會每日自動累積，之後可查看更長區間）"
@@ -3214,10 +3456,10 @@ export default function ResultsClient() {
                       <div className="flex flex-wrap items-center gap-2 sm:inline-flex sm:flex-nowrap sm:whitespace-nowrap sm:min-w-max">
                         {(
                           [
-                            { k: "reach" as const, label: "觸及", dot: "#34d399" },
-                            { k: "impressions" as const, label: "曝光", dot: "#38bdf8" },
-                            { k: "engaged" as const, label: "互動帳號", dot: "#e879f9" },
-                            { k: "followerDelta" as const, label: "粉絲變化", dot: "#fbbf24" },
+                            { k: "reach" as const, label: t("results.trend.legend.reach"), dot: "#34d399" },
+                            { k: "impressions" as const, label: t("results.trend.legend.impressions"), dot: "#38bdf8" },
+                            { k: "engaged" as const, label: t("results.trend.legend.engagedAccounts"), dot: "#e879f9" },
+                            { k: "followerDelta" as const, label: t("results.trend.legend.followerChange"), dot: "#fbbf24" },
                           ] as const
                         ).map((m) => {
                           const pressed = focusedAccountTrendMetric === m.k
@@ -3283,13 +3525,19 @@ export default function ResultsClient() {
                   if (!selected.length) {
                     return (
                       <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
-                        <div className="text-sm text-white/75 text-center leading-snug min-w-0">請至少選擇一個指標</div>
+                        <div className="text-sm text-white/75 text-center leading-snug min-w-0">{t("results.trend.selectAtLeastOne")}</div>
                       </div>
                     )
                   }
 
                   const labelFor = (k: AccountTrendMetricKey) =>
-                    k === "reach" ? "觸及" : k === "impressions" ? "曝光" : k === "engaged" ? "互動帳號" : "粉絲變化"
+                    k === "reach"
+                      ? t("results.trend.legend.reach")
+                      : k === "impressions"
+                        ? t("results.trend.legend.impressions")
+                        : k === "engaged"
+                          ? t("results.trend.legend.engagedAccounts")
+                          : t("results.trend.legend.followerChange")
                   const colorFor = (k: AccountTrendMetricKey) =>
                     k === "reach" ? "#34d399" : k === "impressions" ? "#38bdf8" : k === "engaged" ? "#e879f9" : "#fbbf24"
 
@@ -4049,7 +4297,7 @@ export default function ResultsClient() {
                                 <span className={numMono}>{kpi.value}</span>
                                 {kpi.preview ? (
                                   <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                                    預覽
+                                    {t("results.common.preview")}
                                   </span>
                                 ) : null}
                               </div>
@@ -4138,7 +4386,7 @@ export default function ResultsClient() {
                           <span className={numMono}>{kpi.value}</span>
                           {kpi.preview ? (
                             <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                              預覽
+                              {t("results.common.preview")}
                             </span>
                           ) : null}
                         </div>
