@@ -2,6 +2,10 @@
 
 // Density pass: tighten common headings/blocks inside Results page (UI-only)
 
+if (process.env.NODE_ENV !== "production") {
+  console.log("[ResultsClient] BUILD_MARKER v2026-01-03-2105")
+}
+
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
@@ -22,6 +26,17 @@ import { mockAnalysis } from "../[locale]/results/mockData"
 // Module-scope flag survives remount in the same session and prevents duplicate fetch.
 let __resultsMediaFetchedOnce = false
 let __resultsMeFetchedOnce = false
+
+function toNum(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined
+  if (typeof value === "string") {
+    const s = value.trim()
+    if (!s) return undefined
+    const n = Number(s)
+    return Number.isFinite(n) ? n : undefined
+  }
+  return undefined
+}
 
 type IgMeResponse = {
   connected: boolean
@@ -545,6 +560,8 @@ export default function ResultsClient() {
   const [isProModalOpen, setIsProModalOpen] = useState(false)
   const [upgradeHighlight, setUpgradeHighlight] = useState(false)
 
+  const [mediaError, setMediaError] = useState<string | null>(null)
+
   const [media, setMedia] = useState<Array<ReturnType<typeof normalizeMedia>[number]>>([])
   const [mediaLoaded, setMediaLoaded] = useState(false)
 
@@ -590,18 +607,17 @@ export default function ResultsClient() {
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const igRecentLen = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media.length : 0
-  // These lengths are only used to keep deps stable; rely only on guaranteed data.
+  const mediaLen = Array.isArray(media) ? media.length : 0
   const topPostsLen = igRecentLen
-  const mediaLen = igRecentLen
 
   // Profile stats (UI-only)
   // Source of truth: Meta returns these on `profile`.
   const profileStats = ((igMe as any)?.profile ?? null) as any
-  const followersCount = Number(profileStats?.followers_count ?? NaN)
-  const followsCount = Number(profileStats?.follows_count ?? profileStats?.following_count ?? NaN)
-  const mediaCount = Number(profileStats?.media_count ?? NaN)
-  const formatCompact = (n: number) => {
-    if (!Number.isFinite(n)) return "—"
+  const followersCount = toNum(profileStats?.followers_count)
+  const followsCount = toNum(profileStats?.follows_count ?? profileStats?.following_count)
+  const mediaCount = toNum(profileStats?.media_count) ?? (mediaLoaded && Array.isArray(media) ? media.length : undefined)
+  const formatCompact = (n?: number) => {
+    if (typeof n !== "number" || !Number.isFinite(n)) return "—"
     try {
       return Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n)
     } catch {
@@ -616,6 +632,7 @@ export default function ResultsClient() {
 
   const hasFetchedMediaRef = useRef(false)
   const hasFetchedMeRef = useRef(false)
+  const mediaReqIdRef = useRef(0)
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
   const lastRevalidateAtRef = useRef(0)
@@ -644,7 +661,7 @@ export default function ResultsClient() {
     if (cached.igMe) setIgMe(cached.igMe)
     if (Array.isArray(cached.media)) {
       setMedia(cached.media)
-      setMediaLoaded(true)
+      if (cached.media.length > 0) setMediaLoaded(true)
     }
     if (Array.isArray(cached.trendPoints)) setTrendPoints(cached.trendPoints)
     if (typeof cached.trendFetchedAt === "number" || cached.trendFetchedAt === null) setTrendFetchedAt(cached.trendFetchedAt)
@@ -711,6 +728,7 @@ export default function ResultsClient() {
 
   useEffect(() => {
     if (!isConnectedInstagram) return
+    // Keep existing behavior but avoid request spam by guarding the actual fetch effects.
     setForceReloadTick((x) => x + 1)
   }, [isConnectedInstagram, refetchTick])
 
@@ -955,55 +973,92 @@ export default function ResultsClient() {
   }, [__DEV__, isConnected, isConnectedInstagram, topPostsLen, igRecentLen, mediaLen])
 
   useEffect(() => {
-    if (!isConnected) return
+    if (!isConnectedInstagram) return
+    if (hasFetchedMediaRef.current && mediaLen > 0) return
+    if (hasFetchedMediaRef.current) return
 
-    if (forceReloadTick === 0) {
-      // Prevent duplicate fetch across StrictMode remounts in dev
-      if (__resultsMediaFetchedOnce) return
-
-      // Prevent duplicate fetch (StrictMode / re-render)
-      if (hasFetchedMediaRef.current) return
-
-      if (mediaLoaded) return
-    }
-
-    __resultsMediaFetchedOnce = true
+    // Mark as fetched immediately to prevent loops from dependency updates.
     hasFetchedMediaRef.current = true
-    let cancelled = false
+    __resultsMediaFetchedOnce = true
 
-    console.log("[media] fetch (from ConnectedGate)")
+    let cancelled = false
+    mediaReqIdRef.current += 1
+    const reqId = mediaReqIdRef.current
+
+    if (__DEV__) console.log("[media] fetch (from ConnectedGate)")
     fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
-      .then((res) => res.json())
+      .then(async (res) => {
+        let body: any = null
+        try {
+          body = await res.json()
+        } catch {
+          body = null
+        }
+
+        if (!res.ok) {
+          throw { status: res.status, body }
+        }
+
+        return body
+      })
       .then((json) => {
         if (cancelled) return
+        if (reqId !== mediaReqIdRef.current) return
+
+        setMediaError(null)
+
+        const items = normalizeMedia(json)
+
         if (__DEV__) {
-          const rawLen = Array.isArray(json?.data) ? json.data.length : 0
-          console.log("[media] response received:", { hasDataArray: Array.isArray(json?.data), dataLength: rawLen, hasPaging: !!json?.paging })
+          console.log("[media] response received:", {
+            hasDataArray: Array.isArray(json?.data),
+            dataLength: Array.isArray(json?.data) ? json.data.length : 0,
+            hasPaging: !!json?.paging,
+            normalizedLen: items.length,
+          })
         }
-        setMedia(normalizeMedia(json))
+
+        setMedia((prev: any) => {
+          if (Array.isArray(prev) && prev.length > 0 && items.length === 0) return prev
+          return items
+        })
+
+        setIgMe((prev: any) => {
+          const base = (prev ?? {}) as any
+          if (Array.isArray(base?.recent_media) && base.recent_media.length > 0 && items.length === 0) return base
+          return { ...base, recent_media: items }
+        })
+
         setMediaLoaded(true)
       })
       .catch((err) => {
         if (cancelled) return
-        console.error("[media] fetch failed", err)
+        if (reqId !== mediaReqIdRef.current) return
+
+        const status = (err as any)?.status
+        const body = (err as any)?.body
+
+        const reason = typeof body?.error === "string" ? body.error : `http_${typeof status === "number" ? status : 0}`
+        const detail = typeof body?.detail === "string" && body.detail ? `: ${body.detail}` : ""
+        setMediaError(`${reason}${detail}`)
+
+        if (__DEV__) {
+          const reason = typeof body?.error === "string" ? body.error : null
+          const detail = typeof body?.detail === "string" ? body.detail : null
+          console.error("[media] fetch failed", { status, reason, detail })
+        }
 
         setLoadError(true)
 
         // Avoid infinite loading when fetch fails.
-        setMedia([])
         setMediaLoaded(true)
       })
 
     return () => {
       cancelled = true
-      hasFetchedMediaRef.current = false
-      try {
-        __resultsMediaFetchedOnce = false
-      } catch {
-        // ignore
-      }
+      // Do not reset hasFetchedMediaRef here; cleanup can run during dev re-renders.
     }
-  }, [isConnectedInstagram, pathname, forceReloadTick, r])
+  }, [isConnectedInstagram])
 
   useEffect(() => {
     const onFocus = () => {
@@ -1360,16 +1415,13 @@ export default function ResultsClient() {
   }, [isConnected, searchParams, t])
 
   useEffect(() => {
-    // Prevent duplicate fetch across StrictMode remounts in dev
-    if (forceReloadTick === 0) {
-      if (__resultsMeFetchedOnce) return
+    if (!isConnectedInstagram) return
+    if (hasFetchedMeRef.current) return
 
-      // Prevent duplicate fetch in same mount
-      if (hasFetchedMeRef.current) return
-    }
-
-    __resultsMeFetchedOnce = true
+    // Mark as fetched immediately to prevent loops from dependency updates.
     hasFetchedMeRef.current = true
+    __resultsMeFetchedOnce = true
+
     let cancelled = false
     const run = async () => {
       setIgMeLoading(true)
@@ -1421,6 +1473,14 @@ export default function ResultsClient() {
         if (cancelled) return
         setIgMe(null)
         setLoadError(true)
+
+        // Allow retry on refresh.
+        hasFetchedMeRef.current = false
+        try {
+          __resultsMeFetchedOnce = false
+        } catch {
+          // ignore
+        }
       } finally {
         if (!cancelled) setIgMeLoading(false)
       }
@@ -1428,19 +1488,13 @@ export default function ResultsClient() {
     run()
     return () => {
       cancelled = true
-      hasFetchedMeRef.current = false
-      try {
-        __resultsMeFetchedOnce = false
-      } catch {
-        // ignore
-      }
       try {
         setIgMeLoading(false)
       } catch {
         // ignore
       }
     }
-  }, [forceReloadTick])
+  }, [isConnectedInstagram])
 
   const [gateIsSlow, setGateIsSlow] = useState(false)
 
@@ -3680,6 +3734,11 @@ export default function ResultsClient() {
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-2">
                     {t("results.topPosts.description")}
                   </p>
+                  {mediaError ? (
+                    <div className="text-xs opacity-60 mt-1 truncate">
+                      Media load failed: {mediaError}
+                    </div>
+                  ) : null}
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-1">{uiCopy.topPostsSortHint}</p>
                 </div>
 
