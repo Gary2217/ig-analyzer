@@ -1467,18 +1467,29 @@ export default function PostAnalysisClient() {
 
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), 8_000)
+    let cancelled = false
 
-    fetch("/api/auth/instagram/me", { method: "GET", cache: "no-store", signal: controller.signal })
+    fetch("/api/auth/instagram/me", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+      signal: controller.signal,
+    })
       .then((res) => {
+        if (cancelled) return
         setIsConnected(res.ok)
       })
       .catch(() => {
+        if (cancelled) return
         // ignore network errors; treat as not connected
         setIsConnected(false)
       })
-      .finally(() => window.clearTimeout(timeoutId))
+      .finally(() => {
+        window.clearTimeout(timeoutId)
+      })
 
     return () => {
+      cancelled = true
       controller.abort()
       window.clearTimeout(timeoutId)
     }

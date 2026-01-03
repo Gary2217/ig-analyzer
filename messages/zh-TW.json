@@ -52,10 +52,160 @@
     "showCurrentData": "先顯示目前資料",
     "back": "返回",
     "common": {
-      "preview": "預覽"
+      "preview": "預覽",
+      "todo": "待完成",
+      "inProgress": "進行中",
+      "baseline": "基礎"
+    },
+    "growthTasks": {
+      "title": "你的成長行動任務",
+      "subtitle": "基於你目前的帳號表現",
+      "expand": {
+        "whatTitle": "你要做什麼",
+        "stepsTitle": "具體步驟",
+        "doneTitle": "完成標準"
+      },
+      "cards": {
+        "1": {
+          "title": "固定每週發文節奏",
+          "desc": "先選一個你能穩定維持的節奏（例如每週 3 篇），讓分發與期待感建立起來。",
+          "status": "待完成",
+          "expand": {
+            "what": "先把發文節奏固定下來，讓觀眾與平台都能預期你的輸出。",
+            "steps": {
+              "1": "選一個你接下來 14 天做得到的節奏。",
+              "2": "一次準備 3 個題目與開頭鉤子，降低臨時發文壓力。",
+              "3": "把下週發文日直接排進行事曆。"
+            },
+            "done": "連續兩週準時發文，而且不用臨時趕工。"
+          }
+        },
+        "2": {
+          "title": "把高互動主題做成系列",
+          "desc": "用同一個題目做 3 篇不同角度（教學／案例／清單），提高保存與回訪。",
+          "status": "進行中",
+          "expand": {
+            "what": "把已驗證有效的題目做成 3 篇系列，讓人願意追、願意存。",
+            "steps": {
+              "1": "挑一篇已經表現好的貼文當母題。",
+              "2": "寫三種版本：教學、案例／示範、清單。",
+              "3": "用清楚的「第 1/2/3 篇」標示，讓人能串著看。"
+            },
+            "done": "完整發出三篇系列，並看到保存或個人檔案造訪增加。"
+          }
+        },
+        "3": {
+          "title": "優化個人檔案與置頂內容",
+          "desc": "用一句話說清楚你幫誰解決什麼問題，並把最代表你的 3 篇內容置頂。",
+          "status": "待完成",
+          "expand": {
+            "what": "讓新訪客 5 秒內看懂你是誰、能提供什麼，並用置頂貼文建立信任。",
+            "steps": {
+              "1": "把自介改成：你幫誰＋帶來什麼結果＋一句可信證明。",
+              "2": "置頂 3 篇最能代表你價值的內容。",
+              "3": "加上一個明確行動呼籲（私訊關鍵字或連結）。"
+            },
+            "done": "新訪客能用 5 秒說出你在做什麼，也知道下一步該做什麼。"
+          }
+        }
+      }
+    },
+    "creatorReadiness": {
+      "title": "創作者定位與合作準備度",
+      "subtitle": "以你的內容與帳號狀態呈現可對外展示的定位摘要",
+      "cards": {
+        "style": {
+          "title": "內容風格",
+          "value": "教育 · 實用"
+        },
+        "stage": {
+          "title": "成長階段",
+          "value": "成長期（正在建立穩定節奏）"
+        },
+        "readiness": {
+          "title": "合作準備度",
+          "value": "準備中"
+        }
+      },
+      "explain": {
+        "style": {
+          "meaningTitle": "這個指標代表什麼",
+          "meaningBody": "你的主要內容呈現方式，會影響品牌與觀眾對你的第一印象。",
+          "statusTitle": "你目前的狀態意味著什麼",
+          "statusBody": "教育／實用的定位清楚，有助於建立信任與分享性。",
+          "nextTitle": "下一步建議",
+          "next": {
+            "1": "固定一個可重複的版型（模板），強化辨識度。",
+            "2": "補 1–2 篇成果/案例貼文，提高可信度與權威感。"
+          }
+        },
+        "stage": {
+          "meaningTitle": "這個指標代表什麼",
+          "meaningBody": "你目前在成長曲線的位置（通常由一致性與互動訊號推估）。",
+          "statusTitle": "你目前的狀態意味著什麼",
+          "statusBody": "你正處於累積期：穩定輸出會比偶爾爆紅更能帶來可複製的成長。",
+          "nextTitle": "下一步建議",
+          "next": {
+            "1": "把發文節奏守住 2–4 週，找出可重複的題材與做法。",
+            "2": "把一個有效題目做成系列，放大動能。"
+          }
+        },
+        "readiness": {
+          "meaningTitle": "這個指標代表什麼",
+          "meaningBody": "你的內容與個人檔案對合作的可讀性：清楚、證明、穩定度是否足夠。",
+          "statusTitle": "你目前的狀態意味著什麼",
+          "statusBody": "你已接近可合作，但還需要把證明與包裝補齊，讓品牌更快做決策。",
+          "nextTitle": "下一步建議",
+          "next": {
+            "1": "置頂 3 篇能證明你價值的貼文（成果、案例、代表作）。",
+            "2": "在自介加一行合作資訊（報價/媒體包連結或私訊關鍵字）。"
+          }
+        }
+      }
+    },
+    "gates": {
+      "common": {
+        "back": "返回"
+      },
+      "connect": {
+        "title": "連線 Instagram 以開始分析",
+        "subtitle": "我們只會讀取你授權的帳號資料。",
+        "cta": "連線 Instagram",
+        "tip": "提示：若你是一般私人帳號，可能需要先切換成「專業帳號（商業／創作者）」才能被分析。",
+        "missingEnv": {
+          "title": "缺少必要環境變數",
+          "desc": "伺服器端缺少連線所需設定。請補齊環境變數並重啟服務。"
+        }
+      },
+      "setup": {
+        "title": "你的 Instagram 帳號目前無法被分析",
+        "subtitle": "Meta 規則要求：IG 必須是專業帳號並綁定 Facebook 粉絲專頁。",
+        "stepsTitle": "一分鐘修正步驟",
+        "steps": {
+          "1": "打開 Instagram → 設定與隱私 → 帳號類型與工具",
+          "2": "切換成「專業帳號」（商業或創作者）",
+          "3": "到 Meta Business Suite / 粉專設定，把 IG 帳號綁到你的粉絲專頁",
+          "4": "回到這裡按「重新抓取」"
+        },
+        "retry": "我已完成設定，重新抓取",
+        "reconnect": "重新連線 Instagram",
+        "tip": "若你剛完成綁定，可能需要等幾秒再重試一次（Meta 同步需要時間）。"
+      }
+    },
+    "ui": {
+      "avgLikesLabel": "平均按讚",
+      "avgCommentsLabel": "平均留言",
+      "perPostLast25": "每篇平均（最近 25 篇）",
+      "topPostsSortHint": "依（按讚＋留言）排序（最近 25 篇）"
     },
     "trend": {
       "title": "帳號互動趨勢",
+      "note7d": "最近 7 天（系統會每日自動累積，之後可查看更長區間）",
+      "rangePill7d": "7 天",
+      "available7d": "目前可用：7 天",
+      "rangeLabel": "趨勢區間",
+      "updatedLabel": "更新",
+      "noData": "尚無趨勢資料",
       "subtitle7d": "最近 7 天（可多選）",
       "empty": "目前尚未取得最近 7 天趨勢資料",
       "selectAtLeastOne": "請至少選擇一個指標",
@@ -385,6 +535,12 @@
       "postsPerWeek": {
         "title": "每週貼文",
         "description": "先選一個你做得到的節奏，接下來兩週就照著走。"
+      },
+      "ui": {
+        "mobileTitle": "關鍵指標",
+        "mobileHintCollapsed": "6 個指標 · 點擊展開",
+        "expand": "展開",
+        "collapse": "收合"
       }
     },
     "kpi": {
@@ -1302,10 +1458,16 @@
         "likesLabel": "按讚",
         "commentsLabel": "留言",
         "engagementLabel": "互動",
+        "analyzeTitle": "分析貼文",
+        "analyzeLabel": "分析",
         "proHintFull": "🔒 專業版提供完整貼文內容、發文時間與拆解分析",
         "proHint": "🔒 專業版功能：查看貼文內文、發佈時間，以及這篇為何表現好。",
         "metadataFallback": "貼文編號 · 發佈時間 · 內文分析（專業版）"
       }
+    },
+    "postAnalysis": {
+      "cta": "前往貼文分析",
+      "freeLeft": "免費剩餘"
     },
     "recommendations": {
       "title": "洞察與建議"
@@ -1326,6 +1488,11 @@
     },
     "instagram": {
       "connectedBadge": "已連結 Instagram",
+      "authExpired": {
+        "title": "Instagram 連線已失效",
+        "desc": "請重新驗證登入後再查看帳號分析結果。",
+        "reconnect": "重新連線 Instagram"
+      },
       "connectPromptTitle": "連結 Instagram 以載入真實資料",
       "connectPromptDesc": "完成授權後，將以你的真實 IG 個人檔案與最近貼文取代示範資料。",
       "connectPromptHandle": "（尚未連結）",

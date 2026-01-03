@@ -24,23 +24,7 @@ let __resultsMediaFetchedOnce = false
 let __resultsMeFetchedOnce = false
 
 type IgMeResponse = {
-  username?: string
-  name?: string
-  display_name?: string
-  profile_picture_url?: string
-  account_type?: string
-  followers_count?: number
-  follows_count?: number
-  following_count?: number
-  media_count?: number
-  recent_media?: Array<{
-    id: string
-    media_type?: string
-    media_url?: string
-    caption?: string
-    timestamp?: string
-  }>
-  connected?: boolean
+  connected: boolean
   provider?: string
   profile?: {
     id?: string
@@ -51,6 +35,24 @@ type IgMeResponse = {
     follows_count?: number | null
     media_count?: number | null
   }
+  username?: string
+  name?: string
+  profile_picture_url?: string
+  followers_count?: number
+  follows_count?: number
+  following_count?: number
+  media_count?: number
+  recent_media?: Array<{
+    id: string
+    media_type?: string
+    like_count?: number
+    comments_count?: number
+    timestamp?: string
+    permalink?: string
+    thumbnail_url?: string
+    media_url?: string
+    caption?: string
+  }>
 }
 
 type FakeAnalysis = {
@@ -215,25 +217,23 @@ function LoadingCard(props: {
 }
 
 function ConnectCard(props: {
-  isZh: boolean
+  t: (key: string) => string
   onConnect: () => void
   onBack: () => void
   connectEnvError: "missing_env" | null
 }) {
   return (
     <GateShell
-      title={props.isZh ? "連線 Instagram 以開始分析" : "Connect Instagram to start"}
-      subtitle={props.isZh ? "我們只會讀取你授權的帳號資料。" : "We only read the data you authorize."}
+      title={props.t("results.gates.connect.title")}
+      subtitle={props.t("results.gates.connect.subtitle")}
     >
       {props.connectEnvError === "missing_env" ? (
         <Alert>
-          <AlertTitle>{props.isZh ? "缺少必要環境變數" : "Missing required env vars"}</AlertTitle>
+          <AlertTitle>{props.t("results.gates.connect.missingEnv.title")}</AlertTitle>
           <AlertDescription>
             <div className="space-y-2">
               <div>
-                {props.isZh
-                  ? "伺服器端缺少連線所需設定。請補齊環境變數並重啟服務。"
-                  : "Server is missing config required for connecting. Please set env vars and restart."}
+                {props.t("results.gates.connect.missingEnv.desc")}
               </div>
               <div className="font-mono text-xs break-all">APP_BASE_URL / META_APP_ID / META_APP_SECRET</div>
             </div>
@@ -246,43 +246,37 @@ function ConnectCard(props: {
           className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full sm:w-auto"
           onClick={props.onConnect}
         >
-          {props.isZh ? "連線 Instagram" : "Connect Instagram"}
+          {props.t("results.gates.connect.cta")}
         </Button>
         <Button
           variant="outline"
           className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg w-full sm:w-auto"
           onClick={props.onBack}
         >
-          {props.isZh ? "返回" : "Back"}
+          {props.t("results.gates.common.back")}
         </Button>
       </div>
 
       <div className="text-xs text-white/55 leading-snug min-w-0 break-words">
-        {props.isZh
-          ? "提示：若你是一般私人帳號，可能需要先切換成「專業帳號（商業／創作者）」才能被分析。"
-          : "Tip: Personal accounts may need to switch to a Professional account (Business/Creator) to be analyzed."}
+        {props.t("results.gates.connect.tip")}
       </div>
     </GateShell>
   )
 }
 
-function SetupHelpCard(props: { isZh: boolean; onRetry: () => void; onReconnect: () => void }) {
+function SetupHelpCard(props: { t: (key: string) => string; onRetry: () => void; onReconnect: () => void }) {
   return (
     <GateShell
-      title={props.isZh ? "你的 Instagram 帳號目前無法被分析" : "We can’t analyze this account yet"}
-      subtitle={
-        props.isZh
-          ? "Meta 規則要求：IG 必須是專業帳號並綁定 Facebook 粉絲專頁。"
-          : "Meta requires a Professional IG account linked to a Facebook Page."
-      }
+      title={props.t("results.gates.setup.title")}
+      subtitle={props.t("results.gates.setup.subtitle")}
     >
       <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/80">
-        <div className="font-medium mb-2">{props.isZh ? "一分鐘修正步驟" : "1-minute fix"}</div>
+        <div className="font-medium mb-2">{props.t("results.gates.setup.stepsTitle")}</div>
         <ol className="list-decimal pl-5 space-y-1">
-          <li>{props.isZh ? "打開 Instagram → 設定與隱私 → 帳號類型與工具" : "Open Instagram → Settings and privacy → Account type and tools"}</li>
-          <li>{props.isZh ? "切換成「專業帳號」（商業或創作者）" : "Switch to a Professional account (Business or Creator)"}</li>
-          <li>{props.isZh ? "到 Meta Business Suite / 粉專設定，把 IG 帳號綁到你的粉絲專頁" : "In Meta Business Suite/Page settings, link your IG to your Facebook Page"}</li>
-          <li>{props.isZh ? "回到這裡按「重新抓取」" : "Come back here and click Retry"}</li>
+          <li>{props.t("results.gates.setup.steps.1")}</li>
+          <li>{props.t("results.gates.setup.steps.2")}</li>
+          <li>{props.t("results.gates.setup.steps.3")}</li>
+          <li>{props.t("results.gates.setup.steps.4")}</li>
         </ol>
       </div>
 
@@ -291,21 +285,19 @@ function SetupHelpCard(props: { isZh: boolean; onRetry: () => void; onReconnect:
           className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full sm:w-auto"
           onClick={props.onRetry}
         >
-          {props.isZh ? "我已完成設定，重新抓取" : "I’ve updated settings — Retry"}
+          {props.t("results.gates.setup.retry")}
         </Button>
         <Button
           variant="outline"
           className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg w-full sm:w-auto"
           onClick={props.onReconnect}
         >
-          {props.isZh ? "重新連線 Instagram" : "Reconnect Instagram"}
+          {props.t("results.gates.setup.reconnect")}
         </Button>
       </div>
 
       <div className="text-xs text-white/55 leading-snug min-w-0 break-words">
-        {props.isZh
-          ? "若你剛完成綁定，可能需要等幾秒再重試一次（Meta 同步需要時間）。"
-          : "If you just linked it, wait a few seconds and try again (Meta sync can take time)."}
+        {props.t("results.gates.setup.tip")}
       </div>
     </GateShell>
   )
@@ -388,6 +380,68 @@ function normalizeMedia(raw: any):
     .filter(Boolean) as any
 }
 
+const normalizeMe = (raw: unknown): IgMeResponse | null => {
+  const isRec = (v: unknown): v is Record<string, any> => Boolean(v && typeof v === "object")
+  const toNumOrNull = (v: unknown): number | null => {
+    if (typeof v === "number" && Number.isFinite(v)) return v
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+  const pickStr = (...vals: unknown[]): string | undefined => {
+    for (const v of vals) {
+      if (typeof v === "string" && v.trim()) return v.trim()
+    }
+    return undefined
+  }
+
+  if (!isRec(raw)) return null
+
+  // Accept multiple wrappers: {data:{...}}, {me:{...}}, or direct.
+  const base: Record<string, any> = (isRec(raw.data) ? raw.data : isRec(raw.me) ? raw.me : raw) as any
+  const connected = Boolean((raw as any)?.connected ?? base?.connected)
+
+  const profileRaw: Record<string, any> | null =
+    (isRec(base?.profile) ? base.profile : null) ||
+    (isRec(base?.data?.profile) ? base.data.profile : null) ||
+    (isRec((raw as any)?.profile) ? (raw as any).profile : null)
+
+  // If backend returns flat fields, synthesize a profile object.
+  const flatHasAny =
+    typeof base?.profile_picture_url === "string" ||
+    typeof base?.username === "string" ||
+    typeof base?.followers_count !== "undefined" ||
+    typeof base?.follows_count !== "undefined" ||
+    typeof base?.media_count !== "undefined"
+
+  const p = (profileRaw ?? (flatHasAny ? base : null)) as any
+  if (!p && !connected) return null
+
+  const profile = p
+    ? {
+        id: pickStr(p?.id),
+        username: pickStr(p?.username, base?.username, (raw as any)?.username),
+        name: pickStr(p?.name, base?.name, (raw as any)?.name, base?.display_name),
+        profile_picture_url: pickStr(p?.profile_picture_url, base?.profile_picture_url),
+        followers_count: toNumOrNull(p?.followers_count),
+        follows_count: toNumOrNull(p?.follows_count ?? p?.following_count),
+        media_count: toNumOrNull(p?.media_count),
+      }
+    : undefined
+
+  return {
+    connected,
+    provider: typeof (raw as any)?.provider === "string" ? (raw as any).provider : undefined,
+    profile,
+    username: profile?.username,
+    name: profile?.name,
+    profile_picture_url: profile?.profile_picture_url,
+    followers_count: typeof profile?.followers_count === "number" ? profile.followers_count : undefined,
+    follows_count: typeof profile?.follows_count === "number" ? profile.follows_count : undefined,
+    media_count: typeof profile?.media_count === "number" ? profile.media_count : undefined,
+    recent_media: Array.isArray(base?.recent_media) ? base.recent_media : Array.isArray((raw as any)?.recent_media) ? (raw as any).recent_media : undefined,
+  }
+}
+
 export default function ResultsClient() {
   if (process.env.NODE_ENV !== "production") {
     console.log("[LocaleResultsPage] mounted")
@@ -400,6 +454,13 @@ export default function ResultsClient() {
   const searchParams = useSearchParams()
   const r = searchParams?.get("r") || ""
   const { t } = useI18n()
+
+  const safeT = (key: string) => {
+    const v = t(key)
+    return v === key ? "" : v
+  }
+
+  const isPro = false
 
   const getPostPermalink = (post: any): string => {
     return (
@@ -451,171 +512,6 @@ export default function ResultsClient() {
   const [upgradeCardInView, setUpgradeCardInView] = useState(false)
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[results page] file =", "app/results/page.tsx")
-    }
-  }, [])
-
-  const safeT = (key: string) => {
-    const v = t(key)
-    return v === key ? "" : v
-  }
-
-  const isPro = false // TODO: wire to real subscription state
-
-  // ---- Post analysis free quota (UI-only sync) -----------------------------
-  const FREE_POST_ANALYSIS_LIMIT = 3
-  const FREE_QUOTA_USED_KEYS = [
-    // Prefer your actual key if you already have one; keep these fallbacks:
-    "sa_post_analysis_used",
-    "sa_free_post_analysis_used",
-    "post_analysis_used",
-    "free_post_analysis_used",
-    "sa_post_used",
-    "free_post_used",
-  ]
-  const FREE_QUOTA_REMAIN_KEYS = [
-    "sa_post_analysis_remaining",
-    "sa_free_post_analysis_remaining",
-    "post_analysis_remaining",
-    "free_post_analysis_remaining",
-    "sa_post_remaining",
-    "free_post_remaining",
-  ]
-  const FREE_QUOTA_LIMIT_KEYS = [
-    "sa_post_analysis_limit",
-    "sa_free_post_analysis_limit",
-    "post_analysis_limit",
-    "free_post_analysis_limit",
-  ]
-
-  const safeParseInt = (v: unknown) => {
-    if (typeof v !== "string") return null
-    const n = Number.parseInt(v, 10)
-    return Number.isFinite(n) ? n : null
-  }
-
-  const readFirstNumberFromLocalStorage = (keys: string[]) => {
-    if (typeof window === "undefined") return null
-    try {
-      for (const k of keys) {
-        const raw = window.localStorage.getItem(k)
-        const n = safeParseInt(raw)
-        if (n !== null) return n
-      }
-    } catch {
-      // ignore (private mode / blocked storage)
-    }
-    return null
-  }
-
-  const computeFreeQuotaSnapshot = () => {
-    // priority: remaining -> used -> fallback
-    const limitFromLs = readFirstNumberFromLocalStorage(FREE_QUOTA_LIMIT_KEYS) ?? FREE_POST_ANALYSIS_LIMIT
-
-    const remainingFromLs = readFirstNumberFromLocalStorage(FREE_QUOTA_REMAIN_KEYS)
-    if (remainingFromLs !== null) {
-      const r = Math.max(0, Math.min(limitFromLs, remainingFromLs))
-      return { limit: limitFromLs, remaining: r }
-    }
-
-    const usedFromLs = readFirstNumberFromLocalStorage(FREE_QUOTA_USED_KEYS)
-    if (usedFromLs !== null) {
-      const used = Math.max(0, Math.min(limitFromLs, usedFromLs))
-      return { limit: limitFromLs, remaining: Math.max(0, limitFromLs - used) }
-    }
-
-    // final fallback: keep current UX default (do not break UI)
-    return { limit: FREE_POST_ANALYSIS_LIMIT, remaining: 2 }
-  }
-
-  const [freePostRemaining, setFreePostRemaining] = useState<number>(() => {
-    // SSR-safe default; will be replaced on mount
-    return 2
-  })
-  const [freePostLimit, setFreePostLimit] = useState<number>(() => {
-    return FREE_POST_ANALYSIS_LIMIT
-  })
-
-  useEffect(() => {
-    const sync = () => {
-      const snap = computeFreeQuotaSnapshot()
-      setFreePostLimit(snap.limit)
-      setFreePostRemaining(snap.remaining)
-    }
-
-    sync()
-
-    // Cross-tab sync: if post-analysis page updates localStorage, reflect here.
-    const watched = new Set([...FREE_QUOTA_USED_KEYS, ...FREE_QUOTA_REMAIN_KEYS, ...FREE_QUOTA_LIMIT_KEYS])
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return
-      if (watched.has(e.key)) sync()
-    }
-
-    // Same-tab sync (most common): when user comes back from post-analysis,
-    // refresh on focus/visibility.
-    const onFocus = () => sync()
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") sync()
-    }
-
-    window.addEventListener("storage", onStorage)
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisibility)
-
-    return () => {
-      window.removeEventListener("storage", onStorage)
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisibility)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    // When user navigates back from post-analysis to results in the SAME tab,
-    // focus/visibility may NOT fire. Re-sync on pathname changes.
-    if (typeof pathname === "string" && pathname.endsWith("/results")) {
-      const snap = computeFreeQuotaSnapshot()
-      setFreePostLimit(snap.limit)
-      setFreePostRemaining(snap.remaining)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname])
-
-  const [media, setMedia] = useState<Array<ReturnType<typeof normalizeMedia>[number]>>([])
-  const [topPosts, setTopPosts] = useState<any[]>([])
-
-  const [trendPoints, setTrendPoints] = useState<AccountTrendPoint[]>([])
-  const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
-    loading: false,
-    error: "",
-    lastDays: null,
-  })
-  const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
-  const [trendHasNewDay, setTrendHasNewDay] = useState(false)
-
-  const [mediaLoaded, setMediaLoaded] = useState(false)
-
-  const [hasCachedData, setHasCachedData] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [updateSlow, setUpdateSlow] = useState(false)
-  const [loadTimedOut, setLoadTimedOut] = useState(false)
-  const [loadError, setLoadError] = useState(false)
-
-  const [selectedGoal, setSelectedGoal] = useState<
-    | null
-    | "growthStageAccount"
-    | "personalBrandBuilder"
-    | "trafficFocusedCreator"
-    | "highEngagementCommunity"
-    | "serviceClientReady"
-    | "brandCollaborationProfile"
-    | "fullTimeCreator"
-    | "monetizationFocusedAccount"
-  >(null)
-
-  useEffect(() => {
     const el = upgradeCardRef.current
     if (!el || upgradeCardInView) return
 
@@ -649,6 +545,39 @@ export default function ResultsClient() {
   const [isProModalOpen, setIsProModalOpen] = useState(false)
   const [upgradeHighlight, setUpgradeHighlight] = useState(false)
 
+  const [media, setMedia] = useState<Array<ReturnType<typeof normalizeMedia>[number]>>([])
+  const [mediaLoaded, setMediaLoaded] = useState(false)
+
+  const [trendPoints, setTrendPoints] = useState<AccountTrendPoint[]>([])
+  const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
+    loading: false,
+    error: "",
+    lastDays: null,
+  })
+  const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
+  const [trendHasNewDay, setTrendHasNewDay] = useState(false)
+
+  const [hasCachedData, setHasCachedData] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateSlow, setUpdateSlow] = useState(false)
+  const [loadTimedOut, setLoadTimedOut] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+
+  const [freePostRemaining, setFreePostRemaining] = useState<number>(2)
+  const [freePostLimit, setFreePostLimit] = useState<number>(3)
+
+  const [selectedGoal, setSelectedGoal] = useState<
+    | null
+    | "growthStageAccount"
+    | "personalBrandBuilder"
+    | "trafficFocusedCreator"
+    | "highEngagementCommunity"
+    | "serviceClientReady"
+    | "brandCollaborationProfile"
+    | "fullTimeCreator"
+    | "monetizationFocusedAccount"
+  >(null)
+
   type AccountTrendMetricKey = "reach" | "impressions" | "engaged" | "followerDelta"
   const [selectedAccountTrendMetrics, setSelectedAccountTrendMetrics] = useState<AccountTrendMetricKey[]>([
     "reach",
@@ -660,26 +589,30 @@ export default function ResultsClient() {
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
-  const mediaLen = Array.isArray(media) ? media.length : 0
-  const topPostsLen = Array.isArray(topPosts) ? topPosts.length : 0
   const igRecentLen = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media.length : 0
+  // These lengths are only used to keep deps stable; rely only on guaranteed data.
+  const topPostsLen = igRecentLen
+  const mediaLen = igRecentLen
 
   // Profile stats (UI-only)
-  const followersCount = Number((igMe as any)?.followers_count ?? NaN)
-  const followsCount = Number((igMe as any)?.follows_count ?? NaN)
-  const mediaCount = Number((igMe as any)?.media_count ?? NaN)
+  // Source of truth: Meta returns these on `profile`.
+  const profileStats = ((igMe as any)?.profile ?? null) as any
+  const followersCount = Number(profileStats?.followers_count ?? NaN)
+  const followsCount = Number(profileStats?.follows_count ?? profileStats?.following_count ?? NaN)
+  const mediaCount = Number(profileStats?.media_count ?? NaN)
   const formatCompact = (n: number) => {
     if (!Number.isFinite(n)) return "—"
     try {
-      return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n)
+      return Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n)
     } catch {
-      return String(n)
+      return String(Math.round(n))
     }
   }
 
-  // Determine whether topPosts is real IG media (numeric id) — used for DEV logging only.
-  const topPostsFirstId = String((topPosts as any)?.[0]?.id ?? "")
-  const topPostsHasReal = topPostsLen > 0 && /^\d+$/.test(topPostsFirstId)
+  // Determine whether "recent_media" looks like real IG media (numeric id) — DEV logging only
+  const recentFirstId = String((((igMe as any)?.recent_media?.[0] as any)?.id ?? ""))
+  const topPostsFirstId = recentFirstId
+  const topPostsHasReal = igRecentLen > 0 && /^\d+$/.test(recentFirstId)
 
   const hasFetchedMediaRef = useRef(false)
   const hasFetchedMeRef = useRef(false)
@@ -756,10 +689,10 @@ export default function ResultsClient() {
   }, [resultsCacheKey, igMe, media, mediaLoaded, trendFetchedAt, trendPoints])
 
   const uiCopy = {
-    avgLikesLabel: isZh ? "平均按讚" : "Avg Likes",
-    avgCommentsLabel: isZh ? "平均留言" : "Avg Comments",
-    perPostLast25: isZh ? "每篇平均（最近 25 篇）" : "Per post (last 25)",
-    topPostsSortHint: isZh ? "依（按讚＋留言）排序（最近 25 篇）" : "Sorted by likes + comments (last 25)",
+    avgLikesLabel: t("results.ui.avgLikesLabel"),
+    avgCommentsLabel: t("results.ui.avgCommentsLabel"),
+    perPostLast25: t("results.ui.perPostLast25"),
+    topPostsSortHint: t("results.ui.topPostsSortHint"),
   }
 
   const safeFlexRow = "flex min-w-0 items-center gap-2"
@@ -769,9 +702,8 @@ export default function ResultsClient() {
   const numMono = "tabular-nums whitespace-nowrap"
 
   const igProfile = ((igMe as any)?.profile ?? igMe) as any
-  const isConnected = Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
-  const connectedProvider = searchParams.get("connected")
-  const isConnectedInstagram = Boolean((igMe as any)?.connected === true) || connectedProvider === "instagram"
+  const isConnected = Boolean((igMe as any)?.connected === true) || Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
+  const isConnectedInstagram = Boolean((igMe as any)?.connected === true) || isConnected
 
   const hasAnyResultsData = Boolean(mediaLen > 0 || trendPoints.length > 0 || igMe)
 
@@ -943,79 +875,6 @@ export default function ResultsClient() {
   }, [trendPoints])
 
   useEffect(() => {
-    if (!isConnectedInstagram) return
-
-    const daysWanted = 7
-    if (forceReloadTick === 0 && trendFetchStatus.lastDays === 7 && Array.isArray(trendPoints) && trendPoints.length >= 2) return
-
-    const controller = new AbortController()
-    let cancelled = false
-
-    const run = async () => {
-      try {
-        setTrendFetchStatus((s) => ({ ...s, loading: true, error: "", lastDays: daysWanted }))
-        const res = await fetch(`/api/instagram/trend?days=7`, {
-          cache: "no-store",
-          credentials: "include",
-          signal: controller.signal,
-        })
-
-        if (cancelled) return
-        if (!res.ok) {
-          setTrendFetchStatus((s) => ({ ...s, loading: false, error: `trend_api_failed_${res.status}` }))
-          return
-        }
-
-        const json = (await res.json()) as any
-        const pts = Array.isArray(json?.points) ? json.points : []
-        if (pts.length >= 2) {
-          setTrendPoints(
-            pts.map((p: any) => ({
-              ts: typeof p?.ts === "number" && Number.isFinite(p.ts) ? p.ts : undefined,
-              t:
-                typeof p?.t === "string" && p.t.trim()
-                  ? p.t
-                  : typeof p?.ts === "number" && Number.isFinite(p.ts)
-                    ? (() => {
-                        try {
-                          return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(
-                            new Date(p.ts)
-                          )
-                        } catch {
-                          const d = new Date(p.ts)
-                          const m = String(d.getMonth() + 1).padStart(2, "0")
-                          const dd = String(d.getDate()).padStart(2, "0")
-                          return `${m}/${dd}`
-                        }
-                      })()
-                    : "—",
-              reach: typeof p?.reach === "number" && Number.isFinite(p.reach) ? p.reach : null,
-              impressions: typeof p?.impressions === "number" && Number.isFinite(p.impressions) ? p.impressions : null,
-              engaged: typeof p?.engaged === "number" && Number.isFinite(p.engaged) ? p.engaged : null,
-              followerDelta: typeof p?.followerDelta === "number" && Number.isFinite(p.followerDelta) ? p.followerDelta : null,
-            }))
-          )
-          setTrendFetchedAt(Date.now())
-          setTrendFetchStatus((s) => ({ ...s, loading: false, error: "" }))
-        } else {
-          setTrendFetchStatus((s) => ({ ...s, loading: false, error: "trend_api_no_points" }))
-        }
-      } catch (err: any) {
-        if (cancelled) return
-        if (err?.name === "AbortError") return
-        setTrendFetchStatus((s) => ({ ...s, loading: false, error: "trend_api_exception" }))
-      }
-    }
-
-    run()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnectedInstagram, pathname, forceReloadTick])
-
-  useEffect(() => {
     if (!trendMeta?.endKey) return
     try {
       const key = "ig_analyzer:last_trend_end_key"
@@ -1035,14 +894,14 @@ export default function ResultsClient() {
   const hasRealProfile = Boolean(isConnected)
   const allowDemoProfile = !hasConnectedFlag && !hasRealProfile && !igMeLoading
 
-  const recentPosts = isConnectedInstagram && topPosts.length > 0 ? topPosts : igMe?.recent_media
+  const recentPosts = igMe?.recent_media
 
   const needsDataRefetch = useMemo(() => {
     const hasProfile = Boolean(igProfile && (igProfile?.id || igProfile?.username))
     const hasMedia = Array.isArray(media) && media.length > 0
-    const hasTopPosts = Array.isArray(topPosts) && topPosts.length > 0
+    const hasTopPosts = Array.isArray((igMe as any)?.recent_media) && (igMe as any).recent_media.length > 0
     return !hasProfile || !hasMedia || !hasTopPosts
-  }, [igProfile, media, topPosts])
+  }, [igProfile, media, igRecentLen])
 
   useEffect(() => {
     if (!isConnected) return
@@ -1110,12 +969,10 @@ export default function ResultsClient() {
 
     __resultsMediaFetchedOnce = true
     hasFetchedMediaRef.current = true
-
-    const controller = new AbortController()
     let cancelled = false
 
     console.log("[media] fetch (from ConnectedGate)")
-    fetch("/api/instagram/media", { cache: "no-store", credentials: "include", signal: controller.signal })
+    fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
       .then((res) => res.json())
       .then((json) => {
         if (cancelled) return
@@ -1128,7 +985,6 @@ export default function ResultsClient() {
       })
       .catch((err) => {
         if (cancelled) return
-        if ((err as any)?.name === "AbortError") return
         console.error("[media] fetch failed", err)
 
         setLoadError(true)
@@ -1140,7 +996,12 @@ export default function ResultsClient() {
 
     return () => {
       cancelled = true
-      controller.abort()
+      hasFetchedMediaRef.current = false
+      try {
+        __resultsMediaFetchedOnce = false
+      } catch {
+        // ignore
+      }
     }
   }, [isConnectedInstagram, pathname, forceReloadTick, r])
 
@@ -1167,8 +1028,10 @@ export default function ResultsClient() {
   }, [__DEV__, mediaLoaded, mediaLen])
 
   useEffect(() => {
-    const firstId = String((topPosts as any)?.[0]?.id ?? "")
-    const hasRealTopPosts = topPostsLen > 0 && /^\d+$/.test(firstId)
+    // Dev-only: do not rely on any `topPosts` variable existing in this file scope.
+    // We only log whether recent_media looks real.
+    const firstId = String((((igMe as any)?.recent_media?.[0] as any)?.id ?? ""))
+    const hasRealTopPosts = igRecentLen > 0 && /^\d+$/.test(firstId)
 
     if (__DEV__) {
       console.log("[top-posts][compute] enter", {
@@ -1180,26 +1043,7 @@ export default function ResultsClient() {
         hasRealTopPosts,
       })
     }
-
-    if (!isConnected) return
-    if (mediaLen === 0) return
-    if (hasRealTopPosts) return
-
-    // Use existing `media` state only (trigger-only fix).
-    // Keep the exact same computation logic.
-    const items = media
-    setTopPosts(
-      items
-        .filter((m: any) => ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
-        .sort(
-          (a: any, b: any) =>
-            (Number(b?.like_count || 0) || 0) + (Number(b?.comments_count || 0) || 0) -
-            ((Number(a?.like_count || 0) || 0) + (Number(a?.comments_count || 0) || 0))
-        )
-        .slice(0, 3),
-    )
-    if (__DEV__) console.log("[top-posts][compute] setTopPosts from media", { mediaLen })
-  }, [isConnected, isConnectedInstagram, topPostsLen, mediaLen])
+  }, [__DEV__, igMe, igRecentLen, isConnected, isConnectedInstagram, topPostsLen, mediaLen])
 
   const displayUsername = hasRealProfile
     ? (typeof igProfile?.username === "string" ? String(igProfile.username).trim() : "")
@@ -1526,8 +1370,6 @@ export default function ResultsClient() {
 
     __resultsMeFetchedOnce = true
     hasFetchedMeRef.current = true
-
-    const controller = new AbortController()
     let cancelled = false
     const run = async () => {
       setIgMeLoading(true)
@@ -1535,7 +1377,10 @@ export default function ResultsClient() {
       setConnectEnvError(null)
       setLoadError(false)
       try {
-        const r = await fetch("/api/auth/instagram/me", { cache: "no-store", signal: controller.signal })
+        const r = await fetch("/api/auth/instagram/me", {
+          cache: "no-store",
+          credentials: "include",
+        })
         if (cancelled) return
 
         if (r.status === 401) {
@@ -1550,34 +1395,30 @@ export default function ResultsClient() {
           return
         }
 
-        const data = (await r.json()) as any
-        const normalized: IgMeResponse | null = (() => {
-          if (data?.connected === true && data?.profile) {
-            const p = data.profile
-            return {
-              connected: true,
-              provider: data?.provider,
-              profile: p,
-              username: typeof p?.username === "string" ? p.username : undefined,
-              name: typeof p?.name === "string" ? p.name : undefined,
-              profile_picture_url: typeof p?.profile_picture_url === "string" ? p.profile_picture_url : undefined,
-              followers_count: typeof p?.followers_count === "number" ? p.followers_count : undefined,
-              follows_count: typeof p?.follows_count === "number" ? p.follows_count : undefined,
-              media_count: typeof p?.media_count === "number" ? p.media_count : undefined,
-            }
-          }
+        const raw = (await r.json()) as any
+        const normalized = normalizeMe(raw)
 
-          if (typeof data?.username === "string" && data.username.trim()) {
-            return data as IgMeResponse
-          }
-
-          return null
-        })()
+        if (__DEV__) {
+          const p = (normalized as any)?.profile
+          const avatarUrl = String(p?.profile_picture_url ?? (normalized as any)?.profile_picture_url ?? "")
+          // eslint-disable-next-line no-console
+          console.log("[me raw]", raw)
+          // eslint-disable-next-line no-console
+          console.log("[me normalized]", normalized)
+          // eslint-disable-next-line no-console
+          console.log("[me ui profile stats]", {
+            connected: Boolean((normalized as any)?.connected),
+            username: p?.username,
+            followers_count: p?.followers_count,
+            follows_count: p?.follows_count,
+            media_count: p?.media_count,
+            avatarUrl,
+          })
+        }
 
         setIgMe(normalized)
       } catch (err) {
         if (cancelled) return
-        if ((err as any)?.name === "AbortError") return
         setIgMe(null)
         setLoadError(true)
       } finally {
@@ -1587,7 +1428,17 @@ export default function ResultsClient() {
     run()
     return () => {
       cancelled = true
-      controller.abort()
+      hasFetchedMeRef.current = false
+      try {
+        __resultsMeFetchedOnce = false
+      } catch {
+        // ignore
+      }
+      try {
+        setIgMeLoading(false)
+      } catch {
+        // ignore
+      }
     }
   }, [forceReloadTick])
 
@@ -1846,40 +1697,10 @@ export default function ResultsClient() {
   }
 
   const handleConnect = () => {
-    const run = async () => {
-      setConnectEnvError(null)
-      try {
-        const nextPath = `/${activeLocale}/results`
-        const oauthUrl = `/api/auth/instagram?provider=instagram&next=${encodeURIComponent(nextPath)}`
-        const r = await fetch(oauthUrl, {
-          method: "GET",
-          redirect: "manual",
-          cache: "no-store",
-        })
-
-        if (r.status === 500) {
-          const data = (await r.json().catch(() => null)) as { error?: string } | null
-          if (data?.error === "missing_env") {
-            setConnectEnvError("missing_env")
-            return
-          }
-        }
-
-        if (r.status >= 300 && r.status < 400) {
-          const loc = r.headers.get("Location")
-          window.location.href = loc || oauthUrl
-          return
-        }
-
-        window.location.href = oauthUrl
-      } catch {
-        const nextPath = `/${activeLocale}/results`
-        const oauthUrl = `/api/auth/instagram?provider=instagram&next=${encodeURIComponent(nextPath)}`
-        window.location.href = oauthUrl
-      }
-    }
-
-    void run()
+    setConnectEnvError(null)
+    const nextPath = `/${activeLocale}/results`
+    const oauthUrl = `/api/auth/instagram?provider=instagram&next=${encodeURIComponent(nextPath)}`
+    window.location.href = oauthUrl
   }
 
   const priorityLabel = (label: string) => {
@@ -1893,27 +1714,18 @@ export default function ResultsClient() {
     if (status === "warning") return t("results.priority.medium")
     return t("results.priority.maintain")
   }
-
-  const insights = [
-    {
-      title: t("results.insights.items.0.title"),
-      description: t("results.insights.items.0.description"),
-    },
-    {
-      title: t("results.insights.items.1.title"),
-      description: t("results.insights.items.1.description"),
-    },
-    {
-      title: t("results.insights.items.2.title"),
-      description: t("results.insights.items.2.description"),
-    },
-  ]
-
-  const [insightsExpanded, setInsightsExpanded] = useState(false)
   const [kpiExpanded, setKpiExpanded] = useState(false)
-  const [nextActionsExpanded, setNextActionsExpanded] = useState(false)
   const [isSmUpViewport, setIsSmUpViewport] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [expandedGrowthTask, setExpandedGrowthTask] = useState<null | 1 | 2 | 3>(null)
+  const [openReadinessCard, setOpenReadinessCard] = useState<null | "style" | "stage" | "readiness">(null)
+
+  const growthTaskRefs = useRef<Record<1 | 2 | 3, HTMLButtonElement | null>>({ 1: null, 2: null, 3: null })
+  const readinessRefs = useRef<Record<"style" | "stage" | "readiness", HTMLButtonElement | null>>({
+    style: null,
+    stage: null,
+    readiness: null,
+  })
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1930,6 +1742,36 @@ export default function ResultsClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (!expandedGrowthTask) return
+    const el = growthTaskRefs.current[expandedGrowthTask]
+    if (!el) return
+
+    window.requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect()
+      const vh = window.innerHeight || 0
+      const isFullyVisible = rect.top >= 0 && rect.bottom <= vh
+      if (isFullyVisible) return
+      el.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [expandedGrowthTask])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!openReadinessCard) return
+    const el = readinessRefs.current[openReadinessCard]
+    if (!el) return
+
+    window.requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect()
+      const vh = window.innerHeight || 0
+      const isFullyVisible = rect.top >= 0 && rect.bottom <= vh
+      if (isFullyVisible) return
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    })
+  }, [openReadinessCard])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
     const mq = window.matchMedia("(max-width: 639px)")
     const sync = () => setIsMobile(mq.matches)
     sync()
@@ -1941,159 +1783,91 @@ export default function ResultsClient() {
     return () => mq.removeListener(sync)
   }, [])
 
-  const insightUiMeta = (
-    i: number
-  ): {
-    source: string
-    action: string
-    why: string
-  } => {
-    if (isZh) {
-      if (i === 0)
-        return {
-          source: "根據最近 3 天的互動帳號趨勢",
-          action: "👉 這週先把高互動主題做成 3 篇小系列",
-          why: "因為最近互動帳號上升，但延續性不夠",
-        }
-      if (i === 1)
-        return {
-          source: "根據最近一週的粉絲變化趨勢",
-          action: "👉 這週先把個人頁與置頂貼文做一次對齊",
-          why: "因為最近粉絲成長停滯，需要更清楚的追蹤理由",
-        }
-      return {
-        source: "根據最近 7 天的觸及趨勢",
-        action: "👉 這週先固定一個可維持的發文節奏",
-        why: "因為最近觸及有波動，穩定輸出能讓分發更連續",
-      }
-    }
-
-    if (i === 0)
-      return {
-        source: "Based on the last 3 days of engaged accounts trend",
-        action: "👉 This week, turn your high-engagement topic into a 3-post mini series",
-        why: "Because engaged accounts are rising, but the momentum isn’t consistent",
-      }
-    if (i === 1)
-      return {
-        source: "Based on the last week of follower change trend",
-        action: "👉 This week, align your profile + pinned posts in one pass",
-        why: "Because follower growth is stalling and the follow reason isn’t clear enough",
-      }
-    return {
-      source: "Based on the last 7 days of reach trend",
-      action: "👉 This week, lock a posting cadence you can sustain",
-      why: "Because reach is fluctuating—steady output helps distribution stay continuous",
-    }
-  }
-
   const renderInsightsSection = (variant: "mobile" | "desktop") => {
-    const isMobile = variant === "mobile"
-    const shownInsights = isMobile ? (insightsExpanded ? insights.slice(0, 3) : []) : insights
+    const isMobileVariant = variant === "mobile"
     return (
-      <Card className={isMobile ? "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm" : "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm"}>
-        <CardHeader
-          className={
-            isMobile
-              ? (insightsExpanded
-                  ? "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6 cursor-pointer"
-                  : "px-3 py-2 sm:px-4 sm:pt-4 sm:pb-2 lg:px-6 lg:pt-6 cursor-pointer")
-              : "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6"
-          }
-          onClick={
-            isMobile
-              ? () => {
-                  setInsightsExpanded((v) => !v)
-                }
-              : undefined
-          }
-        >
-          {isMobile ? (
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="min-w-0">
-                <CardTitle className="text-base font-semibold text-white">{t("results.recommendations.title")}</CardTitle>
-                {!insightsExpanded ? (
-                  <div className="mt-0.5 text-[11px] leading-tight text-white/55">
-                    {isZh ? `${insights.length} 個洞察 · 點擊展開` : `${insights.length} insights · tap to expand`}
-                  </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setInsightsExpanded((v) => !v)
-                }}
-                className="text-xs text-white/70 hover:text-white whitespace-nowrap shrink-0"
-              >
-                {insightsExpanded ? "收合" : "展開"}
-              </button>
+      <Card
+        className={
+          isMobileVariant
+            ? "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm"
+            : "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm"
+        }
+      >
+        <CardHeader className={isMobileVariant ? "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6" : "px-3 pt-3 pb-2 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6"}>
+          <div className="min-w-0">
+            <CardTitle className={isMobileVariant ? "text-base font-semibold text-white" : "text-sm text-white"}>
+              {t("results.creatorReadiness.title")}
+            </CardTitle>
+            <div className="mt-0.5 text-[11px] leading-tight text-white/55 min-w-0 line-clamp-2">
+              {t("results.creatorReadiness.subtitle")}
             </div>
-          ) : (
-            <CardTitle className="text-sm text-white">{t("results.recommendations.title")}</CardTitle>
-          )}
+          </div>
         </CardHeader>
-        {(!isMobile || insightsExpanded) ? (
-          <CardContent className="pt-0">
-            <div className={isMobile ? "space-y-2" : "space-y-2 sm:space-y-3"}>
-              {shownInsights.map((insight, idx) => {
-                const meta = insightUiMeta(idx)
-                return (
-                  <div
-                    key={insight.title}
+
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3">
+            {(
+              [
+                { k: "style" as const, titleKey: "results.creatorReadiness.cards.style.title", valueKey: "results.creatorReadiness.cards.style.value" },
+                { k: "stage" as const, titleKey: "results.creatorReadiness.cards.stage.title", valueKey: "results.creatorReadiness.cards.stage.value" },
+                {
+                  k: "readiness" as const,
+                  titleKey: "results.creatorReadiness.cards.readiness.title",
+                  valueKey: "results.creatorReadiness.cards.readiness.value",
+                },
+              ] as const
+            ).map((item) => {
+              const isOpen = openReadinessCard === item.k
+              return (
+                <div key={item.k} className="min-w-0">
+                  <button
+                    ref={(node) => {
+                      readinessRefs.current[item.k] = node
+                    }}
+                    type="button"
                     className={
-                      "rounded-xl border border-white/10 bg-white/5 min-w-0 overflow-hidden " +
-                      (isMobile ? "p-3" : "p-4")
+                      "w-full text-left rounded-xl border bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 " +
+                      (isOpen ? "border-white/25" : "border-white/10 hover:border-white/20")
                     }
+                    onClick={() => setOpenReadinessCard((prev) => (prev === item.k ? null : item.k))}
                   >
-                    <div className={safeFlexRow + " items-start"}>
-                      <div
-                        className={
-                          isMobile
-                            ? "text-sm font-semibold text-white leading-snug " + clampTitleMobile
-                            : "min-w-0 text-xs font-semibold text-white leading-snug"
-                        }
-                      >
-                        {insight.title}
-                      </div>
+                    <div className="text-[10px] font-semibold tracking-widest text-white/55 whitespace-nowrap">{t(item.titleKey)}</div>
+                    <div className="mt-1 flex items-center gap-2 min-w-0">
+                      <div className="text-sm font-semibold text-white min-w-0 truncate">{t(item.valueKey)}</div>
+                      {item.k === "readiness" ? (
+                        <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
+                          {t("results.common.baseline")}
+                        </span>
+                      ) : null}
                     </div>
+                  </button>
 
-                    <div
-                      className={
-                        isMobile
-                          ? "mt-1 text-white/55 " + clampBodyMobile
-                          : "mt-1 text-xs text-white/45 leading-snug"
-                      }
-                    >
-                      {meta.source}
-                    </div>
-
-                    <div className={isMobile ? "mt-2 space-y-1.5" : "mt-2 space-y-2"}>
-                      <div
-                        className={
-                          isMobile
-                            ? "font-semibold text-white " + clampBodyMobile
-                            : "text-sm font-semibold text-white leading-snug"
-                        }
-                      >
-                        {meta.action}
-                      </div>
-                      <div
-                        className={
-                          isMobile
-                            ? "text-slate-200/85 " + clampBodyMobile
-                            : "text-xs text-slate-300 leading-snug"
-                        }
-                      >
-                        {meta.why}
+                  {isOpen ? (
+                    <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-xs sm:text-sm text-white/80 min-w-0 break-words">
+                      <div className="space-y-2">
+                        <div>
+                          <div className="text-[11px] font-semibold text-white/85">{t(`results.creatorReadiness.explain.${item.k}.meaningTitle`)}</div>
+                          <div className="mt-0.5 leading-snug">{t(`results.creatorReadiness.explain.${item.k}.meaningBody`)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-semibold text-white/85">{t(`results.creatorReadiness.explain.${item.k}.statusTitle`)}</div>
+                          <div className="mt-0.5 leading-snug">{t(`results.creatorReadiness.explain.${item.k}.statusBody`)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-semibold text-white/85">{t(`results.creatorReadiness.explain.${item.k}.nextTitle`)}</div>
+                          <ul className="mt-1 list-disc pl-5 space-y-1">
+                            <li className="leading-snug">{t(`results.creatorReadiness.explain.${item.k}.next.1`)}</li>
+                            <li className="leading-snug">{t(`results.creatorReadiness.explain.${item.k}.next.2`)}</li>
+                          </ul>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          </CardContent>
-        ) : null}
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
       </Card>
     )
   }
@@ -2346,12 +2120,7 @@ export default function ResultsClient() {
     },
   }
 
-  const activeGoalMeta = goalMeta[selectedGoal ?? "default"]
-
-  const [checkedNextActions, setCheckedNextActions] = useState<Record<string, boolean>>({})
-  const toggleNextActionChecked = (actionKey: string) => {
-    setCheckedNextActions((prev) => ({ ...prev, [actionKey]: !prev[actionKey] }))
-  }
+  // (UI-only) previous interactive next-actions state removed
 
   const kpis: Array<{
     id: "followers" | "engagementRate" | "avgLikes" | "avgComments" | "engagementVolume" | "postsPerWeek"
@@ -2450,7 +2219,7 @@ export default function ResultsClient() {
     if (loadTimedOut) return "ready"
     if ((igMeLoading || (isConnected && !mediaLoaded)) && !hasAnyResultsData) return "loading"
     if (igMeUnauthorized || !isConnected) return "needs_connect"
-    if (isConnected && mediaLoaded && media.length === 0 && topPosts.length === 0) return "needs_setup"
+    if (isConnected && mediaLoaded && media.length === 0 && igRecentLen === 0) return "needs_setup"
     return "ready"
   })()
 
@@ -2506,7 +2275,7 @@ export default function ResultsClient() {
   if (derivedGateState === "needs_connect")
     return (
       <ConnectCard
-        isZh={isZh}
+        t={t}
         onConnect={handleConnect}
         onBack={() => router.push(localePathname("/", activeLocale))}
         connectEnvError={connectEnvError}
@@ -2516,7 +2285,7 @@ export default function ResultsClient() {
   if (derivedGateState === "needs_setup")
     return (
       <SetupHelpCard
-        isZh={isZh}
+        t={t}
         onRetry={() => {
           setForceReloadTick((x) => x + 1)
         }}
@@ -2588,9 +2357,9 @@ export default function ResultsClient() {
             <div className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-4 sm:px-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-white">Instagram 連線已失效</div>
-                  <div className="mt-1 text-[13px] text-white/70 leading-snug">
-                    請重新驗證登入後再查看帳號分析結果。
+                  <div className="text-sm font-semibold text-white min-w-0 truncate">{t("results.instagram.authExpired.title")}</div>
+                  <div className="mt-1 text-[13px] text-white/70 leading-snug min-w-0 break-words">
+                    {t("results.instagram.authExpired.desc")}
                   </div>
                 </div>
 
@@ -2598,7 +2367,7 @@ export default function ResultsClient() {
                   href={`/api/auth/instagram?provider=instagram&next=/${activeLocale}/results`}
                   className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_8px_20px_rgba(168,85,247,0.25)] hover:brightness-110 active:translate-y-[1px] transition w-full sm:w-auto"
                 >
-                  重新連線 Instagram
+                  {t("results.instagram.authExpired.reconnect")}
                 </Link>
               </div>
             </div>
@@ -3001,7 +2770,7 @@ export default function ResultsClient() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 text-center">
                   <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs text-slate-400">{activeLocale === "zh-TW" ? t("results.profile.followers") : t("results.instagram.followersLabel")}</div>
+                    <div className="text-xs text-slate-400">{t("results.profile.followers")}</div>
                     <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
                       <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
                       {isPreview(kpiFollowers) && (
@@ -3209,17 +2978,23 @@ export default function ResultsClient() {
                 <div className="relative">
                   <div className="hidden sm:flex items-center gap-6 min-w-0">
                     <div className="flex items-center gap-4 min-w-0">
-                      {igProfile?.profile_picture_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={String(igProfile.profile_picture_url)}
-                          alt={displayHandle}
-                          className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 object-cover shrink-0"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 bg-white/10 shrink-0" />
-                      )}
+                      {(() => {
+                        const avatarUrl =
+                          (typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : "") ||
+                          (typeof (igMe as any)?.profile_picture_url === "string" ? String((igMe as any).profile_picture_url) : "") ||
+                          ""
+                        return avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={avatarUrl}
+                            alt={displayHandle}
+                            className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 object-cover shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 bg-white/10 shrink-0" />
+                        )
+                      })()}
 
                       <div className="min-w-0">
                         <div className="text-base font-semibold text-white truncate">
@@ -3276,17 +3051,23 @@ export default function ResultsClient() {
 
                   <div className="sm:hidden flex flex-col gap-2">
                     <div className="flex items-start gap-4">
-                      {igProfile?.profile_picture_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={String(igProfile.profile_picture_url)}
-                          alt={displayHandle}
-                          className="h-16 w-16 rounded-full border border-white/10 object-cover shrink-0"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="h-16 w-16 rounded-full border border-white/10 bg-white/10 shrink-0" />
-                      )}
+                      {(() => {
+                        const avatarUrl =
+                          (typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : "") ||
+                          (typeof (igMe as any)?.profile_picture_url === "string" ? String((igMe as any).profile_picture_url) : "") ||
+                          ""
+                        return avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={avatarUrl}
+                            alt={displayHandle}
+                            className="h-16 w-16 rounded-full border border-white/10 object-cover shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="h-16 w-16 rounded-full border border-white/10 bg-white/10 shrink-0" />
+                        )
+                      })()}
 
                       <div className="min-w-0">
                         <div className="text-base font-semibold text-white truncate">
@@ -3424,17 +3205,11 @@ export default function ResultsClient() {
               <div className="h-px w-48 bg-gradient-to-r from-transparent via-white/25 to-transparent" />
             </div>
 
-            <section className="mt-3 scroll-mt-32 sm:hidden">
-              {renderInsightsSection("mobile")}
-            </section>
-
             <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardHeader className="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-start sm:items-center justify-between gap-3 min-w-0">
                 <CardTitle className="text-xl font-bold text-white min-w-0 truncate shrink-0">{t("results.trend.title")}</CardTitle>
                 <p className="text-[11px] sm:text-sm text-slate-400 min-w-0 leading-snug sm:leading-none sm:whitespace-nowrap sm:truncate text-left sm:text-right">
-                  {isZh
-                    ? "最近 7 天（系統會每日自動累積，之後可查看更長區間）"
-                    : "Last 7 days (we’ll auto-build history daily; longer ranges coming soon)"}
+                  {t("results.trend.note7d")}
                 </p>
               </CardHeader>
               <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
@@ -3442,12 +3217,12 @@ export default function ResultsClient() {
                   <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
                     <div className="shrink-0">
                       <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 whitespace-nowrap">
-                        7天
+                        {t("results.trend.rangePill7d")}
                       </span>
                     </div>
 
                     <div className="shrink-0 whitespace-nowrap tabular-nums min-w-0 overflow-hidden text-ellipsis text-[10px] text-white/45 sm:text-xs sm:text-white/55">
-                      {isZh ? "目前可用：7 天" : "Available: 7 days"}
+                      {t("results.trend.available7d")}
                     </div>
                   </div>
 
@@ -3492,7 +3267,7 @@ export default function ResultsClient() {
                 {trendMeta ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/60 min-w-0">
                     <span className="inline-flex items-center gap-2 min-w-0">
-                      <span className="font-semibold text-white/80 whitespace-nowrap shrink-0">{isZh ? "趨勢區間" : "Range"}</span>
+                      <span className="font-semibold text-white/80 whitespace-nowrap shrink-0">{t("results.trend.rangeLabel")}</span>
                       <span className="tabular-nums whitespace-nowrap truncate min-w-0">
                         {trendMeta.startLabel} – {trendMeta.endLabel}
                       </span>
@@ -3500,7 +3275,7 @@ export default function ResultsClient() {
                     <span className="opacity-40 shrink-0">•</span>
 
                     <span className="inline-flex items-center gap-2 min-w-0">
-                      <span className="font-semibold text-white/80 whitespace-nowrap shrink-0">{isZh ? "更新" : "Updated"}</span>
+                      <span className="font-semibold text-white/80 whitespace-nowrap shrink-0">{t("results.trend.updatedLabel")}</span>
                       <span className="tabular-nums whitespace-nowrap truncate min-w-0">{trendFetchedAt ? formatTimeTW(trendFetchedAt) : "—"}</span>
                     </span>
 
@@ -3614,7 +3389,7 @@ export default function ResultsClient() {
                       {dataForChart.length < 2 ? (
                         <div className="w-full mt-2">
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
-                            {isZh ? "尚無趨勢資料" : "No trend data yet"}
+                            {t("results.trend.noData")}
                           </div>
                         </div>
                       ) : (
@@ -3916,19 +3691,17 @@ export default function ResultsClient() {
                     }}
                     className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10 w-auto shrink-0"
                   >
-                    {activeLocale === "zh-TW" ? "前往貼文分析" : "Analyze Posts"}
+                    {t("results.postAnalysis.cta")}
                   </Button>
 
                   {!isPro ? (
                     <span
                       className="min-w-0 tabular-nums overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-white/55 sm:text-xs sm:text-muted-foreground sm:max-w-[220px]"
                       title={
-                        activeLocale === "zh-TW"
-                          ? `免費剩餘 ${freePostRemaining} / ${freePostLimit}`
-                          : `Free left ${freePostRemaining} / ${freePostLimit}`
+                        `${t("results.postAnalysis.freeLeft")} ${freePostRemaining} / ${freePostLimit}`
                       }
                     >
-                      {activeLocale === "zh-TW" ? "免費剩餘 " : "Free left "}
+                      {t("results.postAnalysis.freeLeft")} 
                       <span className="font-medium tabular-nums">{freePostRemaining}</span> / {freePostLimit}
                     </span>
                   ) : null}
@@ -4020,8 +3793,8 @@ export default function ResultsClient() {
                                   rel="noopener noreferrer"
                                   className="block relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full"
                                 >
-                                  <div className="absolute inset-0 bg-white/10" />
-                                  <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-white/10 pointer-events-none" />
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
                                       {mediaType ? mediaType : "POST"}
                                     </span>
@@ -4063,8 +3836,8 @@ export default function ResultsClient() {
                                 </a>
                               ) : (
                                 <div className="block relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                  <div className="absolute inset-0 bg-white/10" />
-                                  <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-white/10 pointer-events-none" />
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
                                       {mediaType ? mediaType : "POST"}
                                     </span>
@@ -4121,9 +3894,9 @@ export default function ResultsClient() {
                                   <a
                                     href={analyzeHref}
                                     className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 whitespace-nowrap"
-                                    title={activeLocale === "zh-TW" ? "分析貼文" : "Analyze"}
+                                    title={t("results.topPosts.card.analyzeTitle")}
                                   >
-                                    {activeLocale === "zh-TW" ? "分析" : "Analyze"}
+                                    {t("results.topPosts.card.analyzeLabel")}
                                   </a>
                                 </div>
                               </div>
@@ -4223,9 +3996,11 @@ export default function ResultsClient() {
                 >
                   <div className="flex items-start justify-between gap-3 min-w-0">
                     <div className="min-w-0">
-                      <CardTitle className="text-base font-semibold text-white">關鍵指標</CardTitle>
+                      <CardTitle className="text-base font-semibold text-white min-w-0 truncate">{t("results.kpis.ui.mobileTitle")}</CardTitle>
                       {!isMobile && !kpiExpanded ? (
-                        <div className="mt-0.5 text-[11px] leading-tight text-white/55">6 個指標 · 點擊展開</div>
+                        <div className="mt-0.5 text-[11px] leading-tight text-white/55 min-w-0 truncate">
+                          {t("results.kpis.ui.mobileHintCollapsed")}
+                        </div>
                       ) : null}
                     </div>
                     <button
@@ -4236,7 +4011,7 @@ export default function ResultsClient() {
                       }}
                       className="text-xs text-white/70 hover:text-white whitespace-nowrap shrink-0 hidden sm:inline-flex"
                     >
-                      {kpiExpanded ? "收合" : "展開"}
+                      {kpiExpanded ? t("results.kpis.ui.collapse") : t("results.kpis.ui.expand")}
                     </button>
                   </div>
                 </CardHeader>
@@ -4447,11 +4222,13 @@ export default function ResultsClient() {
                         }
                         onClick={() => {
                           setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                          window.setTimeout(() => scrollToKpiSection(), 0)
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault()
                             setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
+                            window.setTimeout(() => scrollToKpiSection(), 0)
                           }
                         }}
                       >
@@ -4464,306 +4241,91 @@ export default function ResultsClient() {
             </Card>
 
             <Card className="text-slate-100 flex flex-col gap-1.5 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg mt-3 rounded-xl border border-white/12 bg-gradient-to-b from-white/8 via-white/4 to-white/2 ring-1 ring-white/8 shadow-lg shadow-black/35 backdrop-blur-sm px-2 py-2 sm:px-3 sm:py-3 mb-5">
-              <CardHeader className="pb-0 py-2">
-                <CardTitle className="text-lg sm:text-xl font-semibold tracking-tight text-white">
-                  {safeT("results.nextActions.title")}
+              <CardHeader className="pb-0 py-2 min-w-0">
+                <CardTitle className="text-lg sm:text-xl font-semibold tracking-tight text-white min-w-0 truncate">
+                  {t("results.growthTasks.title")}
                 </CardTitle>
-                <p className="mt-0.5 text-[10px] leading-tight text-white/65 max-w-3xl min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
-                  <span className="truncate">{safeT("results.nextActions.helperLine")}</span>
-                  <span className="mx-1 opacity-60">·</span>
-                  <span className="truncate">{safeT("results.nextActions.subtitle")}</span>
+                <p className="mt-0.5 text-[10px] leading-tight text-white/65 max-w-3xl min-w-0">
+                  <span className="min-w-0 truncate block">{t("results.growthTasks.subtitle")}</span>
                 </p>
               </CardHeader>
               <CardContent className="pt-0 px-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-1.5">
-                  {(() => {
-                    if (!isSmUpViewport) {
-                      const actions = activeGoalMeta.actions
-                      const visibleActions = nextActionsExpanded ? actions.slice(0, 3) : actions.slice(0, 1)
-                      const hiddenCount = Math.max(0, Math.min(3, actions.length) - visibleActions.length)
-                      let proDividerInserted = false
-                      const nodes: ReactNode[] = []
-
-                      visibleActions.forEach((action) => {
-                        const isLocked = action.isPro && !isPro
-                        const shouldInsertDivider = action.isPro && !proDividerInserted
-                        if (shouldInsertDivider) proDividerInserted = true
-
-                        if (shouldInsertDivider) {
-                          nodes.push(
-                            <div key="pro-divider" className="md:col-span-3 flex items-center">
-                              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-purple-200">
-                                專業版內容
-                              </span>
+                  {(
+                    [
+                      { id: 1 as const },
+                      { id: 2 as const },
+                      { id: 3 as const },
+                    ] as const
+                  ).map((task) => {
+                    const isOpen = expandedGrowthTask === task.id
+                    return (
+                      <div key={task.id} className="min-w-0">
+                        <button
+                          ref={(node) => {
+                            growthTaskRefs.current[task.id] = node
+                          }}
+                          type="button"
+                          aria-expanded={isOpen}
+                          className={
+                            "w-full text-left flex flex-col gap-2 rounded-xl border bg-white/8 px-3 py-3 min-w-0 overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 " +
+                            (isOpen ? "border-white/30" : "border-white/20 hover:border-white/30")
+                          }
+                          onClick={() => setExpandedGrowthTask((prev) => (prev === task.id ? null : task.id))}
+                        >
+                          <div className="flex items-start justify-between gap-2 min-w-0">
+                            <div className="text-xs font-semibold text-white leading-snug min-w-0 truncate">
+                              {t(`results.growthTasks.cards.${task.id}.title`)}
                             </div>
-                          )
-                        }
-
-                        nodes.push(
-                          <div
-                            key={action.titleKey}
-                            role={!isLocked ? "button" : undefined}
-                            tabIndex={!isLocked ? 0 : undefined}
-                            className={
-                              "flex flex-col gap-1 rounded-xl border px-2.5 py-2 sm:px-3 sm:py-2.5 transition-all min-w-0 overflow-hidden " +
-                              (isLocked
-                                ? "border-white/20 bg-white/8"
-                                : checkedNextActions[action.titleKey]
-                                  ? "cursor-pointer border-white/12 bg-white/6 hover:bg-white/7 hover:border-white/25"
-                                  : "cursor-pointer border-white/20 bg-white/8 hover:bg-white/12 hover:border-white/40")
-                            }
-                            onClick={() => {
-                              if (isLocked) return
-                              toggleNextActionChecked(action.titleKey)
-                            }}
-                            onKeyDown={(e) => {
-                              if (isLocked) return
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault()
-                                toggleNextActionChecked(action.titleKey)
-                              }
-                            }}
-                          >
-                            <div className="flex items-start gap-2 min-w-0">
-                              <button
-                                type="button"
-                                aria-label="toggle"
-                                role="checkbox"
-                                aria-checked={!!checkedNextActions[action.titleKey]}
-                                disabled={isLocked}
-                                className={
-                                  "mt-[1px] h-4 w-4 shrink-0 rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40 " +
-                                  (isLocked
-                                    ? "cursor-not-allowed border-white/25 bg-black/20"
-                                    : checkedNextActions[action.titleKey]
-                                      ? "border-emerald-300/60 bg-emerald-400/25"
-                                      : "border-white/30 bg-black/20 hover:bg-white/8")
-                                }
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  if (isLocked) return
-                                  toggleNextActionChecked(action.titleKey)
-                                }}
-                              />
-                              <div className="min-w-0 flex-1 overflow-hidden">
-                                <div className="flex items-start justify-between gap-2 min-w-0">
-                                  <div
-                                    className={
-                                      "text-xs font-semibold leading-snug line-clamp-1 min-w-0 " +
-                                      (isLocked
-                                        ? "text-white"
-                                        : checkedNextActions[action.titleKey]
-                                          ? "text-white/60 line-through decoration-white/30"
-                                          : "text-white")
-                                    }
-                                  >
-                                    {safeT(action.titleKey)}
-                                  </div>
-                                  <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
-                                    {action.isPro ? safeT("results.nextActions.proBadge") : safeT("results.nextActions.freeBadge")}
-                                  </span>
-                                </div>
-
-                                <div
-                                  className={
-                                    "mt-1 text-[11px] leading-snug line-clamp-2 min-w-0 " +
-                                    (isLocked
-                                      ? "text-slate-300 blur-[3px] select-none"
-                                      : checkedNextActions[action.titleKey]
-                                        ? "text-slate-300/70"
-                                        : "text-slate-300")
-                                  }
-                                >
-                                  {safeT(action.descKey)}
-                                </div>
-
-                                {isLocked ? (
-                                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                                    <Lock className="h-3.5 w-3.5" />
-                                    <button
-                                      type="button"
-                                      className="hover:text-slate-200"
-                                      onClick={handleUpgrade}
-                                      onMouseDown={(e) => e.stopPropagation()}
-                                      onClickCapture={(e) => e.stopPropagation()}
-                                    >
-                                      {safeT("results.nextActions.lockLine")}
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })
-
-                      if (!nextActionsExpanded && hiddenCount > 0) {
-                        nodes.push(
-                          <div
-                            key="next-actions-see-more"
-                            role="button"
-                            tabIndex={0}
-                            className="cursor-pointer rounded-xl border border-white/20 bg-white/6 px-2.5 py-2 text-xs font-semibold text-white/85 hover:bg-white/8 hover:border-white/30"
-                            onClick={() => setNextActionsExpanded(true)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault()
-                                setNextActionsExpanded(true)
-                              }
-                            }}
-                          >
-                            {activeLocale === "zh-TW" ? `查看更多（${hiddenCount}）` : `See more (${hiddenCount})`}
-                          </div>
-                        )
-                      }
-
-                      if (nextActionsExpanded) {
-                        nodes.push(
-                          <div
-                            key="next-actions-collapse"
-                            role="button"
-                            tabIndex={0}
-                            className="cursor-pointer rounded-xl border border-white/20 bg-white/6 px-2.5 py-2 text-xs font-semibold text-white/70 hover:bg-white/8 hover:border-white/30"
-                            onClick={() => setNextActionsExpanded(false)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault()
-                                setNextActionsExpanded(false)
-                              }
-                            }}
-                          >
-                            {activeLocale === "zh-TW" ? "收合" : "Collapse"}
-                          </div>
-                        )
-                      }
-
-                      return nodes
-                    }
-
-                    let proDividerInserted = false
-                    return activeGoalMeta.actions.flatMap((action) => {
-                      const isLocked = action.isPro && !isPro
-                      const shouldInsertDivider = action.isPro && !proDividerInserted
-                      if (shouldInsertDivider) proDividerInserted = true
-                      const nodes: ReactNode[] = []
-
-                      if (shouldInsertDivider) {
-                        nodes.push(
-                          <div key="pro-divider" className="md:col-span-3 flex items-center">
-                            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-purple-200">
-                              專業版內容
+                            <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
+                              {t(`results.growthTasks.cards.${task.id}.status`)}
                             </span>
                           </div>
-                        )
-                      }
 
-                      nodes.push(
-                        <div
-                          key={action.titleKey}
-                          role={!isLocked ? "button" : undefined}
-                          tabIndex={!isLocked ? 0 : undefined}
-                          className={
-                            "flex flex-col gap-1 rounded-xl border px-2.5 py-2 sm:px-3 sm:py-2.5 transition-all min-w-0 overflow-hidden " +
-                            (isLocked
-                              ? "border-white/20 bg-white/8"
-                              : checkedNextActions[action.titleKey]
-                                ? "cursor-pointer border-white/12 bg-white/6 hover:bg-white/7 hover:border-white/25"
-                                : "cursor-pointer border-white/20 bg-white/8 hover:bg-white/12 hover:border-white/40")
-                          }
-                          onClick={() => {
-                            if (isLocked) return
-                            toggleNextActionChecked(action.titleKey)
-                          }}
-                          onKeyDown={(e) => {
-                            if (isLocked) return
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault()
-                              toggleNextActionChecked(action.titleKey)
+                          <div
+                            className={
+                              "text-[11px] leading-snug text-slate-300 min-w-0 " +
+                              (isOpen ? "" : "line-clamp-3")
                             }
-                          }}
-                        >
-                          <div className="flex items-start gap-2 min-w-0">
-                            <button
-                              type="button"
-                              aria-label="toggle"
-                              role="checkbox"
-                              aria-checked={!!checkedNextActions[action.titleKey]}
-                              disabled={isLocked}
-                              className={
-                                "mt-[1px] h-4 w-4 shrink-0 rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40 " +
-                                (isLocked
-                                  ? "cursor-not-allowed border-white/25 bg-black/20"
-                                  : checkedNextActions[action.titleKey]
-                                    ? "border-emerald-300/60 bg-emerald-400/25"
-                                    : "border-white/30 bg-black/20 hover:bg-white/8")
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (isLocked) return
-                                toggleNextActionChecked(action.titleKey)
-                              }}
-                            />
-                            <div className="min-w-0 flex-1 overflow-hidden">
-                              <div className="flex items-start justify-between gap-2 min-w-0">
-                                <div
-                                  className={
-                                    "text-xs font-semibold leading-snug line-clamp-1 min-w-0 " +
-                                    (isLocked
-                                      ? "text-white"
-                                      : checkedNextActions[action.titleKey]
-                                        ? "text-white/60 line-through decoration-white/30"
-                                        : "text-white")
-                                  }
-                                >
-                                  {safeT(action.titleKey)}
-                                </div>
-                                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
-                                  {action.isPro
-                                    ? safeT("results.nextActions.proBadge")
-                                    : safeT("results.nextActions.freeBadge")}
-                                </span>
-                              </div>
+                          >
+                            {t(`results.growthTasks.cards.${task.id}.desc`)}
+                          </div>
+                        </button>
 
-                              <div
-                                className={
-                                  "mt-1 text-[11px] leading-snug line-clamp-2 min-w-0 " +
-                                  (isLocked
-                                    ? "text-slate-300 blur-[3px] select-none"
-                                    : checkedNextActions[action.titleKey]
-                                      ? "text-slate-300/70"
-                                      : "text-slate-300")
-                                }
-                              >
-                                {safeT(action.descKey)}
-                              </div>
-
-                              {isLocked ? (
-                                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                                  <Lock className="h-3.5 w-3.5" />
-                                  <button
-                                    type="button"
-                                    className="hover:text-slate-200"
-                                    onClick={handleUpgrade}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClickCapture={(e) => e.stopPropagation()}
-                                  >
-                                    {safeT("results.nextActions.lockLine")}
-                                  </button>
+                        {isOpen ? (
+                          <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-3 min-w-0 break-words">
+                            <div className="space-y-3">
+                              <div>
+                                <div className="text-[11px] font-semibold text-white/85">{t("results.growthTasks.expand.whatTitle")}</div>
+                                <div className="mt-0.5 text-xs text-white/80 leading-snug">
+                                  {t(`results.growthTasks.cards.${task.id}.expand.what`)}
                                 </div>
-                              ) : null}
+                              </div>
+                              <div>
+                                <div className="text-[11px] font-semibold text-white/85">{t("results.growthTasks.expand.stepsTitle")}</div>
+                                <ul className="mt-1 list-disc pl-5 space-y-1">
+                                  <li className="text-xs text-white/80 leading-snug">{t(`results.growthTasks.cards.${task.id}.expand.steps.1`)}</li>
+                                  <li className="text-xs text-white/80 leading-snug">{t(`results.growthTasks.cards.${task.id}.expand.steps.2`)}</li>
+                                  <li className="text-xs text-white/80 leading-snug">{t(`results.growthTasks.cards.${task.id}.expand.steps.3`)}</li>
+                                </ul>
+                              </div>
+                              <div>
+                                <div className="text-[11px] font-semibold text-white/85">{t("results.growthTasks.expand.doneTitle")}</div>
+                                <div className="mt-0.5 text-xs text-white/80 leading-snug">
+                                  {t(`results.growthTasks.cards.${task.id}.expand.done`)}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )
-
-                      return nodes
-                    })
-                  })()}
+                        ) : null}
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
 
-            <section id="insights-section" className="mt-3 scroll-mt-32 hidden sm:block">
+            <section id="insights-section" className="mt-3 scroll-mt-32">
               {renderInsightsSection("desktop")}
             </section>
 

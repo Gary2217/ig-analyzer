@@ -1,23 +1,20 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-
 import { Button } from "@/components/ui/button"
 
 type Provider = "instagram" | "threads"
 
 type Props = {
   activeLocale: string
-  connectedProvider?: Provider
+  isConnectedFromServer: boolean
+  checking: boolean
 }
 
-export default function DemoToolPanel({ activeLocale, connectedProvider }: Props) {
-  const router = useRouter()
+export default function DemoToolPanel({ activeLocale, isConnectedFromServer, checking }: Props) {
+  void isConnectedFromServer
 
   // NOTE: Threads is not supported (API not complete). Lock provider to Instagram only.
   const provider: Provider = "instagram"
-
-  const isConnected = !!connectedProvider && connectedProvider === provider
 
   const oauthBase = `/api/auth/instagram?provider=${provider}`
 
@@ -27,21 +24,15 @@ export default function DemoToolPanel({ activeLocale, connectedProvider }: Props
   }
 
   function onAnalyzeAccount() {
-    if (!isConnected) {
-      const next = `/${activeLocale}/results?connected=${provider}`
-      goOAuth(next)
-      return
-    }
-    router.push(`/${activeLocale}/results?connected=${provider}`)
+    if (checking) return
+    const next = `/${activeLocale}/results`
+    goOAuth(next)
   }
 
   function onAnalyzePost() {
-    if (!isConnected) {
-      const next = `/${activeLocale}/post-analysis?provider=${provider}`
-      goOAuth(next)
-      return
-    }
-    router.push(`/${activeLocale}/post-analysis?provider=${provider}`)
+    if (checking) return
+    const next = `/${activeLocale}/post-analysis`
+    goOAuth(next)
   }
 
   return (
@@ -64,6 +55,8 @@ export default function DemoToolPanel({ activeLocale, connectedProvider }: Props
           onClick={onAnalyzeAccount}
           variant="primary"
           size="lg-cta"
+          disabled={!!checking}
+          aria-busy={checking ? true : undefined}
         >
           分析帳號
         </Button>
@@ -72,6 +65,8 @@ export default function DemoToolPanel({ activeLocale, connectedProvider }: Props
           onClick={onAnalyzePost}
           variant="secondary"
           size="lg-cta"
+          disabled={!!checking}
+          aria-busy={checking ? true : undefined}
         >
           分析貼文
         </Button>

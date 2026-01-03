@@ -4,6 +4,11 @@ import { cookies } from "next/headers"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+// NOTE:
+// - Do NOT request "impressions" here. Many IG Graph contexts reject it with (#100).
+// - Ensure we ALWAYS return non-empty points when media exists by falling back to
+//   like_count/comments_count aggregation if insights are unavailable.
+
 const GRAPH_VERSION = "v24.0"
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
 
@@ -17,6 +22,12 @@ type TrendPoint = {
   impressions: number | null
   engaged: number | null
   followerDelta: null
+}
+
+type FallbackMediaItem = {
+  timestamp?: string
+  like_count?: number
+  comments_count?: number
 }
 
 async function safeJson(res: Response) {
@@ -48,6 +59,11 @@ function startOfDayMs(ms: number) {
   const d = new Date(ms)
   d.setHours(0, 0, 0, 0)
   return d.getTime()
+}
+
+function startOfDayMsUTC(ms: number) {
+  const d = new Date(ms)
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0)
 }
 
 function getCookieValueFromHeader(cookie: string, key: string) {
@@ -150,9 +166,8 @@ export async function GET(req: Request) {
     const since = toUnixSeconds(sinceMs)
     const until = toUnixSeconds(untilMs)
 
-    // Primary metrics (some IG accounts/apps don't support "impressions" on this endpoint)
-    const primaryMetrics = ["reach", "impressions", "accounts_engaged"]
-    const fallbackMetrics = ["reach", "total_interactions", "accounts_engaged"]
+    // Do not request impressions; many apps/accounts reject it with (#100).
+    const primaryMetrics = ["reach", "total_interactions", "accounts_engaged"]
 
     const buildInsightsUrl = (metricList: string[]) =>
       `${GRAPH_BASE}/${encodeURIComponent(ig_id)}/insights` +
@@ -163,68 +178,109 @@ export async function GET(req: Request) {
       `&until=${encodeURIComponent(String(until))}` +
       `&access_token=${encodeURIComponent(pageToken)}`
 
-    let insightsRes = await fetch(buildInsightsUrl(primaryMetrics), { cache: "no-store" })
-    let insightsBody = await safeJson(insightsRes)
+    let insightsRes: Response | null = null
+    let insightsBody: any = null
+    let insightsOk = false
+    let insightsData: any[] = []
 
-    // If primary fails due to invalid metric list, retry with fallback metrics
-    if (!insightsRes.ok && isInvalidMetricError(insightsBody)) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[trend][insights] primary metrics rejected; retrying fallback", {
-          primary: primaryMetrics,
-          fallback: fallbackMetrics,
-          upstreamStatus: insightsRes.status,
-          upstreamBody: insightsBody,
-        })
-      }
-      insightsRes = await fetch(buildInsightsUrl(fallbackMetrics), { cache: "no-store" })
+    try {
+      insightsRes = await fetch(buildInsightsUrl(primaryMetrics), { cache: "no-store" })
       insightsBody = await safeJson(insightsRes)
+      insightsOk = Boolean(insightsRes.ok)
+      insightsData = Array.isArray(insightsBody?.data) ? insightsBody.data : []
+    } catch {
+      insightsOk = false
+      insightsData = []
     }
 
-    if (!insightsRes.ok) {
-      return jsonError(
-        "failed_to_fetch_insights",
-        {
-          upstreamStatus: insightsRes.status,
-          upstreamBody: insightsBody,
-          tried: { primary: primaryMetrics, fallback: fallbackMetrics },
+    const buildInsightsPoints = (data: any[]) => {
+      const byDay = new Map<number, TrendPoint>()
+      const ensure = (ts: number) => {
+        const key = startOfDayMs(ts)
+        const existing = byDay.get(key)
+        if (existing) return existing
+        const init: TrendPoint = { ts: key, reach: null, impressions: null, engaged: null, followerDelta: null }
+        byDay.set(key, init)
+        return init
+      }
+
+      for (const item of data) {
+        const name = String(item?.name || "").trim()
+        const values = Array.isArray(item?.values) ? item.values : []
+        for (const v of values) {
+          const endTime = typeof v?.end_time === "string" ? v.end_time : ""
+          const ms = endTime ? Date.parse(endTime) : NaN
+          if (!Number.isFinite(ms)) continue
+          const num = toNullableNumber(v?.value)
+
+          const p = ensure(ms)
+          if (name === "reach") p.reach = num
+          // Map total_interactions into the "impressions" slot for UI continuity.
+          else if (name === "total_interactions") p.impressions = num
+          else if (name === "accounts_engaged") p.engaged = num
+        }
+      }
+
+      return Array.from(byDay.values()).sort((a, b) => a.ts - b.ts)
+    }
+
+    const buildFallbackPoints = async () => {
+      const mediaUrl = `${url.origin}/api/instagram/media`
+      const mediaRes = await fetch(mediaUrl, {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          cookie: rawCookieHeader,
         },
-        insightsRes.status || 400,
-      )
-    }
+      })
+      const mediaBody = await safeJson(mediaRes)
+      const list = Array.isArray(mediaBody?.data) ? (mediaBody.data as FallbackMediaItem[]) : []
 
-    const data = Array.isArray(insightsBody?.data) ? insightsBody.data : []
+      const untilMs2 = Date.now()
+      const sinceMs2 = untilMs2 - (days - 1) * 24 * 60 * 60 * 1000
+      const byDay = new Map<number, TrendPoint>()
 
-    // Build a date-keyed map. Graph returns values with end_time.
-    const byDay = new Map<number, TrendPoint>()
-    const ensure = (ts: number) => {
-      const key = startOfDayMs(ts)
-      const existing = byDay.get(key)
-      if (existing) return existing
-      const init: TrendPoint = { ts: key, reach: null, impressions: null, engaged: null, followerDelta: null }
-      byDay.set(key, init)
-      return init
-    }
-
-    for (const item of data) {
-      const name = String(item?.name || "").trim()
-      const values = Array.isArray(item?.values) ? item.values : []
-      for (const v of values) {
-        const endTime = typeof v?.end_time === "string" ? v.end_time : ""
-        const ms = endTime ? Date.parse(endTime) : NaN
+      for (const item of list) {
+        const ts = typeof item?.timestamp === "string" ? item.timestamp : ""
+        if (!ts) continue
+        const ms = Date.parse(ts)
         if (!Number.isFinite(ms)) continue
-        const num = toNullableNumber(v?.value)
+        if (ms < sinceMs2 || ms > untilMs2) continue
 
-        const p = ensure(ms)
-        if (name === "reach") p.reach = num
-        // If impressions is available, use it.
-        else if (name === "impressions") p.impressions = num
-        // Fallback mapping: treat total_interactions as "impressions" slot for UI continuity.
-        else if (name === "total_interactions") p.impressions = num
-        else if (name === "accounts_engaged") p.engaged = num
+        const key = startOfDayMsUTC(ms)
+        const likes = Number(item?.like_count || 0) || 0
+        const comments = Number(item?.comments_count || 0) || 0
+        const interactions = likes + comments
+
+        const prev = byDay.get(key)
+        if (prev) {
+          prev.impressions = (prev.impressions || 0) + interactions
+        } else {
+          byDay.set(key, {
+            ts: key,
+            reach: null,
+            impressions: interactions,
+            engaged: null,
+            followerDelta: null,
+          })
+        }
+      }
+
+      return Array.from(byDay.values()).sort((a, b) => a.ts - b.ts)
+    }
+
+    let points: TrendPoint[] = []
+    if (insightsOk) {
+      points = buildInsightsPoints(insightsData)
+    }
+
+    if (!points.length) {
+      try {
+        points = await buildFallbackPoints()
+      } catch {
+        points = []
       }
     }
-
-    const points = Array.from(byDay.values()).sort((a, b) => a.ts - b.ts)
 
     if (process.env.NODE_ENV !== "production") {
       console.log("[trend][api]", {

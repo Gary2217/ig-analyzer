@@ -52,10 +52,160 @@
     "showCurrentData": "Show current data",
     "back": "Back",
     "common": {
-      "preview": "Preview"
+      "preview": "Preview",
+      "todo": "To do",
+      "inProgress": "In progress",
+      "baseline": "Baseline"
+    },
+    "growthTasks": {
+      "title": "Your Growth Action Tasks",
+      "subtitle": "Based on your current account performance",
+      "expand": {
+        "whatTitle": "What to do",
+        "stepsTitle": "Concrete steps",
+        "doneTitle": "Done looks like"
+      },
+      "cards": {
+        "1": {
+          "title": "Lock a weekly posting cadence",
+          "desc": "Pick a cadence you can sustain (e.g., 3 posts/week) to build distribution consistency.",
+          "status": "To do",
+          "expand": {
+            "what": "Commit to a repeatable weekly schedule so the algorithm and your audience learn what to expect.",
+            "steps": {
+              "1": "Pick one cadence you can keep for the next 14 days.",
+              "2": "Batch 3 post ideas and draft hooks in one sitting.",
+              "3": "Schedule your next week’s posts on your calendar."
+            },
+            "done": "You publish on-time for 2 straight weeks without scrambling."
+          }
+        },
+        "2": {
+          "title": "Turn a high-engagement topic into a series",
+          "desc": "Ship 3 angles (how-to / example / checklist) to drive saves and repeat views.",
+          "status": "In progress",
+          "expand": {
+            "what": "Build a 3-part series around one proven topic so people binge and save.",
+            "steps": {
+              "1": "Choose one post that already performed well.",
+              "2": "Write 3 variants: how-to, example/case, checklist.",
+              "3": "Cross-link them with a clear “Part 1/2/3” label."
+            },
+            "done": "You publish the full 3-part series and can see a lift in saves or profile visits."
+          }
+        },
+        "3": {
+          "title": "Optimize profile + pinned posts",
+          "desc": "Clarify who you help + what you deliver, then pin your 3 strongest examples.",
+          "status": "To do",
+          "expand": {
+            "what": "Make your profile instantly understandable and pin your best proof to increase conversion.",
+            "steps": {
+              "1": "Rewrite your bio into: who you help + outcome + credibility proof.",
+              "2": "Pin 3 posts that represent your best work.",
+              "3": "Add one clear call-to-action (DM keyword or link)."
+            },
+            "done": "A new visitor can explain what you do in 5 seconds and knows the next action."
+          }
+        }
+      }
+    },
+    "creatorReadiness": {
+      "title": "Creator Positioning & Collaboration Readiness",
+      "subtitle": "A clean positioning snapshot based on your current account signals.",
+      "cards": {
+        "style": {
+          "title": "Content style",
+          "value": "Educational · Practical"
+        },
+        "stage": {
+          "title": "Growth stage",
+          "value": "Growth (building consistency)"
+        },
+        "readiness": {
+          "title": "Collab readiness",
+          "value": "In progress"
+        }
+      },
+      "explain": {
+        "style": {
+          "meaningTitle": "What it represents",
+          "meaningBody": "Your dominant content style—how brands and followers will perceive your posts at a glance.",
+          "statusTitle": "What your status means",
+          "statusBody": "Educational/practical positioning is clear, which helps trust and shareability.",
+          "nextTitle": "Next steps",
+          "next": {
+            "1": "Keep one repeatable format (template) to strengthen recognition.",
+            "2": "Add 1–2 proof posts (results, case studies) to increase authority."
+          }
+        },
+        "stage": {
+          "meaningTitle": "What it represents",
+          "meaningBody": "Where your account is in its growth curve based on consistency and engagement signals.",
+          "statusTitle": "What your status means",
+          "statusBody": "You’re in a build phase—consistency will compound outcomes faster than one-off spikes.",
+          "nextTitle": "Next steps",
+          "next": {
+            "1": "Protect your cadence for 2–4 weeks and review what repeats.",
+            "2": "Turn one winning topic into a series to build momentum."
+          }
+        },
+        "readiness": {
+          "meaningTitle": "What it represents",
+          "meaningBody": "How ready your profile and content are for collaborations (clarity, proof, and consistency).",
+          "statusTitle": "What your status means",
+          "statusBody": "You’re close—tighten proof and packaging so a brand can say “yes” quickly.",
+          "nextTitle": "Next steps",
+          "next": {
+            "1": "Pin 3 proof posts that demonstrate your value.",
+            "2": "Add one collaboration line (rates/media kit link or DM keyword)."
+          }
+        }
+      }
+    },
+    "gates": {
+      "common": {
+        "back": "Back"
+      },
+      "connect": {
+        "title": "Connect Instagram to start",
+        "subtitle": "We only read the data you authorize.",
+        "cta": "Connect Instagram",
+        "tip": "Tip: Personal accounts may need to switch to a Professional account (Business/Creator) to be analyzed.",
+        "missingEnv": {
+          "title": "Missing required env vars",
+          "desc": "Server is missing config required for connecting. Please set env vars and restart."
+        }
+      },
+      "setup": {
+        "title": "We can’t analyze this account yet",
+        "subtitle": "Meta requires a Professional IG account linked to a Facebook Page.",
+        "stepsTitle": "1-minute fix",
+        "steps": {
+          "1": "Open Instagram → Settings and privacy → Account type and tools",
+          "2": "Switch to a Professional account (Business or Creator)",
+          "3": "In Meta Business Suite/Page settings, link your IG to your Facebook Page",
+          "4": "Come back here and click Retry"
+        },
+        "retry": "I’ve updated settings — Retry",
+        "reconnect": "Reconnect Instagram",
+        "tip": "If you just linked it, wait a few seconds and try again (Meta sync can take time)."
+      }
+    },
+    "ui": {
+      "avgLikesLabel": "Avg Likes",
+      "avgCommentsLabel": "Avg Comments",
+      "perPostLast25": "Per post (last 25)",
+      "topPostsSortHint": "Sorted by likes + comments (last 25)"
     },
     "trend": {
       "title": "Account engagement trend",
+      "note7d": "Last 7 days (we’ll auto-build history daily; longer ranges coming soon)",
+      "rangePill7d": "7 days",
+      "available7d": "Available: 7 days",
+      "rangeLabel": "Range",
+      "updatedLabel": "Updated",
+      "noData": "No trend data yet",
       "subtitle7d": "Last 7 days (multi-select)",
       "empty": "Trend data for the last 7 days isn’t available yet.",
       "selectAtLeastOne": "Please select at least one metric.",
@@ -385,6 +535,12 @@
       "postsPerWeek": {
         "title": "Posts / Week",
         "description": "Pick a cadence you can keep and protect it for the next 2 weeks."
+      },
+      "ui": {
+        "mobileTitle": "Key metrics",
+        "mobileHintCollapsed": "6 metrics · Tap to expand",
+        "expand": "Expand",
+        "collapse": "Collapse"
       }
     },
     "kpi": {
@@ -1302,10 +1458,16 @@
         "likesLabel": "Likes",
         "commentsLabel": "Comments",
         "engagementLabel": "Engagement",
+        "analyzeTitle": "Analyze post",
+        "analyzeLabel": "Analyze",
         "proHintFull": "🔒 Full post content, posting time, and breakdown available in Pro",
         "proHint": "🔒 Pro feature: View post captions, publish time, and why this post performed well.",
         "metadataFallback": "Post ID · Publish Time · Caption Analysis (Pro)"
       }
+    },
+    "postAnalysis": {
+      "cta": "Analyze Posts",
+      "freeLeft": "Free left"
     },
     "recommendations": {
       "title": "Insights & Recommendations"
@@ -1326,6 +1488,11 @@
     },
     "instagram": {
       "connectedBadge": "Instagram Connected",
+      "authExpired": {
+        "title": "Instagram connection expired",
+        "desc": "Please re-authenticate to view your account results.",
+        "reconnect": "Reconnect Instagram"
+      },
       "connectPromptTitle": "Connect Instagram to load real data",
       "connectPromptDesc": "Authorize Instagram to replace demo data with your real profile and recent posts.",
       "connectPromptHandle": "(not connected)",

@@ -13,13 +13,31 @@ export default function ConnectedGate({ connectedUI, notConnectedUI }: Props) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data) => {
-        setConnected(Boolean(data?.instagramConnected));
+    const controller = new AbortController();
+    let cancelled = false;
+
+    fetch("/api/auth/instagram/me", { cache: "no-store", credentials: "include", signal: controller.signal })
+      .then((r) => {
+        if (cancelled) return;
+        setConnected(r.ok);
       })
-      .catch(() => setConnected(false))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (cancelled) return;
+        setConnected(false);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      try {
+        setLoading(false);
+      } catch {
+        // ignore
+      }
+    };
   }, []);
 
   if (loading) return notConnectedUI;
