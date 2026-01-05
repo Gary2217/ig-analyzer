@@ -2,13 +2,9 @@
 
 // Density pass: tighten common headings/blocks inside Results page (UI-only)
 
-if (process.env.NODE_ENV !== "production") {
-  console.log("[ResultsClient] BUILD_MARKER v2026-01-03-2105")
-}
-
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
@@ -36,6 +32,14 @@ function toNum(value: unknown): number | undefined {
     return Number.isFinite(n) ? n : undefined
   }
   return undefined
+}
+
+function isAbortError(e: unknown): boolean {
+  const anyErr = e as any
+  const name = typeof anyErr?.name === "string" ? anyErr.name : ""
+  const msg = typeof anyErr?.message === "string" ? anyErr.message : ""
+  const s = `${name} ${msg}`.toLowerCase()
+  return name === "AbortError" || s.includes("abort") || s.includes("canceled") || s.includes("cancelled")
 }
 
 type IgMeResponse = {
@@ -319,7 +323,6 @@ function SetupHelpCard(props: { t: (key: string) => string; onRetry: () => void;
 }
 
 function ConnectedGate(props: ComponentProps<typeof ConnectedGateBase>) {
-  console.log("[ConnectedGate] mounted")
   return <ConnectedGateBase {...props} />
 }
 
@@ -458,11 +461,32 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
 }
 
 export default function ResultsClient() {
-  if (process.env.NODE_ENV !== "production") {
-    console.log("[LocaleResultsPage] mounted")
-  }
-
   const __DEV__ = process.env.NODE_ENV !== "production"
+  const dlog = useCallback(
+    (...args: any[]) => {
+      if (__DEV__) console.debug(...args)
+    },
+    [__DEV__]
+  )
+
+  useEffect(() => {
+    if (!__DEV__) return
+    try {
+      if (typeof window === "undefined") return
+      const host = window.location.host || ""
+      const publicBase = (process.env.NEXT_PUBLIC_APP_BASE_URL || "").trim()
+      const isTunnel = host.includes("trycloudflare.com")
+      const baseLooksLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(publicBase)
+      if (isTunnel && baseLooksLocal) {
+        dlog("[env] NEXT_PUBLIC_APP_BASE_URL looks local while running behind trycloudflare", {
+          host,
+          publicBase,
+        })
+      }
+    } catch {
+      // ignore
+    }
+  }, [__DEV__, dlog])
 
   const router = useRouter()
   const pathname = usePathname() || "/"
@@ -560,6 +584,36 @@ export default function ResultsClient() {
   const [isProModalOpen, setIsProModalOpen] = useState(false)
   const [upgradeHighlight, setUpgradeHighlight] = useState(false)
 
+  const [cardTasks, setCardTasks] = useState({
+    profileBasics: false,
+    pin3: false,
+    pickOneTheme: false,
+
+    hookOpen: false,
+    cutDeadTime: false,
+    endWithCTA: false,
+
+    askAB: false,
+    reply10: false,
+    repeatFormat: false,
+  })
+
+  const totalTasks = 9
+  const doneTasks =
+    (cardTasks.profileBasics ? 1 : 0) +
+    (cardTasks.pin3 ? 1 : 0) +
+    (cardTasks.pickOneTheme ? 1 : 0) +
+    (cardTasks.hookOpen ? 1 : 0) +
+    (cardTasks.cutDeadTime ? 1 : 0) +
+    (cardTasks.endWithCTA ? 1 : 0) +
+    (cardTasks.askAB ? 1 : 0) +
+    (cardTasks.reply10 ? 1 : 0) +
+    (cardTasks.repeatFormat ? 1 : 0)
+
+  const completionPct = Math.round((doneTasks / totalTasks) * 100)
+
+  const isCardReady = completionPct >= 70
+
   const [mediaError, setMediaError] = useState<string | null>(null)
 
   const [media, setMedia] = useState<Array<ReturnType<typeof normalizeMedia>[number]>>([])
@@ -608,7 +662,18 @@ export default function ResultsClient() {
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const igRecentLen = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media.length : 0
   const mediaLen = Array.isArray(media) ? media.length : 0
-  const topPostsLen = igRecentLen
+  const effectiveRecentMedia = useMemo(() => {
+    const fromApi = Array.isArray(media) ? media : []
+    if (fromApi.length > 0) return fromApi
+
+    const fromMe = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media : []
+    if (fromMe.length > 0) return fromMe
+
+    return [] as any[]
+  }, [igMe, media])
+
+  const effectiveRecentLen = Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia.length : 0
+  const topPostsLen = effectiveRecentLen
 
   // Profile stats (UI-only)
   // Source of truth: Meta returns these on `profile`.
@@ -633,12 +698,22 @@ export default function ResultsClient() {
   const hasFetchedMediaRef = useRef(false)
   const hasFetchedMeRef = useRef(false)
   const mediaReqIdRef = useRef(0)
+  const meAbortRef = useRef<AbortController | null>(null)
+  const hasSuccessfulMePayloadRef = useRef(false)
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
   const lastRevalidateAtRef = useRef(0)
 
   const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
   const isZh = activeLocale === "zh-TW"
+
+  const cookieConnected = useMemo(() => {
+    try {
+      return typeof document !== "undefined" && document.cookie.includes("ig_connected=1")
+    } catch {
+      return false
+    }
+  }, [])
 
   const igCacheId = String(((igMe as any)?.profile?.id ?? (igMe as any)?.profile?.username ?? (igMe as any)?.username ?? "me") || "me")
   const resultsCacheKey = `results_cache:${igCacheId}:7`
@@ -719,12 +794,23 @@ export default function ResultsClient() {
   const numMono = "tabular-nums whitespace-nowrap"
 
   const igProfile = ((igMe as any)?.profile ?? igMe) as any
-  const isConnected = Boolean((igMe as any)?.connected === true) || Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
-  const isConnectedInstagram = Boolean((igMe as any)?.connected === true) || isConnected
+  const isConnected =
+    cookieConnected ||
+    Boolean((igMe as any)?.connected === true) ||
+    Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
+  const isConnectedInstagram = cookieConnected || Boolean((igMe as any)?.connected === true) || isConnected
 
-  const hasAnyResultsData = Boolean(mediaLen > 0 || trendPoints.length > 0 || igMe)
+  const hasAnyResultsData = Boolean(effectiveRecentLen > 0 || trendPoints.length > 0 || igMe)
 
   const refetchTick = useRefetchTick({ enabled: isConnectedInstagram, throttleMs: 900 })
+
+  useEffect(() => {
+    if (!cookieConnected) return
+    setIgMe((prev: any) => {
+      if (prev && prev.connected === true) return prev
+      return { ...(prev ?? {}), connected: true }
+    })
+  }, [cookieConnected])
 
   useEffect(() => {
     if (!isConnectedInstagram) return
@@ -916,10 +1002,10 @@ export default function ResultsClient() {
 
   const needsDataRefetch = useMemo(() => {
     const hasProfile = Boolean(igProfile && (igProfile?.id || igProfile?.username))
-    const hasMedia = Array.isArray(media) && media.length > 0
-    const hasTopPosts = Array.isArray((igMe as any)?.recent_media) && (igMe as any).recent_media.length > 0
+    const hasMedia = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
+    const hasTopPosts = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
     return !hasProfile || !hasMedia || !hasTopPosts
-  }, [igProfile, media, igRecentLen])
+  }, [effectiveRecentLen, effectiveRecentMedia, igProfile])
 
   useEffect(() => {
     if (!isConnected) return
@@ -954,9 +1040,8 @@ export default function ResultsClient() {
   // (Do NOT change logic; only log which branch is being used)
   // -------------------------------------------------
   useEffect(() => {
-    if (!__DEV__) return
     const source = topPostsHasReal ? "topPosts(from /api/instagram/media)" : "igMe.recent_media(fallback)"
-    console.log(
+    dlog(
       "[top-posts] source:",
       source,
       "| topPosts.length:",
@@ -970,10 +1055,10 @@ export default function ResultsClient() {
       "| isConnectedInstagram:",
       isConnectedInstagram,
     )
-  }, [__DEV__, isConnected, isConnectedInstagram, topPostsLen, igRecentLen, mediaLen])
+  }, [__DEV__, dlog, isConnected, isConnectedInstagram, topPostsLen, igRecentLen, mediaLen, topPostsHasReal])
 
   useEffect(() => {
-    if (!isConnectedInstagram) return
+    if (!(isConnectedInstagram || cookieConnected)) return
     if (hasFetchedMediaRef.current && mediaLen > 0) return
     if (hasFetchedMediaRef.current) return
 
@@ -985,7 +1070,7 @@ export default function ResultsClient() {
     mediaReqIdRef.current += 1
     const reqId = mediaReqIdRef.current
 
-    if (__DEV__) console.log("[media] fetch (from ConnectedGate)")
+    dlog("[media] fetch (from ConnectedGate)")
     fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
       .then(async (res) => {
         let body: any = null
@@ -1009,14 +1094,12 @@ export default function ResultsClient() {
 
         const items = normalizeMedia(json)
 
-        if (__DEV__) {
-          console.log("[media] response received:", {
-            hasDataArray: Array.isArray(json?.data),
-            dataLength: Array.isArray(json?.data) ? json.data.length : 0,
-            hasPaging: !!json?.paging,
-            normalizedLen: items.length,
-          })
-        }
+        dlog("[media] response received:", {
+          hasDataArray: Array.isArray(json?.data),
+          dataLength: Array.isArray(json?.data) ? json.data.length : 0,
+          hasPaging: !!json?.paging,
+          normalizedLen: items.length,
+        })
 
         setMedia((prev: any) => {
           if (Array.isArray(prev) && prev.length > 0 && items.length === 0) return prev
@@ -1045,7 +1128,7 @@ export default function ResultsClient() {
         if (__DEV__) {
           const reason = typeof body?.error === "string" ? body.error : null
           const detail = typeof body?.detail === "string" ? body.detail : null
-          console.error("[media] fetch failed", { status, reason, detail })
+          dlog("[media] fetch failed", { status, reason, detail })
         }
 
         setLoadError(true)
@@ -1058,7 +1141,7 @@ export default function ResultsClient() {
       cancelled = true
       // Do not reset hasFetchedMediaRef here; cleanup can run during dev re-renders.
     }
-  }, [isConnectedInstagram])
+  }, [cookieConnected, forceReloadTick, isConnectedInstagram])
 
   useEffect(() => {
     const onFocus = () => {
@@ -1078,9 +1161,8 @@ export default function ResultsClient() {
   // (No logic changes; helps confirm we actually stored media data)
   // -------------------------------------------------
   useEffect(() => {
-    if (!__DEV__) return
-    console.log("[media] state:", { mediaLoaded, mediaLength: mediaLen })
-  }, [__DEV__, mediaLoaded, mediaLen])
+    dlog("[media] state:", { mediaLoaded, mediaLength: mediaLen })
+  }, [__DEV__, dlog, mediaLoaded, mediaLen])
 
   useEffect(() => {
     // Dev-only: do not rely on any `topPosts` variable existing in this file scope.
@@ -1088,17 +1170,15 @@ export default function ResultsClient() {
     const firstId = String((((igMe as any)?.recent_media?.[0] as any)?.id ?? ""))
     const hasRealTopPosts = igRecentLen > 0 && /^\d+$/.test(firstId)
 
-    if (__DEV__) {
-      console.log("[top-posts][compute] enter", {
-        isConnected,
-        isConnectedInstagram,
-        mediaLen,
-        topPostsLen,
-        firstId,
-        hasRealTopPosts,
-      })
-    }
-  }, [__DEV__, igMe, igRecentLen, isConnected, isConnectedInstagram, topPostsLen, mediaLen])
+    dlog("[top-posts][compute] enter", {
+      isConnected,
+      isConnectedInstagram,
+      mediaLen,
+      topPostsLen,
+      firstId,
+      hasRealTopPosts,
+    })
+  }, [__DEV__, dlog, igMe, igRecentLen, isConnected, isConnectedInstagram, topPostsLen, mediaLen])
 
   const displayUsername = hasRealProfile
     ? (typeof igProfile?.username === "string" ? String(igProfile.username).trim() : "")
@@ -1133,7 +1213,7 @@ export default function ResultsClient() {
       }
     }
 
-    if (!Array.isArray(media) || media.length === 0) {
+    if (!Array.isArray(effectiveRecentMedia) || effectiveRecentMedia.length === 0) {
       return {
         engagementRatePct: null as number | null,
         avgLikes: null as number | null,
@@ -1143,7 +1223,7 @@ export default function ResultsClient() {
       }
     }
 
-    const posts = media
+    const posts = effectiveRecentMedia
       .slice(0, 25)
       .map((p) => {
         const likes = finiteNumOrNull((p as any)?.like_count) ?? 0
@@ -1213,8 +1293,8 @@ export default function ResultsClient() {
   const kpiPosts = kpiMediaCount
 
   const topPerformingPosts = (() => {
-    if (isConnected && Array.isArray(media) && media.length > 0) {
-      const items = media
+    if (isConnected && Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0) {
+      const items = effectiveRecentMedia
         .filter((m: any) => ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
         .map((m: any) => {
           const likes = Number(m?.like_count || 0) || 0
@@ -1429,36 +1509,63 @@ export default function ResultsClient() {
       setConnectEnvError(null)
       setLoadError(false)
       try {
+        try {
+          meAbortRef.current?.abort()
+        } catch {
+          // ignore
+        }
+        const controller = new AbortController()
+        meAbortRef.current = controller
+
         const r = await fetch("/api/auth/instagram/me", {
+          method: "GET",
           cache: "no-store",
           credentials: "include",
+          signal: controller.signal,
         })
         if (cancelled) return
+
+        if (r.status === 204 || (r.status >= 300 && r.status < 400)) {
+          return
+        }
 
         if (r.status === 401) {
           setIgMe(null)
           setIgMeUnauthorized(true)
+          hasSuccessfulMePayloadRef.current = false
           return
         }
 
         if (!r.ok) {
-          setIgMe(null)
           setLoadError(true)
           return
         }
 
-        const raw = (await r.json()) as any
+        const rawText = await r.text()
+        if (cancelled) return
+        if (!rawText || !rawText.trim()) {
+          return
+        }
+
+        let raw: any = null
+        try {
+          raw = JSON.parse(rawText)
+        } catch {
+          return
+        }
+
         const normalized = normalizeMe(raw)
+        if (!normalized) {
+          return
+        }
+
+        hasSuccessfulMePayloadRef.current = true
 
         if (__DEV__) {
           const p = (normalized as any)?.profile
           const avatarUrl = String(p?.profile_picture_url ?? (normalized as any)?.profile_picture_url ?? "")
           // eslint-disable-next-line no-console
-          console.log("[me raw]", raw)
-          // eslint-disable-next-line no-console
-          console.log("[me normalized]", normalized)
-          // eslint-disable-next-line no-console
-          console.log("[me ui profile stats]", {
+          dlog("[me ui profile stats]", {
             connected: Boolean((normalized as any)?.connected),
             username: p?.username,
             followers_count: p?.followers_count,
@@ -1471,7 +1578,11 @@ export default function ResultsClient() {
         setIgMe(normalized)
       } catch (err) {
         if (cancelled) return
-        setIgMe(null)
+
+        if (isAbortError(err)) {
+          return
+        }
+
         setLoadError(true)
 
         // Allow retry on refresh.
@@ -1488,6 +1599,11 @@ export default function ResultsClient() {
     run()
     return () => {
       cancelled = true
+      try {
+        meAbortRef.current?.abort()
+      } catch {
+        // ignore
+      }
       try {
         setIgMeLoading(false)
       } catch {
@@ -1525,9 +1641,12 @@ export default function ResultsClient() {
   }, [igMeLoading, isConnected, mediaLoaded, hasAnyResultsData])
 
   useEffect(() => {
-    const active = (igMeLoading || trendFetchStatus.loading || (isConnected && !mediaLoaded)) && hasAnyResultsData
+    const hasEffectiveMedia = effectiveRecentLen > 0
+    const active =
+      ((igMeLoading && !hasEffectiveMedia) || trendFetchStatus.loading || (isConnected && !mediaLoaded && !hasEffectiveMedia)) &&
+      hasAnyResultsData
     setIsUpdating(active)
-  }, [hasAnyResultsData, igMeLoading, isConnected, mediaLoaded, trendFetchStatus.loading])
+  }, [effectiveRecentLen, hasAnyResultsData, igMeLoading, isConnected, mediaLoaded, trendFetchStatus.loading])
 
   useEffect(() => {
     if (!isUpdating) {
@@ -1768,13 +1887,11 @@ export default function ResultsClient() {
     if (status === "warning") return t("results.priority.medium")
     return t("results.priority.maintain")
   }
+
   const [kpiExpanded, setKpiExpanded] = useState(false)
   const [isSmUpViewport, setIsSmUpViewport] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
-  const [expandedGrowthTask, setExpandedGrowthTask] = useState<null | 1 | 2 | 3>(null)
   const [openReadinessCard, setOpenReadinessCard] = useState<null | "style" | "stage" | "readiness">(null)
-
-  const growthTaskRefs = useRef<Record<1 | 2 | 3, HTMLButtonElement | null>>({ 1: null, 2: null, 3: null })
   const readinessRefs = useRef<Record<"style" | "stage" | "readiness", HTMLButtonElement | null>>({
     style: null,
     stage: null,
@@ -1793,21 +1910,6 @@ export default function ResultsClient() {
     mq.addListener(sync)
     return () => mq.removeListener(sync)
   }, [])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    if (!expandedGrowthTask) return
-    const el = growthTaskRefs.current[expandedGrowthTask]
-    if (!el) return
-
-    window.requestAnimationFrame(() => {
-      const rect = el.getBoundingClientRect()
-      const vh = window.innerHeight || 0
-      const isFullyVisible = rect.top >= 0 && rect.bottom <= vh
-      if (isFullyVisible) return
-      el.scrollIntoView({ behavior: "smooth", block: "start" })
-    })
-  }, [expandedGrowthTask])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1841,6 +1943,7 @@ export default function ResultsClient() {
     const isMobileVariant = variant === "mobile"
     return (
       <Card
+        id="creator-card-section"
         className={
           isMobileVariant
             ? "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm"
@@ -1859,6 +1962,43 @@ export default function ResultsClient() {
         </CardHeader>
 
         <CardContent className="pt-0">
+          <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+            <div className="text-[11px] sm:text-[12px] text-white/60 leading-snug">
+              {t("results.creatorCard.subtitle")}
+            </div>
+
+            <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] sm:text-[12px] text-white/75">
+              <span className="font-semibold text-white/85">{t("results.creatorCard.readiness")}</span>
+              <span className="tabular-nums whitespace-nowrap">{completionPct}%</span>
+              <span className="text-white/55">•</span>
+              <span className="text-white/70">
+                {isCardReady ? t("results.creatorCard.status.ready") : t("results.creatorCard.status.notReady")}
+              </span>
+            </div>
+          </div>
+
+          <div className="mb-3 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 min-w-0 truncate">
+                {t("results.creatorReadiness.cards.style.value")}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 min-w-0 truncate">
+                {t("results.creatorReadiness.cards.stage.value")}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 min-w-0 truncate">
+                {t("results.creatorReadiness.cards.readiness.value")}
+              </span>
+            </div>
+
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="min-w-0" />
+              <div className="text-[11px] leading-tight text-white/60 text-right min-w-0">
+                <span className="font-semibold text-white/75">{t("results.creatorReadiness.explain.readiness.nextTitle")}</span>
+                <span className="ml-2 min-w-0 truncate inline-block align-bottom">{t("results.creatorReadiness.explain.readiness.next.1")}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3">
             {(
               [
@@ -1886,26 +2026,33 @@ export default function ResultsClient() {
                     onClick={() => setOpenReadinessCard((prev) => (prev === item.k ? null : item.k))}
                   >
                     <div className="text-[10px] font-semibold tracking-widest text-white/55 whitespace-nowrap">{t(item.titleKey)}</div>
-                    <div className="mt-1 flex items-center gap-2 min-w-0">
-                      <div className="text-sm font-semibold text-white min-w-0 truncate">{t(item.valueKey)}</div>
+                    <div className="mt-1 flex items-center justify-between gap-2 min-w-0">
+                      <div className="text-base font-semibold text-white min-w-0 truncate">{t(item.valueKey)}</div>
                       {item.k === "readiness" ? (
                         <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
                           {t("results.common.baseline")}
                         </span>
                       ) : null}
                     </div>
+                    <div className="mt-1 text-[11px] leading-snug text-white/60 min-w-0 line-clamp-1">
+                      {item.k === "style"
+                        ? t("results.creatorCard.cards.niche.body")
+                        : item.k === "stage"
+                          ? t("results.creatorCard.cards.stage.body")
+                          : t("results.creatorCard.cards.collab.body")}
+                    </div>
                   </button>
 
                   {isOpen ? (
                     <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-xs sm:text-sm text-white/80 min-w-0 break-words">
-                      <div className="space-y-2">
+                      <div className="space-y-2 sm:space-y-2">
                         <div>
                           <div className="text-[11px] font-semibold text-white/85">{t(`results.creatorReadiness.explain.${item.k}.meaningTitle`)}</div>
-                          <div className="mt-0.5 leading-snug">{t(`results.creatorReadiness.explain.${item.k}.meaningBody`)}</div>
+                          <div className="mt-0.5 leading-snug sm:line-clamp-none line-clamp-3">{t(`results.creatorReadiness.explain.${item.k}.meaningBody`)}</div>
                         </div>
                         <div>
                           <div className="text-[11px] font-semibold text-white/85">{t(`results.creatorReadiness.explain.${item.k}.statusTitle`)}</div>
-                          <div className="mt-0.5 leading-snug">{t(`results.creatorReadiness.explain.${item.k}.statusBody`)}</div>
+                          <div className="mt-0.5 leading-snug sm:line-clamp-none line-clamp-3">{t(`results.creatorReadiness.explain.${item.k}.statusBody`)}</div>
                         </div>
                         <div>
                           <div className="text-[11px] font-semibold text-white/85">{t(`results.creatorReadiness.explain.${item.k}.nextTitle`)}</div>
@@ -1920,6 +2067,165 @@ export default function ResultsClient() {
                 </div>
               )
             })}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+              {t("results.creatorCard.fields.portfolio")}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+              {t("results.creatorCard.fields.audience")}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+              {t("results.creatorCard.fields.collabTypes")}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+              {t("results.creatorCard.fields.contact")}
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 min-w-0">
+            {/* Left: Brand preview card */}
+            <div className="lg:col-span-8 min-w-0">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 min-w-0">
+                <div className="flex items-start justify-between gap-3 min-w-0">
+                  <div className="min-w-0">
+                    <div className="text-[12px] sm:text-[13px] font-semibold text-white leading-snug">
+                      {t("results.creatorCard.brandPreview.title")}
+                    </div>
+                    <div className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug line-clamp-2">
+                      {t("results.creatorCard.brandPreview.subtitle")}
+                    </div>
+                  </div>
+
+                  <span className="shrink-0 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-white/80 whitespace-nowrap">
+                    {isCardReady
+                      ? t("results.creatorCard.brandPreview.badgeReady")
+                      : t("results.creatorCard.brandPreview.badgeDraft")}
+                  </span>
+                </div>
+
+                {/* Snapshot rows */}
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/60">{t("results.creatorCard.brandPreview.rows.nicheLabel")}</div>
+                    <div className="mt-0.5 text-[12px] font-semibold text-white truncate">
+                      {t("results.creatorCard.brandPreview.rows.nicheValue")}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/60">{t("results.creatorCard.brandPreview.rows.audienceLabel")}</div>
+                    <div className="mt-0.5 text-[12px] font-semibold text-white truncate">
+                      {t("results.creatorCard.brandPreview.rows.audienceValue")}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/60">
+                      {t("results.creatorCard.brandPreview.rows.deliverablesLabel")}
+                    </div>
+                    <div className="mt-0.5 text-[12px] font-semibold text-white truncate">
+                      {t("results.creatorCard.brandPreview.rows.deliverablesValue")}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/60">{t("results.creatorCard.brandPreview.rows.contactLabel")}</div>
+                    <div className="mt-0.5 text-[12px] font-semibold text-white truncate">
+                      {t("results.creatorCard.brandPreview.rows.contactValue")}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Collab type chips (preview) */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+                    {t("results.creatorCard.brandPreview.chips.c0")}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+                    {t("results.creatorCard.brandPreview.chips.c1")}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+                    {t("results.creatorCard.brandPreview.chips.c2")}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] text-white/75">
+                    {t("results.creatorCard.brandPreview.chips.c3")}
+                  </span>
+                </div>
+
+                {/* Portfolio placeholders */}
+                <div className="mt-3">
+                  <div className="text-[10px] font-semibold text-white/60">{t("results.creatorCard.brandPreview.portfolioLabel")}</div>
+
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 min-w-0">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-3 min-w-0">
+                      <div className="text-[11px] font-semibold text-white truncate">
+                        {t("results.creatorCard.brandPreview.portfolio.p0.title")}
+                      </div>
+                      <div className="mt-1 text-[10px] text-white/55 leading-snug line-clamp-2">
+                        {t("results.creatorCard.brandPreview.portfolio.p0.desc")}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-3 min-w-0">
+                      <div className="text-[11px] font-semibold text-white truncate">
+                        {t("results.creatorCard.brandPreview.portfolio.p1.title")}
+                      </div>
+                      <div className="mt-1 text-[10px] text-white/55 leading-snug line-clamp-2">
+                        {t("results.creatorCard.brandPreview.portfolio.p1.desc")}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-3 min-w-0">
+                      <div className="text-[11px] font-semibold text-white truncate">
+                        {t("results.creatorCard.brandPreview.portfolio.p2.title")}
+                      </div>
+                      <div className="mt-1 text-[10px] text-white/55 leading-snug line-clamp-2">
+                        {t("results.creatorCard.brandPreview.portfolio.p2.desc")}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Brand CTA panel */}
+            <div className="lg:col-span-4 min-w-0">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 min-w-0">
+                <div className="text-[12px] sm:text-[13px] font-semibold text-white leading-snug">
+                  {t("results.creatorCard.brandPreview.cta.title")}
+                </div>
+                <div className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug">
+                  {t("results.creatorCard.brandPreview.cta.body")}
+                </div>
+
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed"
+                    title={t("results.creatorCard.brandPreview.cta.comingSoon")}
+                  >
+                    {t("results.creatorCard.brandPreview.cta.primary")}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document
+                        .querySelector('[data-scope="next-actions"]')
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }
+                    className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/80 hover:border-white/20 hover:bg-white/7 transition-colors"
+                  >
+                    {t("results.creatorCard.brandPreview.cta.secondary")}
+                  </button>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/65 leading-snug">
+                  {t("results.creatorCard.brandPreview.cta.note")}
+                </div>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -2273,7 +2579,7 @@ export default function ResultsClient() {
     if (loadTimedOut) return "ready"
     if ((igMeLoading || (isConnected && !mediaLoaded)) && !hasAnyResultsData) return "loading"
     if (igMeUnauthorized || !isConnected) return "needs_connect"
-    if (isConnected && mediaLoaded && media.length === 0 && igRecentLen === 0) return "needs_setup"
+    if (isConnected && hasSuccessfulMePayloadRef.current && mediaLoaded && effectiveRecentLen === 0) return "needs_setup"
     return "ready"
   })()
 
@@ -2286,11 +2592,23 @@ export default function ResultsClient() {
           setGateIsSlow(false)
           setLoadTimedOut(false)
           setLoadError(false)
+          hasFetchedMediaRef.current = false
+          __resultsMediaFetchedOnce = false
+          setMediaLoaded(false)
+          hasFetchedMeRef.current = false
+          __resultsMeFetchedOnce = false
+          hasSuccessfulMePayloadRef.current = false
           setForceReloadTick((x) => x + 1)
         }}
         onRefresh={() => {
           setLoadTimedOut(false)
           setLoadError(false)
+          hasFetchedMediaRef.current = false
+          __resultsMediaFetchedOnce = false
+          setMediaLoaded(false)
+          hasFetchedMeRef.current = false
+          __resultsMeFetchedOnce = false
+          hasSuccessfulMePayloadRef.current = false
           setForceReloadTick((x) => x + 1)
         }}
         onBack={() => router.push(localePathname("/", activeLocale))}
@@ -2308,6 +2626,12 @@ export default function ResultsClient() {
               onClick={() => {
                 setLoadTimedOut(false)
                 setLoadError(false)
+                hasFetchedMediaRef.current = false
+                __resultsMediaFetchedOnce = false
+                setMediaLoaded(false)
+                hasFetchedMeRef.current = false
+                __resultsMeFetchedOnce = false
+                hasSuccessfulMePayloadRef.current = false
                 setForceReloadTick((x) => x + 1)
               }}
             >
@@ -2341,6 +2665,12 @@ export default function ResultsClient() {
       <SetupHelpCard
         t={t}
         onRetry={() => {
+          hasFetchedMediaRef.current = false
+          __resultsMediaFetchedOnce = false
+          setMediaLoaded(false)
+          hasFetchedMeRef.current = false
+          __resultsMeFetchedOnce = false
+          hasSuccessfulMePayloadRef.current = false
           setForceReloadTick((x) => x + 1)
         }}
         onReconnect={handleConnect}
@@ -3827,12 +4157,13 @@ export default function ResultsClient() {
                           return ""
                         })()
 
-                        if (process.env.NODE_ENV !== "production" && !thumbSrc) {
-                          console.log("[top posts] missing thumbnail", {
+                        if (__DEV__ && !thumbSrc) {
+                          dlog("[top posts] missing thumbnail", {
                             id: real?.id,
                             media_type: real?.media_type,
                             has_thumbnail_url: Boolean(real?.thumbnail_url),
                             has_media_url: Boolean(real?.media_url),
+                            has_caption: Boolean(real?.caption),
                           })
                         }
 
@@ -4299,87 +4630,191 @@ export default function ResultsClient() {
               </CardContent>
             </Card>
 
-            <Card className="text-slate-100 flex flex-col gap-1.5 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg mt-3 rounded-xl border border-white/12 bg-gradient-to-b from-white/8 via-white/4 to-white/2 ring-1 ring-white/8 shadow-lg shadow-black/35 backdrop-blur-sm px-2 py-2 sm:px-3 sm:py-3 mb-5">
-              <CardHeader className="pb-0 py-2 min-w-0">
-                <CardTitle className="text-lg sm:text-xl font-semibold tracking-tight text-white min-w-0 truncate">
-                  {t("results.growthTasks.title")}
-                </CardTitle>
-                <p className="mt-0.5 text-[10px] leading-tight text-white/65 max-w-3xl min-w-0">
-                  <span className="min-w-0 truncate block">{t("results.growthTasks.subtitle")}</span>
-                </p>
+            <Card
+              data-scope="next-actions"
+              className="mt-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm text-slate-100 shadow-lg transition-all duration-200 hover:border-white/15 hover:shadow-xl"
+            >
+              <CardHeader className="border-b border-white/10 px-3 py-3 sm:px-4 sm:py-3 lg:px-6 lg:py-4 flex items-start justify-between gap-3 min-w-0">
+                <div className="min-w-0">
+                  <CardTitle className="tracking-tight text-[13px] sm:text-sm font-semibold text-white leading-snug">
+                    {t("results.nextActions.title")}
+                  </CardTitle>
+                  <p className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug line-clamp-2">
+                    {t("results.nextActions.subtitle")}
+                  </p>
+                </div>
+
+                <div className="shrink-0">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-white/80 whitespace-nowrap">
+                    <span>{t("results.nextActions.badge")}</span>
+                    <span className="tabular-nums text-white/70">
+                      {completionPct}% ({doneTasks}/{totalTasks})
+                    </span>
+                    {isCardReady ? (
+                      <span className="ml-1 inline-flex items-center rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+                        {t("results.nextActions.ready")}
+                      </span>
+                    ) : (
+                      <span className="ml-1 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/60">
+                        {t("results.nextActions.inProgress")}
+                      </span>
+                    )}
+                  </span>
+                </div>
               </CardHeader>
-              <CardContent className="pt-0 px-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-1.5">
-                  {(
-                    [
-                      { id: 1 as const },
-                      { id: 2 as const },
-                      { id: 3 as const },
-                    ] as const
-                  ).map((task) => {
-                    const isOpen = expandedGrowthTask === task.id
-                    return (
-                      <div key={task.id} className="min-w-0">
-                        <button
-                          ref={(node) => {
-                            growthTaskRefs.current[task.id] = node
-                          }}
-                          type="button"
-                          aria-expanded={isOpen}
-                          className={
-                            "w-full text-left flex flex-col gap-2 rounded-xl border bg-white/8 px-3 py-3 min-w-0 overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 " +
-                            (isOpen ? "border-white/30" : "border-white/20 hover:border-white/30")
-                          }
-                          onClick={() => setExpandedGrowthTask((prev) => (prev === task.id ? null : task.id))}
-                        >
-                          <div className="flex items-start justify-between gap-2 min-w-0">
-                            <div className="text-xs font-semibold text-white leading-snug min-w-0 truncate">
-                              {t(`results.growthTasks.cards.${task.id}.title`)}
-                            </div>
-                            <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200 shrink-0 whitespace-nowrap">
-                              {t(`results.growthTasks.cards.${task.id}.status`)}
-                            </span>
-                          </div>
 
-                          <div
-                            className={
-                              "text-[11px] leading-snug text-slate-300 min-w-0 " +
-                              (isOpen ? "" : "line-clamp-3")
-                            }
-                          >
-                            {t(`results.growthTasks.cards.${task.id}.desc`)}
-                          </div>
-                        </button>
+              <CardContent className="px-3 pb-3 pt-3 sm:px-4 sm:pb-4 lg:px-6 lg:pb-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
+                  {/* Card 1 */}
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 min-w-0 transition-colors hover:border-white/15">
+                    <div className="text-[12px] font-semibold text-white leading-snug">
+                      {t("results.nextActions.cards.foundation.title")}
+                    </div>
+                    <div className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug line-clamp-2">
+                      {t("results.nextActions.cards.foundation.body")}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.profileBasics}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, profileBasics: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.profileBasics")}</span>
+                      </label>
 
-                        {isOpen ? (
-                          <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-3 min-w-0 break-words">
-                            <div className="space-y-3">
-                              <div>
-                                <div className="text-[11px] font-semibold text-white/85">{t("results.growthTasks.expand.whatTitle")}</div>
-                                <div className="mt-0.5 text-xs text-white/80 leading-snug">
-                                  {t(`results.growthTasks.cards.${task.id}.expand.what`)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[11px] font-semibold text-white/85">{t("results.growthTasks.expand.stepsTitle")}</div>
-                                <ul className="mt-1 list-disc pl-5 space-y-1">
-                                  <li className="text-xs text-white/80 leading-snug">{t(`results.growthTasks.cards.${task.id}.expand.steps.1`)}</li>
-                                  <li className="text-xs text-white/80 leading-snug">{t(`results.growthTasks.cards.${task.id}.expand.steps.2`)}</li>
-                                  <li className="text-xs text-white/80 leading-snug">{t(`results.growthTasks.cards.${task.id}.expand.steps.3`)}</li>
-                                </ul>
-                              </div>
-                              <div>
-                                <div className="text-[11px] font-semibold text-white/85">{t("results.growthTasks.expand.doneTitle")}</div>
-                                <div className="mt-0.5 text-xs text-white/80 leading-snug">
-                                  {t(`results.growthTasks.cards.${task.id}.expand.done`)}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    )
-                  })}
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.pin3}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, pin3: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.pin3")}</span>
+                      </label>
+
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.pickOneTheme}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, pickOneTheme: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.pickOneTheme")}</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Card 2 */}
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 min-w-0 transition-colors hover:border-white/15">
+                    <div className="text-[12px] font-semibold text-white leading-snug">
+                      {t("results.nextActions.cards.content.title")}
+                    </div>
+                    <div className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug line-clamp-2">
+                      {t("results.nextActions.cards.content.body")}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.hookOpen}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, hookOpen: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.hookOpen")}</span>
+                      </label>
+
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.cutDeadTime}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, cutDeadTime: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.cutDeadTime")}</span>
+                      </label>
+
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.endWithCTA}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, endWithCTA: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.endWithCTA")}</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Card 3 */}
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 min-w-0 transition-colors hover:border-white/15">
+                    <div className="text-[12px] font-semibold text-white leading-snug">
+                      {t("results.nextActions.cards.growth.title")}
+                    </div>
+                    <div className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug line-clamp-2">
+                      {t("results.nextActions.cards.growth.body")}
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.askAB}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, askAB: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.askAB")}</span>
+                      </label>
+
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.reply10}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, reply10: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.reply10")}</span>
+                      </label>
+
+                      <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] sm:text-[12px] text-white/80">
+                        <input
+                          type="checkbox"
+                          className="mt-[2px] h-4 w-4 shrink-0 accent-white"
+                          checked={cardTasks.repeatFormat}
+                          onChange={(e) => setCardTasks((p) => ({ ...p, repeatFormat: e.target.checked }))}
+                        />
+                        <span className="min-w-0 break-words leading-snug">{t("results.nextActions.checklist.repeatFormat")}</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 sm:px-4 text-[11px] sm:text-[12px] text-white/70 leading-snug">
+                  {t("results.nextActions.footer")}
+                </div>
+
+                <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                  <div className="text-[11px] sm:text-[12px] text-white/55 leading-snug">
+                    {t("results.nextActions.ctaHint")}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Link
+                      href="../creator-card"
+                      className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors"
+                    >
+                      {t("results.nextActions.cta.buildCard")}
+                    </Link>
+
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed"
+                      title={t("results.nextActions.cta.comingSoon")}
+                    >
+                      {t("results.nextActions.cta.exportMediaKit")}
+                    </button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

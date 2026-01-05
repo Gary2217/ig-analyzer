@@ -1,4 +1,20 @@
 {
+  "results.nextGrowth.title": "下一步成長建議",
+  "results.nextGrowth.subtitle": "根據你目前的帳號狀態，這是最有效的行動順序。",
+  "results.nextGrowth.cards.primary.title": "先把這一件事做好",
+  "results.nextGrowth.cards.primary.body": "選擇一個你接下來 7 天一定能完成的行動。持續做到位，比同時做很多事更能帶來成長。",
+  "results.nextGrowth.cards.primary.items.0": "固定每週 3 篇貼文",
+  "results.nextGrowth.cards.primary.items.1": "每天 1 則限時動態",
+  "results.nextGrowth.cards.primary.items.2": "固定每週 1 支短影片",
+  "results.nextGrowth.cards.lever.title": "不用更忙，也能更容易被互動",
+  "results.nextGrowth.cards.lever.body": "在現有內容加一個簡單的互動鉤子，不用增加發文頻率，也能提升留言與分享。",
+  "results.nextGrowth.cards.lever.items.0": "貼文結尾加一句明確問題",
+  "results.nextGrowth.cards.lever.items.1": "用二選一引導留言",
+  "results.nextGrowth.cards.lever.items.2": "第一行直接點出痛點或結果",
+  "results.nextGrowth.cards.optimize.title": "不要發更多，先把表現最好的優化",
+  "results.nextGrowth.cards.optimize.body": "挑出表現最好的 3 篇貼文，優化開頭、標題或第一張圖，通常比新增更多貼文更有效。",
+  "results.nextGrowth.cards.optimize.footnote": "演算法更偏好已驗證有效的內容變化，而不是單純堆量。",
+  "results.nextGrowth.footer": "成長來自重複做對的事，而不是一次做完所有事。",
   "home": {
     "hero": {
       "title": "Instagram 與 Threads 帳號分析器",
@@ -163,6 +179,61 @@
         }
       }
     },
+    "creatorCard": {
+      "subtitle": "這裡會變成你的「名片摘要」：讓廠商 10 秒內理解你是誰、適合什麼合作。",
+      "readiness": "合作準備度",
+      "status": {
+        "ready": "可公開給廠商查看",
+        "notReady": "建議先把名片補齊"
+      },
+      "cards": {
+        "niche": { "body": "你的內容定位與受眾印象：越清楚越容易被找到。" },
+        "stage": { "body": "你的成長狀態與節奏：穩定度越高，合作成功率越高。" },
+        "collab": { "body": "你目前可合作的類型與信任訊號：作品、證明、聯絡方式。" }
+      },
+      "brandPreview": {
+        "title": "廠商看到的名片預覽（Brand view）",
+        "subtitle": "這裡模擬廠商的視角：10 秒內看懂你能合作什麼、值不值得聯絡。",
+        "badgeReady": "可合作",
+        "badgeDraft": "草稿",
+        "rows": {
+          "nicheLabel": "定位",
+          "nicheValue": "教育・實用（範例）",
+          "audienceLabel": "受眾",
+          "audienceValue": "台灣・18–34（範例）",
+          "deliverablesLabel": "合作項目",
+          "deliverablesValue": "短影音／貼文／開箱（範例）",
+          "contactLabel": "聯絡",
+          "contactValue": "完成名片後解鎖"
+        },
+        "chips": {
+          "c0": "短影音開箱",
+          "c1": "腳本植入",
+          "c2": "聯盟分潤",
+          "c3": "品牌合作"
+        },
+        "portfolioLabel": "代表作（預覽）",
+        "portfolio": {
+          "p0": { "title": "代表作 #1", "desc": "放你的爆款／案例（之後接 Top 3 posts）" },
+          "p1": { "title": "代表作 #2", "desc": "讓廠商看到你的呈現與成效" },
+          "p2": { "title": "代表作 #3", "desc": "加上主題、形式、受眾感覺" }
+        },
+        "cta": {
+          "title": "廠商行動（預覽）",
+          "body": "未來廠商會在這裡：收藏、發送合作邀請、或詢價。",
+          "primary": "送出合作邀請",
+          "secondary": "回去補齊名片完成度",
+          "comingSoon": "即將推出",
+          "note": "提示：完成度達 70%+ 後，你的名片會更像「可被信任的合作對象」。"
+        }
+      },
+      "fields": {
+        "portfolio": "代表作（Top 3）",
+        "audience": "受眾摘要",
+        "collabTypes": "合作類型",
+        "contact": "聯絡方式"
+      }
+    },
     "gates": {
       "common": {
         "back": "返回"
@@ -298,12 +369,56 @@
       "monetizationFocusedAccount": "變現導向"
     },
     "nextActions": {
-      "title": "你現在最該做的 3 件事",
-      "subtitle": "這週先做這三件事。",
+      "title": "下一步行動建議",
+      "subtitle": "把順序做對，通常一週內就能看到互動曲線改善。",
+      "badge": "可立即執行",
+      "ready": "可上架名片",
+      "inProgress": "準備中",
+      "ctaHint": "完成度達 70% 以上，名片會更像「可合作」的專業資料。",
+      "cta": {
+        "buildCard": "完善名片資料",
+        "exportMediaKit": "匯出媒體包",
+        "comingSoon": "即將推出"
+      },
+      "checklist": {
+        "profileBasics": "更新頭像／簡介：一句話講清楚你提供什麼價值",
+        "pin3": "固定 3 則置頂：自我介紹、代表作、合作／商案入口",
+        "pickOneTheme": "統一內容主題：先選 1 個主題打穿（不要一次做 5 種）",
+        "hookOpen": "每篇開頭加「鉤子」：問題／反差／結果先曝光",
+        "cutDeadTime": "縮短無效片段：每 2–3 秒要有資訊／畫面變化",
+        "endWithCTA": "結尾加 CTA：留言關鍵字、收藏、或下一集預告",
+        "askAB": "每篇設定 1 個互動問題（A/B 選擇最有效）",
+        "reply10": "固定回覆前 10 則留言（提高二次互動）",
+        "repeatFormat": "用 1 個爆款模板連發 5 次（微調主題／開頭）"
+      },
       "helperLine": "👉 這三件事會直接影響你接下來 30 天的成長速度",
       "freeBadge": "免費",
       "proBadge": "專業",
       "lockLine": "升級後解鎖",
+      "cards": {
+        "foundation": {
+          "title": "先把基礎補齊",
+          "body": "先讓帳號「看起來值得追蹤」，再放大內容表現。",
+          "item0": "更新頭像 / 簡介：一句話講清楚你提供什麼價值",
+          "item1": "固定 3 則置頂：自我介紹、代表作、合作/商案入口",
+          "item2": "統一內容主題：先選 1 個主題打穿（不要一次做 5 種）"
+        },
+        "content": {
+          "title": "提高內容命中率",
+          "body": "先贏在前 1 秒：鉤子＋節奏＋清楚的結尾 CTA。",
+          "item0": "每篇開頭加「鉤子」：問題/反差/結果先曝光",
+          "item1": "縮短無效片段：每 2–3 秒要有資訊/畫面變化",
+          "item2": "結尾加 CTA：留言關鍵字、收藏、或下一集預告"
+        },
+        "growth": {
+          "title": "把互動變成成長",
+          "body": "讓看的人願意停下來、互動、再分享給朋友。",
+          "item0": "每篇設定 1 個互動問題（A/B 選擇最有效）",
+          "item1": "固定回覆前 10 則留言（提高二次互動）",
+          "item2": "用 1 個爆款模板連發 5 次（微調主題/開頭）"
+        }
+      },
+      "footer": "提示：如果你想要「更精準」的建議（依粉絲族群、貼文類型與發文時段），專業版會解鎖完整洞察與可複製腳本。",
       "actions": {
         "default": {
           "1": {
@@ -2086,7 +2201,7 @@
     },
     "input": {
       "sectionTitle": "1）輸入",
-      "sectionSubtitle": "貼上 Instagram 或 Threads 的貼文連結。",
+      "sectionSubtitle": "貼上 Instagram 或 Threads 貼文連結。",
       "label": "輸入貼文連結",
       "placeholder": "https://www.instagram.com/p/... 或 https://www.threads.net/...",
       "analyze": "開始分析",
@@ -2094,6 +2209,141 @@
       "hint": "A 模式為推論分析；官方指標僅於授權後顯示。",
       "pasteToBegin": "貼上貼文連結即可開始。",
       "invalidUrl": "連結格式可能不正確：請確認包含 instagram.com 或 threads.net。"
+    },
+    "nextGrowth": {
+      "title": "下一步成長建議",
+      "subtitle": "根據你目前的帳號狀態，這是最有效的行動順序。",
+      "cards": {
+        "primary": {
+          "title": "先把這一件事做好",
+          "body": "選擇一個你接下來 7 天一定能完成的行動。持續做到位，比同時做很多事更能帶來成長。",
+          "item0": "固定每週 3 篇貼文",
+          "item1": "每天 1 則限時動態",
+          "item2": "固定每週 1 支短影片"
+        },
+        "lever": {
+          "title": "不用更忙，也能更容易被互動",
+          "body": "在現有內容加一個簡單的互動鉤子，不用增加發文頻率，也能提升留言與分享。",
+          "item0": "貼文結尾加一句明確問題",
+          "item1": "用二選一引導留言",
+          "item2": "第一行直接點出痛點或結果"
+        },
+        "optimize": {
+          "title": "不要發更多，先把表現最好的優化",
+          "body": "挑出表現最好的 3 篇貼文，優化開頭、標題或第一張圖，通常比新增更多貼文更有效。",
+          "footnote": "演算法更偏好已驗證有效的內容變化，而不是單純堆量。"
+        }
+      },
+      "footer": "成長來自重複做對的事，而不是一次做完所有事。"
+    }
+  },
+  "creatorCard": {
+    "db": {
+      "loading": "載入中…",
+      "saving": "儲存中…",
+      "saved": "已儲存",
+      "error": "錯誤"
+    },
+    "page": {
+      "title": "建立你的合作名片",
+      "subtitle": "左邊填資料，右邊即時預覽廠商看到的名片。完成度越高越容易被合作。",
+      "completion": "完成度",
+      "ready": "可合作",
+      "draft": "草稿",
+      "backToResults": "回 Results",
+      "note": "提示：這是 UI-only Builder。下一步會接資料庫，生成公開名片頁讓廠商瀏覽與邀請合作。"
+    },
+    "form": {
+      "title": "名片資料（編輯）",
+      "subtitle": "先把定位、受眾、合作方式與聯絡方式填清楚。",
+      "status": { "ready": "可合作", "draft": "草稿" },
+      "handle": {
+        "label": "公開網址（handle）",
+        "placeholder": "例如：gary-analytics（可不填，會自動生成）",
+        "helper": "公開頁會是：/c/{handle}（公開後廠商才看得到）"
+      },
+      "displayName": {
+        "label": "顯示名稱（選填）",
+        "placeholder": "例如：Gary｜短影音開箱",
+        "helper": "會顯示在品牌視角名片上（之後可接自動帶入 IG 名稱）"
+      },
+      "public": {
+        "label": "公開給廠商瀏覽",
+        "helper": "開啟後，你的 /c/{handle} 公開頁才會可被看到。",
+        "on": "已公開",
+        "off": "未公開"
+      },
+      "niche": { "label": "定位（內容類型）", "placeholder": "選擇你的定位…" },
+      "audience": { "label": "受眾（主要族群）", "placeholder": "選擇你的受眾…" },
+      "deliverables": {
+        "label": "合作類型（可多選）",
+        "helper": "建議至少選 2–3 個，廠商才好判斷合作方式。"
+      },
+      "contact": { "label": "聯絡方式", "placeholder": "例如 Email、Line、IG DM…" },
+      "portfolio": {
+        "label": "代表作（Top 3）",
+        "itemLabel": "代表作",
+        "titlePlaceholder": "標題（例如：爆款短影音開箱）",
+        "descPlaceholder": "描述（主題、形式、成效、亮點）"
+      },
+      "saveHint": "儲存/公開名片（下一階段接 DB）",
+      "save": "儲存名片",
+      "toPreview": "查看預覽",
+      "comingSoon": "即將推出"
+    },
+    "preview": {
+      "title": "廠商看到的名片預覽（Brand view）",
+      "subtitle": "用廠商視角快速判斷：你做什麼、適合什麼合作、怎麼聯絡。",
+      "badgeReady": "可合作",
+      "badgeDraft": "草稿",
+      "rows": {
+        "nicheLabel": "定位",
+        "audienceLabel": "受眾",
+        "deliverablesLabel": "合作項目",
+        "contactLabel": "聯絡"
+      },
+      "placeholders": {
+        "niche": "尚未選擇",
+        "audience": "尚未選擇",
+        "deliverables": "尚未選擇",
+        "contact": "完成名片後顯示"
+      },
+      "chipsLabel": "合作類型（預覽）",
+      "portfolioLabel": "代表作（預覽）",
+      "portfolio": {
+        "item": "代表作",
+        "placeholderDesc": "之後會自動帶入 Top 3 貼文／案例"
+      },
+      "cta": {
+        "primary": "送出合作邀請",
+        "secondary": "回去補齊資料",
+        "comingSoon": "即將推出",
+        "note": "提示：完成度達 70%+ 後，你的名片會更像「可被信任的合作對象」。"
+      }
+    },
+    "options": {
+      "niche": {
+        "edu": "教育・實用",
+        "beauty": "美妝保養",
+        "food": "美食開箱",
+        "fitness": "健身健康",
+        "tech": "3C 科技",
+        "lifestyle": "生活風格"
+      },
+      "audience": {
+        "tw1834": "台灣・18–34",
+        "tw2539": "台灣・25–39",
+        "global1834": "全球・18–34",
+        "global2544": "全球・25–44"
+      },
+      "deliverables": {
+        "reels": "短影音",
+        "post": "貼文",
+        "story": "限動",
+        "unboxing": "開箱",
+        "affiliate": "聯盟分潤",
+        "livestream": "直播"
+      }
     }
   },
   "footer": {

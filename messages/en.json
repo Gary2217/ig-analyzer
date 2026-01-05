@@ -1,4 +1,20 @@
 {
+  "results.nextGrowth.title": "Next Growth Actions",
+  "results.nextGrowth.subtitle": "Based on your current account state, this is the most effective action order.",
+  "results.nextGrowth.cards.primary.title": "Focus on One Action First",
+  "results.nextGrowth.cards.primary.body": "Choose one action that you can realistically complete in the next 7 days. Consistency builds growth faster than doing many things at once.",
+  "results.nextGrowth.cards.primary.items.0": "Publish 3 posts per week",
+  "results.nextGrowth.cards.primary.items.1": "Post 1 story per day",
+  "results.nextGrowth.cards.primary.items.2": "Publish 1 Reel per week",
+  "results.nextGrowth.cards.lever.title": "Increase Engagement Without Extra Work",
+  "results.nextGrowth.cards.lever.body": "Add a simple interaction hook to your existing content to boost comments and shares without increasing posting frequency.",
+  "results.nextGrowth.cards.lever.items.0": "End posts with a clear question",
+  "results.nextGrowth.cards.lever.items.1": "Use A/B choices to invite comments",
+  "results.nextGrowth.cards.lever.items.2": "State the pain point or outcome in the first line",
+  "results.nextGrowth.cards.optimize.title": "Optimize Instead of Posting More",
+  "results.nextGrowth.cards.optimize.body": "Select your top 3 best-performing posts and improve the hook, headline, or first visual. This outperforms publishing more new posts.",
+  "results.nextGrowth.cards.optimize.footnote": "Algorithms favor proven content variations over raw volume.",
+  "results.nextGrowth.footer": "Growth comes from repeating the right actions — not doing everything at once.",
   "home": {
     "hero": {
       "title": "Instagram & Threads Account Analyzer",
@@ -163,6 +179,61 @@
         }
       }
     },
+    "creatorCard": {
+      "subtitle": "This becomes your creator-card snapshot so brands can decide in 10 seconds.",
+      "readiness": "Collaboration readiness",
+      "status": {
+        "ready": "Ready to show brands",
+        "notReady": "Complete your card first"
+      },
+      "cards": {
+        "niche": { "body": "Your niche and audience impression. Clarity increases discoverability." },
+        "stage": { "body": "Your growth stage and cadence. Consistency builds trust." },
+        "collab": { "body": "Your collab signals: portfolio, proof, and contact methods." }
+      },
+      "brandPreview": {
+        "title": "Brand-view creator card preview",
+        "subtitle": "This simulates how a brand decides in ~10 seconds whether to contact you.",
+        "badgeReady": "Collab-ready",
+        "badgeDraft": "Draft",
+        "rows": {
+          "nicheLabel": "Niche",
+          "nicheValue": "Education • Practical (example)",
+          "audienceLabel": "Audience",
+          "audienceValue": "Taiwan • 18–34 (example)",
+          "deliverablesLabel": "Deliverables",
+          "deliverablesValue": "Reels / Posts / Unboxing (example)",
+          "contactLabel": "Contact",
+          "contactValue": "Unlock after completion"
+        },
+        "chips": {
+          "c0": "Short-form unboxing",
+          "c1": "Script integration",
+          "c2": "Affiliate / CPA",
+          "c3": "Brand collaboration"
+        },
+        "portfolioLabel": "Portfolio (preview)",
+        "portfolio": {
+          "p0": { "title": "Portfolio #1", "desc": "Your best-performing example (later: Top 3 posts)" },
+          "p1": { "title": "Portfolio #2", "desc": "Show your style and outcomes" },
+          "p2": { "title": "Portfolio #3", "desc": "Add niche + format + audience feel" }
+        },
+        "cta": {
+          "title": "Brand actions (preview)",
+          "body": "Later, brands will save, invite, and request quotes here.",
+          "primary": "Send collaboration invite",
+          "secondary": "Back to improve completion",
+          "comingSoon": "Coming soon",
+          "note": "Tip: Hit 70%+ to look more collaboration-ready and trustworthy."
+        }
+      },
+      "fields": {
+        "portfolio": "Portfolio (Top 3)",
+        "audience": "Audience snapshot",
+        "collabTypes": "Collab types",
+        "contact": "Contact"
+      }
+    },
     "gates": {
       "common": {
         "back": "Back"
@@ -298,12 +369,56 @@
       "monetizationFocusedAccount": "Monetization-focused creator"
     },
     "nextActions": {
-      "title": "The 3 things you should do next",
-      "subtitle": "Three practical moves you can do this week.",
+      "title": "Next actions",
+      "subtitle": "Get the order right and you’ll usually see engagement improve within a week.",
+      "badge": "Doable now",
+      "ready": "Card-ready",
+      "inProgress": "In progress",
+      "ctaHint": "Hit 70%+ to make your creator card look collaboration-ready.",
+      "cta": {
+        "buildCard": "Complete my creator card",
+        "exportMediaKit": "Export media kit",
+        "comingSoon": "Coming soon"
+      },
+      "checklist": {
+        "profileBasics": "Refresh avatar/bio: one line that clearly states your value",
+        "pin3": "Pin 3 posts: intro, best work, and collab/DM entry point",
+        "pickOneTheme": "Commit to one theme and win there first",
+        "hookOpen": "Add a hook in the first second: question/contrast/result first",
+        "cutDeadTime": "Cut dead time: every 2–3 seconds should change or add info",
+        "endWithCTA": "End with a CTA: comment keyword, save, or next-episode teaser",
+        "askAB": "Ask one interaction question per post (A/B works best)",
+        "reply10": "Reply to the first 10 comments (boost repeat engagement)",
+        "repeatFormat": "Repeat one winning format 5 times with small variations"
+      },
       "helperLine": "👉 These three actions most directly affect your growth in the next 30 days.",
       "freeBadge": "Free",
       "proBadge": "Pro",
       "lockLine": "Upgrade to unlock",
+      "cards": {
+        "foundation": {
+          "title": "Fix the basics first",
+          "body": "Make your profile worth following before you scale content.",
+          "item0": "Refresh avatar + bio: one line that clearly states your value",
+          "item1": "Pin 3 posts: intro, best work, and collab/DM entry point",
+          "item2": "Commit to one theme and win there first"
+        },
+        "content": {
+          "title": "Increase hit rate",
+          "body": "Win the first second: hook + pacing + a clear CTA.",
+          "item0": "Start with a hook: question, contrast, or the result first",
+          "item1": "Cut dead time: every 2–3 seconds should change or add info",
+          "item2": "End with a CTA: comment keyword, save, or next-episode teaser"
+        },
+        "growth": {
+          "title": "Turn engagement into growth",
+          "body": "Make people stop, interact, and share.",
+          "item0": "Ask one interaction question per post (A/B works best)",
+          "item1": "Reply to the first 10 comments (boosts repeat engagement)",
+          "item2": "Repeat one winning format 5 times with small variations"
+        }
+      },
+      "footer": "Tip: For more precise recommendations based on your audience, format, and timing signals, Pro unlocks deeper insights and copy-ready scripts.",
       "actions": {
         "default": {
           "1": {
@@ -2115,6 +2230,141 @@
       "hint": "A-mode is inferred from public signals. Official metrics unlock after authorization.",
       "pasteToBegin": "Paste a post link to begin.",
       "invalidUrl": "The link may be invalid. Please include instagram.com or threads.net."
+    },
+    "nextGrowth": {
+      "title": "Next Growth Actions",
+      "subtitle": "Based on your current account state, this is the most effective action order.",
+      "cards": {
+        "primary": {
+          "title": "Focus on One Action First",
+          "body": "Choose one action that you can realistically complete in the next 7 days. Consistency builds growth faster than doing many things at once.",
+          "item0": "Publish 3 posts per week",
+          "item1": "Post 1 story per day",
+          "item2": "Publish 1 Reel per week"
+        },
+        "lever": {
+          "title": "Increase Engagement Without Extra Work",
+          "body": "Add a simple interaction hook to your existing content to boost comments and shares without increasing posting frequency.",
+          "item0": "End posts with a clear question",
+          "item1": "Use A/B choices to invite comments",
+          "item2": "State the pain point or outcome in the first line"
+        },
+        "optimize": {
+          "title": "Optimize Instead of Posting More",
+          "body": "Select your top 3 best-performing posts and improve the hook, headline, or first visual. This outperforms publishing more new posts.",
+          "footnote": "Algorithms favor proven content variations over raw volume."
+        }
+      },
+      "footer": "Growth comes from repeating the right actions — not doing everything at once."
+    }
+  },
+  "creatorCard": {
+    "db": {
+      "loading": "Loading…",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "error": "Error"
+    },
+    "page": {
+      "title": "Build your creator card",
+      "subtitle": "Edit on the left, preview the brand view on the right. Higher completion improves collaboration readiness.",
+      "completion": "Completion",
+      "ready": "Collab-ready",
+      "draft": "Draft",
+      "backToResults": "Back to Results",
+      "note": "Tip: This is a UI-only builder. Next, we’ll connect a database and generate a public card page for brands."
+    },
+    "form": {
+      "title": "Card details (edit)",
+      "subtitle": "Start with niche, audience, deliverables, and contact.",
+      "status": { "ready": "Collab-ready", "draft": "Draft" },
+      "handle": {
+        "label": "Public handle",
+        "placeholder": "e.g., gary-analytics (optional, auto-generated)",
+        "helper": "Your public page will be: /c/{handle} (visible only when published)"
+      },
+      "displayName": {
+        "label": "Display name (optional)",
+        "placeholder": "e.g., Gary | Unboxing reels",
+        "helper": "Shown on the brand-view card (later: auto from IG)"
+      },
+      "public": {
+        "label": "Publish for brands",
+        "helper": "Turn on to make /c/{handle} publicly visible.",
+        "on": "Published",
+        "off": "Unpublished"
+      },
+      "niche": { "label": "Niche", "placeholder": "Choose your niche…" },
+      "audience": { "label": "Audience", "placeholder": "Choose your audience…" },
+      "deliverables": {
+        "label": "Deliverables (multi-select)",
+        "helper": "Pick at least 2–3 so brands can quickly decide."
+      },
+      "contact": { "label": "Contact", "placeholder": "Email, Line, or preferred DM…" },
+      "portfolio": {
+        "label": "Portfolio (Top 3)",
+        "itemLabel": "Portfolio",
+        "titlePlaceholder": "Title (e.g., top-performing unboxing reel)",
+        "descPlaceholder": "Description (topic, format, outcomes, highlights)"
+      },
+      "saveHint": "Save/publish (DB comes next)",
+      "save": "Save card",
+      "toPreview": "Jump to preview",
+      "comingSoon": "Coming soon"
+    },
+    "preview": {
+      "title": "Brand-view creator card preview",
+      "subtitle": "A brand decides fast: what you do, what you deliver, how to contact you.",
+      "badgeReady": "Collab-ready",
+      "badgeDraft": "Draft",
+      "rows": {
+        "nicheLabel": "Niche",
+        "audienceLabel": "Audience",
+        "deliverablesLabel": "Deliverables",
+        "contactLabel": "Contact"
+      },
+      "placeholders": {
+        "niche": "Not set",
+        "audience": "Not set",
+        "deliverables": "Not set",
+        "contact": "Unlock after completion"
+      },
+      "chipsLabel": "Deliverables (preview)",
+      "portfolioLabel": "Portfolio (preview)",
+      "portfolio": {
+        "item": "Portfolio",
+        "placeholderDesc": "Later: auto-fill from Top 3 posts/cases"
+      },
+      "cta": {
+        "primary": "Send collaboration invite",
+        "secondary": "Back to complete details",
+        "comingSoon": "Coming soon",
+        "note": "Tip: Hit 70%+ to look more trustworthy and collaboration-ready."
+      }
+    },
+    "options": {
+      "niche": {
+        "edu": "Education • Practical",
+        "beauty": "Beauty & Skincare",
+        "food": "Food & Unboxing",
+        "fitness": "Fitness & Health",
+        "tech": "Tech & Gadgets",
+        "lifestyle": "Lifestyle"
+      },
+      "audience": {
+        "tw1834": "Taiwan • 18–34",
+        "tw2539": "Taiwan • 25–39",
+        "global1834": "Global • 18–34",
+        "global2544": "Global • 25–44"
+      },
+      "deliverables": {
+        "reels": "Short-form video",
+        "post": "Post",
+        "story": "Story",
+        "unboxing": "Unboxing",
+        "affiliate": "Affiliate",
+        "livestream": "Live"
+      }
     }
   },
   "footer": {
