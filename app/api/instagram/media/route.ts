@@ -144,6 +144,14 @@ function jsonError(message: string, extra?: any, status = 400) {
   )
 }
 
+function shouldDebug() {
+  return process.env.IG_GRAPH_DEBUG === "1"
+}
+
+function safeLen(v: unknown): number {
+  return Array.isArray(v) ? v.length : 0
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -212,6 +220,18 @@ export async function GET(req: Request) {
     const igBusinessId = igIdFromCookie
     const pageId = pageIdFromCookie
 
+    if (shouldDebug()) {
+      console.log("[IG_GRAPH_DEBUG][media-route] request", {
+        hasAccessToken,
+        hasIgId,
+        hasPageId,
+        igBusinessId,
+        pageId,
+        after: Boolean(after),
+        limit,
+      })
+    }
+
     // ───────────────────────────────────────────────────────────────────────
     // Cache-first: check before calling upstream
     // ───────────────────────────────────────────────────────────────────────
@@ -231,6 +251,13 @@ export async function GET(req: Request) {
         }
         const safeCached = sanitizeGraphPayload(cached.data)
         cached.data = safeCached
+        if (shouldDebug()) {
+          console.log("[IG_GRAPH_DEBUG][media-route] cache hit", {
+            cacheKey,
+            ageSeconds: Math.floor(ageMs / 1000),
+            dataLen: safeLen((safeCached as any)?.data),
+          })
+        }
         return jsonRes(
           safeCached,
           cached.status,
@@ -314,6 +341,23 @@ export async function GET(req: Request) {
     const mediaRes = await fetch(mediaUrl, { cache: "no-store" });
     const mediaJson = await safeJson(mediaRes);
 
+    if (shouldDebug()) {
+      const bodyErrMsg =
+        typeof (mediaJson as any)?.error?.message === "string"
+          ? (mediaJson as any).error.message
+          : typeof (mediaJson as any)?.message === "string"
+            ? (mediaJson as any).message
+            : null
+
+      console.log("[IG_GRAPH_DEBUG][media-route] upstream media", {
+        status: mediaRes.status,
+        ok: mediaRes.ok,
+        dataLen: safeLen((mediaJson as any)?.data),
+        hasPaging: Boolean((mediaJson as any)?.paging),
+        error: bodyErrMsg ? toShortDetail(bodyErrMsg) : null,
+      })
+    }
+
     if (!mediaRes.ok) {
       const msg = toShortDetail(
         typeof mediaJson?.error?.message === "string"
@@ -355,9 +399,27 @@ export async function GET(req: Request) {
     }
 
     // Success: cache and return
+    // IMPORTANT: do not cache empty-but-200 payloads. Meta can temporarily return
+    // { data: [] } during Page/IG linkage propagation; caching would make the UI
+    // appear "stuck" for SUCCESS_TTL_MS.
     const safeMediaJson = sanitizeGraphPayload(mediaJson)
-    __mediaCache.set(cacheKey, { at: Date.now(), status: 200, data: safeMediaJson, kind: "success" })
-    return jsonRes(safeMediaJson, 200, { cache: "miss", kind: "success", ageSeconds: 0, upstream: "called" });
+    const dataLen = safeLen((safeMediaJson as any)?.data)
+    const shouldCache = dataLen > 0
+    if (shouldCache) {
+      __mediaCache.set(cacheKey, { at: Date.now(), status: 200, data: safeMediaJson, kind: "success" })
+    }
+    if (shouldDebug()) {
+      console.log("[IG_GRAPH_DEBUG][media-route] success", {
+        cacheKey,
+        cached: shouldCache,
+        dataLen,
+      })
+    }
+    return jsonRes(
+      safeMediaJson,
+      200,
+      { cache: "miss", kind: "success", ageSeconds: 0, upstream: "called" },
+    );
   } catch (err: any) {
     return jsonError(
       "server_error",

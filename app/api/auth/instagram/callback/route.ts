@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -12,6 +13,30 @@ function getRequestOrigin(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  console.log("[IG CALLBACK] HIT", new Date().toISOString())
+  try {
+    const reqUrl = new URL(req.url)
+    const supabaseUrlRaw = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()
+    let supabaseHost: string | null = null
+    try {
+      supabaseHost = supabaseUrlRaw ? new URL(supabaseUrlRaw).hostname : null
+    } catch {
+      supabaseHost = null
+    }
+    console.log(
+      JSON.stringify({
+        tag: "IG_CALLBACK_ENTRY",
+        ts: new Date().toISOString(),
+        reqHost: reqUrl.host,
+        reqPath: reqUrl.pathname,
+        supabaseHost,
+        hasServiceRoleKey: Boolean((process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()),
+        hasAnonKey: Boolean((process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim()),
+      }),
+    )
+  } catch {
+    // swallow
+  }
   const url = new URL(req.url)
   const code = url.searchParams.get("code")
   const state = url.searchParams.get("state")
@@ -112,6 +137,17 @@ export async function GET(req: NextRequest) {
   const appSecret =
     process.env.META_APP_SECRET || process.env.INSTAGRAM_APP_SECRET || process.env.META_CLIENT_SECRET
 
+  const GRAPH_BASE = "https://graph.facebook.com"
+  const GRAPH_VERSION = "v21.0"
+
+  const safeJson = async (res: Response) => {
+    try {
+      return await res.json()
+    } catch {
+      return null
+    }
+  }
+
   if (!baseUrl || !appId || !appSecret) {
     const errPath = `/${locale}/results?ig_error=missing_env`
     const res = redirectTo(errPath)
@@ -169,13 +205,233 @@ export async function GET(req: NextRequest) {
       return res
     }
 
+    // Exchange to long-lived user token (server-side)
+    let longLivedToken = accessToken
+    let tokenExpiresAt: string | null = null
+    try {
+      const llUrl = new URL(`${GRAPH_BASE}/${GRAPH_VERSION}/oauth/access_token`)
+      llUrl.searchParams.set("grant_type", "fb_exchange_token")
+      llUrl.searchParams.set("client_id", appId)
+      llUrl.searchParams.set("client_secret", appSecret)
+      llUrl.searchParams.set("fb_exchange_token", accessToken)
+
+      const llRes = await fetch(llUrl.toString(), { method: "GET", cache: "no-store" })
+      const llBody = await safeJson(llRes)
+      if (llRes.ok && llBody?.access_token && typeof llBody.access_token === "string") {
+        longLivedToken = String(llBody.access_token).trim()
+        const expiresIn =
+          typeof llBody?.expires_in === "number"
+            ? llBody.expires_in
+            : typeof llBody?.expires_in === "string"
+              ? Number(llBody.expires_in)
+              : typeof (llBody as any)?.expiresIn === "number"
+                ? (llBody as any).expiresIn
+                : typeof (llBody as any)?.expiresIn === "string"
+                  ? Number((llBody as any).expiresIn)
+                  : null
+
+        tokenExpiresAt =
+          typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0
+            ? new Date(Date.now() + expiresIn * 1000).toISOString()
+            : null
+      }
+    } catch {
+      // swallow; fallback to short-lived
+    }
+
+    if (tokenExpiresAt == null) {
+      const expiresIn =
+        typeof (tokenData as any)?.expires_in === "number"
+          ? (tokenData as any).expires_in
+          : typeof (tokenData as any)?.expires_in === "string"
+            ? Number((tokenData as any).expires_in)
+            : typeof (tokenData as any)?.expiresIn === "number"
+              ? (tokenData as any).expiresIn
+              : typeof (tokenData as any)?.expiresIn === "string"
+                ? Number((tokenData as any).expiresIn)
+                : null
+
+      tokenExpiresAt =
+        typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0
+          ? new Date(Date.now() + expiresIn * 1000).toISOString()
+          : null
+    }
+
+    if (tokenExpiresAt == null) {
+      tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
+    }
+
+    // Determine page_id + ig_ig_id (IG business account id)
+    let pageId = ""
+    let igId = ""
+    try {
+      const accountsUrl = new URL(`${GRAPH_BASE}/${GRAPH_VERSION}/me/accounts`)
+      accountsUrl.searchParams.set("fields", "name,instagram_business_account")
+      accountsUrl.searchParams.set("access_token", longLivedToken)
+
+      const r = await fetch(accountsUrl.toString(), { method: "GET", cache: "no-store" })
+      const data = await safeJson(r)
+      const list: any[] = Array.isArray(data?.data) ? data.data : []
+      const picked = list.find((p) => p?.instagram_business_account?.id)
+      const nextPageId = typeof picked?.id === "string" ? picked.id : ""
+      const nextIgId = typeof picked?.instagram_business_account?.id === "string" ? picked.instagram_business_account.id : ""
+      if (nextPageId && nextIgId) {
+        pageId = nextPageId
+        igId = nextIgId
+      }
+    } catch {
+      // swallow
+    }
+
+    console.log("[IG CALLBACK] igId =", igId ?? null)
+
+    try {
+      const nowIso = new Date().toISOString()
+
+      if (igId) {
+        try {
+          console.log(
+            JSON.stringify({
+              tag: "IG_CALLBACK_UPSERT_ATTEMPT",
+              ts: new Date().toISOString(),
+              table: "ig_auth_state",
+              igId,
+              pageId: pageId || null,
+            }),
+          )
+        } catch {
+          // swallow
+        }
+
+        try {
+          const { data, error } = await supabaseServer
+            .from("ig_auth_state")
+            .upsert(
+              { ig_user_id: igId, state: "connected", last_verified_at: nowIso },
+              { onConflict: "ig_user_id" },
+            )
+
+          if (error) {
+            console.log(
+              JSON.stringify({
+                tag: "IG_CALLBACK_UPSERT_FAIL",
+                ts: new Date().toISOString(),
+                table: "ig_auth_state",
+                igId,
+                message: error.message,
+                code: (error as any)?.code ?? null,
+                hint: (error as any)?.hint ?? null,
+              }),
+            )
+          } else {
+            const d: any = data as any
+            const len = Array.isArray(d) ? d.length : d ? 1 : 0
+            console.log(
+              JSON.stringify({
+                tag: "IG_CALLBACK_UPSERT_OK",
+                ts: new Date().toISOString(),
+                table: "ig_auth_state",
+                igId,
+                dataLen: len,
+              }),
+            )
+          }
+        } catch (e: any) {
+          console.log(
+            JSON.stringify({
+              tag: "IG_CALLBACK_UPSERT_THROW",
+              ts: new Date().toISOString(),
+              table: "ig_auth_state",
+              igId,
+              message: e?.message ?? String(e),
+            }),
+          )
+        }
+      }
+
+      if (igId && pageId) {
+        try {
+          console.log(
+            JSON.stringify({
+              tag: "IG_CALLBACK_UPSERT_ATTEMPT",
+              ts: new Date().toISOString(),
+              table: "ig_credentials",
+              igId,
+              pageId,
+            }),
+          )
+        } catch {
+          // swallow
+        }
+
+        try {
+          const { data, error } = await supabaseServer
+            .from("ig_credentials")
+            .upsert(
+              {
+                ig_user_id: igId,
+                page_id: pageId,
+                access_token: longLivedToken,
+                expires_at: tokenExpiresAt,
+              },
+              { onConflict: "ig_user_id" },
+            )
+
+          if (error) {
+            console.log(
+              JSON.stringify({
+                tag: "IG_CALLBACK_UPSERT_FAIL",
+                ts: new Date().toISOString(),
+                table: "ig_credentials",
+                igId,
+                pageId,
+                message: error.message,
+                code: (error as any)?.code ?? null,
+                hint: (error as any)?.hint ?? null,
+              }),
+            )
+          } else {
+            const d: any = data as any
+            const len = Array.isArray(d) ? d.length : d ? 1 : 0
+            console.log(
+              JSON.stringify({
+                tag: "IG_CALLBACK_UPSERT_OK",
+                ts: new Date().toISOString(),
+                table: "ig_credentials",
+                igId,
+                pageId,
+                dataLen: len,
+              }),
+            )
+          }
+        } catch (e: any) {
+          console.log(
+            JSON.stringify({
+              tag: "IG_CALLBACK_UPSERT_THROW",
+              ts: new Date().toISOString(),
+              table: "ig_credentials",
+              igId,
+              pageId,
+              message: e?.message ?? String(e),
+            }),
+          )
+        }
+      }
+    } catch {
+      // swallow
+    }
+
     const rawNext = url.searchParams.get("next") ?? cookieNext ?? ""
     const nextPath = normalizeNextPath(rawNext)
     const res = redirectTo(nextPath)
     res.headers.set("Cache-Control", "no-store")
 
     res.cookies.set("ig_connected", "1", { ...baseCookieOptions, httpOnly: false })
-    res.cookies.set("ig_access_token", accessToken, baseCookieOptions)
+    res.cookies.set("ig_access_token", longLivedToken, baseCookieOptions)
+    if (pageId && igId) {
+      res.cookies.set("ig_page_id", pageId, baseCookieOptions)
+      res.cookies.set("ig_ig_id", igId, baseCookieOptions)
+    }
 
     logRedirectResponse(res)
 

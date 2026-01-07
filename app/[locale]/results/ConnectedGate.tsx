@@ -17,9 +17,18 @@ export default function ConnectedGate({ connectedUI, notConnectedUI }: Props) {
     let cancelled = false;
 
     fetch("/api/auth/instagram/me", { cache: "no-store", credentials: "include", signal: controller.signal })
-      .then((r) => {
+      .then(async (r) => {
         if (cancelled) return;
-        setConnected(r.ok);
+        if (!r.ok) {
+          setConnected(false);
+          return;
+        }
+        try {
+          const json = (await r.json()) as any;
+          setConnected(Boolean(json?.connected === true));
+        } catch {
+          setConnected(false);
+        }
       })
       .catch(() => {
         if (cancelled) return;

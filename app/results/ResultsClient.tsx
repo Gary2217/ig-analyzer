@@ -101,6 +101,7 @@ type AccountTrendPoint = {
   impressions?: number
   engaged?: number
   followerDelta?: number
+  ts?: number
 }
 
 const MOCK_ACCOUNT_TREND_7D: AccountTrendPoint[] = [
@@ -380,8 +381,8 @@ function normalizeMedia(raw: any):
       const id = typeof m?.id === "string" ? m.id : String(m?.id ?? "")
       if (!id) return null
 
-      const like_count = Number(m?.like_count)
-      const comments_count = Number(m?.comments_count)
+      const like_count = Number(m?.like_count ?? m?.likes_count ?? m?.likes)
+      const comments_count = Number(m?.comments_count ?? m?.comment_count ?? m?.comments)
 
       return {
         id,
@@ -627,6 +628,7 @@ export default function ResultsClient() {
   })
   const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
+  const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
   const [hasCachedData, setHasCachedData] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -700,8 +702,15 @@ export default function ResultsClient() {
   const mediaReqIdRef = useRef(0)
   const meAbortRef = useRef<AbortController | null>(null)
   const hasSuccessfulMePayloadRef = useRef(false)
+  const lastMeFetchTickRef = useRef<number | null>(null)
+
+  const hasFetchedDailySnapshotRef = useRef(false)
+  const dailySnapshotAbortRef = useRef<AbortController | null>(null)
+  const lastDailySnapshotFetchAtRef = useRef(0)
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
+
+  const tick = forceReloadTick ?? 0
   const lastRevalidateAtRef = useRef(0)
 
   const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
@@ -822,6 +831,124 @@ export default function ResultsClient() {
     `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
   const formatTimeTW = (ms: number) => new Date(ms).toLocaleString("zh-TW", { hour12: false })
 
+  const normalizeDailyInsightsToTrendPoints = useCallback((insightsDaily: any[]): AccountTrendPoint[] => {
+    const toNum = (v: unknown) => {
+      const n = typeof v === "number" ? v : Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+
+    const fmtLabel = (ts: number) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
+      } catch {
+        const d = new Date(ts)
+        const m = String(d.getMonth() + 1).padStart(2, "0")
+        const dd = String(d.getDate()).padStart(2, "0")
+        return `${m}/${dd}`
+      }
+    }
+
+    const startOfDayMs = (ms: number) => {
+      const d = new Date(ms)
+      d.setHours(0, 0, 0, 0)
+      return d.getTime()
+    }
+
+    const byDay = new Map<number, AccountTrendPoint>()
+    const ensure = (ts: number) => {
+      const key = startOfDayMs(ts)
+      const ex = byDay.get(key)
+      if (ex) return ex
+      const init: AccountTrendPoint = { t: fmtLabel(key), ts: key }
+      byDay.set(key, init)
+      return init
+    }
+
+    const list = Array.isArray(insightsDaily) ? insightsDaily : []
+    for (const item of list) {
+      const name = String(item?.name || "").trim()
+      const values = Array.isArray(item?.values) ? item.values : []
+      for (const v of values) {
+        const endTime = typeof v?.end_time === "string" ? v.end_time : ""
+        const ms = endTime ? Date.parse(endTime) : NaN
+        if (!Number.isFinite(ms)) continue
+        const p = ensure(ms)
+        const num = toNum(v?.value)
+        if (name === "reach") p.reach = num === null ? undefined : num
+        else if (name === "total_interactions") p.impressions = num === null ? undefined : num
+        else if (name === "accounts_engaged") p.engaged = num === null ? undefined : num
+      }
+    }
+
+    const out = Array.from(byDay.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([, p]) => p)
+    return out
+  }, [])
+
+  useEffect(() => {
+    if (!isConnectedInstagram) {
+      setTrendNeedsConnectHint(false)
+      return
+    }
+
+    const now = Date.now()
+    const cooldownMs = 90_000
+    if (now - lastDailySnapshotFetchAtRef.current < cooldownMs) return
+    if (hasFetchedDailySnapshotRef.current && trendPoints.length >= 2) return
+
+    lastDailySnapshotFetchAtRef.current = now
+    hasFetchedDailySnapshotRef.current = true
+
+    setTrendFetchStatus({ loading: true, error: "", lastDays: 7 })
+    setTrendNeedsConnectHint(false)
+
+    dailySnapshotAbortRef.current?.abort()
+    const ac = new AbortController()
+    dailySnapshotAbortRef.current = ac
+
+    ;(async () => {
+      try {
+        const res = await fetch("/api/instagram/daily-snapshot?days=7", {
+          method: "POST",
+          cache: "no-store",
+          credentials: "include",
+          signal: ac.signal,
+        })
+
+        if (res.status === 401 || res.status === 403) {
+          setTrendNeedsConnectHint(true)
+          setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+          return
+        }
+
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json?.ok) {
+          setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+          return
+        }
+
+        const raw = Array.isArray(json?.insights_daily) ? json.insights_daily : []
+        const pts = normalizeDailyInsightsToTrendPoints(raw)
+
+        if (pts.length >= 1) {
+          setTrendPoints(pts)
+          setTrendFetchedAt(Date.now())
+          if (__DEV__) console.debug("[trend] source: daily-snapshot", { days: json?.days, len: pts.length })
+        }
+
+        setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+      } catch (e: any) {
+        if (e?.name === "AbortError") return
+        setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+      }
+    })()
+
+    return () => {
+      ac.abort()
+    }
+  }, [isConnectedInstagram, normalizeDailyInsightsToTrendPoints, trendPoints.length])
+
   const allAccountTrend = useMemo<AccountTrendPoint[]>(() => {
     const isRec = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === "object")
     const toNum = (v: unknown) => {
@@ -851,7 +978,7 @@ export default function ResultsClient() {
       return cur
     }
 
-    if (Array.isArray(trendPoints) && trendPoints.length >= 2) {
+    if (Array.isArray(trendPoints) && trendPoints.length >= 1) {
       return trendPoints
     }
 
@@ -873,7 +1000,7 @@ export default function ResultsClient() {
 
     const raw = candidates.find((c) => Array.isArray(c))
     const arr = Array.isArray(raw) ? raw : null
-    if (!arr || arr.length < 2) {
+    if (!arr || arr.length < 1) {
       return __DEV__ ? MOCK_ACCOUNT_TREND_7D : []
     }
 
@@ -942,7 +1069,7 @@ export default function ResultsClient() {
     })
 
     const all = sorted.map((x) => x.p)
-    return all.length >= 2 ? all : (__DEV__ ? MOCK_ACCOUNT_TREND_7D : [])
+    return all.length >= 1 ? all : (__DEV__ ? MOCK_ACCOUNT_TREND_7D : [])
   }, [__DEV__, igMe, igProfile, result, trendPoints])
 
   const accountTrend = useMemo<AccountTrendPoint[]>(() => {
@@ -1295,10 +1422,10 @@ export default function ResultsClient() {
   const topPerformingPosts = (() => {
     if (isConnected && Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0) {
       const items = effectiveRecentMedia
-        .filter((m: any) => ["IMAGE", "VIDEO", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
+        .filter((m: any) => ["IMAGE", "VIDEO", "REELS", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
         .map((m: any) => {
-          const likes = Number(m?.like_count || 0) || 0
-          const comments = Number(m?.comments_count || 0) || 0
+          const likes = Number(m?.like_count ?? m?.likes_count ?? m?.likes ?? 0) || 0
+          const comments = Number(m?.comments_count ?? m?.comment_count ?? m?.comments ?? 0) || 0
           return {
             id: String(m?.id || ""),
             media_type: typeof m?.media_type === "string" ? m.media_type : "",
@@ -1496,9 +1623,13 @@ export default function ResultsClient() {
 
   useEffect(() => {
     if (!isConnectedInstagram) return
-    if (hasFetchedMeRef.current) return
+    if (hasFetchedMeRef.current && lastMeFetchTickRef.current === tick) return
+
+    lastMeFetchTickRef.current = tick
 
     // Mark as fetched immediately to prevent loops from dependency updates.
+    // IMPORTANT: if the request is aborted or returns an empty/invalid body, we reset this flag
+    // so the next render tick (or forceReloadTick) can retry automatically.
     hasFetchedMeRef.current = true
     __resultsMeFetchedOnce = true
 
@@ -1544,6 +1675,12 @@ export default function ResultsClient() {
         const rawText = await r.text()
         if (cancelled) return
         if (!rawText || !rawText.trim()) {
+          hasFetchedMeRef.current = false
+          try {
+            __resultsMeFetchedOnce = false
+          } catch {
+            // ignore
+          }
           return
         }
 
@@ -1551,11 +1688,23 @@ export default function ResultsClient() {
         try {
           raw = JSON.parse(rawText)
         } catch {
+          hasFetchedMeRef.current = false
+          try {
+            __resultsMeFetchedOnce = false
+          } catch {
+            // ignore
+          }
           return
         }
 
         const normalized = normalizeMe(raw)
         if (!normalized) {
+          hasFetchedMeRef.current = false
+          try {
+            __resultsMeFetchedOnce = false
+          } catch {
+            // ignore
+          }
           return
         }
 
@@ -1580,6 +1729,13 @@ export default function ResultsClient() {
         if (cancelled) return
 
         if (isAbortError(err)) {
+          // Abort is common during navigation/hydration. Allow a retry on the next tick.
+          hasFetchedMeRef.current = false
+          try {
+            __resultsMeFetchedOnce = false
+          } catch {
+            // ignore
+          }
           return
         }
 
@@ -1610,7 +1766,7 @@ export default function ResultsClient() {
         // ignore
       }
     }
-  }, [isConnectedInstagram])
+  }, [tick, isConnectedInstagram])
 
   const [gateIsSlow, setGateIsSlow] = useState(false)
 
@@ -3597,6 +3753,11 @@ export default function ResultsClient() {
                 </p>
               </CardHeader>
               <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
+                {trendNeedsConnectHint ? (
+                  <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">
+                    {t("results.connect.subtitle")}
+                  </div>
+                ) : null}
                 <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
                     <div className="shrink-0">
@@ -4819,9 +4980,11 @@ export default function ResultsClient() {
               </CardContent>
             </Card>
 
-            <section id="insights-section" className="mt-3 scroll-mt-32">
-              {renderInsightsSection("desktop")}
-            </section>
+            {selectedGoal === "brandCollaborationProfile" ? (
+              <section id="insights-section" className="mt-3 scroll-mt-32">
+                {renderInsightsSection("desktop")}
+              </section>
+            ) : null}
 
             <div className="hidden sm:block">
               <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
