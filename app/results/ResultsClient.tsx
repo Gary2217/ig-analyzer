@@ -3882,6 +3882,9 @@ export default function ResultsClient() {
                   const selected = selectedAccountTrendMetrics
                   const dataForChart = accountTrend
 
+                  const shouldShowTotalsFallback =
+                    Boolean(dailySnapshotTotals) && (!Array.isArray(trendPoints) || trendPoints.length < 2)
+
                   if (!selected.length) {
                     return (
                       <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
@@ -3992,8 +3995,13 @@ export default function ResultsClient() {
 
                   return (
                     <>
-                      {dataForChart.length < 2 && dailySnapshotTotals ? (
+                      {shouldShowTotalsFallback ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
+                          {(() => {
+                            const totals = dailySnapshotTotals
+                            if (!totals) return null
+                            return (
+                              <>
                           <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0">
                             {t("results.trend.totalsFallback")}
                           </div>
@@ -4003,7 +4011,7 @@ export default function ResultsClient() {
                                 {t("results.trend.legend.reach")}
                               </div>
                               <div className="mt-0.5 text-[clamp(13px,4vw,15px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">
-                                {typeof dailySnapshotTotals.reach === "number" ? Math.round(dailySnapshotTotals.reach).toLocaleString() : "—"}
+                                {typeof totals.reach === "number" ? Math.round(totals.reach).toLocaleString() : "—"}
                               </div>
                             </div>
                             <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 min-w-0">
@@ -4011,8 +4019,8 @@ export default function ResultsClient() {
                                 {t("results.trend.legend.interactions")}
                               </div>
                               <div className="mt-0.5 text-[clamp(13px,4vw,15px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">
-                                {typeof dailySnapshotTotals.interactions === "number"
-                                  ? Math.round(dailySnapshotTotals.interactions).toLocaleString()
+                                {typeof totals.interactions === "number"
+                                  ? Math.round(totals.interactions).toLocaleString()
                                   : "—"}
                               </div>
                             </div>
@@ -4021,10 +4029,13 @@ export default function ResultsClient() {
                                 {t("results.trend.legend.engagedAccounts")}
                               </div>
                               <div className="mt-0.5 text-[clamp(13px,4vw,15px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">
-                                {typeof dailySnapshotTotals.engaged === "number" ? Math.round(dailySnapshotTotals.engaged).toLocaleString() : "—"}
+                                {typeof totals.engaged === "number" ? Math.round(totals.engaged).toLocaleString() : "—"}
                               </div>
                             </div>
                           </div>
+                              </>
+                            )
+                          })()}
                         </div>
                       ) : null}
                       {dataForChart.length < 2 ? (
@@ -4366,16 +4377,29 @@ export default function ResultsClient() {
                     return shown.map((p: any, index: number) => (
                       <div key={String(p?.id ?? index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
                         {(() => {
-                          const real = topPerformingPosts[index] as any
+                          const real = (topPerformingPosts.length > 0 ? (topPerformingPosts[index] as any) : p) as any
 
-                          const likes = typeof real?.likes === "number" ? real.likes : !isConnected ? Number(p?.likes ?? 0) : null
-                          const comments =
-                            typeof real?.comments === "number" ? real.comments : !isConnected ? Number(p?.comments ?? 0) : null
+                          const likesRaw =
+                            typeof real?.likes === "number"
+                              ? real.likes
+                              : typeof real?.like_count === "number"
+                                ? real.like_count
+                                : Number(real?.like_count ?? real?.likes_count ?? real?.likes)
+                          const commentsRaw =
+                            typeof real?.comments === "number"
+                              ? real.comments
+                              : typeof real?.comments_count === "number"
+                                ? real.comments_count
+                                : Number(real?.comments_count ?? real?.comment_count ?? real?.comments)
+
+                          const likes = Number.isFinite(likesRaw) ? likesRaw : null
+                          const comments = Number.isFinite(commentsRaw) ? commentsRaw : null
+
                           const engagement =
-                            typeof real?.engagement === "number"
+                            typeof real?.engagement === "number" && Number.isFinite(real.engagement)
                               ? real.engagement
-                              : !isConnected
-                                ? Number((p?.likes ?? 0) + (p?.comments ?? 0))
+                              : typeof likes === "number" && typeof comments === "number"
+                                ? likes + comments
                                 : null
 
                           const mediaType = typeof real?.media_type === "string" && real.media_type ? real.media_type : ""
@@ -4406,10 +4430,14 @@ export default function ResultsClient() {
                           const thumb = typeof real?.thumbnail_url === "string" && real.thumbnail_url ? real.thumbnail_url : ""
                           if (thumb) return thumb
 
-                          // Only IMAGE/CAROUSEL should use media_url as an <img> source.
-                          // VIDEO/REELS media_url is often an mp4, which will break <img> and fall back to placeholder.
                           const mu = typeof real?.media_url === "string" && real.media_url ? real.media_url : ""
                           if (!mu) return ""
+
+                          // Allow known image-like urls; many setups already provide a valid jpg/webp even for video previews.
+                          const looksLikeImage = /\.(png|jpe?g|webp)(\?.*)?$/i.test(mu)
+                          if (looksLikeImage) return mu
+
+                          // Fallback only for image/carousel types.
                           if (mediaType === "IMAGE" || mediaType === "CAROUSEL_ALBUM") return mu
                           return ""
                         })()
