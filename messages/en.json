@@ -282,15 +282,18 @@
       "selectAtLeastOne": "Please select at least one metric.",
       "legend": {
         "reach": "Reach",
+        "interactions": "Interactions",
         "impressions": "Impressions",
         "engagedAccounts": "Engaged accounts",
         "followerChange": "Follower change"
       },
+      "totalsFallback": "Trend is unavailable. Showing totals instead.",
       "lastSynced": "Last synced",
       "today": "Today",
       "new": "New",
       "metrics": {
         "reach": "Reach",
+        "interactions": "Interactions",
         "impressions": "Impressions",
         "engaged": "Engaged accounts",
         "followerDelta": "Follower change"

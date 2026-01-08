@@ -282,15 +282,18 @@
       "selectAtLeastOne": "請至少選擇一個指標",
       "legend": {
         "reach": "觸及",
+        "interactions": "互動",
         "impressions": "曝光",
         "engagedAccounts": "互動帳號",
         "followerChange": "粉絲變化"
       },
+      "totalsFallback": "暫時無法顯示趨勢，先顯示總數。",
       "lastSynced": "最後同步",
       "today": "今日",
       "new": "新",
       "metrics": {
         "reach": "觸及",
+        "interactions": "互動",
         "impressions": "曝光",
         "engaged": "互動帳號",
         "followerDelta": "粉絲變化"

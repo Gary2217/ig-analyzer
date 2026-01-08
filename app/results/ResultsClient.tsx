@@ -99,19 +99,20 @@ type AccountTrendPoint = {
   t: string
   reach?: number
   impressions?: number
+  interactions?: number
   engaged?: number
   followerDelta?: number
   ts?: number
 }
 
 const MOCK_ACCOUNT_TREND_7D: AccountTrendPoint[] = [
-  { t: "12/22", reach: 18200, impressions: 25400, engaged: 890, followerDelta: 12 },
-  { t: "12/23", reach: 20150, impressions: 27800, engaged: 960, followerDelta: 18 },
-  { t: "12/24", reach: 17500, impressions: 24100, engaged: 820, followerDelta: -3 },
-  { t: "12/25", reach: 22300, impressions: 30500, engaged: 1100, followerDelta: 25 },
-  { t: "12/26", reach: 21000, impressions: 28950, engaged: 1025, followerDelta: 9 },
-  { t: "12/27", reach: 23800, impressions: 33000, engaged: 1210, followerDelta: 31 },
-  { t: "12/28", reach: 25150, impressions: 34800, engaged: 1290, followerDelta: 22 },
+  { t: "12/22", reach: 18200, interactions: 25400, engaged: 890, followerDelta: 12 },
+  { t: "12/23", reach: 20150, interactions: 27800, engaged: 960, followerDelta: 18 },
+  { t: "12/24", reach: 17500, interactions: 24100, engaged: 820, followerDelta: -3 },
+  { t: "12/25", reach: 22300, interactions: 30500, engaged: 1100, followerDelta: 25 },
+  { t: "12/26", reach: 21000, interactions: 28950, engaged: 1025, followerDelta: 9 },
+  { t: "12/27", reach: 23800, interactions: 33000, engaged: 1210, followerDelta: 31 },
+  { t: "12/28", reach: 25150, interactions: 34800, engaged: 1290, followerDelta: 22 },
 ]
 
 type ResultsCachePayloadV1 = {
@@ -621,6 +622,7 @@ export default function ResultsClient() {
   const [mediaLoaded, setMediaLoaded] = useState(false)
 
   const [trendPoints, setTrendPoints] = useState<AccountTrendPoint[]>([])
+  const [dailySnapshotTotals, setDailySnapshotTotals] = useState<{ reach: number | null; interactions: number | null; engaged: number | null } | null>(null)
   const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
     loading: false,
     error: "",
@@ -651,10 +653,10 @@ export default function ResultsClient() {
     | "monetizationFocusedAccount"
   >(null)
 
-  type AccountTrendMetricKey = "reach" | "impressions" | "engaged" | "followerDelta"
+  type AccountTrendMetricKey = "reach" | "interactions" | "impressions" | "engaged" | "followerDelta"
   const [selectedAccountTrendMetrics, setSelectedAccountTrendMetrics] = useState<AccountTrendMetricKey[]>([
     "reach",
-    "impressions",
+    "interactions",
     "engaged",
     "followerDelta",
   ])
@@ -722,6 +724,21 @@ export default function ResultsClient() {
     } catch {
       return false
     }
+  }, [])
+
+  const normalizeTotalsFromInsightsDaily = useCallback((insightsDaily: any[]): { reach: number | null; interactions: number | null; engaged: number | null } | null => {
+    const list = Array.isArray(insightsDaily) ? insightsDaily : []
+    const pickMetric = (metricName: string): number | null => {
+      const it = list.find((x) => String(x?.name || "").trim() === metricName)
+      const v = it?.total_value?.value
+      const n = typeof v === "number" ? v : Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+    const reach = pickMetric("reach")
+    const interactions = pickMetric("total_interactions")
+    const engaged = pickMetric("accounts_engaged")
+    if (reach === null && interactions === null && engaged === null) return null
+    return { reach, interactions, engaged }
   }, [])
 
   const igCacheId = String(((igMe as any)?.profile?.id ?? (igMe as any)?.profile?.username ?? (igMe as any)?.username ?? "me") || "me")
@@ -875,7 +892,7 @@ export default function ResultsClient() {
         const p = ensure(ms)
         const num = toNum(v?.value)
         if (name === "reach") p.reach = num === null ? undefined : num
-        else if (name === "total_interactions") p.impressions = num === null ? undefined : num
+        else if (name === "total_interactions") p.interactions = num === null ? undefined : num
         else if (name === "accounts_engaged") p.engaged = num === null ? undefined : num
       }
     }
@@ -928,8 +945,16 @@ export default function ResultsClient() {
           return
         }
 
-        const raw = Array.isArray(json?.insights_daily) ? json.insights_daily : []
-        const pts = normalizeDailyInsightsToTrendPoints(raw)
+        const totalsRaw = Array.isArray(json?.insights_daily) ? json.insights_daily : []
+        setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
+
+        const seriesRaw = Array.isArray(json?.insights_daily_series)
+          ? json.insights_daily_series
+          : (Array.isArray(json?.insights_daily) && json.insights_daily.some((x: any) => Array.isArray(x?.values))
+              ? json.insights_daily
+              : [])
+
+        const pts = normalizeDailyInsightsToTrendPoints(seriesRaw)
 
         if (pts.length >= 1) {
           setTrendPoints(pts)
@@ -947,7 +972,7 @@ export default function ResultsClient() {
     return () => {
       ac.abort()
     }
-  }, [isConnectedInstagram, normalizeDailyInsightsToTrendPoints, trendPoints.length])
+  }, [isConnectedInstagram, normalizeDailyInsightsToTrendPoints, normalizeTotalsFromInsightsDaily, trendPoints.length])
 
   const allAccountTrend = useMemo<AccountTrendPoint[]>(() => {
     const isRec = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === "object")
@@ -1037,6 +1062,11 @@ export default function ResultsClient() {
           toNum((it as Record<string, unknown>).impressionsTotal) ??
           null
 
+        const interactions = toNum((it as Record<string, unknown>).interactions) ??
+          toNum((it as Record<string, unknown>).total_interactions) ??
+          toNum((it as Record<string, unknown>).totalInteractions) ??
+          null
+
         const engaged = toNum((it as Record<string, unknown>).engaged) ??
           toNum((it as Record<string, unknown>).engaged_accounts) ??
           toNum((it as Record<string, unknown>).accounts_engaged) ??
@@ -1053,6 +1083,7 @@ export default function ResultsClient() {
           t: label,
           reach: typeof reach === "number" ? reach : undefined,
           impressions: typeof impressions === "number" ? impressions : undefined,
+          interactions: typeof interactions === "number" ? interactions : undefined,
           engaged: typeof engaged === "number" ? engaged : undefined,
           followerDelta: typeof followerDelta === "number" ? followerDelta : undefined,
         }
@@ -1353,8 +1384,16 @@ export default function ResultsClient() {
     const posts = effectiveRecentMedia
       .slice(0, 25)
       .map((p) => {
-        const likes = finiteNumOrNull((p as any)?.like_count) ?? 0
-        const comments = finiteNumOrNull((p as any)?.comments_count) ?? 0
+        const likes =
+          finiteNumOrNull((p as any)?.like_count) ??
+          finiteNumOrNull((p as any)?.likes_count) ??
+          finiteNumOrNull((p as any)?.likes) ??
+          0
+        const comments =
+          finiteNumOrNull((p as any)?.comments_count) ??
+          finiteNumOrNull((p as any)?.comment_count) ??
+          finiteNumOrNull((p as any)?.comments) ??
+          0
         const timestamp = typeof (p as any)?.timestamp === "string" ? String((p as any).timestamp) : null
         return { likes, comments, timestamp }
       })
@@ -3777,7 +3816,8 @@ export default function ResultsClient() {
                         {(
                           [
                             { k: "reach" as const, label: t("results.trend.legend.reach"), dot: "#34d399" },
-                            { k: "impressions" as const, label: t("results.trend.legend.impressions"), dot: "#38bdf8" },
+                            { k: "interactions" as const, label: t("results.trend.legend.interactions"), dot: "#38bdf8" },
+                            { k: "impressions" as const, label: t("results.trend.legend.impressions"), dot: "#93c5fd" },
                             { k: "engaged" as const, label: t("results.trend.legend.engagedAccounts"), dot: "#e879f9" },
                             { k: "followerDelta" as const, label: t("results.trend.legend.followerChange"), dot: "#fbbf24" },
                           ] as const
@@ -3853,18 +3893,37 @@ export default function ResultsClient() {
                   const labelFor = (k: AccountTrendMetricKey) =>
                     k === "reach"
                       ? t("results.trend.legend.reach")
-                      : k === "impressions"
-                        ? t("results.trend.legend.impressions")
-                        : k === "engaged"
-                          ? t("results.trend.legend.engagedAccounts")
-                          : t("results.trend.legend.followerChange")
+                      : k === "interactions"
+                        ? t("results.trend.legend.interactions")
+                        : k === "impressions"
+                          ? t("results.trend.legend.impressions")
+                          : k === "engaged"
+                            ? t("results.trend.legend.engagedAccounts")
+                            : t("results.trend.legend.followerChange")
                   const colorFor = (k: AccountTrendMetricKey) =>
-                    k === "reach" ? "#34d399" : k === "impressions" ? "#38bdf8" : k === "engaged" ? "#e879f9" : "#fbbf24"
+                    k === "reach"
+                      ? "#34d399"
+                      : k === "interactions"
+                        ? "#38bdf8"
+                        : k === "impressions"
+                          ? "#93c5fd"
+                          : k === "engaged"
+                            ? "#e879f9"
+                            : "#fbbf24"
 
                   const series = selected.map((k) => {
                     const raw = dataForChart
                       .map((p, i) => {
-                        const y = k === "reach" ? p.reach : k === "impressions" ? p.impressions : k === "engaged" ? p.engaged : p.followerDelta
+                        const y =
+                          k === "reach"
+                            ? p.reach
+                            : k === "interactions"
+                              ? p.interactions
+                              : k === "impressions"
+                                ? p.impressions
+                                : k === "engaged"
+                                  ? p.engaged
+                                  : p.followerDelta
                         if (typeof y !== "number" || !Number.isFinite(y)) return null
                         return { i, y }
                       })
@@ -3911,11 +3970,13 @@ export default function ResultsClient() {
                           const val =
                             k === "reach"
                               ? hoverPoint.reach
-                              : k === "impressions"
-                                ? hoverPoint.impressions
-                                : k === "engaged"
-                                  ? hoverPoint.engaged
-                                  : hoverPoint.followerDelta
+                              : k === "interactions"
+                                ? hoverPoint.interactions
+                                : k === "impressions"
+                                  ? hoverPoint.impressions
+                                  : k === "engaged"
+                                    ? hoverPoint.engaged
+                                    : hoverPoint.followerDelta
                           if (typeof val !== "number" || !Number.isFinite(val)) return null
                           return {
                             label: labelFor(k),
@@ -3931,6 +3992,41 @@ export default function ResultsClient() {
 
                   return (
                     <>
+                      {dataForChart.length < 2 && dailySnapshotTotals ? (
+                        <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
+                          <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0">
+                            {t("results.trend.totalsFallback")}
+                          </div>
+                          <div className="mt-2 grid grid-cols-3 gap-2 min-w-0">
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 min-w-0">
+                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">
+                                {t("results.trend.legend.reach")}
+                              </div>
+                              <div className="mt-0.5 text-[clamp(13px,4vw,15px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">
+                                {typeof dailySnapshotTotals.reach === "number" ? Math.round(dailySnapshotTotals.reach).toLocaleString() : "—"}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 min-w-0">
+                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">
+                                {t("results.trend.legend.interactions")}
+                              </div>
+                              <div className="mt-0.5 text-[clamp(13px,4vw,15px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">
+                                {typeof dailySnapshotTotals.interactions === "number"
+                                  ? Math.round(dailySnapshotTotals.interactions).toLocaleString()
+                                  : "—"}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 min-w-0">
+                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">
+                                {t("results.trend.legend.engagedAccounts")}
+                              </div>
+                              <div className="mt-0.5 text-[clamp(13px,4vw,15px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">
+                                {typeof dailySnapshotTotals.engaged === "number" ? Math.round(dailySnapshotTotals.engaged).toLocaleString() : "—"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                       {dataForChart.length < 2 ? (
                         <div className="w-full mt-2">
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
