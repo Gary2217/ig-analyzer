@@ -4,6 +4,37 @@ import { supabaseServer } from "@/lib/supabase/server"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+function normalizeOrigin(v: string) {
+  return v.replace(/\/$/, "")
+}
+
+function getAllowedOrigins() {
+  const list = [
+    process.env.APP_BASE_URL,
+    process.env.NEXT_PUBLIC_APP_BASE_URL,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    // 若有用 LAN 測試可打開
+    // "http://10.5.0.2:3000",
+  ]
+    .filter(Boolean)
+    .map((s) => normalizeOrigin(String(s)))
+
+  return Array.from(new Set(list))
+}
+
+function isAllowedRedirectUri(redirectUri: string, origin: string | null) {
+  const allowed = getAllowedOrigins()
+
+  // redirectUri 只要符合 allowlist 任一 base 即可
+  if (allowed.some((base) => redirectUri.startsWith(base))) return true
+
+  // 保底：避免反代 / port 變化
+  if (origin && redirectUri.startsWith(normalizeOrigin(origin))) return true
+
+  return false
+}
+
 function getRequestOrigin(req: NextRequest) {
   const xfProto = req.headers.get("x-forwarded-proto")?.toLowerCase()
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host
@@ -158,10 +189,20 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const redirectUri =
-      cookieRedirectUri && cookieRedirectUri.startsWith(origin)
-        ? cookieRedirectUri
-        : `${origin}/api/auth/instagram/callback`
+    if (cookieRedirectUri && !isAllowedRedirectUri(cookieRedirectUri, origin)) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: "redirect_uri_not_allowed",
+          cookieRedirectUri,
+          origin,
+          allowed: getAllowedOrigins(),
+        }),
+        { status: 403 },
+      )
+    }
+
+    const redirectUri = cookieRedirectUri || `${origin}/api/auth/instagram/callback`
 
     const codeStr = code as string
 
