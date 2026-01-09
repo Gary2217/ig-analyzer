@@ -26,16 +26,14 @@ let __resultsMeFetchedOnce = false
 function toNum(value: unknown): number | undefined {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined
   if (typeof value === "string") {
-    const s = value.trim()
-    if (!s) return undefined
-    const n = Number(s)
+    const n = Number(value)
     return Number.isFinite(n) ? n : undefined
   }
   return undefined
 }
 
-function isAbortError(e: unknown): boolean {
-  const anyErr = e as any
+function isAbortError(err: unknown): boolean {
+  const anyErr = err as any
   const name = typeof anyErr?.name === "string" ? anyErr.name : ""
   const msg = typeof anyErr?.message === "string" ? anyErr.message : ""
   const s = `${name} ${msg}`.toLowerCase()
@@ -169,6 +167,30 @@ function saWriteResultsCache(key: string, payload: ResultsCachePayloadV1) {
   } catch {
     // ignore
   }
+}
+
+function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
+  const FALLBACK_IMG = "/window.svg"
+  const [currentSrc, setCurrentSrc] = useState<string>(src && src.length > 0 ? src : FALLBACK_IMG)
+
+  useEffect(() => {
+    setCurrentSrc(src && src.length > 0 ? src : FALLBACK_IMG)
+  }, [src])
+
+  // eslint-disable-next-line @next/next/no-img-element
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      className="absolute inset-0 h-full w-full object-cover"
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (currentSrc !== FALLBACK_IMG) setCurrentSrc(FALLBACK_IMG)
+      }}
+    />
+  )
 }
 
 function GateShell(props: { title: string; subtitle?: string; children: ReactNode }) {
@@ -374,26 +396,25 @@ function normalizeMedia(raw: any):
     thumbnail_url?: string
     caption?: string
   }> {
-  const src =
-    Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.items) ? raw.items : []
+  const src = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : []
 
   return src
     .map((m: any) => {
       const id = typeof m?.id === "string" ? m.id : String(m?.id ?? "")
       if (!id) return null
 
-      const like_count = Number(m?.like_count ?? m?.likes_count ?? m?.likes)
-      const comments_count = Number(m?.comments_count ?? m?.comment_count ?? m?.comments)
+      const like_count = Number(m?.like_count ?? m?.likeCount ?? m?.likes_count ?? m?.likesCount ?? m?.likes)
+      const comments_count = Number(m?.comments_count ?? m?.commentsCount ?? m?.comment_count ?? m?.commentCount ?? m?.comments)
 
       return {
         id,
         like_count: Number.isFinite(like_count) ? like_count : undefined,
         comments_count: Number.isFinite(comments_count) ? comments_count : undefined,
         timestamp: typeof m?.timestamp === "string" ? m.timestamp : undefined,
-        media_type: typeof m?.media_type === "string" ? m.media_type : undefined,
+        media_type: typeof (m?.media_type ?? m?.mediaType) === "string" ? String(m?.media_type ?? m?.mediaType) : undefined,
         permalink: typeof m?.permalink === "string" ? m.permalink : undefined,
-        media_url: typeof m?.media_url === "string" ? m.media_url : undefined,
-        thumbnail_url: typeof m?.thumbnail_url === "string" ? m.thumbnail_url : undefined,
+        media_url: typeof (m?.media_url ?? m?.mediaUrl) === "string" ? String(m?.media_url ?? m?.mediaUrl) : undefined,
+        thumbnail_url: typeof (m?.thumbnail_url ?? m?.thumbnailUrl) === "string" ? String(m?.thumbnail_url ?? m?.thumbnailUrl) : undefined,
         caption: typeof m?.caption === "string" ? m.caption : undefined,
       }
     })
@@ -464,6 +485,7 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
 
 export default function ResultsClient() {
   const __DEV__ = process.env.NODE_ENV !== "production"
+  const __DEBUG_RESULTS__ = process.env.NEXT_PUBLIC_DEBUG_RESULTS === "1"
   const dlog = useCallback(
     (...args: any[]) => {
       if (__DEV__) console.debug(...args)
@@ -1216,7 +1238,6 @@ export default function ResultsClient() {
   }, [__DEV__, dlog, isConnected, isConnectedInstagram, topPostsLen, igRecentLen, mediaLen, topPostsHasReal])
 
   useEffect(() => {
-    if (!(isConnectedInstagram || cookieConnected)) return
     if (hasFetchedMediaRef.current && mediaLen > 0) return
     if (hasFetchedMediaRef.current) return
 
@@ -1250,7 +1271,8 @@ export default function ResultsClient() {
 
         setMediaError(null)
 
-        const items = normalizeMedia(json)
+        const dataArr = Array.isArray((json as any)?.data) ? (json as any).data : []
+        const items = normalizeMedia(dataArr)
 
         dlog("[media] response received:", {
           hasDataArray: Array.isArray(json?.data),
@@ -1258,6 +1280,45 @@ export default function ResultsClient() {
           hasPaging: !!json?.paging,
           normalizedLen: items.length,
         })
+
+        if (__DEBUG_RESULTS__) {
+          try {
+            const first: any = Array.isArray(dataArr) && dataArr.length > 0 ? dataArr[0] : null
+            const firstKeys = first && typeof first === "object" ? Object.keys(first).slice(0, 50) : []
+            const byType: Record<string, number> = {}
+            for (const it of Array.isArray(dataArr) ? dataArr : []) {
+              const mt = String((it as any)?.media_type ?? (it as any)?.mediaType ?? "") || "(unknown)"
+              byType[mt] = (byType[mt] ?? 0) + 1
+            }
+
+            const previewHost = (() => {
+              if (!first) return ""
+              const mt = String(first?.media_type ?? first?.mediaType ?? "")
+              const mu = String(first?.media_url ?? first?.mediaUrl ?? "")
+              const tu = String(first?.thumbnail_url ?? first?.thumbnailUrl ?? "")
+              const isV = mt === "VIDEO" || mt === "REELS"
+              const preview = isV ? (tu || "") : (mu || tu || "")
+              if (!preview) return ""
+              const noQs = preview.split("?")[0]
+              try {
+                return new URL(noQs).hostname
+              } catch {
+                return ""
+              }
+            })()
+
+            // eslint-disable-next-line no-console
+            console.debug("[DEBUG_RESULTS] /api/instagram/media", {
+              hasData: Array.isArray(dataArr),
+              dataLen: Array.isArray(dataArr) ? dataArr.length : 0,
+              firstKeys,
+              previewHost,
+              byType,
+            })
+          } catch {
+            // ignore
+          }
+        }
 
         setMedia((prev: any) => {
           if (Array.isArray(prev) && prev.length > 0 && items.length === 0) return prev
@@ -1279,12 +1340,23 @@ export default function ResultsClient() {
         const status = (err as any)?.status
         const body = (err as any)?.body
 
-        const reason = typeof body?.error === "string" ? body.error : `http_${typeof status === "number" ? status : 0}`
+        const bodyError = typeof body?.error === "string" ? body.error : ""
+        const isExpectedAuthFailure =
+          status === 401 ||
+          (status === 403 && (bodyError.startsWith("missing_cookie") || bodyError.startsWith("missing_token")))
+        if (isExpectedAuthFailure) {
+          // UI-only: unauthenticated visitors can still view demo content.
+          // Do not show an error banner for expected auth failures.
+          setMediaLoaded(true)
+          return
+        }
+
+        const reason = bodyError ? bodyError : `http_${typeof status === "number" ? status : 0}`
         const detail = typeof body?.detail === "string" && body.detail ? `: ${body.detail}` : ""
         setMediaError(`${reason}${detail}`)
 
         if (__DEV__) {
-          const reason = typeof body?.error === "string" ? body.error : null
+          const reason = bodyError || null
           const detail = typeof body?.detail === "string" ? body.detail : null
           dlog("[media] fetch failed", { status, reason, detail })
         }
@@ -1299,7 +1371,7 @@ export default function ResultsClient() {
       cancelled = true
       // Do not reset hasFetchedMediaRef here; cleanup can run during dev re-renders.
     }
-  }, [cookieConnected, forceReloadTick, isConnectedInstagram])
+  }, [forceReloadTick, mediaLen])
 
   useEffect(() => {
     const onFocus = () => {
@@ -1458,34 +1530,110 @@ export default function ResultsClient() {
   const kpiMediaCount = numOrNull(igProfile?.media_count)
   const kpiPosts = kpiMediaCount
 
-  const topPerformingPosts = (() => {
-    if (isConnected && Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0) {
-      const items = effectiveRecentMedia
-        .filter((m: any) => ["IMAGE", "VIDEO", "REELS", "CAROUSEL_ALBUM"].includes(String(m?.media_type || "")))
-        .map((m: any) => {
-          const likes = Number(m?.like_count ?? m?.likes_count ?? m?.likes ?? 0) || 0
-          const comments = Number(m?.comments_count ?? m?.comment_count ?? m?.comments ?? 0) || 0
-          return {
-            id: String(m?.id || ""),
-            media_type: typeof m?.media_type === "string" ? m.media_type : "",
-            likes,
-            comments,
-            engagement: likes + comments,
-            permalink: typeof m?.permalink === "string" ? m.permalink : "",
-            media_url: typeof m?.media_url === "string" ? m.media_url : "",
-            thumbnail_url: typeof m?.thumbnail_url === "string" ? m.thumbnail_url : "",
-            timestamp: typeof m?.timestamp === "string" ? m.timestamp : "",
+  const hasRealMedia = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
+
+  const topPerformingPosts = useMemo(() => {
+    if (!hasRealMedia) return []
+
+    const copy = [...effectiveRecentMedia]
+    copy.sort((a, b) => {
+      const al = toNum((a as any)?.like_count) ?? 0
+      const ac = toNum((a as any)?.comments_count) ?? 0
+      const bl = toNum((b as any)?.like_count) ?? 0
+      const bc = toNum((b as any)?.comments_count) ?? 0
+      return (bl + bc) - (al + ac)
+    })
+    return copy.slice(0, 3)
+  }, [effectiveRecentMedia, hasRealMedia])
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return
+    const first = hasRealMedia ? ((effectiveRecentMedia as any[])?.[0] as any) : null
+    // eslint-disable-next-line no-console
+    console.log("[top-posts]", {
+      mediaLen: Array.isArray(media) ? media.length : 0,
+      effectiveRecentLen: Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia.length : 0,
+      hasRealMedia,
+      topPostsLen: Array.isArray(topPerformingPosts) ? topPerformingPosts.length : 0,
+      firstPresence: first
+        ? {
+            hasMediaUrl: typeof first.media_url === "string" && first.media_url.length > 0,
+            hasThumb: typeof first.thumbnail_url === "string" && first.thumbnail_url.length > 0,
+            hasLike: typeof first.like_count === "number",
+            hasComments: typeof first.comments_count === "number",
           }
-        })
-        .filter((p) => Boolean(p.id))
-        .sort((a, b) => (b.likes + b.comments) - (a.likes + a.comments))
+        : null,
+    })
+  }, [hasRealMedia, effectiveRecentMedia, topPerformingPosts, media])
 
-      return items.slice(0, 3)
+  useEffect(() => {
+    if (!__DEV__) return
+    try {
+      const first: any = Array.isArray(topPerformingPosts) && topPerformingPosts.length > 0 ? topPerformingPosts[0] : null
+      dlog("[top-posts] computed", {
+        mediaLen,
+        effectiveRecentLen,
+        isConnected,
+        topPostsLen: Array.isArray(topPerformingPosts) ? topPerformingPosts.length : 0,
+        first: first
+          ? {
+              id: String(first?.id ?? "").slice(0, 12),
+              media_type: String(first?.media_type ?? ""),
+              has_media_url: Boolean(first?.media_url),
+              has_thumbnail_url: Boolean(first?.thumbnail_url),
+              has_like_count: typeof first?.like_count === "number",
+              has_comments_count: typeof first?.comments_count === "number",
+            }
+          : null,
+      })
+    } catch {
+      // ignore
     }
+  }, [__DEV__, dlog, effectiveRecentLen, isConnected, mediaLen, topPerformingPosts])
 
-    if (isConnected) return []
-    return mockAnalysis.topPosts.slice(0, 3).map((p) => ({ ...p, engagement: p.likes + p.comments }))
-  })()
+  useEffect(() => {
+    if (!__DEBUG_RESULTS__) return
+    try {
+      const arr = Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia : []
+      const first: any = arr[0] || null
+      if (!first) {
+        // eslint-disable-next-line no-console
+        console.debug("[DEBUG_RESULTS] media: empty")
+        return
+      }
+
+      const mediaType = String(first?.media_type ?? first?.mediaType ?? "")
+      const mediaUrl = String(first?.media_url ?? first?.mediaUrl ?? "")
+      const thumbUrl = String(first?.thumbnail_url ?? first?.thumbnailUrl ?? "")
+      const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
+      const previewUrl = isVideo ? (thumbUrl || "") : (mediaUrl || thumbUrl || "")
+      const mediaExt = (() => {
+        const m = mediaUrl.toLowerCase()
+        const u = m.split("?")[0]
+        const dot = u.lastIndexOf(".")
+        return dot >= 0 ? u.slice(dot) : ""
+      })()
+      const previewHost = (() => {
+        try {
+          return previewUrl ? new URL(previewUrl).hostname : ""
+        } catch {
+          return ""
+        }
+      })()
+
+      // eslint-disable-next-line no-console
+      console.debug("[DEBUG_RESULTS] first media", {
+        media_type: mediaType,
+        media_url_ext: mediaExt,
+        has_thumbnail_url: Boolean(thumbUrl),
+        preview_host: previewHost,
+        has_like_count: typeof first?.like_count !== "undefined" || typeof first?.likeCount !== "undefined",
+        has_comments_count: typeof first?.comments_count !== "undefined" || typeof first?.commentsCount !== "undefined",
+      })
+    } catch {
+      // ignore
+    }
+  }, [__DEBUG_RESULTS__, effectiveRecentMedia])
 
   useEffect(() => {
     try {
@@ -1497,8 +1645,8 @@ export default function ResultsClient() {
         thumbnail_url: p?.thumbnail_url ?? "",
         media_url: p?.media_url ?? "",
         permalink: getPostPermalink(p),
-        likes: p?.likes ?? null,
-        comments: p?.comments ?? null,
+        like_count: typeof p?.like_count === "number" ? p.like_count : (typeof p?.likeCount === "number" ? p.likeCount : null),
+        comments_count: typeof p?.comments_count === "number" ? p.comments_count : (typeof p?.commentsCount === "number" ? p.commentsCount : null),
         engagement: p?.engagement ?? null,
         timestamp: p?.timestamp ?? "",
       }))
@@ -1751,7 +1899,6 @@ export default function ResultsClient() {
 
         if (__DEV__) {
           const p = (normalized as any)?.profile
-          const avatarUrl = String(p?.profile_picture_url ?? (normalized as any)?.profile_picture_url ?? "")
           // eslint-disable-next-line no-console
           dlog("[me ui profile stats]", {
             connected: Boolean((normalized as any)?.connected),
@@ -1759,7 +1906,7 @@ export default function ResultsClient() {
             followers_count: p?.followers_count,
             follows_count: p?.follows_count,
             media_count: p?.media_count,
-            avatarUrl,
+            has_profile_picture_url: Boolean(p?.profile_picture_url ?? (normalized as any)?.profile_picture_url),
           })
         }
 
@@ -4325,7 +4472,11 @@ export default function ResultsClient() {
               </CardContent>
             </Card>
 
-            <Card id="top-posts-section" className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40 overflow-hidden">
+            <Card
+              id="top-posts-section"
+              data-testid="top-performing-posts"
+              className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40 overflow-hidden"
+            >
               <CardHeader className="border-b border-white/10 px-3 pt-4 pb-1 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-center justify-between gap-3 min-w-0">
                 <div className="min-w-0">
                   <CardTitle className="text-sm text-white truncate">{t("results.topPosts.title")}</CardTitle>
@@ -4367,33 +4518,38 @@ export default function ResultsClient() {
               <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {(() => {
-                    const src = isConnected
-                      ? (topPerformingPosts.length > 0
-                          ? topPerformingPosts
-                          : Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` })))
-                      : mockAnalysis.topPosts.slice(0, 3)
+                    const placeholders = Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` }))
+                    const mockPosts = mockAnalysis.topPosts
+                    const renderCards = hasRealMedia
+                      ? (topPerformingPosts.length > 0 ? topPerformingPosts : (effectiveRecentMedia as any[]).slice(0, 3))
+                      : (isConnected ? placeholders : mockPosts.slice(0, 3))
 
-                    const shown = !isSmUpViewport ? (src as any[]).slice(0, 3) : (src as any[])
+                    const shown = !isSmUpViewport ? (renderCards as any[]).slice(0, 3) : (renderCards as any[])
                     return shown.map((p: any, index: number) => (
                       <div key={String(p?.id ?? index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
                         {(() => {
-                          const real = (topPerformingPosts.length > 0 ? (topPerformingPosts[index] as any) : p) as any
+                          const real = p as any
 
-                          const likesRaw =
-                            typeof real?.likes === "number"
-                              ? real.likes
-                              : typeof real?.like_count === "number"
-                                ? real.like_count
-                                : Number(real?.like_count ?? real?.likes_count ?? real?.likes)
-                          const commentsRaw =
-                            typeof real?.comments === "number"
-                              ? real.comments
-                              : typeof real?.comments_count === "number"
-                                ? real.comments_count
-                                : Number(real?.comments_count ?? real?.comment_count ?? real?.comments)
+                          const likeCountRaw =
+                            typeof real?.like_count === "number"
+                              ? real.like_count
+                              : typeof real?.likeCount === "number"
+                                ? real.likeCount
+                                : typeof real?.likes === "number"
+                                  ? real.likes
+                                  : Number(real?.like_count ?? real?.likeCount ?? real?.likes_count ?? real?.likesCount ?? real?.likes)
 
-                          const likes = Number.isFinite(likesRaw) ? likesRaw : null
-                          const comments = Number.isFinite(commentsRaw) ? commentsRaw : null
+                          const commentsCountRaw =
+                            typeof real?.comments_count === "number"
+                              ? real.comments_count
+                              : typeof real?.commentsCount === "number"
+                                ? real.commentsCount
+                                : typeof real?.comments === "number"
+                                  ? real.comments
+                                  : Number(real?.comments_count ?? real?.commentsCount ?? real?.comment_count ?? real?.commentCount ?? real?.comments)
+
+                          const likes = Number.isFinite(likeCountRaw) ? likeCountRaw : null
+                          const comments = Number.isFinite(commentsCountRaw) ? commentsCountRaw : null
 
                           const engagement =
                             typeof real?.engagement === "number" && Number.isFinite(real.engagement)
@@ -4402,7 +4558,10 @@ export default function ResultsClient() {
                                 ? likes + comments
                                 : null
 
-                          const mediaType = typeof real?.media_type === "string" && real.media_type ? real.media_type : ""
+                          const mediaType =
+                            typeof (real?.media_type ?? real?.mediaType) === "string" && String(real?.media_type ?? real?.mediaType)
+                              ? String(real?.media_type ?? real?.mediaType)
+                              : ""
 
                         const ymd = (() => {
                           const ts = typeof real?.timestamp === "string" ? real.timestamp : ""
@@ -4426,24 +4585,16 @@ export default function ResultsClient() {
                             ? `https://www.instagram.com/p/${real.shortcode}/`
                             : "")
 
-                        const thumbSrc = (() => {
-                          const thumb = typeof real?.thumbnail_url === "string" && real.thumbnail_url ? real.thumbnail_url : ""
-                          if (thumb) return thumb
-
-                          const mu = typeof real?.media_url === "string" && real.media_url ? real.media_url : ""
-                          if (!mu) return ""
-
-                          // Allow known image-like urls; many setups already provide a valid jpg/webp even for video previews.
-                          const looksLikeImage = /\.(png|jpe?g|webp)(\?.*)?$/i.test(mu)
-                          if (looksLikeImage) return mu
-
-                          // Fallback only for image/carousel types.
-                          if (mediaType === "IMAGE" || mediaType === "CAROUSEL_ALBUM") return mu
-                          return ""
+                        const previewUrl = (() => {
+                          const mt = String((real as any)?.media_type || "")
+                          const mu = String((real as any)?.media_url || "")
+                          const tu = String((real as any)?.thumbnail_url || "")
+                          const isV = mt === "VIDEO" || mt === "REELS"
+                          return (isV ? (tu || mu) : mu) || "/window.svg"
                         })()
 
-                        if (__DEV__ && !thumbSrc) {
-                          dlog("[top posts] missing thumbnail", {
+                        if (__DEV__ && !previewUrl) {
+                          dlog("[top posts] missing previewUrl", {
                             id: real?.id,
                             media_type: real?.media_type,
                             has_thumbnail_url: Boolean(real?.thumbnail_url),
@@ -4458,101 +4609,17 @@ export default function ResultsClient() {
                           ? `/${activeLocale}/post-analysis?url=${encodeURIComponent(permalink)}`
                           : `/${activeLocale}/post-analysis`
 
+                        const insightsUnavailable =
+                          (typeof likes !== "number" || !Number.isFinite(likes)) &&
+                          (typeof comments !== "number" || !Number.isFinite(comments))
+                        const insightsUnavailableLabel = isZh ? "無法取得洞察" : "Insights unavailable"
+
                         return (
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
-                              {igHref ? (
-                                <a
-                                  href={igHref}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="block relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full"
-                                >
-                                  <div className="absolute inset-0 bg-white/10 pointer-events-none" />
-                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
-                                      {mediaType ? mediaType : "POST"}
-                                    </span>
-                                  </div>
-                                  {thumbSrc ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={thumbSrc}
-                                      alt=""
-                                      className="absolute inset-0 h-full w-full object-cover"
-                                      referrerPolicy="no-referrer"
-                                      onError={(e) => {
-                                        // hide broken image to reveal placeholder underneath
-                                        e.currentTarget.style.display = "none"
-                                      }}
-                                    />
-                                  ) : null}
-
-                                  {isVideo ? (
-                                    <div
-                                      className="absolute left-2 top-2 sm:hidden max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium leading-none text-white"
-                                      title={videoLabel}
-                                    >
-                                      <span className="truncate">{videoLabel}</span>
-                                    </div>
-                                  ) : null}
-
-                                  {isVideo ? (
-                                    <div className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center bg-black/0 opacity-0 group-hover:opacity-100 group-hover:bg-black/30 transition">
-                                      <div
-                                        className="max-w-[90%] overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-2 rounded-full bg-black/70 px-3 py-1 text-[11px] sm:text-xs font-medium leading-none text-white"
-                                        title={videoLabel}
-                                      >
-                                        <span className="shrink-0">▶</span>
-                                        <span className="truncate">{videoLabel}</span>
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                </a>
-                              ) : (
-                                <div className="block relative group overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                  <div className="absolute inset-0 bg-white/10 pointer-events-none" />
-                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <span className="text-[10px] sm:text-[11px] font-semibold text-white/60 tabular-nums tracking-wide whitespace-nowrap truncate max-w-[90%]">
-                                      {mediaType ? mediaType : "POST"}
-                                    </span>
-                                  </div>
-                                  {thumbSrc ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={thumbSrc}
-                                      alt=""
-                                      className="absolute inset-0 h-full w-full object-cover"
-                                      referrerPolicy="no-referrer"
-                                      onError={(e) => {
-                                        // hide broken image to reveal placeholder underneath
-                                        e.currentTarget.style.display = "none"
-                                      }}
-                                    />
-                                  ) : null}
-
-                                  {isVideo ? (
-                                    <div
-                                      className="absolute left-2 top-2 sm:hidden max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium leading-none text-white"
-                                      title={videoLabel}
-                                    >
-                                      <span className="truncate">{videoLabel}</span>
-                                    </div>
-                                  ) : null}
-
-                                  {isVideo ? (
-                                    <div className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center bg-black/0 opacity-0 group-hover:opacity-100 group-hover:bg-black/30 transition">
-                                      <div
-                                        className="max-w-[90%] overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-2 rounded-full bg-black/70 px-3 py-1 text-[11px] sm:text-xs font-medium leading-none text-white"
-                                        title={videoLabel}
-                                      >
-                                        <span className="shrink-0">▶</span>
-                                        <span className="truncate">{videoLabel}</span>
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              )}
+                              <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
+                                <TopPostThumb src={previewUrl} alt="post preview" />
+                              </a>
                             </div>
 
                             <div className="min-w-0 flex-1">
@@ -4563,6 +4630,12 @@ export default function ResultsClient() {
                                     <span className="mx-1">·</span>
                                     <span className={numMono}>{ymd}</span>
                                   </div>
+
+                                  {insightsUnavailable ? (
+                                    <div className="mt-1 inline-flex max-w-full items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/65 whitespace-nowrap overflow-hidden text-ellipsis">
+                                      {insightsUnavailableLabel}
+                                    </div>
+                                  ) : null}
                                 </div>
 
                                 <div className="flex items-center gap-1.5 shrink-0">
