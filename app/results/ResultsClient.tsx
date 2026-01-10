@@ -1271,18 +1271,27 @@ export default function ResultsClient() {
 
         setMediaError(null)
 
-        const dataArr = Array.isArray((json as any)?.data) ? (json as any).data : []
-        const items = normalizeMedia(dataArr)
+        // Accept both shapes:
+        // - { data: [...] }
+        // - [...] (raw array)
+        const rawMedia = Array.isArray((json as any)?.data)
+          ? (json as any).data
+          : Array.isArray(json)
+            ? json
+            : []
+
+        const items = normalizeMedia(rawMedia)
 
         dlog("[media] response received:", {
-          hasDataArray: Array.isArray(json?.data),
-          dataLength: Array.isArray(json?.data) ? json.data.length : 0,
-          hasPaging: !!json?.paging,
+          hasDataArray: Array.isArray((json as any)?.data),
+          dataLength: Array.isArray((json as any)?.data) ? (json as any).data.length : Array.isArray(json) ? json.length : 0,
+          hasPaging: !!(json as any)?.paging,
           normalizedLen: items.length,
         })
 
         if (__DEBUG_RESULTS__) {
           try {
+            const dataArr = Array.isArray(rawMedia) ? rawMedia : []
             const first: any = Array.isArray(dataArr) && dataArr.length > 0 ? dataArr[0] : null
             const firstKeys = first && typeof first === "object" ? Object.keys(first).slice(0, 50) : []
             const byType: Record<string, number> = {}
@@ -1525,11 +1534,13 @@ export default function ResultsClient() {
 
   const isPreview = (n: number | null) => isConnected && n === null
 
-  const kpiFollowers = numOrNull(igProfile?.followers_count)
-  const kpiFollowing = numOrNull(igProfile?.follows_count ?? igProfile?.following_count)
-  const kpiMediaCount = numOrNull(igProfile?.media_count)
+  // KPI numbers should accept numeric strings from API responses.
+  const kpiFollowers = finiteNumOrNull(igProfile?.followers_count)
+  const kpiFollowing = finiteNumOrNull(igProfile?.follows_count ?? igProfile?.following_count)
+  const kpiMediaCount = finiteNumOrNull(igProfile?.media_count)
   const kpiPosts = kpiMediaCount
 
+  // Treat any non-empty media array as real media; do NOT require like/comment metrics.
   const hasRealMedia = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
 
   const topPerformingPosts = useMemo(() => {
@@ -4586,11 +4597,9 @@ export default function ResultsClient() {
                             : "")
 
                         const previewUrl = (() => {
-                          const mt = String((real as any)?.media_type || "")
-                          const mu = String((real as any)?.media_url || "")
-                          const tu = String((real as any)?.thumbnail_url || "")
-                          const isV = mt === "VIDEO" || mt === "REELS"
-                          return (isV ? (tu || mu) : mu) || "/window.svg"
+                          const tu = typeof (real as any)?.thumbnail_url === "string" ? String((real as any).thumbnail_url) : ""
+                          const mu = typeof (real as any)?.media_url === "string" ? String((real as any).media_url) : ""
+                          return tu || mu || ""
                         })()
 
                         if (__DEV__ && !previewUrl) {
@@ -4618,7 +4627,7 @@ export default function ResultsClient() {
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                <TopPostThumb src={previewUrl} alt="post preview" />
+                                <TopPostThumb src={previewUrl || undefined} alt="post preview" />
                               </a>
                             </div>
 
