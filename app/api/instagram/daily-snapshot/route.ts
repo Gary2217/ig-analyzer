@@ -1,11 +1,93 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const BUILD_MARKER = "daily-snapshot-points-v2"
+
 const GRAPH_VERSION = "v24.0"
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
+
+function todayUtcDateString() {
+  const d = new Date()
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+  const dd = String(d.getUTCDate()).padStart(2, "0")
+  return `${y}-${m}-${dd}`
+}
+
+function utcDateStringFromOffset(daysAgo: number) {
+  const now = new Date()
+  const ms =
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0) -
+    daysAgo * 24 * 60 * 60 * 1000
+  const d = new Date(ms)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+  const dd = String(d.getUTCDate()).padStart(2, "0")
+  return `${y}-${m}-${dd}`
+}
+
+function toSafeInt(v: unknown) {
+  const n = typeof v === "number" ? v : Number(v)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.floor(n))
+}
+
+type DailySnapshotPoint = {
+  date: string
+  reach: number
+  impressions: number
+  interactions: number
+  engaged_accounts: number
+}
+
+function buildPaddedPoints(params: {
+  days: number
+  byDate: Map<string, { reach: number; impressions: number; interactions: number; engaged_accounts: number }>
+}) {
+  const out: DailySnapshotPoint[] = []
+  for (let i = params.days - 1; i >= 0; i--) {
+    const date = utcDateStringFromOffset(i)
+    const row = params.byDate.get(date)
+    out.push({
+      date,
+      reach: row ? row.reach : 0,
+      impressions: row ? row.impressions : 0,
+      interactions: row ? row.interactions : 0,
+      engaged_accounts: row ? row.engaged_accounts : 0,
+    })
+  }
+  return out
+}
+
+function buildPointsFromGraphInsights(insightsDailySeries: any[], days: number) {
+  const byDate = new Map<string, { reach: number; impressions: number; interactions: number; engaged_accounts: number }>()
+
+  const list = Array.isArray(insightsDailySeries) ? insightsDailySeries : []
+  for (const item of list) {
+    const name = String(item?.name || "").trim()
+    const values = Array.isArray(item?.values) ? item.values : []
+    for (const v of values) {
+      const endTime = typeof v?.end_time === "string" ? v.end_time : ""
+      const ms = endTime ? Date.parse(endTime) : NaN
+      if (!Number.isFinite(ms)) continue
+
+      const d = new Date(ms)
+      const dateStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+      const ex = byDate.get(dateStr) ?? { reach: 0, impressions: 0, interactions: 0, engaged_accounts: 0 }
+      const num = toSafeInt(v?.value)
+      if (name === "reach") ex.reach = num
+      else if (name === "total_interactions") ex.interactions = num
+      else if (name === "accounts_engaged") ex.engaged_accounts = num
+      byDate.set(dateStr, ex)
+    }
+  }
+
+  return buildPaddedPoints({ days, byDate })
+}
 
 async function safeJson(res: Response) {
   try {
@@ -114,6 +196,7 @@ export async function POST(req: Request) {
   try {
     const url = new URL(req.url)
     const days = clampDays(url.searchParams.get("days"))
+    const safeDays = Math.max(1, days)
 
     let c: any = null
     try {
@@ -164,13 +247,67 @@ export async function POST(req: Request) {
     if (!pageId) return jsonError("missing_cookie:ig_page_id", null, 401)
     if (!igId) return jsonError("missing_cookie:ig_ig_id", null, 401)
 
+    // Prefer DB snapshots for the trend chart. Always return exactly N padded points ending today (UTC).
+    // If DB has no rows, fall back to the Graph API fetch below.
+    const today = todayUtcDateString()
+    const start = utcDateStringFromOffset(safeDays - 1)
+
+    try {
+      const { data: rows, error } = await supabaseServer
+        .from("ig_daily_snapshots")
+        .select("snapshot_date,reach,impressions,interactions,engaged_accounts")
+        .eq("ig_user_id", igId)
+        .gte("snapshot_date", start)
+        .lte("snapshot_date", today)
+        .order("snapshot_date", { ascending: true })
+
+      if (!error && Array.isArray(rows) && rows.length >= 1) {
+        const byDate = new Map<string, { reach: number; impressions: number; interactions: number; engaged_accounts: number }>()
+        for (const r of rows as any[]) {
+          const dateStr = String(r?.snapshot_date || "").trim()
+          if (!dateStr) continue
+          byDate.set(dateStr, {
+            reach: toSafeInt(r?.reach),
+            impressions: toSafeInt(r?.impressions),
+            interactions: toSafeInt(r?.interactions),
+            engaged_accounts: toSafeInt(r?.engaged_accounts),
+          })
+        }
+
+        const points = buildPaddedPoints({ days: safeDays, byDate })
+
+        return NextResponse.json(
+          {
+            build_marker: BUILD_MARKER,
+            ok: true,
+            days: safeDays,
+            points,
+            points_ok: true,
+            points_source: "db",
+            points_end_date: today,
+            insights_daily: [],
+            insights_daily_series: [],
+            series_ok: true,
+          },
+          { status: 200, headers: { "Cache-Control": "no-store" } },
+        )
+      }
+    } catch {
+      // ignore DB failures here; fall back to Graph
+    }
+
     const pageTokenRes = await getPageAccessToken(token, pageId)
     if (!pageTokenRes.ok) {
       // Backward-compatible: still return ok:true but no data.
       return NextResponse.json(
         {
+          build_marker: BUILD_MARKER,
           ok: true,
-          days,
+          days: safeDays,
+          points: buildPaddedPoints({ days: safeDays, byDate: new Map() }),
+          points_ok: false,
+          points_source: "none",
+          points_end_date: todayUtcDateString(),
           insights_daily: [],
           insights_daily_series: [],
           series_ok: false,
@@ -179,13 +316,17 @@ export async function POST(req: Request) {
       )
     }
 
-    const totalsRes = await fetchInsights({ igId, pageAccessToken: pageTokenRes.pageAccessToken, days, metricType: "total_value" })
-    const seriesRes = await fetchInsights({ igId, pageAccessToken: pageTokenRes.pageAccessToken, days, metricType: "time_series" })
+    const totalsRes = await fetchInsights({ igId, pageAccessToken: pageTokenRes.pageAccessToken, days: safeDays, metricType: "total_value" })
+    const seriesRes = await fetchInsights({ igId, pageAccessToken: pageTokenRes.pageAccessToken, days: safeDays, metricType: "time_series" })
 
     const insights_daily = Array.isArray(totalsRes.data) ? totalsRes.data : []
     const insights_daily_series = Array.isArray(seriesRes.data) ? seriesRes.data : []
 
     const series_ok = Boolean(seriesRes.ok && insights_daily_series.length > 0)
+
+    const points = series_ok
+      ? buildPointsFromGraphInsights(insights_daily_series, safeDays)
+      : buildPaddedPoints({ days: safeDays, byDate: new Map() })
 
     if (shouldDebug()) {
       console.log("[IG_GRAPH_DEBUG][daily-snapshot]", {
@@ -201,8 +342,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       {
+        build_marker: BUILD_MARKER,
         ok: true,
-        days,
+        days: safeDays,
+        points,
+        points_ok: Boolean(points.length === safeDays),
+        points_source: series_ok ? "graph" : "fallback_zero_series",
+        points_end_date: todayUtcDateString(),
         insights_daily,
         insights_daily_series,
         series_ok,
