@@ -4439,7 +4439,7 @@ export default function ResultsClient() {
                                 ? real.likeCount
                                 : typeof real?.likes === "number"
                                   ? real.likes
-                                  : Number(real?.like_count ?? real?.likeCount ?? real?.likes_count ?? real?.likesCount ?? real?.likes)
+                                  : toNum(real?.like_count ?? real?.likeCount ?? real?.likes_count ?? real?.likesCount ?? real?.likes)
 
                           const commentsCountRaw =
                             typeof real?.comments_count === "number"
@@ -4448,10 +4448,10 @@ export default function ResultsClient() {
                                 ? real.commentsCount
                                 : typeof real?.comments === "number"
                                   ? real.comments
-                                  : Number(real?.comments_count ?? real?.commentsCount ?? real?.comment_count ?? real?.commentCount ?? real?.comments)
+                                  : toNum(real?.comments_count ?? real?.commentsCount ?? real?.comment_count ?? real?.commentCount ?? real?.comments)
 
-                          const likes = Number.isFinite(likeCountRaw) ? likeCountRaw : null
-                          const comments = Number.isFinite(commentsCountRaw) ? commentsCountRaw : null
+                          const likes = (toNum(likeCountRaw) ?? 0)
+                          const comments = (toNum(commentsCountRaw) ?? 0)
 
                           const engagement =
                             typeof real?.engagement === "number" && Number.isFinite(real.engagement)
@@ -4488,9 +4488,14 @@ export default function ResultsClient() {
                             : "")
 
                         const previewUrl = (() => {
+                          const mt = String((real as any)?.media_type ?? (real as any)?.mediaType ?? "")
                           const tu = typeof (real as any)?.thumbnail_url === "string" ? String((real as any).thumbnail_url) : ""
                           const mu = typeof (real as any)?.media_url === "string" ? String((real as any).media_url) : ""
-                          return tu || mu || ""
+                          const isVideoType = mt === "VIDEO" || mt === "REELS"
+                          const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u)
+                          const pick = isVideoType ? (tu || mu) : (mu || tu)
+                          if (pick && isLikelyVideoUrl(pick)) return tu || ""
+                          return pick || ""
                         })()
 
                         if (__DEV__ && !previewUrl) {
@@ -4509,9 +4514,7 @@ export default function ResultsClient() {
                           ? `/${activeLocale}/post-analysis?url=${encodeURIComponent(permalink)}`
                           : `/${activeLocale}/post-analysis`
 
-                        const insightsUnavailable =
-                          (typeof likes !== "number" || !Number.isFinite(likes)) &&
-                          (typeof comments !== "number" || !Number.isFinite(comments))
+                        const insightsUnavailable = false
                         const insightsUnavailableLabel = isZh ? "無法取得洞察" : "Insights unavailable"
 
                         return (
@@ -4559,25 +4562,21 @@ export default function ResultsClient() {
                                 <span className="whitespace-nowrap">{t("results.topPosts.card.likesLabel")}</span>
                                 <span className="ml-1 mr-2 inline-flex items-center">
                                   <span className={numMono}>
-                                    {typeof likes === "number" && Number.isFinite(likes) ? Math.round(likes).toLocaleString() : "—"}
+                                    {Math.round(likes).toLocaleString()}
                                   </span>
                                 </span>
                                 <span className="opacity-50">·</span>
                                 <span className="ml-2 whitespace-nowrap">{t("results.topPosts.card.commentsLabel")}</span>
                                 <span className="ml-1 mr-2 inline-flex items-center">
                                   <span className={numMono}>
-                                    {typeof comments === "number" && Number.isFinite(comments)
-                                      ? Math.round(comments).toLocaleString()
-                                      : "—"}
+                                    {Math.round(comments).toLocaleString()}
                                   </span>
                                 </span>
                                 <span className="opacity-50">·</span>
                                 <span className="ml-2 whitespace-nowrap">{t("results.topPosts.card.engagementLabel")}</span>
                                 <span className="ml-1 inline-flex items-center">
                                   <span className={numMono}>
-                                    {typeof engagement === "number" && Number.isFinite(engagement)
-                                      ? Math.round(engagement).toLocaleString()
-                                      : "—"}
+                                    {Math.round(engagement ?? (likes + comments)).toLocaleString()}
                                   </span>
                                 </span>
                               </div>
@@ -4587,7 +4586,7 @@ export default function ResultsClient() {
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.likesLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
                                     <span className={numMono}>
-                                      {typeof likes === "number" && Number.isFinite(likes) ? Math.round(likes).toLocaleString() : "—"}
+                                      {Math.round(likes).toLocaleString()}
                                     </span>
                                   </div>
                                 </div>
@@ -4596,9 +4595,7 @@ export default function ResultsClient() {
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.commentsLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
                                     <span className={numMono}>
-                                      {typeof comments === "number" && Number.isFinite(comments)
-                                        ? Math.round(comments).toLocaleString()
-                                        : "—"}
+                                      {Math.round(comments).toLocaleString()}
                                     </span>
                                   </div>
                                 </div>
@@ -4607,9 +4604,7 @@ export default function ResultsClient() {
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.engagementLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
                                     <span className={numMono}>
-                                      {typeof engagement === "number" && Number.isFinite(engagement)
-                                        ? Math.round(engagement).toLocaleString()
-                                        : "—"}
+                                      {Math.round((engagement ?? (likes + comments)) as number).toLocaleString()}
                                     </span>
                                   </div>
                                 </div>
