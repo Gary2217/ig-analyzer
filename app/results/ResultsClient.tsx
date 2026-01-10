@@ -15,6 +15,7 @@ import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
 import { useRefetchTick } from "../lib/useRefetchTick"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
+import { useInstagramMe } from "../lib/useInstagramMe"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 
@@ -724,7 +725,6 @@ export default function ResultsClient() {
   const hasFetchedMediaRef = useRef(false)
   const hasFetchedMeRef = useRef(false)
   const mediaReqIdRef = useRef(0)
-  const meAbortRef = useRef<AbortController | null>(null)
   const hasSuccessfulMePayloadRef = useRef(false)
   const lastMeFetchTickRef = useRef<number | null>(null)
 
@@ -1819,151 +1819,42 @@ export default function ResultsClient() {
     return () => clearTimeout(timer)
   }, [isConnected, searchParams, t])
 
+  const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
+
   useEffect(() => {
     if (!isConnectedInstagram) return
     if (hasFetchedMeRef.current && lastMeFetchTickRef.current === tick) return
-
     lastMeFetchTickRef.current = tick
-
-    // Mark as fetched immediately to prevent loops from dependency updates.
-    // IMPORTANT: if the request is aborted or returns an empty/invalid body, we reset this flag
-    // so the next render tick (or forceReloadTick) can retry automatically.
     hasFetchedMeRef.current = true
     __resultsMeFetchedOnce = true
+  }, [isConnectedInstagram, tick])
 
-    let cancelled = false
-    const run = async () => {
-      setIgMeLoading(true)
-      setIgMeUnauthorized(false)
-      setConnectEnvError(null)
-      setLoadError(false)
-      try {
-        try {
-          meAbortRef.current?.abort()
-        } catch {
-          // ignore
-        }
-        const controller = new AbortController()
-        meAbortRef.current = controller
+  useEffect(() => {
+    setIgMeLoading(Boolean(meQuery.loading))
+  }, [meQuery.loading])
 
-        const r = await fetch("/api/auth/instagram/me", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-          signal: controller.signal,
-        })
-        if (cancelled) return
-
-        if (r.status === 204 || (r.status >= 300 && r.status < 400)) {
-          return
-        }
-
-        if (r.status === 401) {
-          setIgMe(null)
-          setIgMeUnauthorized(true)
-          hasSuccessfulMePayloadRef.current = false
-          return
-        }
-
-        if (!r.ok) {
-          setLoadError(true)
-          return
-        }
-
-        const rawText = await r.text()
-        if (cancelled) return
-        if (!rawText || !rawText.trim()) {
-          hasFetchedMeRef.current = false
-          try {
-            __resultsMeFetchedOnce = false
-          } catch {
-            // ignore
-          }
-          return
-        }
-
-        let raw: any = null
-        try {
-          raw = JSON.parse(rawText)
-        } catch {
-          hasFetchedMeRef.current = false
-          try {
-            __resultsMeFetchedOnce = false
-          } catch {
-            // ignore
-          }
-          return
-        }
-
-        const normalized = normalizeMe(raw)
-        if (!normalized) {
-          hasFetchedMeRef.current = false
-          try {
-            __resultsMeFetchedOnce = false
-          } catch {
-            // ignore
-          }
-          return
-        }
-
-        hasSuccessfulMePayloadRef.current = true
-
-        if (__DEV__) {
-          const p = (normalized as any)?.profile
-          // eslint-disable-next-line no-console
-          dlog("[me ui profile stats]", {
-            connected: Boolean((normalized as any)?.connected),
-            username: p?.username,
-            followers_count: p?.followers_count,
-            follows_count: p?.follows_count,
-            media_count: p?.media_count,
-            has_profile_picture_url: Boolean(p?.profile_picture_url ?? (normalized as any)?.profile_picture_url),
-          })
-        }
-
-        setIgMe(normalized)
-      } catch (err) {
-        if (cancelled) return
-
-        if (isAbortError(err)) {
-          // Abort is common during navigation/hydration. Allow a retry on the next tick.
-          hasFetchedMeRef.current = false
-          try {
-            __resultsMeFetchedOnce = false
-          } catch {
-            // ignore
-          }
-          return
-        }
-
-        setLoadError(true)
-
-        // Allow retry on refresh.
-        hasFetchedMeRef.current = false
-        try {
-          __resultsMeFetchedOnce = false
-        } catch {
-          // ignore
-        }
-      } finally {
-        if (!cancelled) setIgMeLoading(false)
-      }
+  useEffect(() => {
+    if (!isConnectedInstagram) return
+    if (meQuery.status === 401) {
+      setIgMe(null)
+      setIgMeUnauthorized(true)
+      hasSuccessfulMePayloadRef.current = false
+      return
     }
-    run()
-    return () => {
-      cancelled = true
-      try {
-        meAbortRef.current?.abort()
-      } catch {
-        // ignore
-      }
-      try {
-        setIgMeLoading(false)
-      } catch {
-        // ignore
-      }
+    if (meQuery.error) {
+      setLoadError(true)
+      return
     }
-  }, [tick, isConnectedInstagram])
+    if (!meQuery.data) return
+
+    const normalized = normalizeMe(meQuery.data)
+    if (!normalized) return
+
+    setIgMeUnauthorized(false)
+    setConnectEnvError(null)
+    hasSuccessfulMePayloadRef.current = true
+    setIgMe(normalized)
+  }, [isConnectedInstagram, meQuery.data, meQuery.error, meQuery.status])
 
   const [gateIsSlow, setGateIsSlow] = useState(false)
 
