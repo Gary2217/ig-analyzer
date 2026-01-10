@@ -1,8 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { cookies } from "next/headers";
 
 const GRAPH_VERSION = "v24.0";
 const PAGE_ID = "851912424681350";
 const IG_BUSINESS_ID = "17841404364250644";
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+function getIsHttps(req: NextRequest) {
+  const xfProto = req.headers.get("x-forwarded-proto")?.toLowerCase()
+  return xfProto === "https" || req.nextUrl.protocol === "https:"
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // In-memory cache for rate-limit mitigation
@@ -152,17 +161,25 @@ function safeLen(v: unknown): number {
   return Array.isArray(v) ? v.length : 0
 }
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const after = url.searchParams.get("after") || "";
     const limit = url.searchParams.get("limit") || "25";
 
-    // 1) 從 cookie 取得 User Access Token（注意名稱）
-    const cookie = req.headers.get("cookie") || "";
-    const userAccessToken = getCookieValue(cookie, "ig_access_token");
-    const igIdFromCookie = getCookieValue(cookie, "ig_ig_id");
-    const pageIdFromCookie = getCookieValue(cookie, "ig_page_id");
+    // 1) From cookies (source of truth)
+    const c = await cookies()
+    const isHttps = getIsHttps(req)
+    const baseCookieOptions = {
+      httpOnly: true,
+      secure: isHttps,
+      sameSite: "lax" as const,
+      path: "/",
+    } as const
+
+    const userAccessToken = (c.get("ig_access_token")?.value ?? "").trim()
+    let igIdFromCookie = (c.get("ig_ig_id")?.value ?? "").trim()
+    let pageIdFromCookie = (c.get("ig_page_id")?.value ?? "").trim()
 
      const hasAccessToken = Boolean(userAccessToken)
      const hasIgId = Boolean(igIdFromCookie)
@@ -184,7 +201,34 @@ export async function GET(req: Request) {
       )
     }
 
-    // Require IDs to be present in cookies to prevent accidental 403 spam from unstable connection state.
+    // 2) If IDs are missing, hydrate them from Graph using the user token.
+    // This matches /api/auth/instagram/me behavior and prevents false 403s after a successful OAuth.
+    if (userAccessToken && (!igIdFromCookie || !pageIdFromCookie)) {
+      try {
+        const graphUrl = new URL(`https://graph.facebook.com/v21.0/me/accounts`)
+        graphUrl.searchParams.set("fields", "name,instagram_business_account")
+        graphUrl.searchParams.set("access_token", userAccessToken)
+
+        const r = await fetch(graphUrl.toString(), { method: "GET", cache: "no-store" })
+        if (r.ok) {
+          const data = (await r.json()) as any
+          const list: any[] = Array.isArray(data?.data) ? data.data : []
+          const picked = list.find((p) => p?.instagram_business_account?.id)
+          const nextPageId = typeof picked?.id === "string" ? picked.id : ""
+          const nextIgId = typeof picked?.instagram_business_account?.id === "string" ? picked.instagram_business_account.id : ""
+
+          if (!pageIdFromCookie && nextPageId) pageIdFromCookie = nextPageId
+          if (!igIdFromCookie && nextIgId) igIdFromCookie = nextIgId
+
+          // Best-effort: persist for subsequent calls.
+          if (pageIdFromCookie) c.set("ig_page_id", pageIdFromCookie, baseCookieOptions)
+          if (igIdFromCookie) c.set("ig_ig_id", igIdFromCookie, baseCookieOptions)
+        }
+      } catch {
+        // swallow
+      }
+    }
+
     if (!igIdFromCookie) {
       console.warn("[media-route] fail", {
         status: 403,
