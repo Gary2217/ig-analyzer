@@ -1,10 +1,10 @@
 import { Suspense } from "react"
-import HomeClient from "./HomeClient"
+import DemoToolPanel from "./[locale]/components/demo-tool-panel"
 
 export default function Page() {
   return (
     <Suspense fallback={null}>
-      <HomeClient />
+      <DemoToolPanel activeLocale="en" isConnectedFromServer={false} checking={false} />
     </Suspense>
   )
 }

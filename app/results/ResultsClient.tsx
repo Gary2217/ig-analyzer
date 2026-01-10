@@ -724,6 +724,7 @@ export default function ResultsClient() {
 
   const hasFetchedMediaRef = useRef(false)
   const hasFetchedMeRef = useRef(false)
+  const lastMediaFetchTickRef = useRef<number | null>(null)
   const mediaReqIdRef = useRef(0)
   const hasSuccessfulMePayloadRef = useRef(false)
   const lastMeFetchTickRef = useRef<number | null>(null)
@@ -1238,12 +1239,15 @@ export default function ResultsClient() {
   }, [__DEV__, dlog, isConnected, isConnectedInstagram, topPostsLen, igRecentLen, mediaLen, topPostsHasReal])
 
   useEffect(() => {
-    if (hasFetchedMediaRef.current && mediaLen > 0) return
-    if (hasFetchedMediaRef.current) return
+    // Allow refetch when media is still empty but the refresh tick changes (e.g. after OAuth sets cookies).
+    if (mediaLen > 0) {
+      hasFetchedMediaRef.current = true
+      __resultsMediaFetchedOnce = true
+      return
+    }
 
-    // Mark as fetched immediately to prevent loops from dependency updates.
-    hasFetchedMediaRef.current = true
-    __resultsMediaFetchedOnce = true
+    if (lastMediaFetchTickRef.current === forceReloadTick) return
+    lastMediaFetchTickRef.current = forceReloadTick
 
     let cancelled = false
     mediaReqIdRef.current += 1
@@ -1391,8 +1395,14 @@ export default function ResultsClient() {
       lastRevalidateAtRef.current = now
       setForceReloadTick((x) => x + 1)
     }
+
+    if (typeof window === "undefined") return
+
     window.addEventListener("focus", onFocus)
-    return () => window.removeEventListener("focus", onFocus)
+
+    return () => {
+      window.removeEventListener("focus", onFocus)
+    }
   }, [isConnected, needsDataRefetch])
 
   // -------------------------------------------------
