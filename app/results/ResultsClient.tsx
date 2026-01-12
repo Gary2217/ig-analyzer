@@ -730,6 +730,7 @@ export default function ResultsClient() {
   const lastMeFetchTickRef = useRef<number | null>(null)
 
   const hasFetchedDailySnapshotRef = useRef(false)
+  const hasAppliedDailySnapshotTrendRef = useRef(false)
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
   const lastDailySnapshotFetchAtRef = useRef(0)
 
@@ -787,12 +788,18 @@ export default function ResultsClient() {
       setMedia(cached.media)
       if (cached.media.length > 0) setMediaLoaded(true)
     }
-    if (Array.isArray(cached.trendPoints)) setTrendPoints(cached.trendPoints)
+    if (Array.isArray(cached.trendPoints)) {
+      const cachedLen = cached.trendPoints.length
+      const curLen = Array.isArray(trendPoints) ? trendPoints.length : 0
+      if (cachedLen >= 1 || (curLen < 1 && !hasAppliedDailySnapshotTrendRef.current)) {
+        setTrendPoints(cached.trendPoints)
+      }
+    }
     if (typeof cached.trendFetchedAt === "number" || cached.trendFetchedAt === null) setTrendFetchedAt(cached.trendFetchedAt)
 
     // Migrate legacy locale-specific cache to the locale-agnostic key.
     saWriteResultsCache(resultsCacheKey, cached)
-  }, [resultsCacheKey])
+  }, [resultsCacheKey, trendPoints])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams?.toString() || "")
@@ -926,6 +933,150 @@ export default function ResultsClient() {
     return out
   }, [])
 
+  const coerceDailySnapshotPointsToArray = useCallback((points: unknown): any[] => {
+    if (Array.isArray(points)) return points
+    if (!points || typeof points !== "object") return []
+
+    const parseKeyMs = (k: string): number | null => {
+      const key = String(k || "").trim()
+      if (!key) return null
+
+      if (/^\d+$/.test(key)) {
+        const n = Number(key)
+        if (!Number.isFinite(n)) return null
+        // 10-digit seconds or 13-digit ms
+        if (n > 1e12) return n
+        if (n > 1e9) return n * 1000
+        return null
+      }
+
+      if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+        const ms = Date.parse(`${key}T00:00:00.000Z`)
+        return Number.isFinite(ms) ? ms : null
+      }
+
+      const ms = Date.parse(key)
+      return Number.isFinite(ms) ? ms : null
+    }
+
+    const parseValueMs = (v: unknown): number | null => {
+      if (!v || typeof v !== "object") return null
+      const obj: any = v as any
+      if (typeof obj.ts === "number" && Number.isFinite(obj.ts)) return obj.ts
+      const dateRaw =
+        (typeof obj.timestamp === "string" ? obj.timestamp : null) ??
+        (typeof obj.date === "string" ? obj.date : null) ??
+        (typeof obj.day === "string" ? obj.day : null)
+      if (!dateRaw) return null
+      const ms = Date.parse(String(dateRaw))
+      return Number.isFinite(ms) ? ms : null
+    }
+
+    const looksLikePoint = (v: unknown): boolean => {
+      if (!v || typeof v !== "object") return false
+      const obj: any = v as any
+      const hasTime =
+        (typeof obj.date === "string" && obj.date.trim()) ||
+        (typeof obj.day === "string" && obj.day.trim()) ||
+        (typeof obj.timestamp === "string" && obj.timestamp.trim()) ||
+        (typeof obj.ts === "number" && Number.isFinite(obj.ts))
+
+      const hasMetric =
+        obj.reach !== undefined ||
+        obj.impressions !== undefined ||
+        obj.interactions !== undefined ||
+        obj.total_interactions !== undefined ||
+        obj.engaged_accounts !== undefined ||
+        obj.accounts_engaged !== undefined
+
+      return Boolean(hasTime || hasMetric)
+    }
+
+    const entries = Object.entries(points as Record<string, unknown>).filter(([, v]) => looksLikePoint(v))
+    if (entries.length < 1) return []
+
+    const keyMsList = entries.map(([k]) => parseKeyMs(k))
+    const keyMsOk = keyMsList.filter((x) => typeof x === "number").length
+    const useKeyOrder = keyMsOk >= Math.max(2, Math.ceil(entries.length * 0.6))
+
+    const sorted = entries
+      .map(([k, v], i) => ({ k, v, i, keyMs: parseKeyMs(k), valMs: parseValueMs(v) }))
+      .sort((a, b) => {
+        const ams = useKeyOrder ? a.keyMs : a.valMs
+        const bms = useKeyOrder ? b.keyMs : b.valMs
+        if (typeof ams === "number" && typeof bms === "number") return ams - bms
+        if (typeof ams === "number") return -1
+        if (typeof bms === "number") return 1
+        return a.i - b.i
+      })
+
+    return sorted.map((x) => x.v)
+  }, [])
+
+  const normalizeDailySnapshotPointsToTrendPoints = useCallback((pointsRaw: any[]): AccountTrendPoint[] => {
+    const toNum = (v: unknown) => {
+      const n = typeof v === "number" ? v : Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+
+    const fmtLabel = (ts: number) => {
+      try {
+        return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
+      } catch {
+        const d = new Date(ts)
+        const m = String(d.getMonth() + 1).padStart(2, "0")
+        const dd = String(d.getDate()).padStart(2, "0")
+        return `${m}/${dd}`
+      }
+    }
+
+    const list = Array.isArray(pointsRaw) ? pointsRaw : []
+    const now = Date.now()
+    const dayMs = 24 * 60 * 60 * 1000
+    const out: AccountTrendPoint[] = []
+
+    for (let idx = 0; idx < list.length; idx++) {
+      const it = list[idx] as any
+      const dateRaw =
+        (typeof it?.date === "string" ? it.date : null) ??
+        (typeof it?.day === "string" ? it.day : null) ??
+        (typeof it?.t === "string" ? it.t : null)
+
+      const ts = (() => {
+        if (typeof it?.ts === "number" && Number.isFinite(it.ts)) return it.ts
+        if (typeof it?.timestamp === "string") {
+          const ms = Date.parse(it.timestamp)
+          if (Number.isFinite(ms)) return ms
+        }
+        if (dateRaw) {
+          const ms = Date.parse(String(dateRaw))
+          if (Number.isFinite(ms)) return ms
+        }
+        return now - (list.length - 1 - idx) * dayMs
+      })()
+
+      const reach = toNum(it?.reach) ?? 0
+      const impressions = toNum(it?.impressions) ?? 0
+      const interactions = toNum(it?.interactions) ?? toNum(it?.total_interactions) ?? 0
+      const engaged = toNum(it?.engaged_accounts) ?? toNum(it?.accounts_engaged) ?? 0
+
+      const p: any = {
+        t: fmtLabel(ts),
+        ts,
+        reach,
+        impressions,
+        interactions,
+        engaged,
+      }
+      p.total_interactions = interactions
+      p.engaged_accounts = engaged
+      p.accounts_engaged = engaged
+      out.push(p as AccountTrendPoint)
+    }
+
+    return out
+  }, [])
+
   useEffect(() => {
     if (!isConnectedInstagram) {
       setTrendNeedsConnectHint(false)
@@ -935,7 +1086,7 @@ export default function ResultsClient() {
     const now = Date.now()
     const cooldownMs = 90_000
     if (now - lastDailySnapshotFetchAtRef.current < cooldownMs) return
-    if (hasFetchedDailySnapshotRef.current && trendPoints.length >= 2) return
+    if (hasFetchedDailySnapshotRef.current && trendPoints.length >= 1) return
 
     lastDailySnapshotFetchAtRef.current = now
     hasFetchedDailySnapshotRef.current = true
@@ -971,6 +1122,17 @@ export default function ResultsClient() {
         const totalsRaw = Array.isArray(json?.insights_daily) ? json.insights_daily : []
         setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
 
+        const pointsRaw = coerceDailySnapshotPointsToArray(json?.points)
+        const pointsPts = normalizeDailySnapshotPointsToTrendPoints(pointsRaw)
+        if (pointsPts.length >= 1) {
+          hasAppliedDailySnapshotTrendRef.current = true
+          setTrendPoints(pointsPts)
+          setTrendFetchedAt(Date.now())
+          if (__DEV__) console.debug("[trend] source: daily-snapshot points", { days: json?.days, len: pointsPts.length })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+          return
+        }
+
         const seriesRaw = Array.isArray(json?.insights_daily_series)
           ? json.insights_daily_series
           : (Array.isArray(json?.insights_daily) && json.insights_daily.some((x: any) => Array.isArray(x?.values))
@@ -980,6 +1142,7 @@ export default function ResultsClient() {
         const pts = normalizeDailyInsightsToTrendPoints(seriesRaw)
 
         if (pts.length >= 1) {
+          hasAppliedDailySnapshotTrendRef.current = true
           setTrendPoints(pts)
           setTrendFetchedAt(Date.now())
           if (__DEV__) console.debug("[trend] source: daily-snapshot", { days: json?.days, len: pts.length })
@@ -995,7 +1158,7 @@ export default function ResultsClient() {
     return () => {
       ac.abort()
     }
-  }, [isConnectedInstagram, normalizeDailyInsightsToTrendPoints, normalizeTotalsFromInsightsDaily, trendPoints.length])
+  }, [coerceDailySnapshotPointsToArray, isConnectedInstagram, normalizeDailyInsightsToTrendPoints, normalizeDailySnapshotPointsToTrendPoints, normalizeTotalsFromInsightsDaily, trendPoints.length])
 
   const allAccountTrend = useMemo<AccountTrendPoint[]>(() => {
     const isRec = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === "object")
@@ -3939,10 +4102,11 @@ export default function ResultsClient() {
 
                 {(() => {
                   const selected = selectedAccountTrendMetrics
-                  const dataForChart = accountTrend
+                  const dataForChart =
+                    Array.isArray(trendPoints) && trendPoints.length >= 1 ? trendPoints.slice(-7) : accountTrend
 
                   const shouldShowTotalsFallback =
-                    Boolean(dailySnapshotTotals) && (!Array.isArray(trendPoints) || trendPoints.length < 2)
+                    Boolean(dailySnapshotTotals) && (!Array.isArray(trendPoints) || trendPoints.length < 1)
 
                   if (!selected.length) {
                     return (
@@ -4004,7 +4168,7 @@ export default function ResultsClient() {
                     return { k, label: labelFor(k), color: colorFor(k), min, max, points }
                   })
 
-                  const drawable = series.filter((s) => s.points.length >= 2)
+                  const drawable = series.filter((s) => s.points.length >= 1)
                   const yMin = 0
                   const yMax = 100
 
@@ -4097,7 +4261,7 @@ export default function ResultsClient() {
                           })()}
                         </div>
                       ) : null}
-                      {dataForChart.length < 2 ? (
+                      {dataForChart.length < 1 ? (
                         <div className="w-full mt-2">
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
                             {t("results.trend.noData")}
