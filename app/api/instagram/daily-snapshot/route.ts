@@ -7,6 +7,9 @@ export const dynamic = "force-dynamic"
 
 const BUILD_MARKER = "daily-snapshot-points-v2"
 
+const __DEV__ = process.env.NODE_ENV !== "production"
+const __DEBUG_DAILY_SNAPSHOT__ = __DEV__ || process.env.IG_GRAPH_DEBUG === "1"
+
 const GRAPH_VERSION = "v24.0"
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
 
@@ -252,25 +255,42 @@ export async function POST(req: Request) {
     const today = todayUtcDateString()
     const start = utcDateStringFromOffset(safeDays - 1)
 
+    if (__DEBUG_DAILY_SNAPSHOT__) {
+      console.log("[daily-snapshot] scope", { igId, pageId, start, today, days: safeDays })
+    }
+
     try {
       const { data: rows, error } = await supabaseServer
-        .from("ig_daily_snapshots")
-        .select("snapshot_date,reach,impressions,interactions,engaged_accounts")
-        .eq("ig_user_id", igId)
-        .gte("snapshot_date", start)
-        .lte("snapshot_date", today)
-        .order("snapshot_date", { ascending: true })
+        .from("ig_daily_insights")
+        .select("day,reach,impressions,total_interactions,accounts_engaged")
+        .eq("ig_user_id", Number(igId))
+        .eq("page_id", Number(pageId))
+        .gte("day", start)
+        .lte("day", today)
+        .order("day", { ascending: true })
+
+      if (__DEBUG_DAILY_SNAPSHOT__) {
+        const list = Array.isArray(rows) ? rows : []
+        const firstDay = list.length > 0 ? (list[0] as any)?.day : null
+        const lastDay = list.length > 0 ? (list[list.length - 1] as any)?.day : null
+        console.log("[daily-snapshot] db", {
+          err: error ? { message: (error as any)?.message, code: (error as any)?.code, hint: (error as any)?.hint } : null,
+          rows_len: list.length,
+          first_day: firstDay,
+          last_day: lastDay,
+        })
+      }
 
       if (!error && Array.isArray(rows) && rows.length >= 1) {
         const byDate = new Map<string, { reach: number; impressions: number; interactions: number; engaged_accounts: number }>()
         for (const r of rows as any[]) {
-          const dateStr = String(r?.snapshot_date || "").trim()
+          const dateStr = String(r?.day || "").trim()
           if (!dateStr) continue
           byDate.set(dateStr, {
             reach: toSafeInt(r?.reach),
             impressions: toSafeInt(r?.impressions),
-            interactions: toSafeInt(r?.interactions),
-            engaged_accounts: toSafeInt(r?.engaged_accounts),
+            interactions: toSafeInt(r?.total_interactions),
+            engaged_accounts: toSafeInt(r?.accounts_engaged),
           })
         }
 
@@ -283,11 +303,12 @@ export async function POST(req: Request) {
             days: safeDays,
             points,
             points_ok: true,
-            points_source: "db",
+            points_source: "db_snapshots",
             points_end_date: today,
             insights_daily: [],
             insights_daily_series: [],
             series_ok: true,
+            __diag: { db_rows: rows.length, used_source: "db", start, end: today },
           },
           { status: 200, headers: { "Cache-Control": "no-store" } },
         )
@@ -296,48 +317,8 @@ export async function POST(req: Request) {
       // ignore DB failures here; fall back to Graph
     }
 
-    const pageTokenRes = await getPageAccessToken(token, pageId)
-    if (!pageTokenRes.ok) {
-      // Backward-compatible: still return ok:true but no data.
-      return NextResponse.json(
-        {
-          build_marker: BUILD_MARKER,
-          ok: true,
-          days: safeDays,
-          points: buildPaddedPoints({ days: safeDays, byDate: new Map() }),
-          points_ok: false,
-          points_source: "none",
-          points_end_date: todayUtcDateString(),
-          insights_daily: [],
-          insights_daily_series: [],
-          series_ok: false,
-        },
-        { status: 200, headers: { "Cache-Control": "no-store" } },
-      )
-    }
-
-    const totalsRes = await fetchInsights({ igId, pageAccessToken: pageTokenRes.pageAccessToken, days: safeDays, metricType: "total_value" })
-    const seriesRes = await fetchInsights({ igId, pageAccessToken: pageTokenRes.pageAccessToken, days: safeDays, metricType: "time_series" })
-
-    const insights_daily = Array.isArray(totalsRes.data) ? totalsRes.data : []
-    const insights_daily_series = Array.isArray(seriesRes.data) ? seriesRes.data : []
-
-    const series_ok = Boolean(seriesRes.ok && insights_daily_series.length > 0)
-
-    const points = series_ok
-      ? buildPointsFromGraphInsights(insights_daily_series, safeDays)
-      : buildPaddedPoints({ days: safeDays, byDate: new Map() })
-
-    if (shouldDebug()) {
-      console.log("[IG_GRAPH_DEBUG][daily-snapshot]", {
-        days,
-        hasToken: Boolean(token),
-        hasIds: Boolean(pageId && igId),
-        totals_ok: Boolean(totalsRes.ok),
-        totals_len: insights_daily.length,
-        series_ok,
-        series_len: insights_daily_series.length,
-      })
+    if (__DEBUG_DAILY_SNAPSHOT__) {
+      console.log("[daily-snapshot] db empty -> fallback_zero_series")
     }
 
     return NextResponse.json(
@@ -345,13 +326,14 @@ export async function POST(req: Request) {
         build_marker: BUILD_MARKER,
         ok: true,
         days: safeDays,
-        points,
-        points_ok: Boolean(points.length === safeDays),
-        points_source: series_ok ? "graph" : "fallback_zero_series",
+        points: buildPaddedPoints({ days: safeDays, byDate: new Map() }),
+        points_ok: false,
+        points_source: "fallback_zero_series",
         points_end_date: todayUtcDateString(),
-        insights_daily,
-        insights_daily_series,
-        series_ok,
+        insights_daily: [],
+        insights_daily_series: [],
+        series_ok: false,
+        __diag: { db_rows: 0, used_source: "fallback", start, end: today },
       },
       { status: 200, headers: { "Cache-Control": "no-store" } },
     )
