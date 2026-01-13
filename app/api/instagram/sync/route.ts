@@ -34,7 +34,7 @@ type NormalizedItem = {
   timestamp: string | null
   caption: string | null
   metrics: NormalizedMetrics
-  errors?: Array<{ step: string; message: string; status?: number; code?: number; fbtrace_id?: string }>
+  errors?: Array<{ step: string; message: string; metric?: string; status?: number; code?: number; fbtrace_id?: string }>
 }
 
 function toIntOrNull(v: unknown): number | null {
@@ -65,7 +65,7 @@ function isUnsupportedMetricError(err: unknown): boolean {
 function normalizeInsights(insights: IgInsightsResponse | null, requested: string[]): Record<string, number | null> {
   const out: Record<string, number | null> = {}
   for (const k of requested) out[k] = null
-  const data = Array.isArray(insights?.data) ? insights!.data! : []
+  const data = Array.isArray((insights as any)?.data) ? (insights as any).data : []
   for (const item of data) {
     const name = typeof item?.name === "string" ? item.name : ""
     if (!name) continue
@@ -139,108 +139,113 @@ async function fetchInsightsResilient(
 }
 
 export async function GET(req: Request) {
-  const url = new URL(req.url)
-
+  const fetchedAt = new Date().toISOString()
   const igUserId = ((process.env.IG_USER_ID ?? "").trim() || "17841404364250644")
   const token = (process.env.IG_ACCESS_TOKEN ?? "").trim()
 
-  if (!igUserId || !token) {
-    return NextResponse.json(
-      { ok: false, error: "missing_env", missing: [!igUserId ? "IG_USER_ID" : null, !token ? "IG_ACCESS_TOKEN" : null].filter(Boolean) },
-      { status: 500, headers: { "Cache-Control": "no-store" } },
-    )
-  }
+  const json = (payload: { ok: boolean; igUserId: string; fetchedAt: string; pageCount: number; itemCount: number; items: NormalizedItem[] }, status = 200) =>
+    NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" } })
 
-  const sinceMs = parseSinceMs(url.searchParams.get("since"))
-  const maxItemsOverride = parsePosInt(url.searchParams.get("maxItems"))
-  const maxPagesOverride = parsePosInt(url.searchParams.get("maxPages"))
+  try {
+    const url = new URL(req.url)
 
-  const pageLimit = Math.max(1, Math.min(100, Math.floor(Number(process.env.IG_SYNC_PAGE_LIMIT ?? "25") || 25)))
-  const maxPages = Math.max(1, Math.floor(maxPagesOverride ?? (Number(process.env.IG_SYNC_MAX_PAGES ?? "20") || 20)))
-  const maxItems = Math.max(1, Math.floor(maxItemsOverride ?? (Number(process.env.IG_SYNC_MAX_ITEMS ?? "500") || 500)))
-
-  const fetchedAt = new Date().toISOString()
-
-  let pageCount = 0
-  let after: string | null = null
-
-  const collected: IgMediaListItem[] = []
-
-  while (pageCount < maxPages && collected.length < maxItems) {
-    const params: Record<string, string> = {
-      fields: "id,caption,media_type,media_url,permalink,timestamp",
-      limit: String(pageLimit),
+    if (!igUserId || !token) {
+      return json({ ok: false, igUserId: igUserId || "", fetchedAt, pageCount: 0, itemCount: 0, items: [] }, 500)
     }
-    if (after) params.after = after
 
-    const page = await graphGet<GraphListResponse<IgMediaListItem>>(`/${igUserId}/media`, params)
-    const data = Array.isArray(page?.data) ? page.data : []
+    const sinceMs = parseSinceMs(url.searchParams.get("since"))
+    const maxItemsOverride = parsePosInt(url.searchParams.get("maxItems"))
+    const maxPagesOverride = parsePosInt(url.searchParams.get("maxPages"))
 
-    for (const it of data) {
-      if (!it?.id) continue
-      if (sinceMs !== null) {
-        const ts = typeof it.timestamp === "string" ? it.timestamp : ""
-        const ms = ts ? Date.parse(ts) : NaN
-        if (Number.isFinite(ms) && ms < sinceMs) continue
+    const pageLimit = Math.max(1, Math.min(100, Math.floor(Number(process.env.IG_SYNC_PAGE_LIMIT ?? "25") || 25)))
+    const maxPages = Math.max(1, Math.floor(maxPagesOverride ?? (Number(process.env.IG_SYNC_MAX_PAGES ?? "20") || 20)))
+    const maxItems = Math.max(1, Math.floor(maxItemsOverride ?? (Number(process.env.IG_SYNC_MAX_ITEMS ?? "500") || 500)))
+
+    let pageCount = 0
+    let after: string | null = null
+    const collected: IgMediaListItem[] = []
+
+    while (pageCount < maxPages && collected.length < maxItems) {
+      const params: Record<string, string> = {
+        fields: "id,caption,media_type,media_url,permalink,timestamp",
+        limit: String(pageLimit),
       }
-      collected.push(it)
-      if (collected.length >= maxItems) break
+      if (after) params.after = after
+
+      let page: GraphListResponse<IgMediaListItem> | null = null
+      try {
+        page = await graphGet<GraphListResponse<IgMediaListItem>>(`/${igUserId}/media`, params)
+      } catch {
+        break
+      }
+
+      const data = Array.isArray((page as any)?.data) ? (page as any).data : []
+
+      for (const it of data) {
+        if (!it?.id) continue
+        if (sinceMs !== null) {
+          const ts = typeof it.timestamp === "string" ? it.timestamp : ""
+          const ms = ts ? Date.parse(ts) : NaN
+          if (Number.isFinite(ms) && ms < sinceMs) continue
+        }
+        collected.push(it)
+        if (collected.length >= maxItems) break
+      }
+
+      pageCount += 1
+      const nextAfter = typeof (page as any)?.paging?.cursors?.after === "string" ? (page as any).paging.cursors.after : ""
+      if (!nextAfter) break
+      after = nextAfter
     }
 
-    pageCount += 1
-    const nextAfter = typeof page?.paging?.cursors?.after === "string" ? page.paging!.cursors!.after! : ""
-    if (!nextAfter) break
-    after = nextAfter
+    const items: NormalizedItem[] = []
+
+    for (const base of collected) {
+      const id = String(base?.id ?? "")
+      if (!id) continue
+
+      const perItemErrors: NonNullable<NormalizedItem["errors"]> = []
+
+      let details: IgMediaDetails | null = null
+      try {
+        details = await graphGet<IgMediaDetails>(`/${id}`, {
+          fields: "id,media_type,media_product_type,permalink,timestamp,thumbnail_url,caption",
+        })
+      } catch (e: any) {
+        const ge = e as GraphApiError
+        perItemErrors.push({ step: "media_details", message: typeof ge?.message === "string" ? ge.message : "details_failed", status: ge?.status, code: ge?.code, fbtrace_id: ge?.fbtrace_id })
+        details = null
+      }
+
+      const media_product_type = details?.media_product_type ?? null
+      const isReels = String(media_product_type || "").toUpperCase() === "REELS"
+
+      let insightsRes: { metrics: NormalizedMetrics; errors: NormalizedItem["errors"] } = { metrics: {}, errors: [] }
+      try {
+        insightsRes = await fetchInsightsResilient(id, isReels)
+      } catch (e: any) {
+        perItemErrors.push({ step: "insights_metric", message: typeof e?.message === "string" ? e.message : "insights_failed" })
+      }
+      for (const e of insightsRes.errors ?? []) perItemErrors.push(e as any)
+
+      const item: NormalizedItem = {
+        id,
+        media_type: details?.media_type ?? (base.media_type ?? null),
+        media_product_type,
+        permalink: details?.permalink ?? (base.permalink ?? null),
+        media_url: base.media_url ?? null,
+        thumbnail_url: details?.thumbnail_url ?? null,
+        timestamp: details?.timestamp ?? (base.timestamp ?? null),
+        caption: details?.caption ?? (typeof base.caption === "string" ? base.caption : null),
+        metrics: insightsRes.metrics && typeof insightsRes.metrics === "object" ? insightsRes.metrics : {},
+        ...(perItemErrors.length ? { errors: perItemErrors } : null),
+      }
+
+      items.push(item)
+    }
+
+    return json({ ok: true, igUserId, fetchedAt, pageCount, itemCount: items.length, items }, 200)
+  } catch {
+    return json({ ok: false, igUserId: igUserId || "", fetchedAt, pageCount: 0, itemCount: 0, items: [] }, 500)
   }
-
-  const items: NormalizedItem[] = []
-
-  for (const base of collected) {
-    const id = String(base.id)
-    const perItemErrors: NonNullable<NormalizedItem["errors"]> = []
-
-    let details: IgMediaDetails | null = null
-    try {
-      details = await graphGet<IgMediaDetails>(`/${id}`, {
-        fields: "id,media_type,media_product_type,permalink,timestamp,thumbnail_url,caption",
-      })
-    } catch (e: any) {
-      const ge = e as GraphApiError
-      perItemErrors.push({ step: "media_details", message: typeof ge?.message === "string" ? ge.message : "details_failed", status: ge?.status, code: ge?.code, fbtrace_id: ge?.fbtrace_id })
-      details = null
-    }
-
-    const media_product_type = details?.media_product_type ?? null
-    const isReels = String(media_product_type || "").toUpperCase() === "REELS"
-
-    const insightsRes = await fetchInsightsResilient(id, isReels)
-    for (const e of insightsRes.errors ?? []) perItemErrors.push(e as any)
-
-    const item: NormalizedItem = {
-      id,
-      media_type: details?.media_type ?? (base.media_type ?? null),
-      media_product_type,
-      permalink: details?.permalink ?? (base.permalink ?? null),
-      media_url: base.media_url ?? null,
-      thumbnail_url: details?.thumbnail_url ?? null,
-      timestamp: details?.timestamp ?? (base.timestamp ?? null),
-      caption: details?.caption ?? (typeof base.caption === "string" ? base.caption : null),
-      metrics: insightsRes.metrics,
-      ...(perItemErrors.length ? { errors: perItemErrors } : null),
-    }
-
-    items.push(item)
-  }
-
-  return NextResponse.json(
-    {
-      ok: true,
-      igUserId,
-      fetchedAt,
-      pageCount,
-      itemCount: items.length,
-      items,
-    },
-    { status: 200, headers: { "Cache-Control": "no-store" } },
-  )
 }
