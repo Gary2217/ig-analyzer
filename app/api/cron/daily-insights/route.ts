@@ -72,6 +72,13 @@ function isVercelCron(req: Request) {
 
 async function runCron(req: Request) {
   try {
+    console.log("[cron] start", {
+      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      hasIgToken: !!process.env.IG_ACCESS_TOKEN,
+      nodeEnv: process.env.NODE_ENV,
+    })
+
     const vercelCron = isVercelCron(req)
     if (!vercelCron) {
       const secret = (process.env.CRON_SECRET ?? "").trim()
@@ -323,10 +330,18 @@ async function runCron(req: Request) {
       { status: 200, headers: baseHeaders },
     )
   } catch (e: any) {
-    console.error("[cron] fatal error", e)
-    return NextResponse.json(
-      { ok: false, error: "server_error", message: e?.message ?? String(e), build_marker: BUILD_MARKER },
-      { status: 500, headers: baseHeaders },
+    console.error("[cron] FATAL", e)
+    if (e instanceof Error) {
+      console.error("[cron] FATAL message", e.message)
+      console.error("[cron] FATAL stack", e.stack)
+    }
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "cron_failed",
+        message: e instanceof Error ? e.message : String(e),
+      }),
+      { status: 500 },
     )
   }
 }
