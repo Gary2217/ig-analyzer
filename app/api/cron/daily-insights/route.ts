@@ -19,6 +19,21 @@ function todayUtcDateString() {
   return `${y}-${m}-${dd}`
 }
 
+function ymdFromIsoEndTime(endTime: string) {
+  // IG typically returns ISO like "2026-01-12T07:00:00+0000" (or Z).
+  // We treat the YYYY-MM-DD portion as the authoritative UTC day key.
+  const s = String(endTime || "")
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (m?.[1]) return m[1]
+  const ms = Date.parse(s)
+  if (!Number.isFinite(ms)) return null
+  const d = new Date(ms)
+  const y = d.getUTCFullYear()
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0")
+  const dd = String(d.getUTCDate()).padStart(2, "0")
+  return `${y}-${mm}-${dd}`
+}
+
 function utcDateStringFromOffset(daysAgo: number) {
   const now = new Date()
   const ms =
@@ -88,7 +103,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const day = todayUtcDateString()
+    const today = todayUtcDateString()
 
     const { data: credsRows, error: credsErr } = await supabaseServer
       .from("ig_credentials")
@@ -139,15 +154,16 @@ export async function POST(req: Request) {
         continue
       }
 
+      // Pull the last few days so we can persist the last fully completed day(s).
+      // We will explicitly filter out "today" to avoid partial-day persistence.
       const untilMs = Date.now()
-      const sinceMs = untilMs
+      const sinceMs = untilMs - 4 * 24 * 60 * 60 * 1000
       const since = Math.floor(sinceMs / 1000)
       const until = Math.floor(untilMs / 1000)
 
       const insightsUrl = new URL(`${GRAPH_BASE}/${encodeURIComponent(igUserIdStr)}/insights`)
       insightsUrl.searchParams.set("metric", "reach,total_interactions,accounts_engaged,impressions")
       insightsUrl.searchParams.set("period", "day")
-      insightsUrl.searchParams.set("metric_type", "total_value")
       insightsUrl.searchParams.set("since", String(since))
       insightsUrl.searchParams.set("until", String(until))
       insightsUrl.searchParams.set("access_token", pageAccessToken)
@@ -156,27 +172,65 @@ export async function POST(req: Request) {
       const insightsBody = await safeJson(insightsRes)
 
       const data = Array.isArray(insightsBody?.data) ? insightsBody.data : []
-      const pickTotal = (name: string) => {
+      const extractSeries = (name: string) => {
         const it = data.find((x: any) => String(x?.name || "").trim() === name)
-        return toSafeInt(it?.total_value?.value)
+        return Array.isArray(it?.values) ? it.values : []
       }
 
-      const reach = pickTotal("reach")
-      const total_interactions = pickTotal("total_interactions")
-      const accounts_engaged = pickTotal("accounts_engaged")
-      const impressions = pickTotal("impressions")
+      const reachSeries = extractSeries("reach")
+      const interactionsSeries = extractSeries("total_interactions")
+      const engagedSeries = extractSeries("accounts_engaged")
+      const impressionsSeries = extractSeries("impressions")
 
+      const byDay = new Map<
+        string,
+        { day: string; reach: number; total_interactions: number; accounts_engaged: number; impressions: number }
+      >()
+
+      const ensure = (dayKey: string) => {
+        const ex = byDay.get(dayKey)
+        if (ex) return ex
+        const init = { day: dayKey, reach: 0, total_interactions: 0, accounts_engaged: 0, impressions: 0 }
+        byDay.set(dayKey, init)
+        return init
+      }
+
+      const applySeries = (series: any[], field: "reach" | "total_interactions" | "accounts_engaged" | "impressions") => {
+        for (const v of Array.isArray(series) ? series : []) {
+          const endTime = typeof v?.end_time === "string" ? v.end_time : ""
+          const dayKey = endTime ? ymdFromIsoEndTime(endTime) : null
+          if (!dayKey) continue
+          if (dayKey >= today) continue // do NOT persist partial "today"
+          const rec = ensure(dayKey)
+          rec[field] = toSafeInt(v?.value)
+        }
+      }
+
+      applySeries(reachSeries, "reach")
+      applySeries(interactionsSeries, "total_interactions")
+      applySeries(engagedSeries, "accounts_engaged")
+      applySeries(impressionsSeries, "impressions")
+
+      const completedDays = Array.from(byDay.keys()).sort()
+      const lastCompletedDay = completedDays.length ? completedDays[completedDays.length - 1] : null
+      if (!lastCompletedDay) {
+        skipped++
+        continue
+      }
+
+      // Persist only the last fully completed day to avoid partial-day drift.
+      const payload = byDay.get(lastCompletedDay)!
       const { error: upErr } = await supabaseServer
         .from("ig_daily_insights")
         .upsert(
           {
             ig_user_id,
             page_id,
-            day,
-            reach,
-            total_interactions,
-            accounts_engaged,
-            impressions,
+            day: payload.day,
+            reach: payload.reach,
+            total_interactions: payload.total_interactions,
+            accounts_engaged: payload.accounts_engaged,
+            impressions: payload.impressions,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "ig_user_id,page_id,day" },
@@ -191,7 +245,7 @@ export async function POST(req: Request) {
             .eq("ig_user_id", ig_user_id)
             .eq("page_id", page_id)
             .gte("day", start)
-            .lte("day", day)
+            .lte("day", lastCompletedDay)
             .order("day", { ascending: true })
 
           const list = Array.isArray(chkRows) ? chkRows : []
@@ -240,7 +294,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { ok: true, day, upserted, skipped, total: rows.length, build_marker: BUILD_MARKER },
+      { ok: true, day: today, upserted, skipped, total: rows.length, build_marker: BUILD_MARKER },
       { status: 200, headers: baseHeaders },
     )
   } catch (e: any) {
