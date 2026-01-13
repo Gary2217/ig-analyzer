@@ -60,10 +60,6 @@ async function safeJson(res: Response) {
   }
 }
 
-export async function GET(req: Request) {
-  return POST(req)
-}
-
 function requireBearer(req: Request) {
   const auth = req.headers.get("authorization") || ""
   const m = auth.match(/^Bearer\s+(.+)$/i)
@@ -71,18 +67,20 @@ function requireBearer(req: Request) {
 }
 
 function isVercelCron(req: Request) {
-  const v = (req.headers.get("x-vercel-cron") ?? "").trim()
-  return Boolean(v)
+  return req.headers.has("x-vercel-cron")
 }
 
-export async function POST(req: Request) {
+async function runCron(req: Request) {
   try {
     const vercelCron = isVercelCron(req)
     if (!vercelCron) {
       const secret = (process.env.CRON_SECRET ?? "").trim()
       const token = requireBearer(req)
       if (!secret || token !== secret) {
-        return NextResponse.json({ ok: false, error: "unauthorized", build_marker: BUILD_MARKER }, { status: 401, headers: baseHeaders })
+        return NextResponse.json(
+          { ok: false, error: "unauthorized", build_marker: BUILD_MARKER },
+          { status: 401, headers: baseHeaders },
+        )
       }
     }
 
@@ -96,6 +94,7 @@ export async function POST(req: Request) {
       )
     }
 
+    // IMPORTANT: Keep the existing POST business logic below unchanged.
     // Supabase table existence guard (auto).
     // Avoids relying on manual SQL edits/checks.
     try {
@@ -324,9 +323,18 @@ export async function POST(req: Request) {
       { status: 200, headers: baseHeaders },
     )
   } catch (e: any) {
+    console.error("[cron] fatal error", e)
     return NextResponse.json(
       { ok: false, error: "server_error", message: e?.message ?? String(e), build_marker: BUILD_MARKER },
       { status: 500, headers: baseHeaders },
     )
   }
+}
+
+export async function GET(req: Request) {
+  return runCron(req)
+}
+
+export async function POST(req: Request) {
+  return runCron(req)
 }
