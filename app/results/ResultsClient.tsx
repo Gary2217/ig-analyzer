@@ -1293,7 +1293,7 @@ export default function ResultsClient() {
 
     ;(async () => {
       try {
-        const igReq = fetch("/api/instagram/daily-snapshot?days=7", {
+        const igReq = fetch("/api/instagram/daily-snapshot?days=90", {
           method: "POST",
           cache: "no-store",
           credentials: "include",
