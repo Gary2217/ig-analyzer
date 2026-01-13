@@ -96,7 +96,13 @@ async function runCron(req: Request) {
     const __DEV__ = process.env.NODE_ENV !== "production"
     const __DEBUG_CRON__ = __DEV__ || process.env.IG_GRAPH_DEBUG === "1"
 
-    const supabaseServer = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
+    let supabaseServer: any
+    try {
+      supabaseServer = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
+    } catch (e) {
+      console.error("[cron][supabase_init_failed]", e)
+      throw e
+    }
 
     const vercelCron = isVercelCron(req)
     if (!vercelCron) {
@@ -124,7 +130,14 @@ async function runCron(req: Request) {
     // Supabase table existence guard (auto).
     // Avoids relying on manual SQL edits/checks.
     try {
-      const { error: tableErr } = await supabaseServer.from("ig_daily_insights").select("id").limit(1)
+      let tableErr: any = null
+      try {
+        const r = await supabaseServer.from("ig_daily_insights").select("id").limit(1)
+        tableErr = (r as any)?.error
+      } catch (e) {
+        console.error("[cron][supabase_select_failed]", e)
+        throw e
+      }
       if (tableErr) {
         const code = (tableErr as any)?.code
         const msg = String((tableErr as any)?.message ?? "")
@@ -152,9 +165,16 @@ async function runCron(req: Request) {
 
     const today = todayUtcDateString()
 
-    const { data: credsRows, error: credsErr } = await supabaseServer
-      .from("ig_credentials")
-      .select("ig_user_id,page_id,access_token")
+    let credsRows: any = null
+    let credsErr: any = null
+    try {
+      const r = await supabaseServer.from("ig_credentials").select("ig_user_id,page_id,access_token")
+      credsRows = (r as any)?.data
+      credsErr = (r as any)?.error
+    } catch (e) {
+      console.error("[cron][supabase_select_failed]", e)
+      throw e
+    }
 
     if (credsErr) {
       return NextResponse.json(
@@ -192,7 +212,13 @@ async function runCron(req: Request) {
       pageTokenUrl.searchParams.set("fields", "access_token")
       pageTokenUrl.searchParams.set("access_token", userToken)
 
-      const pageTokenRes = await fetch(pageTokenUrl.toString(), { method: "GET", cache: "no-store" })
+      let pageTokenRes: Response
+      try {
+        pageTokenRes = await fetch(pageTokenUrl.toString(), { method: "GET", cache: "no-store" })
+      } catch (e) {
+        console.error("[cron][ig_fetch_failed]", e)
+        throw e
+      }
       const pageTokenBody = await safeJson(pageTokenRes)
       const pageAccessToken = pageTokenRes.ok && typeof pageTokenBody?.access_token === "string" ? String(pageTokenBody.access_token).trim() : ""
 
@@ -215,7 +241,13 @@ async function runCron(req: Request) {
       insightsUrl.searchParams.set("until", String(until))
       insightsUrl.searchParams.set("access_token", pageAccessToken)
 
-      const insightsRes = await fetch(insightsUrl.toString(), { method: "GET", cache: "no-store" })
+      let insightsRes: Response
+      try {
+        insightsRes = await fetch(insightsUrl.toString(), { method: "GET", cache: "no-store" })
+      } catch (e) {
+        console.error("[cron][ig_fetch_failed]", e)
+        throw e
+      }
       const insightsBody = await safeJson(insightsRes)
 
       const data = Array.isArray(insightsBody?.data) ? insightsBody.data : []
@@ -267,33 +299,49 @@ async function runCron(req: Request) {
 
       // Persist only the last fully completed day to avoid partial-day drift.
       const payload = byDay.get(lastCompletedDay)!
-      const { error: upErr } = await supabaseServer
-        .from("ig_daily_insights")
-        .upsert(
-          {
-            ig_user_id,
-            page_id,
-            day: payload.day,
-            reach: payload.reach,
-            total_interactions: payload.total_interactions,
-            accounts_engaged: payload.accounts_engaged,
-            impressions: payload.impressions,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "ig_user_id,page_id,day" },
-        )
+      let upErr: any = null
+      try {
+        const r = await supabaseServer
+          .from("ig_daily_insights")
+          .upsert(
+            {
+              ig_user_id,
+              page_id,
+              day: payload.day,
+              reach: payload.reach,
+              total_interactions: payload.total_interactions,
+              accounts_engaged: payload.accounts_engaged,
+              impressions: payload.impressions,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "ig_user_id,page_id,day" },
+          )
+        upErr = (r as any)?.error
+      } catch (e) {
+        console.error("[cron][supabase_upsert_failed]", e)
+        throw e
+      }
 
       if (__DEBUG_CRON__) {
         try {
           const start = utcDateStringFromOffset(6)
-          const { data: chkRows, error: chkErr } = await supabaseServer
-            .from("ig_daily_insights")
-            .select("day,reach,impressions,total_interactions,accounts_engaged")
-            .eq("ig_user_id", ig_user_id)
-            .eq("page_id", page_id)
-            .gte("day", start)
-            .lte("day", lastCompletedDay)
-            .order("day", { ascending: true })
+          let chkRows: any = null
+          let chkErr: any = null
+          try {
+            const r = await supabaseServer
+              .from("ig_daily_insights")
+              .select("day,reach,impressions,total_interactions,accounts_engaged")
+              .eq("ig_user_id", ig_user_id)
+              .eq("page_id", page_id)
+              .gte("day", start)
+              .lte("day", lastCompletedDay)
+              .order("day", { ascending: true })
+            chkRows = (r as any)?.data
+            chkErr = (r as any)?.error
+          } catch (e) {
+            console.error("[cron][supabase_select_failed]", e)
+            throw e
+          }
 
           const list = Array.isArray(chkRows) ? chkRows : []
           const firstDay = list.length > 0 ? (list[0] as any)?.day : null
