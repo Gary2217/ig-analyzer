@@ -70,12 +70,30 @@ function requireBearer(req: Request) {
   return (m?.[1] ?? "").trim()
 }
 
+function isVercelCron(req: Request) {
+  const v = (req.headers.get("x-vercel-cron") ?? "").trim()
+  return Boolean(v)
+}
+
 export async function POST(req: Request) {
   try {
-    const secret = (process.env.CRON_SECRET ?? "").trim()
-    const token = requireBearer(req)
-    if (!secret || token !== secret) {
-      return NextResponse.json({ ok: false, error: "unauthorized", build_marker: BUILD_MARKER }, { status: 401, headers: baseHeaders })
+    const vercelCron = isVercelCron(req)
+    if (!vercelCron) {
+      const secret = (process.env.CRON_SECRET ?? "").trim()
+      const token = requireBearer(req)
+      if (!secret || token !== secret) {
+        return NextResponse.json({ ok: false, error: "unauthorized", build_marker: BUILD_MARKER }, { status: 401, headers: baseHeaders })
+      }
+    }
+
+    if (__DEBUG_CRON__) {
+      console.log(
+        JSON.stringify({
+          status: "cron_invoked",
+          vercel_cron: vercelCron,
+          has_auth_header: Boolean((req.headers.get("authorization") ?? "").trim()),
+        }),
+      )
     }
 
     // Supabase table existence guard (auto).
@@ -295,6 +313,10 @@ export async function POST(req: Request) {
       }
 
       upserted++
+    }
+
+    if (__DEBUG_CRON__) {
+      console.log(JSON.stringify({ status: "cron_finished", upserted, skipped, total: rows.length }))
     }
 
     return NextResponse.json(
