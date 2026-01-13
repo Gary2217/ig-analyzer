@@ -678,6 +678,7 @@ export default function ResultsClient() {
   const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
+  const [trendNeedsEmptyHint, setTrendNeedsEmptyHint] = useState(false)
 
   const trendPointsHashRef = useRef<string>("")
   const hashTrendPoints = useCallback((pts: AccountTrendPoint[]) => {
@@ -1344,6 +1345,18 @@ export default function ResultsClient() {
           setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
           return
         }
+
+        const pointsRaw = Array.isArray(json7?.points) ? json7.points : []
+        const pointsSource = typeof json7?.points_source === "string" ? json7.points_source : ""
+        const isEmptySeries = pointsSource === "empty" || pointsRaw.length < 1
+
+        if (isEmptySeries) {
+          setTrendNeedsEmptyHint(true)
+          setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
+          return
+        }
+
+        setTrendNeedsEmptyHint(false)
 
         const totalsRaw = Array.isArray(json7?.insights_daily) ? json7.insights_daily : []
         setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
@@ -4241,6 +4254,12 @@ export default function ResultsClient() {
                 {trendNeedsConnectHint ? (
                   <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">
                     {t("results.connect.subtitle")}
+                  </div>
+                ) : null}
+                {trendNeedsEmptyHint ? (
+                  <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">
+                    <div>正在累積每日數據，通常需要 24 小時後才會出現趨勢曲線。</div>
+                    <div>We’re accumulating daily data. Trend lines typically appear after ~24 hours.</div>
                   </div>
                 ) : null}
                 <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
