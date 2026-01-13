@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { supabaseServer } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -7,9 +7,6 @@ export const dynamic = "force-dynamic"
 const BUILD_MARKER = "cron-daily-insights-v1"
 
 const baseHeaders = { "Cache-Control": "no-store", "x-build-marker": BUILD_MARKER } as const
-
-const __DEV__ = process.env.NODE_ENV !== "production"
-const __DEBUG_CRON__ = __DEV__ || process.env.IG_GRAPH_DEBUG === "1"
 
 function todayUtcDateString() {
   const d = new Date()
@@ -78,6 +75,28 @@ async function runCron(req: Request) {
       hasIgToken: !!process.env.IG_ACCESS_TOKEN,
       nodeEnv: process.env.NODE_ENV,
     })
+
+    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()
+    const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()
+    const igAccessToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+
+    const missing: string[] = []
+    if (!supabaseUrl) missing.push("NEXT_PUBLIC_SUPABASE_URL")
+    if (!serviceKey) missing.push("SUPABASE_SERVICE_ROLE_KEY")
+    if (!igAccessToken) missing.push("IG_ACCESS_TOKEN")
+
+    if (missing.length > 0) {
+      console.error("[cron] missing env", { missing })
+      return new Response(
+        JSON.stringify({ ok: false, error: "missing_env", missing }),
+        { status: 500 },
+      )
+    }
+
+    const __DEV__ = process.env.NODE_ENV !== "production"
+    const __DEBUG_CRON__ = __DEV__ || process.env.IG_GRAPH_DEBUG === "1"
+
+    const supabaseServer = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
 
     const vercelCron = isVercelCron(req)
     if (!vercelCron) {
