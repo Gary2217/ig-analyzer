@@ -60,6 +60,10 @@ async function safeJson(res: Response) {
   }
 }
 
+export async function GET(req: Request) {
+  return POST(req)
+}
+
 function requireBearer(req: Request) {
   const auth = req.headers.get("authorization") || ""
   const m = auth.match(/^Bearer\s+(.+)$/i)
