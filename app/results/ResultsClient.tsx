@@ -756,6 +756,7 @@ export default function ResultsClient() {
   const hasFetchedDailySnapshotRef = useRef(false)
   const hasAppliedDailySnapshotTrendRef = useRef(false)
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
+  const dailySnapshotRequestSeqRef = useRef(0)
   const lastDailySnapshotFetchAtRef = useRef(0)
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
@@ -1249,7 +1250,15 @@ export default function ResultsClient() {
     setTrendFetchStatus({ loading: true, error: "", lastDays: 90 })
     setTrendNeedsConnectHint(false)
 
-    dailySnapshotAbortRef.current?.abort()
+    const nextReqId = (dailySnapshotRequestSeqRef.current += 1)
+    if (dailySnapshotAbortRef.current) {
+      try {
+        if (__DEV__) console.debug("[daily-snapshot] abort: replaced_by_new_request", { reqId: nextReqId })
+        dailySnapshotAbortRef.current.abort()
+      } catch {
+        // ignore
+      }
+    }
     const ac = new AbortController()
     dailySnapshotAbortRef.current = ac
 
@@ -1327,9 +1336,24 @@ export default function ResultsClient() {
     })()
 
     return () => {
-      ac.abort()
+      // Do not abort here. React effect cleanup can run due to unrelated state/dep changes
+      // and would prematurely cancel an in-flight request. Abort is handled only when a
+      // new request starts (above) or on component unmount (separate effect).
     }
   }, [isConnectedInstagram, mergeToContinuousTrendPoints, normalizeTotalsFromInsightsDaily, supabaseBrowser, trendPoints.length])
+
+  useEffect(() => {
+    return () => {
+      if (dailySnapshotAbortRef.current) {
+        try {
+          if (__DEV__) console.debug("[daily-snapshot] abort: unmount")
+          dailySnapshotAbortRef.current.abort()
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [])
 
   const allAccountTrend = useMemo<AccountTrendPoint[]>(() => {
     const isRec = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === "object")
