@@ -39,7 +39,7 @@ function detectLocale(req: NextRequest): SupportedLocale {
   return "en"
 }
 
-export function middleware(req: NextRequest) {
+export default function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl
   if (shouldSkip(pathname)) return NextResponse.next()
 
