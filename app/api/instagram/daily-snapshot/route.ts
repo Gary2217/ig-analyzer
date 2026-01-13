@@ -7,6 +7,14 @@ export const dynamic = "force-dynamic"
 
 const BUILD_MARKER = "daily-snapshot-points-v2"
 
+const HANDLER_FILE = "app/api/instagram/daily-snapshot/route.ts"
+const HANDLER_VERSION = "ds-v2-diag-1"
+const HANDLER_HEADERS = {
+  "X-Handler-File": HANDLER_FILE,
+  "X-Handler-Version": HANDLER_VERSION,
+  "X-Handler-Build-Marker": BUILD_MARKER,
+} as const
+
 const __DEV__ = process.env.NODE_ENV !== "production"
 const __DEBUG_DAILY_SNAPSHOT__ = __DEV__ || process.env.IG_GRAPH_DEBUG === "1"
 
@@ -101,7 +109,10 @@ async function safeJson(res: Response) {
 }
 
 function jsonError(message: string, extra?: any, status = 400) {
-  return NextResponse.json({ ok: false, error: message, ...(extra ?? null) }, { status, headers: { "Cache-Control": "no-store" } })
+  return NextResponse.json(
+    { ok: false, error: message, ...(extra ?? null) },
+    { status, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
+  )
 }
 
 function getCookieValueFromHeader(cookie: string, key: string) {
@@ -310,7 +321,7 @@ export async function POST(req: Request) {
             series_ok: true,
             __diag: { db_rows: rows.length, used_source: "db", start, end: today },
           },
-          { status: 200, headers: { "Cache-Control": "no-store" } },
+          { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
         )
       }
     } catch {
@@ -335,7 +346,7 @@ export async function POST(req: Request) {
         series_ok: false,
         __diag: { db_rows: 0, used_source: "fallback", start, end: today },
       },
-      { status: 200, headers: { "Cache-Control": "no-store" } },
+      { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
     )
   } catch (err: any) {
     return jsonError("server_error", { message: err?.message ?? String(err) }, 500)
