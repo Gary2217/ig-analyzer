@@ -21,11 +21,7 @@ Why plays/shares are conditional
 */
 
 type NormalizedMetrics = {
-  impressions: number | null
-  reach: number | null
-  saved: number | null
-  plays?: number | null
-  shares?: number | null
+  [metric: string]: number
 }
 
 type NormalizedItem = {
@@ -79,57 +75,67 @@ function normalizeInsights(insights: IgInsightsResponse | null, requested: strin
   return out
 }
 
-async function fetchInsightsWithFallback(mediaId: string, isReels: boolean): Promise<{ metrics: NormalizedMetrics; errors: NormalizedItem["errors"] }> {
-  const errors: NormalizedItem["errors"] = []
+async function fetchSingleMetric(mediaId: string, metric: string): Promise<number | undefined> {
+  const body = await graphGet<IgInsightsResponse>(`/${mediaId}/insights`, { metric })
+  const normalized = normalizeInsights(body, [metric])
+  const val = normalized[metric]
+  return typeof val === "number" && Number.isFinite(val) ? val : undefined
+}
 
-  const safeMetrics = ["impressions", "reach", "saved"]
-  const reelsExtras = ["plays", "shares"]
+async function fetchInsightsResilient(
+  mediaId: string,
+  isReels: boolean,
+): Promise<{ metrics: NormalizedMetrics; errors: NormalizedItem["errors"] }> {
+  const errors: NonNullable<NormalizedItem["errors"]> = []
+  const metrics: NormalizedMetrics = {}
 
-  const safeMetricParam = safeMetrics.join(",")
-  const extrasMetricParam = reelsExtras.join(",")
-
-  const safeCall = async () => {
-    const body = await graphGet<IgInsightsResponse>(`/${mediaId}/insights`, { metric: safeMetricParam })
-    const normalized = normalizeInsights(body, safeMetrics)
-    return {
-      impressions: normalized.impressions ?? null,
-      reach: normalized.reach ?? null,
-      saved: normalized.saved ?? null,
-    } satisfies NormalizedMetrics
-  }
-
-  const extrasCall = async () => {
-    const body = await graphGet<IgInsightsResponse>(`/${mediaId}/insights`, { metric: extrasMetricParam })
-    const normalized = normalizeInsights(body, reelsExtras)
-    return {
-      plays: normalized.plays ?? null,
-      shares: normalized.shares ?? null,
-    } satisfies Pick<NormalizedMetrics, "plays" | "shares">
-  }
-
-  try {
-    const base = await safeCall()
-    if (!isReels) return { metrics: base, errors }
-
+  const tryMetric = async (metric: string, opts?: { step?: string; onUnsupported?: "skip" | "error" }) => {
     try {
-      const extra = await extrasCall()
-      return { metrics: { ...base, ...extra }, errors }
+      const v = await fetchSingleMetric(mediaId, metric)
+      if (typeof v === "number") metrics[metric] = v
     } catch (e: any) {
-      if (isUnsupportedMetricError(e)) {
-        errors.push({ step: "insights_extras", message: "unsupported_metric", status: e?.status, code: e?.code, fbtrace_id: e?.fbtrace_id })
-        return { metrics: base, errors }
-      }
-      throw e
+      const unsupported = isUnsupportedMetricError(e)
+      const onUnsupported = opts?.onUnsupported ?? "error"
+
+      if (unsupported && onUnsupported === "skip") return
+
+      errors.push({
+        step: opts?.step ?? "insights_metric",
+        message: unsupported ? "unsupported_metric" : typeof e?.message === "string" ? e.message : "metric_failed",
+        status: e?.status,
+        code: e?.code,
+        fbtrace_id: e?.fbtrace_id,
+        metric,
+      } as any)
     }
+  }
+
+  await tryMetric("reach", { step: "insights_metric", onUnsupported: "error" })
+  await tryMetric("saved", { step: "insights_metric", onUnsupported: "error" })
+
+  let impressionsUnsupported = false
+  try {
+    const v = await fetchSingleMetric(mediaId, "impressions")
+    if (typeof v === "number") metrics.impressions = v
   } catch (e: any) {
     if (isUnsupportedMetricError(e)) {
-      errors.push({ step: "insights_safe", message: "unsupported_metric", status: e?.status, code: e?.code, fbtrace_id: e?.fbtrace_id })
-      return { metrics: { impressions: null, reach: null, saved: null, ...(isReels ? { plays: null, shares: null } : null) }, errors }
+      impressionsUnsupported = true
+      errors.push({ step: "insights_metric", message: "unsupported_metric", status: e?.status, code: e?.code, fbtrace_id: e?.fbtrace_id, metric: "impressions" } as any)
+    } else {
+      errors.push({ step: "insights_metric", message: typeof e?.message === "string" ? e.message : "metric_failed", status: e?.status, code: e?.code, fbtrace_id: e?.fbtrace_id, metric: "impressions" } as any)
     }
-
-    errors.push({ step: "insights_safe", message: typeof e?.message === "string" ? e.message : "insights_failed", status: e?.status, code: e?.code, fbtrace_id: e?.fbtrace_id })
-    return { metrics: { impressions: null, reach: null, saved: null, ...(isReels ? { plays: null, shares: null } : null) }, errors }
   }
+
+  if (impressionsUnsupported) {
+    await tryMetric("views", { step: "insights_metric", onUnsupported: "error" })
+  }
+
+  if (isReels) {
+    await tryMetric("plays", { step: "insights_metric", onUnsupported: "skip" })
+    await tryMetric("shares", { step: "insights_metric", onUnsupported: "skip" })
+  }
+
+  return { metrics, errors: errors.length ? errors : [] }
 }
 
 export async function GET(req: Request) {
@@ -207,8 +213,8 @@ export async function GET(req: Request) {
     const media_product_type = details?.media_product_type ?? null
     const isReels = String(media_product_type || "").toUpperCase() === "REELS"
 
-    const insightsRes = await fetchInsightsWithFallback(id, isReels)
-    for (const e of insightsRes.errors ?? []) perItemErrors.push(e)
+    const insightsRes = await fetchInsightsResilient(id, isReels)
+    for (const e of insightsRes.errors ?? []) perItemErrors.push(e as any)
 
     const item: NormalizedItem = {
       id,
