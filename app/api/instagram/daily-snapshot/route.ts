@@ -16,7 +16,7 @@ const HANDLER_HEADERS = {
 } as const
 
 const __DEV__ = process.env.NODE_ENV !== "production"
-const __DEBUG_DAILY_SNAPSHOT__ = __DEV__ || process.env.IG_GRAPH_DEBUG === "1"
+const __DEBUG_DAILY_SNAPSHOT__ = process.env.IG_GRAPH_DEBUG === "1"
 
 const GRAPH_VERSION = "v24.0"
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
@@ -91,6 +91,7 @@ function buildPointsFromGraphInsights(insightsDailySeries: any[], days: number) 
       const ex = byDate.get(dateStr) ?? { reach: 0, impressions: 0, interactions: 0, engaged_accounts: 0 }
       const num = toSafeInt(v?.value)
       if (name === "reach") ex.reach = num
+      else if (name === "impressions" || name === "views") ex.impressions = num
       else if (name === "total_interactions") ex.interactions = num
       else if (name === "accounts_engaged") ex.engaged_accounts = num
       byDate.set(dateStr, ex)
@@ -184,13 +185,16 @@ async function fetchInsights(params: {
   pageAccessToken: string
   days: number
   metricType: "total_value" | "time_series"
+  metricsOverride?: string[]
 }) {
   const untilMs = Date.now()
   const sinceMs = untilMs - (params.days - 1) * 24 * 60 * 60 * 1000
   const since = toUnixSeconds(sinceMs)
   const until = toUnixSeconds(untilMs)
 
-  const metricList = ["reach", "total_interactions", "accounts_engaged"]
+  const metricList = Array.isArray(params.metricsOverride) && params.metricsOverride.length
+    ? params.metricsOverride
+    : ["reach", "total_interactions", "accounts_engaged"]
 
   const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
   u.searchParams.set("metric", metricList.join(","))
@@ -204,6 +208,13 @@ async function fetchInsights(params: {
   const body = await safeJson(r)
   const data = Array.isArray(body?.data) ? body.data : []
   return { ok: r.ok, status: r.status, body, data }
+}
+
+function isUnsupportedMetricBody(body: unknown): boolean {
+  const b = body as any
+  const code = typeof b?.error?.code === "number" ? b.error.code : typeof b?.code === "number" ? b.code : undefined
+  const msg = typeof b?.error?.message === "string" ? String(b.error.message).toLowerCase() : typeof b?.message === "string" ? String(b.message).toLowerCase() : ""
+  return code === 100 || msg.includes("invalid") || msg.includes("unsupported") || msg.includes("metric")
 }
 
 export async function POST(req: Request) {
@@ -267,7 +278,7 @@ export async function POST(req: Request) {
     const start = utcDateStringFromOffset(safeDays - 1)
 
     if (__DEBUG_DAILY_SNAPSHOT__) {
-      console.log("[daily-snapshot] scope", { igId, pageId, start, today, days: safeDays })
+      console.log("[daily-snapshot] scope", { days: safeDays })
     }
 
     try {
@@ -282,13 +293,9 @@ export async function POST(req: Request) {
 
       if (__DEBUG_DAILY_SNAPSHOT__) {
         const list = Array.isArray(rows) ? rows : []
-        const firstDay = list.length > 0 ? (list[0] as any)?.day : null
-        const lastDay = list.length > 0 ? (list[list.length - 1] as any)?.day : null
         console.log("[daily-snapshot] db", {
           err: error ? { message: (error as any)?.message, code: (error as any)?.code, hint: (error as any)?.hint } : null,
           rows_len: list.length,
-          first_day: firstDay,
-          last_day: lastDay,
         })
       }
 
@@ -328,8 +335,115 @@ export async function POST(req: Request) {
       // ignore DB failures here; fall back to Graph
     }
 
-    if (__DEBUG_DAILY_SNAPSHOT__) {
-      console.log("[daily-snapshot] db empty -> fallback_zero_series")
+    if (__DEBUG_DAILY_SNAPSHOT__) console.log("[daily-snapshot] db empty")
+
+    // Seed when DB is empty (safe for prod):
+    // - Prefer cookie token (existing auth)
+    // - Fallback to env IG_ACCESS_TOKEN only if cookie token fails
+    // - Any Graph failure => fallback_zero_series (200)
+    try {
+      const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+
+      // 1) page access token via cookie token
+      let pageToken = await getPageAccessToken(token, pageId)
+      let tokenSource: "cookie" | "env" = "cookie"
+
+      // 2) optional env fallback
+      if (!pageToken.ok && envToken) {
+        tokenSource = "env"
+        pageToken = await getPageAccessToken(envToken, pageId)
+      }
+
+      if (!pageToken.ok) throw new Error("page_access_token_failed")
+
+      const metricsPrimary = ["reach", "impressions", "total_interactions", "accounts_engaged"]
+      const metricsViewsFallback = ["reach", "views", "total_interactions", "accounts_engaged"]
+      const metricsNoImpressions = ["reach", "total_interactions", "accounts_engaged"]
+
+      let impressionsSource: "impressions" | "views" | "none" = "impressions"
+
+      // Try impressions first.
+      let series = await fetchInsights({
+        igId,
+        pageAccessToken: pageToken.pageAccessToken,
+        days: safeDays,
+        metricType: "time_series",
+        metricsOverride: metricsPrimary,
+      })
+
+      // If impressions unsupported, try views.
+      if (!series.ok && isUnsupportedMetricBody(series.body)) {
+        impressionsSource = "views"
+        series = await fetchInsights({
+          igId,
+          pageAccessToken: pageToken.pageAccessToken,
+          days: safeDays,
+          metricType: "time_series",
+          metricsOverride: metricsViewsFallback,
+        })
+      }
+
+      // If views also unsupported, omit impressions entirely.
+      if (!series.ok && isUnsupportedMetricBody(series.body)) {
+        impressionsSource = "none"
+        series = await fetchInsights({
+          igId,
+          pageAccessToken: pageToken.pageAccessToken,
+          days: safeDays,
+          metricType: "time_series",
+          metricsOverride: metricsNoImpressions,
+        })
+      }
+
+      const points = buildPointsFromGraphInsights(series.data, safeDays)
+      if (Array.isArray(points) && points.length >= 1) {
+        // Never upsert today (partial-day instability).
+        try {
+          const rowsToUpsert = points
+            .filter((p) => p?.date && p.date !== today)
+            .map((p) => ({
+              ig_user_id: Number(igId),
+              page_id: Number(pageId),
+              day: p.date,
+              reach: toSafeInt(p.reach),
+              impressions: toSafeInt(p.impressions),
+              total_interactions: toSafeInt(p.interactions),
+              accounts_engaged: toSafeInt(p.engaged_accounts),
+              updated_at: new Date().toISOString(),
+            }))
+
+          if (rowsToUpsert.length >= 1) {
+            await supabaseServer.from("ig_daily_insights").upsert(rowsToUpsert as any, { onConflict: "ig_user_id,page_id,day" })
+          }
+        } catch {
+          // ignore db write failures
+        }
+
+        if (__DEBUG_DAILY_SNAPSHOT__) {
+          console.log("[daily-snapshot] graph_seed", { status: series.status, token_source: tokenSource, impressions_source: impressionsSource })
+        }
+
+        return NextResponse.json(
+          {
+            build_marker: BUILD_MARKER,
+            ok: true,
+            days: safeDays,
+            points,
+            points_ok: true,
+            points_source: "graph_series",
+            points_end_date: today,
+            insights_daily: [],
+            insights_daily_series: series.data,
+            series_ok: series.ok,
+            __diag: { db_rows: 0, used_source: "graph", start, end: today, impressions_source: impressionsSource },
+          },
+          { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
+        )
+      }
+    } catch (e: any) {
+      if (__DEBUG_DAILY_SNAPSHOT__) {
+        console.log("[daily-snapshot] graph_seed_failed", { status: typeof e?.status === "number" ? e.status : undefined, message: "graph_seed_failed" })
+      }
     }
 
     return NextResponse.json(

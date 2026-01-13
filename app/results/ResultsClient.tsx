@@ -679,6 +679,35 @@ export default function ResultsClient() {
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
+  const trendPointsHashRef = useRef<string>("")
+  const hashTrendPoints = useCallback((pts: AccountTrendPoint[]) => {
+    const list = Array.isArray(pts) ? pts : []
+    try {
+      return JSON.stringify(
+        list.map((p: any) => [
+          typeof p?.ts === "number" && Number.isFinite(p.ts) ? p.ts : null,
+          typeof p?.reach === "number" && Number.isFinite(p.reach) ? p.reach : 0,
+          typeof p?.impressions === "number" && Number.isFinite(p.impressions) ? p.impressions : 0,
+          typeof p?.interactions === "number" && Number.isFinite(p.interactions) ? p.interactions : 0,
+          typeof p?.engaged === "number" && Number.isFinite(p.engaged) ? p.engaged : 0,
+        ]),
+      )
+    } catch {
+      return String(Date.now())
+    }
+  }, [])
+
+  const setTrendPointsDeduped = useCallback(
+    (next: AccountTrendPoint[]) => {
+      const pts = Array.isArray(next) ? next : []
+      const h = hashTrendPoints(pts)
+      if (h === trendPointsHashRef.current) return
+      trendPointsHashRef.current = h
+      setTrendPoints(pts)
+    },
+    [hashTrendPoints],
+  )
+
   const [hasCachedData, setHasCachedData] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateSlow, setUpdateSlow] = useState(false)
@@ -817,14 +846,14 @@ export default function ResultsClient() {
       const cachedLen = cached.trendPoints.length
       const curLen = Array.isArray(trendPoints) ? trendPoints.length : 0
       if (cachedLen >= 1 || (curLen < 1 && !hasAppliedDailySnapshotTrendRef.current)) {
-        setTrendPoints(cached.trendPoints)
+        setTrendPointsDeduped(cached.trendPoints)
       }
     }
     if (typeof cached.trendFetchedAt === "number" || cached.trendFetchedAt === null) setTrendFetchedAt(cached.trendFetchedAt)
 
     // Migrate legacy locale-specific cache to the locale-agnostic key.
     saWriteResultsCache(resultsCacheKey, cached)
-  }, [resultsCacheKey, trendPoints])
+  }, [resultsCacheKey, setTrendPointsDeduped, trendPoints.length])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams?.toString() || "")
@@ -1324,7 +1353,7 @@ export default function ResultsClient() {
 
         if (merged90.length >= 1) {
           hasAppliedDailySnapshotTrendRef.current = true
-          setTrendPoints(merged90)
+          setTrendPointsDeduped(merged90)
           setTrendFetchedAt(Date.now())
         }
 
