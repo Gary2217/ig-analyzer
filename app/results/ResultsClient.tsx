@@ -5,6 +5,7 @@
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
+import { createClient } from "@supabase/supabase-js"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
@@ -31,6 +32,29 @@ function toNum(value: unknown): number | undefined {
     return Number.isFinite(n) ? n : undefined
   }
   return undefined
+}
+
+function getCookieValue(key: string): string {
+  try {
+    if (typeof document === "undefined") return ""
+    const raw = document.cookie || ""
+    const parts = raw.split(";")
+    for (const p of parts) {
+      const idx = p.indexOf("=")
+      if (idx < 0) continue
+      const k = p.slice(0, idx).trim()
+      if (k !== key) continue
+      const v = p.slice(idx + 1).trim()
+      try {
+        return decodeURIComponent(v)
+      } catch {
+        return v
+      }
+    }
+    return ""
+  } catch {
+    return ""
+  }
 }
 
 function isAbortError(err: unknown): boolean {
@@ -933,7 +957,138 @@ export default function ResultsClient() {
     return out
   }, [])
 
-  const coerceDailySnapshotPointsToArray = useCallback((points: unknown): any[] => {
+  const mergeToContinuousTrendPoints = useCallback(
+    (params: {
+      days: number
+      baseDbRowsRaw: unknown
+      overridePointsRaw: unknown
+    }): AccountTrendPoint[] => {
+      const days = Math.max(1, Math.floor(params.days || 90))
+
+      const parseYmd = (ymd: string) => {
+        const s = String(ymd || "").trim()
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null
+        const ms = Date.parse(`${s}T00:00:00.000Z`)
+        return Number.isFinite(ms) ? ms : null
+      }
+
+      const utcDateStringFromOffset = (daysAgo: number) => {
+        const now = new Date()
+        const ms =
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0) -
+          daysAgo * 24 * 60 * 60 * 1000
+        const d = new Date(ms)
+        const y = d.getUTCFullYear()
+        const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+        const dd = String(d.getUTCDate()).padStart(2, "0")
+        return `${y}-${m}-${dd}`
+      }
+
+      const toSafeInt = (v: unknown) => {
+        const n = typeof v === "number" ? v : Number(v)
+        if (!Number.isFinite(n)) return 0
+        return Math.max(0, Math.floor(n))
+      }
+
+      const toByDayFromDbRows = (raw: unknown) => {
+        const arr = Array.isArray(raw) ? raw : []
+        const map = new Map<
+          string,
+          { reach: number; impressions: number; total_interactions: number; accounts_engaged: number }
+        >()
+
+        for (const it of Array.isArray(arr) ? arr : []) {
+          const ymd = typeof (it as any)?.day === "string" ? String((it as any).day).trim() : ""
+          if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue
+
+          map.set(ymd, {
+            reach: toSafeInt((it as any)?.reach),
+            impressions: toSafeInt((it as any)?.impressions),
+            total_interactions: toSafeInt((it as any)?.total_interactions),
+            accounts_engaged: toSafeInt((it as any)?.accounts_engaged),
+          })
+        }
+
+        return map
+      }
+
+      const toByDayFromIgPoints = (raw: unknown) => {
+        const arr = coerceDailySnapshotPointsToArray(raw)
+        const map = new Map<
+          string,
+          { reach: number; impressions: number; total_interactions: number; accounts_engaged: number }
+        >()
+
+        for (const it of Array.isArray(arr) ? arr : []) {
+          const ymd =
+            (typeof (it as any)?.date === "string" ? String((it as any).date).trim() : "") ||
+            (typeof (it as any)?.day === "string" ? String((it as any).day).trim() : "")
+          if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue
+
+          map.set(ymd, {
+            reach: toSafeInt((it as any)?.reach),
+            impressions: toSafeInt((it as any)?.impressions),
+            total_interactions: toSafeInt((it as any)?.interactions ?? (it as any)?.total_interactions),
+            accounts_engaged: toSafeInt((it as any)?.engaged_accounts ?? (it as any)?.accounts_engaged ?? (it as any)?.engaged),
+          })
+        }
+
+        return map
+      }
+
+      const baseByDay = toByDayFromDbRows(params.baseDbRowsRaw)
+      const overrideByDay = toByDayFromIgPoints(params.overridePointsRaw)
+
+      const mergedByDay = new Map(baseByDay)
+      for (const [k, v] of overrideByDay.entries()) mergedByDay.set(k, v)
+
+      const out: AccountTrendPoint[] = []
+      for (let i = days - 1; i >= 0; i--) {
+        const ymd = utcDateStringFromOffset(i)
+        const row = mergedByDay.get(ymd) ?? { reach: 0, impressions: 0, total_interactions: 0, accounts_engaged: 0 }
+        const ts = parseYmd(ymd)
+        const safeTs = ts ?? Date.now() - i * 24 * 60 * 60 * 1000
+
+        const p: any = {
+          t: (() => {
+            try {
+              return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(safeTs))
+            } catch {
+              const d = new Date(safeTs)
+              const m = String(d.getMonth() + 1).padStart(2, "0")
+              const dd = String(d.getDate()).padStart(2, "0")
+              return `${m}/${dd}`
+            }
+          })(),
+          ts: safeTs,
+          reach: row.reach,
+          impressions: row.impressions,
+          interactions: row.total_interactions,
+          engaged: row.accounts_engaged,
+        }
+        p.total_interactions = row.total_interactions
+        p.engaged_accounts = row.accounts_engaged
+        p.accounts_engaged = row.accounts_engaged
+        out.push(p as AccountTrendPoint)
+      }
+
+      return out
+    },
+    [],
+  )
+
+  const supabaseBrowser = useMemo(() => {
+    try {
+      const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()
+      const anon = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim()
+      if (!url || !anon) return null
+      return createClient(url, anon, { auth: { persistSession: false } })
+    } catch {
+      return null
+    }
+  }, [])
+
+  function coerceDailySnapshotPointsToArray(points: unknown): any[] {
     if (Array.isArray(points)) return points
     if (!points || typeof points !== "object") return []
 
@@ -1011,7 +1166,7 @@ export default function ResultsClient() {
       })
 
     return sorted.map((x) => x.v)
-  }, [])
+  }
 
   const normalizeDailySnapshotPointsToTrendPoints = useCallback((pointsRaw: any[]): AccountTrendPoint[] => {
     const toNum = (v: unknown) => {
@@ -1091,7 +1246,7 @@ export default function ResultsClient() {
     lastDailySnapshotFetchAtRef.current = now
     hasFetchedDailySnapshotRef.current = true
 
-    setTrendFetchStatus({ loading: true, error: "", lastDays: 7 })
+    setTrendFetchStatus({ loading: true, error: "", lastDays: 90 })
     setTrendNeedsConnectHint(false)
 
     dailySnapshotAbortRef.current?.abort()
@@ -1100,65 +1255,81 @@ export default function ResultsClient() {
 
     ;(async () => {
       try {
-        const res = await fetch("/api/instagram/daily-snapshot?days=7", {
+        const igReq = fetch("/api/instagram/daily-snapshot?days=7", {
           method: "POST",
           cache: "no-store",
           credentials: "include",
           signal: ac.signal,
         })
 
-        if (res.status === 401 || res.status === 403) {
+        const igUserIdStr = getCookieValue("ig_ig_id")
+        const pageIdStr = getCookieValue("ig_page_id")
+        const ig_user_id = Number(igUserIdStr)
+        const page_id = Number(pageIdStr)
+
+        const canQueryDb = Boolean(
+          supabaseBrowser &&
+            igUserIdStr &&
+            pageIdStr &&
+            Number.isFinite(ig_user_id) &&
+            Number.isFinite(page_id)
+        )
+
+        const dbReq = canQueryDb
+          ? supabaseBrowser!
+              .from("ig_daily_insights")
+              .select("day,reach,impressions,total_interactions,accounts_engaged")
+              .eq("ig_user_id", ig_user_id)
+              .eq("page_id", page_id)
+              .gte("day", (() => {
+                const now = new Date()
+                const ms = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0) - 89 * 24 * 60 * 60 * 1000
+                const d = new Date(ms)
+                const y = d.getUTCFullYear()
+                const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+                const dd = String(d.getUTCDate()).padStart(2, "0")
+                return `${y}-${m}-${dd}`
+              })())
+              .order("day", { ascending: true })
+          : Promise.resolve({ data: [], error: null } as any)
+
+        const [igRes, dbRes] = await Promise.all([igReq, dbReq])
+
+        if (igRes.status === 401 || igRes.status === 403) {
           setTrendNeedsConnectHint(true)
-          setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
           return
         }
 
-        const json = await res.json().catch(() => null)
-        if (!res.ok || !json?.ok) {
-          setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+        const json7 = await igRes.json().catch(() => null)
+        if (!igRes.ok || !json7?.ok) {
+          setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
           return
         }
 
-        const totalsRaw = Array.isArray(json?.insights_daily) ? json.insights_daily : []
+        const totalsRaw = Array.isArray(json7?.insights_daily) ? json7.insights_daily : []
         setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
 
-        const pointsRaw = coerceDailySnapshotPointsToArray(json?.points)
-        const pointsPts = normalizeDailySnapshotPointsToTrendPoints(pointsRaw)
-        if (pointsPts.length >= 1) {
+        const dbRows = (dbRes as any)?.data
+        const merged90 = mergeToContinuousTrendPoints({ days: 90, baseDbRowsRaw: dbRows, overridePointsRaw: json7?.points })
+
+        if (merged90.length >= 1) {
           hasAppliedDailySnapshotTrendRef.current = true
-          setTrendPoints(pointsPts)
+          setTrendPoints(merged90)
           setTrendFetchedAt(Date.now())
-          if (__DEV__) console.debug("[trend] source: daily-snapshot points", { days: json?.days, len: pointsPts.length })
-          setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
-          return
         }
 
-        const seriesRaw = Array.isArray(json?.insights_daily_series)
-          ? json.insights_daily_series
-          : (Array.isArray(json?.insights_daily) && json.insights_daily.some((x: any) => Array.isArray(x?.values))
-              ? json.insights_daily
-              : [])
-
-        const pts = normalizeDailyInsightsToTrendPoints(seriesRaw)
-
-        if (pts.length >= 1) {
-          hasAppliedDailySnapshotTrendRef.current = true
-          setTrendPoints(pts)
-          setTrendFetchedAt(Date.now())
-          if (__DEV__) console.debug("[trend] source: daily-snapshot", { days: json?.days, len: pts.length })
-        }
-
-        setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+        setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
       } catch (e: any) {
         if (e?.name === "AbortError") return
-        setTrendFetchStatus({ loading: false, error: "", lastDays: 7 })
+        setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
       }
     })()
 
     return () => {
       ac.abort()
     }
-  }, [coerceDailySnapshotPointsToArray, isConnectedInstagram, normalizeDailyInsightsToTrendPoints, normalizeDailySnapshotPointsToTrendPoints, normalizeTotalsFromInsightsDaily, trendPoints.length])
+  }, [isConnectedInstagram, mergeToContinuousTrendPoints, normalizeTotalsFromInsightsDaily, supabaseBrowser, trendPoints.length])
 
   const allAccountTrend = useMemo<AccountTrendPoint[]>(() => {
     const isRec = (v: unknown): v is Record<string, unknown> => Boolean(v && typeof v === "object")
@@ -4103,7 +4274,7 @@ export default function ResultsClient() {
                 {(() => {
                   const selected = selectedAccountTrendMetrics
                   const dataForChart =
-                    Array.isArray(trendPoints) && trendPoints.length >= 1 ? trendPoints.slice(-7) : accountTrend
+                    Array.isArray(trendPoints) && trendPoints.length >= 1 ? trendPoints : accountTrend
 
                   const shouldShowTotalsFallback =
                     Boolean(dailySnapshotTotals) && (!Array.isArray(trendPoints) || trendPoints.length < 1)
