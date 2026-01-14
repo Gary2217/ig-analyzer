@@ -194,29 +194,61 @@ async function getPageAccessToken(userToken: string, pageId: string) {
 }
 
 async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: string; days: number }) {
-  // use unix seconds to match Graph paging behavior
-  const untilMs = Date.now()
-  const sinceMs = untilMs - (params.days - 1) * 24 * 60 * 60 * 1000
-  const since = toUnixSeconds(sinceMs)
-  const until = toUnixSeconds(untilMs)
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const MAX_DAYS_PER_CALL = 30
 
-  // v24 verified: reach + total_interactions time-series works
+  // v24 verified: reach time-series works
   const metricList = ["reach"]
 
+  let remainingDays = Math.max(1, params.days)
+  let currentUntilMs = Date.now()
 
-  const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
-  u.searchParams.set("metric", metricList.join(","))
-  u.searchParams.set("period", "day")
-  u.searchParams.set("since", String(since))
-  u.searchParams.set("until", String(until))
-  u.searchParams.set("access_token", params.pageAccessToken)
+  const mergedData: any[] = []
+  let lastStatus = 200
+  let lastBody: any = null
+  let lastUrl = ""
 
-  const r = await fetch(u.toString(), { method: "GET", cache: "no-store" })
-  const body = await safeJson(r)
-  const data = Array.isArray(body?.data) ? body.data : []
+  while (remainingDays > 0) {
+    const chunkDays = Math.min(MAX_DAYS_PER_CALL, remainingDays)
 
-  return { ok: r.ok, status: r.status, body, data, url: u.toString() }
+    const sinceMs = currentUntilMs - (chunkDays - 1) * DAY_MS
+    const since = toUnixSeconds(sinceMs)
+    const until = toUnixSeconds(currentUntilMs)
+
+    const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
+    u.searchParams.set("metric", metricList.join(","))
+    u.searchParams.set("period", "day")
+    u.searchParams.set("since", String(since))
+    u.searchParams.set("until", String(until))
+    u.searchParams.set("access_token", params.pageAccessToken)
+
+    lastUrl = u.toString()
+    const r = await fetch(lastUrl, { method: "GET", cache: "no-store" })
+    const body = await safeJson(r)
+
+    lastStatus = r.status
+    lastBody = body
+
+    if (!r.ok) {
+      return { ok: false, status: lastStatus, body: lastBody, data: [], url: lastUrl }
+    }
+
+    const data = Array.isArray(body?.data) ? body.data : []
+    mergedData.push(...data)
+
+    remainingDays -= chunkDays
+    currentUntilMs = sinceMs - DAY_MS
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    body: { data: mergedData },
+    data: mergedData,
+    url: lastUrl,
+  }
 }
+
 
 async function fetchInsightsTotalValue(params: { igId: string; pageAccessToken: string; days: number }) {
   const untilMs = Date.now()
