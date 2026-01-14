@@ -107,6 +107,7 @@ function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days
 
       if (name === "reach") ex.reach = num
       else if (name === "total_interactions") ex.interactions = num
+      else if (name === "views" || name === "content_views") ex.impressions = num
       // v24 note: impressions not supported here; keep 0
       // v24 note: accounts_engaged requires metric_type=total_value; no time-series here; keep 0
 
@@ -115,6 +116,35 @@ function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days
   }
 
   return buildPaddedPoints({ days, byDate })
+}
+
+function isUnsupportedMetricBody(body: unknown): boolean {
+  const b = body as any
+  const code = typeof b?.error?.code === "number" ? b.error.code : typeof b?.code === "number" ? b.code : undefined
+  const msg =
+    typeof b?.error?.message === "string"
+      ? String(b.error.message).toLowerCase()
+      : typeof b?.message === "string"
+        ? String(b.message).toLowerCase()
+        : ""
+  return code === 100 || msg.includes("invalid") || msg.includes("unsupported") || msg.includes("metric")
+}
+
+function buildInsightsDailyTotals(params: {
+  total_interactions: number | null
+  accounts_engaged: number | null
+  profile_views: number | null
+  follower_change: number | null
+  impressions_total: number | null
+}) {
+  const wrap = (name: string, value: number | null) => ({ name, total_value: { value } })
+  return [
+    wrap("total_interactions", params.total_interactions),
+    wrap("accounts_engaged", params.accounts_engaged),
+    wrap("profile_views", params.profile_views),
+    wrap("follower_change", params.follower_change),
+    wrap("impressions_total", params.impressions_total),
+  ]
 }
 
 async function safeJson(res: Response) {
@@ -197,8 +227,9 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
   const DAY_MS = 24 * 60 * 60 * 1000
   const MAX_DAYS_PER_CALL = 30
 
-  // v24 verified: reach time-series works
-  const metricList = ["reach"]
+  // v24 verified: reach time-series works; best-effort impressions-like curve via views
+  const metricListPrimary = ["reach", "views"]
+  const metricListFallback = ["reach"]
 
   let remainingDays = Math.max(1, params.days)
   let currentUntilMs = Date.now()
@@ -215,16 +246,25 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
     const since = toUnixSeconds(sinceMs)
     const until = toUnixSeconds(currentUntilMs)
 
-    const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
-    u.searchParams.set("metric", metricList.join(","))
-    u.searchParams.set("period", "day")
-    u.searchParams.set("since", String(since))
-    u.searchParams.set("until", String(until))
-    u.searchParams.set("access_token", params.pageAccessToken)
+    const run = async (metricList: string[]) => {
+      const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
+      u.searchParams.set("metric", metricList.join(","))
+      u.searchParams.set("period", "day")
+      u.searchParams.set("since", String(since))
+      u.searchParams.set("until", String(until))
+      u.searchParams.set("access_token", params.pageAccessToken)
+      lastUrl = u.toString()
+      const r = await fetch(lastUrl, { method: "GET", cache: "no-store" })
+      const body = await safeJson(r)
+      return { r, body }
+    }
 
-    lastUrl = u.toString()
-    const r = await fetch(lastUrl, { method: "GET", cache: "no-store" })
-    const body = await safeJson(r)
+    let r: Response
+    let body: any
+    ;({ r, body } = await run(metricListPrimary))
+    if (!r.ok && isUnsupportedMetricBody(body)) {
+      ;({ r, body } = await run(metricListFallback))
+    }
 
     lastStatus = r.status
     lastBody = body
@@ -256,29 +296,45 @@ async function fetchInsightsTotalValue(params: { igId: string; pageAccessToken: 
   const since = toUnixSeconds(sinceMs)
   const until = toUnixSeconds(untilMs)
 
-  // v24 verified: these require metric_type=total_value
-  const metricList = ["profile_views", "accounts_engaged"]
+  // v24 best-effort totals (some metrics may be unsupported)
+  const metricListPrimary = ["total_interactions", "accounts_engaged", "profile_views"]
+  const metricListFallback = ["accounts_engaged", "profile_views"]
 
-  const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
-  u.searchParams.set("metric", metricList.join(","))
-  u.searchParams.set("period", "day")
-  u.searchParams.set("metric_type", "total_value")
-  u.searchParams.set("since", String(since))
-  u.searchParams.set("until", String(until))
-  u.searchParams.set("access_token", params.pageAccessToken)
+  const run = async (metricList: string[]) => {
+    const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
+    u.searchParams.set("metric", metricList.join(","))
+    u.searchParams.set("period", "day")
+    u.searchParams.set("metric_type", "total_value")
+    u.searchParams.set("since", String(since))
+    u.searchParams.set("until", String(until))
+    u.searchParams.set("access_token", params.pageAccessToken)
+    const r = await fetch(u.toString(), { method: "GET", cache: "no-store" })
+    const body = await safeJson(r)
+    return { r, body, url: u.toString() }
+  }
 
-  const r = await fetch(u.toString(), { method: "GET", cache: "no-store" })
-  const body = await safeJson(r)
+  let r: Response
+  let body: any
+  let url = ""
+  ;({ r, body, url } = await run(metricListPrimary))
+  if (!r.ok && isUnsupportedMetricBody(body)) {
+    ;({ r, body, url } = await run(metricListFallback))
+  }
+
   const data = Array.isArray(body?.data) ? body.data : []
 
-  // Normalize to { profile_views: number, accounts_engaged: number }
-  let profile_views = 0
-  let accounts_engaged = 0
+  // Normalize to totals (null when missing)
+  let total_interactions: number | null = null
+  let profile_views: number | null = null
+  let accounts_engaged: number | null = null
   for (const item of data) {
     const name = String(item?.name || "").trim()
-    const val = toSafeInt(item?.total_value?.value)
-    if (name === "profile_views") profile_views = val
-    else if (name === "accounts_engaged") accounts_engaged = val
+    const valRaw = item?.total_value?.value
+    const val = typeof valRaw === "number" ? valRaw : Number(valRaw)
+    if (!Number.isFinite(val)) continue
+    if (name === "profile_views") profile_views = Math.max(0, Math.floor(val))
+    else if (name === "accounts_engaged") accounts_engaged = Math.max(0, Math.floor(val))
+    else if (name === "total_interactions") total_interactions = Math.max(0, Math.floor(val))
   }
 
   return {
@@ -286,9 +342,39 @@ async function fetchInsightsTotalValue(params: { igId: string; pageAccessToken: 
     status: r.status,
     body,
     data,
-    totals: { profile_views, accounts_engaged },
-    url: u.toString(),
+    totals: { total_interactions, profile_views, accounts_engaged },
+    url,
   }
+}
+
+async function fetchTotalsBestEffort(params: {
+  token: string
+  envToken: string
+  pageId: string
+  igId: string
+  days: number
+}) {
+  let pageToken = await getPageAccessToken(params.token, params.pageId)
+  if (!pageToken.ok && params.envToken) pageToken = await getPageAccessToken(params.envToken, params.pageId)
+  if (!pageToken.ok) {
+    return { ok: false as const, insights_daily: buildInsightsDailyTotals({ total_interactions: null, accounts_engaged: null, profile_views: null, follower_change: null, impressions_total: null }) }
+  }
+
+  const totalsResp = await fetchInsightsTotalValue({
+    igId: params.igId,
+    pageAccessToken: pageToken.pageAccessToken,
+    days: params.days,
+  })
+
+  const insights_daily = buildInsightsDailyTotals({
+    total_interactions: totalsResp.ok ? totalsResp.totals.total_interactions : null,
+    accounts_engaged: totalsResp.ok ? totalsResp.totals.accounts_engaged : null,
+    profile_views: totalsResp.ok ? totalsResp.totals.profile_views : null,
+    follower_change: null,
+    impressions_total: null,
+  })
+
+  return { ok: totalsResp.ok as boolean, insights_daily }
 }
 
 async function getAvailableDaysCount(params: { igId: string; pageId: string }) {
@@ -422,6 +508,9 @@ export async function POST(req: Request) {
           })
         }
 
+        const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+        const totals = await fetchTotalsBestEffort({ token, envToken, pageId, igId, days: safeDays })
+
         return NextResponse.json(
           {
             build_marker: BUILD_MARKER,
@@ -433,7 +522,7 @@ export async function POST(req: Request) {
             points_source: "db",
             points_end_date: today,
             // we’ll still provide totals even when DB hit is used (best effort)
-            insights_daily: [],
+            insights_daily: totals.insights_daily,
             insights_daily_series: [],
             series_ok: true,
             __diag: { db_rows: list.length, used_source: "db", start, end: today },
@@ -505,18 +594,8 @@ export async function POST(req: Request) {
         points.some((p) => toSafeInt(p?.reach) > 0 || toSafeInt(p?.interactions) > 0)
 
       // totals (best-effort)
-      const totalsResp = await fetchInsightsTotalValue({
-        igId,
-        pageAccessToken: pageToken.pageAccessToken,
-        days: safeDays,
-      })
-
-      const insights_daily = totalsResp.ok
-        ? [
-            { name: "profile_views", total_value: toSafeInt(totalsResp.totals.profile_views) },
-            { name: "accounts_engaged", total_value: toSafeInt(totalsResp.totals.accounts_engaged) },
-          ]
-        : []
+      const totals = await fetchTotalsBestEffort({ token, envToken, pageId, igId, days: safeDays })
+      const insights_daily = totals.insights_daily
 
       if (!hasAnyNonZero) {
         return NextResponse.json(
@@ -538,9 +617,7 @@ export async function POST(req: Request) {
               start,
               end: today,
               token_source: tokenSource,
-              totals_ok: totalsResp.ok,
-              totals_status: totalsResp.status,
-              totals_body: totalsResp.ok ? undefined : totalsResp.body,
+              totals_ok: totals.ok,
             },
           },
           { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
@@ -613,8 +690,7 @@ export async function POST(req: Request) {
         console.log("[daily-snapshot] graph_seed_ok", {
           token_source: tokenSource,
           series_status: series.status,
-          totals_ok: totalsResp.ok,
-          totals_status: totalsResp.status,
+          totals_ok: totals.ok,
         })
       }
 
@@ -637,7 +713,7 @@ export async function POST(req: Request) {
             start,
             end: today,
             token_source: tokenSource,
-            totals_ok: totalsResp.ok,
+            totals_ok: totals.ok,
           },
         },
         { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
