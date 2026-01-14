@@ -201,7 +201,8 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
   const until = toUnixSeconds(untilMs)
 
   // v24 verified: reach + total_interactions time-series works
-  const metricList = ["reach", "total_interactions"]
+  const metricList = ["reach"]
+
 
   const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
   u.searchParams.set("metric", metricList.join(","))
