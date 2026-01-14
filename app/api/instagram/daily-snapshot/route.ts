@@ -282,7 +282,7 @@ export async function POST(req: Request) {
     }
 
     try {
-      const { data: rows, error } = await supabaseServer
+      const { data: dbRows, error: dbError } = await supabaseServer
         .from("ig_daily_insights")
         .select("day,reach,impressions,total_interactions,accounts_engaged")
         .eq("ig_user_id", Number(igId))
@@ -291,17 +291,17 @@ export async function POST(req: Request) {
         .lte("day", today)
         .order("day", { ascending: true })
 
+      const list = Array.isArray(dbRows) ? dbRows : []
       if (__DEBUG_DAILY_SNAPSHOT__) {
-        const list = Array.isArray(rows) ? rows : []
         console.log("[daily-snapshot] db", {
-          err: error ? { message: (error as any)?.message, code: (error as any)?.code, hint: (error as any)?.hint } : null,
+          err: dbError ? { message: (dbError as any)?.message, code: (dbError as any)?.code, hint: (dbError as any)?.hint } : null,
           rows_len: list.length,
         })
       }
 
-      if (!error && Array.isArray(rows) && rows.length >= 1) {
+      if (!dbError && list.length > 0) {
         const byDate = new Map<string, { reach: number; impressions: number; interactions: number; engaged_accounts: number }>()
-        for (const r of rows as any[]) {
+        for (const r of list as any[]) {
           const dateStr = String(r?.day || "").trim()
           if (!dateStr) continue
           byDate.set(dateStr, {
@@ -312,21 +312,19 @@ export async function POST(req: Request) {
           })
         }
 
-        const points = buildPaddedPoints({ days: safeDays, byDate })
-
         return NextResponse.json(
           {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
-            points,
+            points: buildPaddedPoints({ days: safeDays, byDate }),
             points_ok: true,
-            points_source: "db_snapshots",
+            points_source: "db",
             points_end_date: today,
             insights_daily: [],
             insights_daily_series: [],
             series_ok: true,
-            __diag: { db_rows: rows.length, used_source: "db", start, end: today },
+            __diag: { db_rows: list.length, used_source: "db", start, end: today },
           },
           { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
         )
@@ -396,24 +394,97 @@ export async function POST(req: Request) {
       }
 
       const points = buildPointsFromGraphInsights(series.data, safeDays)
-      if (Array.isArray(points) && points.length >= 1) {
+
+      const hasAnyNonZero = Array.isArray(points)
+        ? points.some(
+            (p) =>
+              toSafeInt(p?.reach) > 0 ||
+              toSafeInt(p?.impressions) > 0 ||
+              toSafeInt(p?.interactions) > 0 ||
+              toSafeInt(p?.engaged_accounts) > 0,
+          )
+        : false
+
+      if (Array.isArray(points) && points.length >= 1 && !hasAnyNonZero) {
+        return NextResponse.json(
+          {
+            build_marker: BUILD_MARKER,
+            ok: true,
+            days: safeDays,
+            points: [],
+            points_ok: false,
+            points_source: "empty",
+            points_end_date: today,
+            insights_daily: [],
+            insights_daily_series: series.data,
+            series_ok: series.ok,
+            __diag: {
+              db_rows: 0,
+              used_source: "graph",
+              start,
+              end: today,
+              impressions_source: impressionsSource,
+            },
+          },
+          {
+            status: 200,
+            headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS },
+          },
+        )
+      }
+
+      if (Array.isArray(points) && points.length >= 1 && hasAnyNonZero) {
         // Never upsert today (partial-day instability).
         try {
-          const rowsToUpsert = points
+          const candidate = points
             .filter((p) => p?.date && p.date !== today)
             .map((p) => ({
-              ig_user_id: Number(igId),
-              page_id: Number(pageId),
               day: p.date,
               reach: toSafeInt(p.reach),
               impressions: toSafeInt(p.impressions),
               total_interactions: toSafeInt(p.interactions),
               accounts_engaged: toSafeInt(p.engaged_accounts),
+            }))
+
+          const skipDays = new Set<string>()
+          try {
+            const daysToCheck = candidate.map((r) => r.day).filter(Boolean)
+            const { data: existing } = daysToCheck.length
+              ? await supabaseServer
+                  .from("ig_daily_insights")
+                  .select("day,reach,impressions,total_interactions,accounts_engaged")
+                  .eq("ig_user_id", Number(igId))
+                  .eq("page_id", Number(pageId))
+                  .in("day", daysToCheck)
+              : ({ data: [] } as any)
+            for (const r of (Array.isArray(existing) ? existing : []) as any[]) {
+              const d = String(r?.day || "").trim()
+              if (!d) continue
+              if (toSafeInt(r?.reach) > 0 || toSafeInt(r?.impressions) > 0 || toSafeInt(r?.total_interactions) > 0 || toSafeInt(r?.accounts_engaged) > 0) {
+                skipDays.add(d)
+              }
+            }
+          } catch {
+            // ignore
+          }
+
+          const rowsToUpsert = candidate
+            .filter((r) => !skipDays.has(r.day))
+            .map((r) => ({
+              ig_user_id: Number(igId),
+              page_id: Number(pageId),
+              day: r.day,
+              reach: r.reach,
+              impressions: r.impressions,
+              total_interactions: r.total_interactions,
+              accounts_engaged: r.accounts_engaged,
               updated_at: new Date().toISOString(),
             }))
 
           if (rowsToUpsert.length >= 1) {
-            await supabaseServer.from("ig_daily_insights").upsert(rowsToUpsert as any, { onConflict: "ig_user_id,page_id,day" })
+            await supabaseServer
+              .from("ig_daily_insights")
+              .upsert(rowsToUpsert as any, { onConflict: "ig_user_id,page_id,day" })
           }
         } catch {
           // ignore db write failures

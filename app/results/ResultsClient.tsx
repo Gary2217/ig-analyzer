@@ -678,7 +678,6 @@ export default function ResultsClient() {
   const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
-  const [trendNeedsEmptyHint, setTrendNeedsEmptyHint] = useState(false)
 
   const trendPointsHashRef = useRef<string>("")
   const hashTrendPoints = useCallback((pts: AccountTrendPoint[]) => {
@@ -788,6 +787,7 @@ export default function ResultsClient() {
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
   const dailySnapshotRequestSeqRef = useRef(0)
   const lastDailySnapshotFetchAtRef = useRef(0)
+  const lastDailySnapshotPointsSourceRef = useRef<string>("")
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
 
@@ -1279,6 +1279,7 @@ export default function ResultsClient() {
 
     setTrendFetchStatus({ loading: true, error: "", lastDays: 90 })
     setTrendNeedsConnectHint(false)
+    lastDailySnapshotPointsSourceRef.current = ""
 
     const nextReqId = (dailySnapshotRequestSeqRef.current += 1)
     if (dailySnapshotAbortRef.current) {
@@ -1346,17 +1347,13 @@ export default function ResultsClient() {
           return
         }
 
-        const pointsRaw = Array.isArray(json7?.points) ? json7.points : []
         const pointsSource = typeof json7?.points_source === "string" ? json7.points_source : ""
-        const isEmptySeries = pointsSource === "empty" || pointsRaw.length < 1
+        lastDailySnapshotPointsSourceRef.current = pointsSource
 
-        if (isEmptySeries) {
-          setTrendNeedsEmptyHint(true)
+        if (pointsSource === "empty") {
           setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
           return
         }
-
-        setTrendNeedsEmptyHint(false)
 
         const totalsRaw = Array.isArray(json7?.insights_daily) ? json7.insights_daily : []
         setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
@@ -1531,6 +1528,12 @@ export default function ResultsClient() {
     if (!data.length) return []
     return data.slice(-7)
   }, [allAccountTrend])
+
+  const hasFallback =
+    (Array.isArray(trendPoints) && trendPoints.length > 0) ||
+    (Array.isArray(accountTrend) && accountTrend.length > 0)
+  const shouldShowEmptySeriesHint =
+    lastDailySnapshotPointsSourceRef.current === "empty" && !hasFallback
 
   const trendMeta = useMemo(() => {
     if (!trendPoints || trendPoints.length === 0) return null
@@ -4256,7 +4259,7 @@ export default function ResultsClient() {
                     {t("results.connect.subtitle")}
                   </div>
                 ) : null}
-                {trendNeedsEmptyHint ? (
+                {shouldShowEmptySeriesHint ? (
                   <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">
                     <div>正在累積每日數據，通常需要 24 小時後才會出現趨勢曲線。</div>
                     <div>We’re accumulating daily data. Trend lines typically appear after ~24 hours.</div>
@@ -4345,8 +4348,11 @@ export default function ResultsClient() {
 
                 {(() => {
                   const selected = selectedAccountTrendMetrics
-                  const dataForChart =
-                    Array.isArray(trendPoints) && trendPoints.length >= 1 ? trendPoints : accountTrend
+                  const dataForChart = shouldShowEmptySeriesHint
+                    ? ([] as AccountTrendPoint[])
+                    : Array.isArray(trendPoints) && trendPoints.length >= 1
+                      ? trendPoints
+                      : accountTrend
 
                   const shouldShowTotalsFallback =
                     Boolean(dailySnapshotTotals) && (!Array.isArray(trendPoints) || trendPoints.length < 1)
