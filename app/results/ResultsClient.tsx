@@ -743,7 +743,7 @@ export default function ResultsClient() {
     "engaged",
     "followerDelta",
   ])
-  const [focusedAccountTrendMetric, setFocusedAccountTrendMetric] = useState<AccountTrendMetricKey>("engaged")
+  const [focusedAccountTrendMetric, setFocusedAccountTrendMetric] = useState<AccountTrendMetricKey>("reach")
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
@@ -4451,16 +4451,16 @@ export default function ResultsClient() {
                     return null
                   }
 
-                  const focusedHasSeries = hasVaryingTimeSeries(focusedAccountTrendMetric)
+                  const focusedIsReach = focusedAccountTrendMetric === "reach"
+                  const focusedHasSeries = focusedIsReach && hasVaryingTimeSeries("reach")
                   const focusedTotal = getTotalValueForMetric(focusedAccountTrendMetric)
-                  const focusedIsTotalsOnly =
-                    (focusedAccountTrendMetric === "interactions" ||
-                      focusedAccountTrendMetric === "engaged" ||
-                      focusedAccountTrendMetric === "impressions") &&
-                    !focusedHasSeries
-                  const shouldShowTotalValuePanel = focusedIsTotalsOnly || (!focusedHasSeries && focusedAccountTrendMetric !== "reach")
 
-                  const series = selected.map((k) => {
+                  // UX rule: ONLY reach can render a line chart. All other metrics always show summary panel.
+                  const shouldShowTotalValuePanel = !focusedIsReach
+
+                  const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : []
+
+                  const series = seriesKeys.map((k) => {
                     const raw = dataForChart
                       .map((p, i) => {
                         const y =
@@ -4549,8 +4549,8 @@ export default function ResultsClient() {
                       {shouldShowTotalValuePanel ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
                           <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
-                            <div>此指標目前只有區間總量，沒有每日趨勢圖。</div>
-                            <div>This metric is only available as a period total (no daily trend).</div>
+                            <div>此指標目前沒有可用數據</div>
+                            <div>This metric is not available right now.</div>
                           </div>
                           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
                             <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 min-w-0">
@@ -4574,8 +4574,8 @@ export default function ResultsClient() {
                           </div>
                           {focusedTotal === null ? (
                             <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere">
-                              <div>此指標目前無法取得總量數據。</div>
-                              <div>Total value is not available for this metric right now.</div>
+                              <div>此指標目前沒有可用數據</div>
+                              <div>This metric is not available right now.</div>
                             </div>
                           ) : null}
                         </div>
