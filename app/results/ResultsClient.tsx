@@ -736,7 +736,7 @@ export default function ResultsClient() {
     | "monetizationFocusedAccount"
   >(null)
 
-  type AccountTrendMetricKey = "reach" | "interactions" | "impressions" | "engaged" | "followerDelta"
+  type AccountTrendMetricKey = "reach" | "followers" | "interactions" | "impressions" | "engaged" | "followerDelta"
   const [selectedAccountTrendMetrics, setSelectedAccountTrendMetrics] = useState<AccountTrendMetricKey[]>([
     "reach",
     "interactions",
@@ -4310,10 +4310,7 @@ export default function ResultsClient() {
                         {(
                           [
                             { k: "reach" as const, label: t("results.trend.legend.reach"), dot: "#34d399" },
-                            { k: "interactions" as const, label: t("results.trend.legend.interactions"), dot: "#38bdf8" },
-                            { k: "impressions" as const, label: t("results.trend.legend.impressions"), dot: "#93c5fd" },
-                            { k: "engaged" as const, label: t("results.trend.legend.engagedAccounts"), dot: "#e879f9" },
-                            { k: "followerDelta" as const, label: t("results.trend.legend.followerChange"), dot: "#fbbf24" },
+                            { k: "followers" as const, label: "粉絲 Followers", dot: "#fbbf24" },
                           ] as const
                         ).map((m) => {
                           const pressed = focusedAccountTrendMetric === m.k
@@ -4394,17 +4391,21 @@ export default function ResultsClient() {
                   const labelFor = (k: AccountTrendMetricKey) =>
                     k === "reach"
                       ? t("results.trend.legend.reach")
-                      : k === "interactions"
-                        ? t("results.trend.legend.interactions")
-                        : k === "impressions"
-                          ? t("results.trend.legend.impressions")
-                          : k === "engaged"
-                            ? t("results.trend.legend.engagedAccounts")
-                            : t("results.trend.legend.followerChange")
+                      : k === "followers"
+                        ? "粉絲 Followers"
+                        : k === "interactions"
+                          ? t("results.trend.legend.interactions")
+                          : k === "impressions"
+                            ? t("results.trend.legend.impressions")
+                            : k === "engaged"
+                              ? t("results.trend.legend.engagedAccounts")
+                              : t("results.trend.legend.followerChange")
                   const colorFor = (k: AccountTrendMetricKey) =>
                     k === "reach"
                       ? "#34d399"
-                      : k === "interactions"
+                      : k === "followers"
+                        ? "#fbbf24"
+                        : k === "interactions"
                         ? "#38bdf8"
                         : k === "impressions"
                           ? "#93c5fd"
@@ -4452,11 +4453,14 @@ export default function ResultsClient() {
                   }
 
                   const focusedIsReach = focusedAccountTrendMetric === "reach"
+                  const focusedIsFollowers = focusedAccountTrendMetric === "followers"
                   const focusedHasSeries = focusedIsReach && hasVaryingTimeSeries("reach")
                   const focusedTotal = getTotalValueForMetric(focusedAccountTrendMetric)
 
-                  // UX rule: ONLY reach can render a line chart. All other metrics always show summary panel.
-                  const shouldShowTotalValuePanel = !focusedIsReach
+                  // UX rule: ONLY reach can render a line chart.
+                  // Followers is shown as a placeholder panel (no chart) for now.
+                  const shouldShowFollowersComingSoonPanel = focusedIsFollowers
+                  const shouldShowTotalValuePanel = !focusedIsReach && !focusedIsFollowers
 
                   const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : []
 
@@ -4546,7 +4550,32 @@ export default function ResultsClient() {
 
                   return (
                     <>
-                      {shouldShowTotalValuePanel ? (
+                      {shouldShowFollowersComingSoonPanel ? (
+                        <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
+                          <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                            <div>粉絲趨勢即將支援</div>
+                            <div>Follower trend coming soon.</div>
+                          </div>
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">{labelFor(focusedAccountTrendMetric)}</div>
+                              <div className="mt-0.5 text-[clamp(14px,4.6vw,16px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">—</div>
+                              <div className="mt-0.5 text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                <div>即將提供 Coming soon</div>
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">{t("results.trend.rangeLabel")}</div>
+                              <div className="mt-0.5 text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">
+                                {trendMeta ? `${trendMeta.startLabel} – ${trendMeta.endLabel}` : "—"}
+                              </div>
+                              <div className="mt-0.5 text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                <div>區間 Period</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : shouldShowTotalValuePanel ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
                           <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
                             <div>此指標目前沒有可用數據</div>
@@ -4624,7 +4653,7 @@ export default function ResultsClient() {
                           })()}
                         </div>
                       ) : null}
-                      {shouldShowTotalValuePanel ? null : dataForChart.length < 1 ? (
+                      {shouldShowFollowersComingSoonPanel || shouldShowTotalValuePanel ? null : dataForChart.length < 1 ? (
                         <div className="w-full mt-2">
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
                             {t("results.trend.noData")}
