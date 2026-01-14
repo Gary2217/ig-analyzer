@@ -4395,6 +4395,53 @@ export default function ResultsClient() {
                             ? "#e879f9"
                             : "#fbbf24"
 
+                  const getTimeSeriesValues = (k: AccountTrendMetricKey): number[] => {
+                    const vals = dataForChart
+                      .map((p) => {
+                        const y =
+                          k === "reach"
+                            ? (p as any).reach
+                            : k === "interactions"
+                              ? (p as any).interactions
+                              : k === "impressions"
+                                ? (p as any).impressions
+                                : k === "engaged"
+                                  ? (p as any).engaged
+                                  : (p as any).followerDelta
+                        return typeof y === "number" && Number.isFinite(y) ? y : null
+                      })
+                      .filter((x): x is number => typeof x === "number")
+                    return vals
+                  }
+
+                  const hasVaryingTimeSeries = (k: AccountTrendMetricKey) => {
+                    const vals = getTimeSeriesValues(k)
+                    if (vals.length < 2) return false
+                    const first = vals[0]
+                    return vals.some((v) => v !== first)
+                  }
+
+                  const getTotalValueForMetric = (k: AccountTrendMetricKey): number | null => {
+                    if (k === "reach") return typeof dailySnapshotTotals?.reach === "number" ? dailySnapshotTotals.reach : null
+                    if (k === "interactions") return typeof dailySnapshotTotals?.interactions === "number" ? dailySnapshotTotals.interactions : null
+                    if (k === "engaged") return typeof dailySnapshotTotals?.engaged === "number" ? dailySnapshotTotals.engaged : null
+                    if (k === "followerDelta") {
+                      const vals = getTimeSeriesValues("followerDelta")
+                      if (vals.length < 2) return null
+                      return vals[vals.length - 1] - vals[0]
+                    }
+                    return null
+                  }
+
+                  const focusedHasSeries = hasVaryingTimeSeries(focusedAccountTrendMetric)
+                  const focusedTotal = getTotalValueForMetric(focusedAccountTrendMetric)
+                  const focusedIsTotalsOnly =
+                    (focusedAccountTrendMetric === "interactions" ||
+                      focusedAccountTrendMetric === "engaged" ||
+                      focusedAccountTrendMetric === "impressions") &&
+                    !focusedHasSeries
+                  const shouldShowTotalValuePanel = focusedIsTotalsOnly || (!focusedHasSeries && focusedAccountTrendMetric !== "reach")
+
                   const series = selected.map((k) => {
                     const raw = dataForChart
                       .map((p, i) => {
@@ -4412,6 +4459,11 @@ export default function ResultsClient() {
                         return { i, y }
                       })
                       .filter(Boolean) as Array<{ i: number; y: number }>
+
+                    if (raw.length < 2) return { k, label: labelFor(k), color: colorFor(k), min: 0, max: 0, points: [] }
+                    const firstY = raw[0]?.y
+                    const isConstant = raw.every((p) => p.y === firstY)
+                    if (isConstant) return { k, label: labelFor(k), color: colorFor(k), min: firstY ?? 0, max: firstY ?? 0, points: [] }
 
                     const ys = raw.map((p) => p.y)
                     const min = ys.length ? Math.min(...ys) : 0
@@ -4476,6 +4528,35 @@ export default function ResultsClient() {
 
                   return (
                     <>
+                      {shouldShowTotalValuePanel ? (
+                        <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
+                          <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                            <div>此指標目前只有區間總量，沒有每日趨勢圖。</div>
+                            <div>This metric is only available as a period total (no daily trend).</div>
+                          </div>
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">{labelFor(focusedAccountTrendMetric)}</div>
+                              <div className="mt-0.5 text-[clamp(14px,4.6vw,16px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">
+                                {typeof focusedTotal === "number" ? Math.round(focusedTotal).toLocaleString() : "—"}
+                              </div>
+                              <div className="mt-0.5 text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                <div>總量 Total value</div>
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">{t("results.trend.rangeLabel")}</div>
+                              <div className="mt-0.5 text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">
+                                {trendMeta ? `${trendMeta.startLabel} – ${trendMeta.endLabel}` : "—"}
+                              </div>
+                              <div className="mt-0.5 text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                <div>區間 Period</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
                       {shouldShowTotalsFallback ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3">
                           {(() => {
@@ -4519,7 +4600,7 @@ export default function ResultsClient() {
                           })()}
                         </div>
                       ) : null}
-                      {dataForChart.length < 1 ? (
+                      {shouldShowTotalValuePanel ? null : dataForChart.length < 1 ? (
                         <div className="w-full mt-2">
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
                             {t("results.trend.noData")}
