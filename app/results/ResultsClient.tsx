@@ -669,7 +669,13 @@ export default function ResultsClient() {
   const [mediaLoaded, setMediaLoaded] = useState(false)
 
   const [trendPoints, setTrendPoints] = useState<AccountTrendPoint[]>([])
-  const [dailySnapshotTotals, setDailySnapshotTotals] = useState<{ reach: number | null; interactions: number | null; engaged: number | null } | null>(null)
+  const [dailySnapshotTotals, setDailySnapshotTotals] = useState<{
+    reach: number | null
+    interactions: number | null
+    engaged: number | null
+    profileViews: number | null
+    impressionsTotal: number | null
+  } | null>(null)
   const [dailySnapshotAvailableDays, setDailySnapshotAvailableDays] = useState<number | null>(null)
   const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
     loading: false,
@@ -806,7 +812,14 @@ export default function ResultsClient() {
     }
   }, [])
 
-  const normalizeTotalsFromInsightsDaily = useCallback((insightsDaily: any[]): { reach: number | null; interactions: number | null; engaged: number | null } | null => {
+  const normalizeTotalsFromInsightsDaily = useCallback(
+    (insightsDaily: any[]): {
+      reach: number | null
+      interactions: number | null
+      engaged: number | null
+      profileViews: number | null
+      impressionsTotal: number | null
+    } | null => {
     const list = Array.isArray(insightsDaily) ? insightsDaily : []
     const pickMetric = (metricName: string): number | null => {
       const it = list.find((x) => String(x?.name || "").trim() === metricName)
@@ -817,9 +830,13 @@ export default function ResultsClient() {
     const reach = pickMetric("reach")
     const interactions = pickMetric("total_interactions")
     const engaged = pickMetric("accounts_engaged")
-    if (reach === null && interactions === null && engaged === null) return null
-    return { reach, interactions, engaged }
-  }, [])
+    const profileViews = pickMetric("profile_views")
+    const impressionsTotal = pickMetric("impressions_total")
+    if (reach === null && interactions === null && engaged === null && profileViews === null && impressionsTotal === null) return null
+    return { reach, interactions, engaged, profileViews, impressionsTotal }
+  },
+    [],
+  )
 
   const igCacheId = String(((igMe as any)?.profile?.id ?? (igMe as any)?.profile?.username ?? (igMe as any)?.username ?? "me") || "me")
   const resultsCacheKey = `results_cache:${igCacheId}:7`
@@ -4425,6 +4442,7 @@ export default function ResultsClient() {
                     if (k === "reach") return typeof dailySnapshotTotals?.reach === "number" ? dailySnapshotTotals.reach : null
                     if (k === "interactions") return typeof dailySnapshotTotals?.interactions === "number" ? dailySnapshotTotals.interactions : null
                     if (k === "engaged") return typeof dailySnapshotTotals?.engaged === "number" ? dailySnapshotTotals.engaged : null
+                    if (k === "impressions") return typeof dailySnapshotTotals?.impressionsTotal === "number" ? dailySnapshotTotals.impressionsTotal : null
                     if (k === "followerDelta") {
                       const vals = getTimeSeriesValues("followerDelta")
                       if (vals.length < 2) return null
@@ -4554,6 +4572,12 @@ export default function ResultsClient() {
                               </div>
                             </div>
                           </div>
+                          {focusedTotal === null ? (
+                            <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                              <div>此指標目前無法取得總量數據。</div>
+                              <div>Total value is not available for this metric right now.</div>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
 
