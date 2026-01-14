@@ -217,35 +217,66 @@ function isUnsupportedMetricBody(body: unknown): boolean {
   return code === 100 || msg.includes("invalid") || msg.includes("unsupported") || msg.includes("metric")
 }
 
+async function getAvailableDaysCount(params: { igId: string; pageId: string }) {
+  try {
+    const r = await (supabaseServer as any)
+      .from("ig_daily_insights")
+      .select("day", { count: "exact", head: true })
+      .eq("ig_user_id", Number(params.igId))
+      .eq("page_id", Number(params.pageId))
+    const count = typeof (r as any)?.count === "number" ? (r as any).count : null
+    return Number.isFinite(count) ? (count as number) : null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const url = new URL(req.url)
     const days = clampDays(url.searchParams.get("days"))
     const safeDays = Math.max(1, days)
 
+    const h = req.headers.get("x-cron-secret")
+    const cron = process.env.CRON_SECRET
+    const cronMode = Boolean(h && cron && h === cron)
+
+    let token = ""
+    let pageId = ""
+    let igId = ""
+
     let c: any = null
-    try {
-      c = await (cookies() as any)
-    } catch {
-      c = null
-    }
+    if (cronMode) {
+      const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+      const envUserId = (process.env.IG_USER_ID ?? "").trim()
+      if (!envToken) return jsonError("missing_env:IG_ACCESS_TOKEN", null, 401)
+      if (!envUserId) return jsonError("missing_env:IG_USER_ID", null, 401)
+      token = envToken
+      igId = envUserId
+    } else {
+      try {
+        c = await (cookies() as any)
+      } catch {
+        c = null
+      }
 
-    const rawCookieHeader = req.headers.get("cookie") || ""
+      const rawCookieHeader = req.headers.get("cookie") || ""
 
-    const tokenFromCookies = typeof c?.get === "function" ? (c.get("ig_access_token")?.value ?? "") : ""
-    const pageIdFromCookies = typeof c?.get === "function" ? (c.get("ig_page_id")?.value ?? "") : ""
-    const igIdFromCookies = typeof c?.get === "function" ? (c.get("ig_ig_id")?.value ?? "") : ""
+      const tokenFromCookies = typeof c?.get === "function" ? (c.get("ig_access_token")?.value ?? "") : ""
+      const pageIdFromCookies = typeof c?.get === "function" ? (c.get("ig_page_id")?.value ?? "") : ""
+      const igIdFromCookies = typeof c?.get === "function" ? (c.get("ig_ig_id")?.value ?? "") : ""
 
-    const tokenFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_access_token")
-    const pageIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_page_id")
-    const igIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_ig_id")
+      const tokenFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_access_token")
+      const pageIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_page_id")
+      const igIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_ig_id")
 
-    const token = (tokenFromCookies || tokenFromHeader).trim()
-    let pageId = (pageIdFromCookies || pageIdFromHeader).trim()
-    let igId = (igIdFromCookies || igIdFromHeader).trim()
+      token = (tokenFromCookies || tokenFromHeader).trim()
+      pageId = (pageIdFromCookies || pageIdFromHeader).trim()
+      igId = (igIdFromCookies || igIdFromHeader).trim()
 
-    if (!token) {
-      return jsonError("missing_cookie:ig_access_token", null, 401)
+      if (!token) {
+        return jsonError("missing_cookie:ig_access_token", null, 401)
+      }
     }
 
     // If ids are missing, try to load them (and set cookies if possible).
@@ -256,7 +287,7 @@ export async function POST(req: Request) {
           pageId = ids.pageId
           igId = ids.igId
           try {
-            if (typeof c?.set === "function") {
+            if (!cronMode && typeof c?.set === "function") {
               c.set("ig_page_id", pageId, { httpOnly: true, sameSite: "lax", path: "/" })
               c.set("ig_ig_id", igId, { httpOnly: true, sameSite: "lax", path: "/" })
             }
@@ -269,8 +300,10 @@ export async function POST(req: Request) {
       }
     }
 
-    if (!pageId) return jsonError("missing_cookie:ig_page_id", null, 401)
-    if (!igId) return jsonError("missing_cookie:ig_ig_id", null, 401)
+    if (!pageId) return jsonError(cronMode ? "missing_ids:page_id" : "missing_cookie:ig_page_id", null, 401)
+    if (!igId) return jsonError(cronMode ? "missing_ids:ig_ig_id" : "missing_cookie:ig_ig_id", null, 401)
+
+    const availableDays = (await getAvailableDaysCount({ igId, pageId })) ?? null
 
     // Prefer DB snapshots for the trend chart. Always return exactly N padded points ending today (UTC).
     // If DB has no rows, fall back to the Graph API fetch below.
@@ -317,6 +350,7 @@ export async function POST(req: Request) {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
+            available_days: availableDays ?? list.length,
             points: buildPaddedPoints({ days: safeDays, byDate }),
             points_ok: true,
             points_source: "db",
@@ -411,6 +445,7 @@ export async function POST(req: Request) {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
+            available_days: availableDays,
             points: [],
             points_ok: false,
             points_source: "empty",
@@ -499,6 +534,7 @@ export async function POST(req: Request) {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
+            available_days: availableDays,
             points,
             points_ok: true,
             points_source: "graph_series",
@@ -522,6 +558,7 @@ export async function POST(req: Request) {
         build_marker: BUILD_MARKER,
         ok: true,
         days: safeDays,
+        available_days: availableDays,
         points: buildPaddedPoints({ days: safeDays, byDate: new Map() }),
         points_ok: false,
         points_source: "fallback_zero_series",

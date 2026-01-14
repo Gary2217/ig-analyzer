@@ -670,6 +670,7 @@ export default function ResultsClient() {
 
   const [trendPoints, setTrendPoints] = useState<AccountTrendPoint[]>([])
   const [dailySnapshotTotals, setDailySnapshotTotals] = useState<{ reach: number | null; interactions: number | null; engaged: number | null } | null>(null)
+  const [dailySnapshotAvailableDays, setDailySnapshotAvailableDays] = useState<number | null>(null)
   const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
     loading: false,
     error: "",
@@ -1346,6 +1347,9 @@ export default function ResultsClient() {
           setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
           return
         }
+
+        const availableDaysFromApi = typeof json7?.available_days === "number" && Number.isFinite(json7.available_days) ? (json7.available_days as number) : null
+        if (availableDaysFromApi !== null) setDailySnapshotAvailableDays(availableDaysFromApi)
 
         const pointsSource = typeof json7?.points_source === "string" ? json7.points_source : ""
         lastDailySnapshotPointsSourceRef.current = pointsSource
@@ -4249,9 +4253,10 @@ export default function ResultsClient() {
             <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardHeader className="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-start sm:items-center justify-between gap-3 min-w-0">
                 <CardTitle className="text-xl font-bold text-white min-w-0 truncate shrink-0">{t("results.trend.title")}</CardTitle>
-                <p className="text-[11px] sm:text-sm text-slate-400 min-w-0 leading-snug sm:leading-none sm:whitespace-nowrap sm:truncate text-left sm:text-right">
-                  {t("results.trend.note7d")}
-                </p>
+                <div className="text-[11px] sm:text-sm text-slate-400 min-w-0 leading-snug text-left sm:text-right overflow-hidden">
+                  <div className="min-w-0 break-words overflow-wrap-anywhere">帳號互動趨勢</div>
+                  <div className="min-w-0 break-words overflow-wrap-anywhere">Account engagement trend</div>
+                </div>
               </CardHeader>
               <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
                 {trendNeedsConnectHint ? (
@@ -4260,21 +4265,25 @@ export default function ResultsClient() {
                   </div>
                 ) : null}
                 {shouldShowEmptySeriesHint ? (
-                  <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">
-                    <div>正在累積每日數據，通常需要 24 小時後才會出現趨勢曲線。</div>
-                    <div>We’re accumulating daily data. Trend lines typically appear after ~24 hours.</div>
+                  <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                    <div>資料累積中（目前 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} 天），明天起會逐日形成趨勢曲線。</div>
+                    <div>Collecting data ({typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} days so far). The trend line will form as daily history builds.</div>
                   </div>
                 ) : null}
                 <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
                     <div className="shrink-0">
                       <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 whitespace-nowrap">
-                        {t("results.trend.rangePill7d")}
+                        <span className="tabular-nums">已選 {trendFetchStatus.lastDays ?? 90} 天</span>
+                        <span className="mx-1 opacity-50">|</span>
+                        <span className="tabular-nums">Selected {trendFetchStatus.lastDays ?? 90} days</span>
                       </span>
                     </div>
 
-                    <div className="shrink-0 whitespace-nowrap tabular-nums min-w-0 overflow-hidden text-ellipsis text-[10px] text-white/45 sm:text-xs sm:text-white/55">
-                      {t("results.trend.available7d")}
+                    <div className="shrink-0 tabular-nums min-w-0 overflow-hidden text-ellipsis text-[10px] text-white/45 sm:text-xs sm:text-white/55 break-words overflow-wrap-anywhere whitespace-normal sm:whitespace-nowrap">
+                      <span>目前可用 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} 天</span>
+                      <span className="mx-1 opacity-50">|</span>
+                      <span>Available {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} days</span>
                     </div>
                   </div>
 
@@ -4576,11 +4585,11 @@ export default function ResultsClient() {
 
                                   return (
                                     <path
-                                      key={`trend-series-${s.k}`}
-                                      d={d || ""}
-                                      fill="none"
+                                      key={`trend-line-${s.k}`}
+                                      d={d}
                                       stroke={s.color}
-                                      strokeWidth={isFocused ? 3.6 : 2.2}
+                                      strokeWidth={1.5}
+                                      fill="none"
                                       opacity={isFocused ? 0.99 : 0.55}
                                     />
                                   )
@@ -4681,29 +4690,33 @@ export default function ResultsClient() {
                                   const n = dataForChart.length
                                   if (n <= 0) return null
                                   const last = n - 1
-                                  const mid = Math.floor(last / 2)
-                                  const step = n <= 8 ? 3 : n <= 16 ? 4 : 5
-                                  const showLabel = (i: number) =>
-                                    !isSmUp ? i === 0 || i === last || i === mid : i === 0 || i === last || i === mid || i % step === 0
+
+                                  const maxTicks = isSmUp ? 8 : 5
+                                  const idxs = (() => {
+                                    if (n <= maxTicks) return Array.from({ length: n }).map((_, i) => i)
+                                    const out = new Set<number>()
+                                    out.add(0)
+                                    out.add(last)
+                                    const slots = Math.max(maxTicks - 2, 0)
+                                    for (let k = 1; k <= slots; k++) {
+                                      const i = Math.round((k * last) / (slots + 1))
+                                      out.add(Math.max(0, Math.min(last, i)))
+                                    }
+                                    return Array.from(out).sort((a, b) => a - b)
+                                  })()
+
                                   const anchorFor = (i: number) => (i === 0 ? "start" : i === last ? "end" : "middle")
                                   const topY = padY
                                   const bottomY = h - padY
 
                                   return (
                                     <g key="trend-x-axis-upgrade">
-                                      {Array.from({ length: n }).map((_, i) => {
+                                      {idxs.map((i) => {
                                         const x = sx(i)
                                         if (!Number.isFinite(x)) return null
                                         return (
                                           <g key={`trend-xt-${i}`}>
-                                            <line
-                                              x1={x}
-                                              x2={x}
-                                              y1={topY}
-                                              y2={bottomY}
-                                              stroke="rgba(255,255,255,0.06)"
-                                              strokeWidth="1"
-                                            />
+                                            <line x1={x} x2={x} y1={topY} y2={bottomY} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
                                             <line
                                               x1={x}
                                               x2={x}
@@ -4716,28 +4729,25 @@ export default function ResultsClient() {
                                         )
                                       })}
 
-                                      {Array.from({ length: n })
-                                        .map((_, i) => i)
-                                        .filter(showLabel)
-                                        .map((i) => {
-                                          const x = sx(i)
-                                          if (!Number.isFinite(x)) return null
-                                          const label = dataForChart[i]?.t ?? ""
-                                          return (
-                                            <text
-                                              key={`trend-xlab-${i}`}
-                                              x={x}
-                                              y={h - 4}
-                                              textAnchor={anchorFor(i) as any}
-                                              fill="rgba(255,255,255,0.34)"
-                                              fontSize={10}
-                                              fontWeight={500}
-                                              style={{ fontVariantNumeric: "tabular-nums" as any }}
-                                            >
-                                              {label}
-                                            </text>
-                                          )
-                                        })}
+                                      {idxs.map((i) => {
+                                        const x = sx(i)
+                                        if (!Number.isFinite(x)) return null
+                                        const label = dataForChart[i]?.t ?? ""
+                                        return (
+                                          <text
+                                            key={`trend-xlab-${i}`}
+                                            x={x}
+                                            y={h - 4}
+                                            textAnchor={anchorFor(i) as any}
+                                            fill="rgba(255,255,255,0.34)"
+                                            fontSize={10}
+                                            fontWeight={500}
+                                            style={{ fontVariantNumeric: "tabular-nums" as any }}
+                                          >
+                                            {label}
+                                          </text>
+                                        )
+                                      })}
                                     </g>
                                   )
                                 })()}
