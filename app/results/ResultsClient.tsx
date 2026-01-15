@@ -4501,6 +4501,26 @@ export default function ResultsClient() {
                     (focusedIsFollowers && hasVaryingTimeSeries("followers"))
                   const focusedTotal = getTotalValueForMetric(focusedAccountTrendMetric)
 
+                  const netFollowers7dText = (() => {
+                    if (!focusedIsFollowers) return ""
+                    if (!followersSeries.ok) return "—"
+                    const list = followersSeriesValues
+                    const n = Array.isArray(list) ? list.length : 0
+                    if (n < 2) return "—"
+                    const lastIdx = n - 1
+                    const baseIdx = Math.max(0, lastIdx - 6)
+                    const last = list[lastIdx]
+                    const base = list[baseIdx]
+                    if (typeof last !== "number" || !Number.isFinite(last)) return "—"
+                    if (typeof base !== "number" || !Number.isFinite(base)) return "—"
+                    const net7 = last - base
+                    const num = Math.round(net7)
+                    const abs = Math.abs(num).toLocaleString()
+                    if (num > 0) return `+${abs}`
+                    if (num < 0) return `-${abs}`
+                    return "0"
+                  })()
+
                   // UX rule: only Reach + Followers are allowed to render a line chart.
                   const shouldShowTotalValuePanel = !focusedIsReach && !focusedIsFollowers
 
@@ -4609,6 +4629,18 @@ export default function ResultsClient() {
 
                   return (
                     <>
+                      {focusedIsFollowers ? (
+                        <div className="mt-3 flex items-center justify-center sm:justify-end min-w-0">
+                          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 min-w-0">
+                            <div className="text-[10px] font-semibold text-white/70 leading-none min-w-0">
+                              <div className="whitespace-nowrap">近 7 天淨增</div>
+                              <div className="whitespace-nowrap">Net (7d)</div>
+                            </div>
+                            <div className="text-xs font-semibold text-white tabular-nums whitespace-nowrap">{netFollowers7dText}</div>
+                          </div>
+                        </div>
+                      ) : null}
+
                       {shouldShowTotalValuePanel ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
                           <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
@@ -4707,6 +4739,34 @@ export default function ResultsClient() {
                               <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere">
                                 <div>需要累積一段時間後才會顯示趨勢</div>
                                 <div>Trend will appear after enough data is collected</div>
+                              </div>
+                              <div className="mt-3 text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                <div>資料開始累積：</div>
+                                <div>Data collection started:</div>
+                                <div className="mt-1 text-white/60 tabular-nums">
+                                  {(() => {
+                                    const first = dataForChart[0] as any
+                                    const firstTs = typeof first?.ts === "number" && Number.isFinite(first.ts) ? (first.ts as number) : null
+                                    const ms = firstTs
+                                    const d = ms !== null ? new Date(ms) : new Date()
+                                    const ymd = (() => {
+                                      try {
+                                        const s = new Intl.DateTimeFormat(activeLocale, {
+                                          year: "numeric",
+                                          month: "2-digit",
+                                          day: "2-digit",
+                                        }).format(d)
+                                        return String(s).replace(/-/g, "/")
+                                      } catch {
+                                        return formatDateTW(d)
+                                      }
+                                    })()
+
+                                    const hasRealDate = firstTs !== null
+                                    if (hasRealDate) return ymd
+                                    return isZh ? "從今天起" : "Starting today"
+                                  })()}
+                                </div>
                               </div>
                               <div className="mt-4">
                                 <div className="mx-auto h-px w-40 border-t border-dashed border-white/15" />
