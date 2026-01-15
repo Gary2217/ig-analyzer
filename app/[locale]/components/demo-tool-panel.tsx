@@ -36,7 +36,7 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
   }
 
   return (
-    <section className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+    <section className="w-full max-w-3xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-6">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="text-xs font-semibold tracking-widest text-white/60">DEMO TOOL</div>
