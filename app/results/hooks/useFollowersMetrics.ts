@@ -9,7 +9,10 @@ export function useFollowersMetrics(input: {
   seriesValues: number[]
   totalFollowers: number | null
   deltaYesterday: number | null
+  growth7d: number | null
+  growth30d: number | null
   deltasByIndex: Array<number | null>
+  lastDataDay: string | null
   lastWriteAt: string | null
 } {
   const { focusedMetric, followersDailyRows, followersLastWriteAt } = input
@@ -22,7 +25,10 @@ export function useFollowersMetrics(input: {
         seriesValues: [] as number[],
         totalFollowers: null,
         deltaYesterday: null,
+        growth7d: null,
+        growth30d: null,
         deltasByIndex: [] as Array<number | null>,
+        lastDataDay: null,
         lastWriteAt: followersLastWriteAt,
       }
     }
@@ -44,6 +50,26 @@ export function useFollowersMetrics(input: {
     const deltaYesterday =
       seriesValues.length >= 2 ? seriesValues[seriesValues.length - 1] - seriesValues[seriesValues.length - 2] : null
 
+    const growth7d = (() => {
+      const n = seriesValues.length
+      if (n < 8) return null
+      const last = seriesValues[n - 1]
+      const base = seriesValues[Math.max(0, n - 1 - 7)]
+      if (typeof last !== "number" || !Number.isFinite(last)) return null
+      if (typeof base !== "number" || !Number.isFinite(base)) return null
+      return last - base
+    })()
+
+    const growth30d = (() => {
+      const n = seriesValues.length
+      if (n < 31) return null
+      const last = seriesValues[n - 1]
+      const base = seriesValues[Math.max(0, n - 1 - 30)]
+      if (typeof last !== "number" || !Number.isFinite(last)) return null
+      if (typeof base !== "number" || !Number.isFinite(base)) return null
+      return last - base
+    })()
+
     const deltasByIndex: Array<number | null> = (() => {
       if (seriesValues.length < 1) return []
       return seriesValues.map((v, i) => {
@@ -55,12 +81,21 @@ export function useFollowersMetrics(input: {
       })
     })()
 
+    const lastDataDay = (() => {
+      const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
+      const raw = list.length >= 1 ? list[list.length - 1]?.day : null
+      return typeof raw === "string" && raw.trim() ? raw.trim() : null
+    })()
+
     return {
       isFollowersFocused,
       seriesValues,
       totalFollowers,
       deltaYesterday,
+      growth7d,
+      growth30d,
       deltasByIndex,
+      lastDataDay,
       lastWriteAt: followersLastWriteAt,
     }
   }, [focusedMetric, followersDailyRows, followersLastWriteAt])

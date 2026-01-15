@@ -19,6 +19,7 @@ import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 import { useInstagramMe } from "../lib/useInstagramMe"
 import { extractIgUserIdFromInsightsId } from "../lib/instagram"
 import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
+import { FollowersStatChips } from "./components/FollowersStatChips"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 
@@ -817,7 +818,10 @@ export default function ResultsClient() {
     seriesValues: followersSeriesValues,
     totalFollowers,
     deltaYesterday,
+    growth7d,
+    growth30d,
     deltasByIndex,
+    lastDataDay,
   } = followersMetrics
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
@@ -4560,9 +4564,9 @@ export default function ResultsClient() {
                     </div>
                   </div>
 
-                  <div className="min-w-0 sm:flex-1 sm:flex sm:justify-center">
-                    <div className="max-w-full sm:overflow-x-auto sm:whitespace-nowrap sm:overscroll-x-contain sm:[-webkit-overflow-scrolling:touch]">
-                      <div className="flex flex-wrap items-center gap-2 sm:inline-flex sm:flex-nowrap sm:whitespace-nowrap sm:min-w-max">
+                  <div className="min-w-0 sm:flex-1 sm:flex sm:justify-center w-full overflow-hidden">
+                    <div className="w-full min-w-0 max-w-full overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-2 w-full min-w-0 max-w-full overflow-hidden">
                         {(
                           [
                             { k: "reach" as const, label: t("results.trend.legend.reach"), dot: "#34d399" },
@@ -4593,41 +4597,13 @@ export default function ResultsClient() {
                         })}
 
                         {focusedAccountTrendMetric === "followers" ? (
-                          <div className="flex flex-wrap items-center gap-2 min-w-0">
-                            {(() => {
-                              const totalText =
-                                typeof totalFollowers === "number" && Number.isFinite(totalFollowers)
-                                  ? Math.round(totalFollowers).toLocaleString()
-                                  : "—"
-
-                              const deltaText =
-                                typeof deltaYesterday === "number" && Number.isFinite(deltaYesterday)
-                                  ? `${deltaYesterday >= 0 ? "+" : ""}${Math.round(deltaYesterday).toLocaleString()}`
-                                  : "—"
-
-                              return (
-                                <>
-                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0 min-w-[120px]">
-                                    <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">
-                                      Followers 粉絲總數
-                                    </div>
-                                    <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">
-                                      {totalText}
-                                    </div>
-                                  </div>
-
-                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0 min-w-[120px]">
-                                    <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">
-                                      Δ Yesterday 昨日增加
-                                    </div>
-                                    <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">
-                                      {deltaText}
-                                    </div>
-                                  </div>
-                                </>
-                              )
-                            })()}
-                          </div>
+                          <FollowersStatChips
+                            totalFollowers={totalFollowers}
+                            deltaYesterday={deltaYesterday}
+                            growth7d={growth7d}
+                            growth30d={growth30d}
+                            lastDataDay={lastDataDay}
+                          />
                         ) : null}
                       </div>
                     </div>
