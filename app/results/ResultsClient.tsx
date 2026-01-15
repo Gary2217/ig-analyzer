@@ -4565,8 +4565,8 @@ export default function ResultsClient() {
                   </div>
 
                   <div className="min-w-0 sm:flex-1 sm:flex sm:justify-center w-full overflow-hidden">
-                    <div className="w-full min-w-0 max-w-full overflow-hidden">
-                      <div className="flex flex-wrap items-center gap-2 w-full min-w-0 max-w-full overflow-hidden">
+                    <div className="w-full min-w-0">
+                      <div className="w-full min-w-0 flex flex-wrap items-center justify-center gap-2">
                         {(
                           [
                             { k: "reach" as const, label: t("results.trend.legend.reach"), dot: "#34d399" },
@@ -4595,17 +4595,21 @@ export default function ResultsClient() {
                             </button>
                           )
                         })}
-
-                        {focusedAccountTrendMetric === "followers" ? (
-                          <FollowersStatChips
-                            totalFollowers={totalFollowers}
-                            deltaYesterday={deltaYesterday}
-                            growth7d={growth7d}
-                            growth30d={growth30d}
-                            lastDataDay={lastDataDay}
-                          />
-                        ) : null}
                       </div>
+
+                      {focusedAccountTrendMetric === "followers" ? (
+                        <div className="w-full min-w-0 mt-2 flex justify-center sm:justify-end">
+                          <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
+                            <FollowersStatChips
+                              totalFollowers={totalFollowers}
+                              deltaYesterday={deltaYesterday}
+                              growth7d={growth7d}
+                              growth30d={growth30d}
+                              lastDataDay={lastDataDay}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>

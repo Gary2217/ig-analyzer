@@ -37,7 +37,7 @@ export function FollowersStatChips(props: {
   }, [lastDataDay])
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden">
+    <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
       <div className="text-[10px] leading-tight text-white/60 min-w-0 max-w-full overflow-hidden">
         <div className="truncate min-w-0">{lastUpdated.zh}</div>
         <div className="truncate min-w-0">{lastUpdated.en}</div>
