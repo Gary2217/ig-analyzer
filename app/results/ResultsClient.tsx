@@ -18,6 +18,7 @@ import { useRefetchTick } from "../lib/useRefetchTick"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 import { useInstagramMe } from "../lib/useInstagramMe"
 import { extractIgUserIdFromInsightsId } from "../lib/instagram"
+import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 
@@ -805,23 +806,19 @@ export default function ResultsClient() {
   const [focusedAccountTrendMetric, setFocusedAccountTrendMetric] = useState<AccountTrendMetricKey>("reach")
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
 
-  const followersSeries = useMemo(() => {
-    if (focusedAccountTrendMetric !== "followers") return { ok: false as const, values: [] as number[] }
-    const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
-    const values = list
-      .map((r) => {
-        const n = typeof r?.followers_count === "number" ? r.followers_count : Number((r as any)?.followers_count)
-        return Number.isFinite(n) ? Math.floor(n) : null
-      })
-      .filter((x): x is number => typeof x === "number")
+  const followersMetrics = useFollowersMetrics({
+    focusedMetric: focusedAccountTrendMetric,
+    followersDailyRows,
+    followersLastWriteAt,
+  })
 
-    if (values.length === 1) {
-      return { ok: true as const, values: [values[0], values[0]] }
-    }
-
-    return { ok: values.length >= 1, values }
-  }, [focusedAccountTrendMetric, followersDailyRows])
-  const followersSeriesValues: number[] = followersSeries.values
+  const {
+    isFollowersFocused,
+    seriesValues: followersSeriesValues,
+    totalFollowers,
+    deltaYesterday,
+    deltasByIndex,
+  } = followersMetrics
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const igRecentLen = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media.length : 0
@@ -4619,23 +4616,6 @@ export default function ResultsClient() {
                         {focusedAccountTrendMetric === "followers" ? (
                           <div className="flex flex-wrap items-center gap-2 min-w-0">
                             {(() => {
-                              const rows = Array.isArray(followersDailyRows) ? followersDailyRows : []
-                              const valuesFallback = Array.isArray(followersSeriesValues) ? followersSeriesValues : []
-
-                              const totalFollowers =
-                                rows.length >= 1
-                                  ? rows[rows.length - 1]?.followers_count
-                                  : valuesFallback.length >= 1
-                                    ? valuesFallback[valuesFallback.length - 1]
-                                    : null
-
-                              const deltaYesterday =
-                                rows.length >= 2
-                                  ? rows[rows.length - 1]!.followers_count - rows[rows.length - 2]!.followers_count
-                                  : valuesFallback.length >= 2
-                                    ? valuesFallback[valuesFallback.length - 1]! - valuesFallback[valuesFallback.length - 2]!
-                                    : null
-
                               const totalText =
                                 typeof totalFollowers === "number" && Number.isFinite(totalFollowers)
                                   ? Math.round(totalFollowers).toLocaleString()
@@ -4706,7 +4686,7 @@ export default function ResultsClient() {
 
                 {(() => {
                   const selected = selectedAccountTrendMetrics
-                  const focusedIsFollowers = focusedAccountTrendMetric === "followers"
+                  const focusedIsFollowers = isFollowersFocused
                   const focusedIsReach = focusedAccountTrendMetric === "reach"
 
                   const followersDailyPoints: AccountTrendPoint[] = (() => {
@@ -4859,7 +4839,7 @@ export default function ResultsClient() {
 
                   const netFollowers7dText = (() => {
                     if (!focusedIsFollowers) return ""
-                    if (!followersSeries.ok) return "—"
+                    if (followersSeriesValues.length < 1) return "—"
                     const list = followersSeriesValues
                     const n = Array.isArray(list) ? list.length : 0
                     if (n < 2) return "—"
@@ -4943,26 +4923,13 @@ export default function ResultsClient() {
 
                   const hoverPoint = clampedHoverIdx !== null ? dataForChart[clampedHoverIdx] : null
 
-                  const followersDeltas: Array<number | null> = (() => {
-                    if (!focusedIsFollowers) return []
-                    const values = Array.isArray(followersSeriesValues) ? followersSeriesValues : []
-                    if (values.length < 1) return []
-                    return values.map((v, i) => {
-                      if (i === 0) return null
-                      const prev = values[i - 1]
-                      if (typeof v !== "number" || !Number.isFinite(v)) return null
-                      if (typeof prev !== "number" || !Number.isFinite(prev)) return null
-                      return v - prev
-                    })
-                  })()
-
                   const tooltipItems = hoverPoint
                     ? (() => {
                         if (focusedIsFollowers) {
                           const v = typeof clampedHoverIdx === "number" ? followersSeriesValues[clampedHoverIdx] : null
                           if (typeof v !== "number" || !Number.isFinite(v)) return []
 
-                          const delta = typeof clampedHoverIdx === "number" ? followersDeltas[clampedHoverIdx] : null
+                          const delta = typeof clampedHoverIdx === "number" ? deltasByIndex[clampedHoverIdx] : null
                           const deltaText =
                             typeof delta === "number" && Number.isFinite(delta)
                               ? `${delta >= 0 ? "+" : ""}${Math.round(delta).toLocaleString()}`
@@ -5134,7 +5101,7 @@ export default function ResultsClient() {
                         <div className="w-full mt-2">
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">{t("results.trend.noData")}</div>
                         </div>
-                      ) : focusedIsFollowers && !followersSeries.ok ? (
+                      ) : focusedIsFollowers && followersSeriesValues.length < 1 ? (
                         <div className="w-full mt-2 relative min-w-0">
                           <div className="h-[220px] sm:h-[280px] lg:h-[320px] flex items-center justify-center min-w-0">
                             <div className="w-full max-w-[520px] px-3 text-center min-w-0">
