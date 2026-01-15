@@ -4743,7 +4743,22 @@ export default function ResultsClient() {
                       })()
                     : []
 
-                  const hasValidFollowersCount = typeof followersCount === "number" && Number.isFinite(followersCount)
+                  const followersCountFromProfileRaw = (igMe as any)?.profile?.followers_count
+                  const followersCountFromProfile =
+                    typeof followersCountFromProfileRaw === "number" && Number.isFinite(followersCountFromProfileRaw)
+                      ? followersCountFromProfileRaw
+                      : typeof followersCountFromProfileRaw === "string" && followersCountFromProfileRaw.trim() && Number.isFinite(Number(followersCountFromProfileRaw))
+                        ? Number(followersCountFromProfileRaw)
+                        : null
+
+                  const followersCountForFallback =
+                    followersCountFromProfile !== null
+                      ? followersCountFromProfile
+                      : typeof followersCount === "number" && Number.isFinite(followersCount)
+                        ? followersCount
+                        : null
+
+                  const hasValidFollowersCount = typeof followersCountForFallback === "number" && Number.isFinite(followersCountForFallback)
 
                   return (
                     <>
@@ -4846,7 +4861,7 @@ export default function ResultsClient() {
                               const fetchedTs = trendFetchedAt ? new Date(trendFetchedAt).getTime() : null
                               const ts = firstTs !== null ? firstTs : fetchedTs
                               const date = ts !== null ? new Date(ts).toISOString().slice(0, 10) : ""
-                              const value = Math.floor(followersCount)
+                              const value = Math.floor(followersCountForFallback)
                               const capturedAt = ts !== null ? new Date(ts).toISOString() : undefined
                               return { date, value, capturedAt }
                             })()}
