@@ -1257,50 +1257,6 @@ export default function ResultsClient() {
     }
   }, [])
 
-  useEffect(() => {
-    const igUserIdStr = getCookieValue("ig_ig_id")
-    if (!supabaseBrowser || !igUserIdStr) {
-      setFollowersDailyRows([])
-      return
-    }
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { data, error } = await supabaseBrowser
-          .from("ig_daily_followers")
-          .select("day,followers_count")
-          .eq("ig_user_id", igUserIdStr)
-          .order("day", { ascending: true })
-
-        if (cancelled) return
-        if (error || !Array.isArray(data)) {
-          setFollowersDailyRows([])
-          return
-        }
-
-        const rows = (data as any[])
-          .map((r) => {
-            const day = typeof r?.day === "string" ? r.day : ""
-            const n =
-              typeof r?.followers_count === "number" ? r.followers_count : Number(r?.followers_count)
-            if (!day || !Number.isFinite(n)) return null
-            return { day, followers_count: Math.floor(n) }
-          })
-          .filter(Boolean) as Array<{ day: string; followers_count: number }>
-
-        setFollowersDailyRows(rows)
-      } catch {
-        if (cancelled) return
-        setFollowersDailyRows([])
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [supabaseBrowser])
-
   function coerceDailySnapshotPointsToArray(points: unknown): any[] {
     if (Array.isArray(points)) return points
     if (!points || typeof points !== "object") return []
@@ -1718,7 +1674,12 @@ export default function ResultsClient() {
     (Array.isArray(trendPoints) && trendPoints.length > 0) ||
     (Array.isArray(accountTrend) && accountTrend.length > 0)
   const shouldShowEmptySeriesHint =
-    lastDailySnapshotPointsSourceRef.current === "empty" && !hasFallback
+    lastDailySnapshotPointsSourceRef.current === "empty" &&
+    !hasFallback &&
+    !(
+      focusedAccountTrendMetric === "followers" &&
+      followersDailyRows.length >= 1
+    )
 
   const trendMeta = useMemo(() => {
     if (!trendPoints || trendPoints.length === 0) return null
@@ -2418,6 +2379,96 @@ export default function ResultsClient() {
   }, [isConnected, searchParams, t])
 
   const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
+
+  useEffect(() => {
+    if (!isConnectedInstagram) {
+      setFollowersDailyRows([])
+      return
+    }
+
+    if (!meQuery.data && !getCookieValue("ig_ig_id").trim()) {
+      return
+    }
+
+    const igUserIdFromMe =
+      typeof (meQuery.data as any)?.igId === "string"
+        ? String((meQuery.data as any).igId).trim()
+        : ""
+    const igUserIdFromCookie = getCookieValue("ig_ig_id").trim()
+    const igUserIdStr = (igUserIdFromMe || igUserIdFromCookie).trim()
+
+    if (__DEBUG_RESULTS__) {
+      dlog("[followers] resolved igUserId", {
+        igUserId: igUserIdStr || null,
+        source: igUserIdFromMe
+          ? "me"
+          : igUserIdFromCookie
+            ? "cookie"
+            : "none",
+      })
+    }
+
+    if (!supabaseBrowser || !igUserIdStr) {
+      setFollowersDailyRows([])
+      return
+    }
+
+    if (__DEBUG_RESULTS__) {
+      dlog("[followers] fetch start", { igUserId: igUserIdStr })
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabaseBrowser
+          .from("ig_daily_followers")
+          .select("day,followers_count")
+          .eq("ig_user_id", igUserIdStr)
+          .order("day", { ascending: true })
+
+        if (cancelled) return
+        if (error || !Array.isArray(data)) {
+          setFollowersDailyRows([])
+          return
+        }
+
+        const rows = (data as any[])
+          .map((r) => {
+            const day = typeof r?.day === "string" ? r.day : ""
+            const n =
+              typeof r?.followers_count === "number"
+                ? r.followers_count
+                : Number(r?.followers_count)
+            if (!day || !Number.isFinite(n)) return null
+            return { day, followers_count: Math.floor(n) }
+          })
+          .filter(Boolean) as Array<{
+            day: string
+            followers_count: number
+          }>
+
+        setFollowersDailyRows(rows)
+
+        if (__DEBUG_RESULTS__) {
+          const firstDay = rows[0]?.day ?? ""
+          const lastDay = rows[rows.length - 1]?.day ?? ""
+          dlog("[followers] fetch done", {
+            igUserId: igUserIdStr,
+            rows: rows.length,
+            firstDay,
+            lastDay,
+          })
+        }
+      } catch {
+        if (cancelled) return
+        setFollowersDailyRows([])
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [__DEBUG_RESULTS__, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
 
   useEffect(() => {
     if (!isConnectedInstagram) return
@@ -4540,7 +4591,7 @@ export default function ResultsClient() {
 
                   const followersDailyPoints: AccountTrendPoint[] = (() => {
                     const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
-                    return list
+                    const pts = list
                       .map((r) => {
                         const day = typeof r?.day === "string" ? r.day : ""
                         const ts = day
@@ -4560,15 +4611,43 @@ export default function ResultsClient() {
                         return { t: label, ts } as AccountTrendPoint
                       })
                       .filter(Boolean) as AccountTrendPoint[]
+
+                    if (focusedIsFollowers && pts.length === 1) {
+                      const p0 = pts[0]
+                      const ts0 = typeof p0?.ts === "number" && Number.isFinite(p0.ts) ? p0.ts : Date.now()
+                      const p1: AccountTrendPoint = {
+                        ...(p0 as any),
+                        ts: ts0 + 24 * 60 * 60 * 1000,
+                        t: p0.t,
+                      }
+                      return [p0, p1]
+                    }
+
+                    return pts
                   })()
 
-                  const dataForChart = shouldShowEmptySeriesHint
+                  const dataForChartBase = shouldShowEmptySeriesHint
                     ? ([] as AccountTrendPoint[])
                     : focusedIsFollowers
                       ? followersDailyPoints
                       : Array.isArray(trendPoints) && trendPoints.length >= 1
                         ? trendPoints
                         : accountTrend
+
+                  const dataForChart = (() => {
+                    if (!focusedIsFollowers) return dataForChartBase
+                    if (!Array.isArray(dataForChartBase)) return [] as AccountTrendPoint[]
+                    if (dataForChartBase.length !== 1) return dataForChartBase
+
+                    const p0 = dataForChartBase[0] as any
+                    const ts0 = typeof p0?.ts === "number" && Number.isFinite(p0.ts) ? (p0.ts as number) : Date.now()
+                    const p1: AccountTrendPoint = {
+                      ...(p0 as any),
+                      ts: ts0 + 24 * 60 * 60 * 1000,
+                      t: p0?.t,
+                    }
+                    return [p0 as AccountTrendPoint, p1]
+                  })()
 
                   const followersSeries = (() => {
                     if (!focusedIsFollowers) return { ok: false as const, values: [] as number[] }
@@ -4582,6 +4661,11 @@ export default function ResultsClient() {
                         return Number.isFinite(n) ? Math.floor(n) : null
                       })
                       .filter((x): x is number => typeof x === "number")
+
+                    if (values.length === 1) {
+                      return { ok: true as const, values: [values[0], values[0]] }
+                    }
+
                     return { ok: values.length >= 1, values }
                   })()
                   const followersSeriesValues: number[] = followersSeries.values
@@ -4910,7 +4994,7 @@ export default function ResultsClient() {
                           })()}
                         </div>
                       ) : null}
-                      {shouldShowTotalValuePanel ? null : focusedIsFollowers && hasValidFollowersCount && dataForChart.length < 2 ? (
+                      {shouldShowTotalValuePanel ? null : focusedIsFollowers && hasValidFollowersCount && followersDailyRows.length < 1 && dataForChart.length < 2 ? (
                         <div className="w-full mt-2 relative min-w-0">
                           <FollowersTrendFallback
                             point={(() => {
