@@ -140,6 +140,52 @@ function toneForStatus(status: InferredStatus): { label: string; classes: string
   }
 }
 
+const numMono = "tabular-nums"
+
+function SafeIgThumb(props: { src: string; alt?: string; className: string }) {
+  const { src, alt, className } = props
+  const [broken, setBroken] = useState(false)
+
+  const cls = useMemo(() => {
+    const c = String(className || "").trim()
+    return c ? `${c} relative` : "relative"
+  }, [className])
+
+  useEffect(() => {
+    setBroken(false)
+  }, [src])
+
+  const isVideoUrl = useMemo(() => {
+    const u = typeof src === "string" ? src.trim() : ""
+    if (!u) return false
+    return /\.mp4(\?|$)/i.test(u)
+  }, [src])
+
+  const shouldShowPlaceholder = broken || !src || isVideoUrl
+
+  if (shouldShowPlaceholder) {
+    return (
+      <div className={cls} aria-label={alt || "Video"}>
+        <div className="absolute inset-0 bg-white/5" />
+        <div className="relative text-white/70 text-[11px] font-semibold">Video</div>
+      </div>
+    )
+  }
+
+  // eslint-disable-next-line @next/next/no-img-element
+  return (
+    <img
+      src={src}
+      alt={alt || ""}
+      className={cls}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+    />
+  )
+}
+
 export default function PostAnalysisClient() {
   const { locale, t } = useI18n()
   const router = useRouter()
@@ -376,8 +422,27 @@ export default function PostAnalysisClient() {
     const officialMedia = typeof (officialPost as any)?.media?.media_url === "string" ? String((officialPost as any).media.media_url) : ""
     const thumb = typeof (analysisResult as any)?.thumbnail_url === "string" ? String((analysisResult as any).thumbnail_url) : ""
     const media = typeof (analysisResult as any)?.media_url === "string" ? String((analysisResult as any).media_url) : ""
-    return officialThumb.trim() || officialMedia.trim() || thumb.trim() || media.trim() || ""
+
+    const isVideo = (u: string) => /\.mp4(\?|$)/i.test(u)
+    const pick = (u: string) => {
+      const s = String(u || "").trim()
+      if (!s) return ""
+      if (isVideo(s)) return ""
+      return s
+    }
+
+    return pick(officialThumb) || pick(officialMedia) || pick(thumb) || pick(media) || ""
   }, [analysisResult, officialPost])
+
+  const safeImgSrc = useMemo(() => {
+    const isVideo = (u: string) => /\.mp4(\?|$)/i.test(u)
+    return (u: string) => {
+      const s = String(u || "").trim()
+      if (!s) return ""
+      if (isVideo(s)) return ""
+      return s
+    }
+  }, [])
 
   const [freeUsed, setFreeUsed] = useState(0)
 
@@ -2075,29 +2140,13 @@ export default function PostAnalysisClient() {
                               >
                                 {thumb ? (
                                   // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={thumb}
-                                    alt=""
-                                    className="absolute inset-0 h-full w-full object-cover"
-                                    loading="lazy"
-                                    decoding="async"
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                      if (process.env.NODE_ENV !== "production") {
-                                        const key = `${String(p?.id ?? idx)}|${thumb}`
-                                        if (!imgErrorLoggedRef.current[key]) {
-                                          imgErrorLoggedRef.current[key] = true
-                                          console.log("[post-analysis][quickpick][img error]", {
-                                            src: thumb,
-                                            id: p?.id,
-                                            media_type: p?.media_type,
-                                          })
-                                        }
-                                      }
-                                      ;(e.currentTarget as HTMLImageElement).style.display = "none"
-                                    }}
-                                  />
-                                ) : null}
+                                  <SafeIgThumb src={safeImgSrc(thumb)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center text-white/45">
+                                    <div className="h-8 w-8 rounded-lg border border-white/10 bg-white/5" />
+                                    <div className="mt-1 text-[10px]">POST</div>
+                                  </div>
+                                )}
                                 <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/45 tabular-nums">
                                   {type}
                                 </div>
@@ -2106,28 +2155,7 @@ export default function PostAnalysisClient() {
                               <div className="block shrink-0 relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white/5 border border-white/10">
                                 {thumb ? (
                                   // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={thumb}
-                                    alt=""
-                                    className="absolute inset-0 h-full w-full object-cover"
-                                    loading="lazy"
-                                    decoding="async"
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                      if (process.env.NODE_ENV !== "production") {
-                                        const key = `${String(p?.id ?? idx)}|${thumb}`
-                                        if (!imgErrorLoggedRef.current[key]) {
-                                          imgErrorLoggedRef.current[key] = true
-                                          console.log("[post-analysis][quickpick][img error]", {
-                                            src: thumb,
-                                            id: p?.id,
-                                            media_type: p?.media_type,
-                                          })
-                                        }
-                                      }
-                                      ;(e.currentTarget as HTMLImageElement).style.display = "none"
-                                    }}
-                                  />
+                                  <SafeIgThumb src={safeImgSrc(thumb)} alt="" className="absolute inset-0 h-full w-full object-cover" />
                                 ) : null}
                                 <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/45 tabular-nums">
                                   {type}
@@ -2336,28 +2364,7 @@ export default function PostAnalysisClient() {
                             <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/5 to-transparent" />
                             {previewThumbSrc ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={previewThumbSrc}
-                                alt=""
-                                className="absolute inset-0 h-full w-full object-cover"
-                                loading="lazy"
-                                decoding="async"
-                                referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                  if (process.env.NODE_ENV !== "production") {
-                                    const key = `preview|${previewThumbSrc}`
-                                    if (!imgErrorLoggedRef.current[key]) {
-                                      imgErrorLoggedRef.current[key] = true
-                                      console.log("[post-analysis][preview][img error]", {
-                                        src: previewThumbSrc,
-                                        id: (analysisResult as any)?.id,
-                                        media_type: (analysisResult as any)?.media_type,
-                                      })
-                                    }
-                                  }
-                                  ;(e.currentTarget as HTMLImageElement).style.display = "none"
-                                }}
-                              />
+                              <SafeIgThumb src={previewThumbSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
                             ) : null}
                             {!previewThumbSrc && (
                               <div className="relative text-slate-300">
