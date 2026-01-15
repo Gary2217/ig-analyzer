@@ -17,6 +17,7 @@ import { ShareResults } from "../../components/share-results"
 import { useRefetchTick } from "../lib/useRefetchTick"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 import { useInstagramMe } from "../lib/useInstagramMe"
+import { extractIgUserIdFromInsightsId } from "../lib/instagram"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 
@@ -742,6 +743,7 @@ export default function ResultsClient() {
   const [followersDailyRows, setFollowersDailyRows] = useState<
     Array<{ day: string; followers_count: number }>
   >([])
+  const [followersLastWriteAt, setFollowersLastWriteAt] = useState<string | null>(null)
 
   const trendPointsHashRef = useRef<string>("")
   const hashTrendPoints = useCallback((pts: AccountTrendPoint[]) => {
@@ -2385,15 +2387,10 @@ export default function ResultsClient() {
 
   const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
 
-  function extractIgUserIdFromInsightsId(v: unknown): string {
-    if (typeof v !== "string") return ""
-    const head = v.split("/")[0]?.trim() ?? ""
-    return /^\d+$/.test(head) ? head : ""
-  }
-
   useEffect(() => {
     if (!isConnectedInstagram) {
       setFollowersDailyRows([])
+      setFollowersLastWriteAt(null)
       return
     }
 
@@ -2428,6 +2425,7 @@ export default function ResultsClient() {
 
     if (!supabaseBrowser || !igUserIdStr) {
       setFollowersDailyRows([])
+      setFollowersLastWriteAt(null)
       return
     }
 
@@ -2435,18 +2433,37 @@ export default function ResultsClient() {
       dlog("[followers] fetch start", { igUserId: igUserIdStr })
     }
 
+    const tryFetchWithCreatedAt = async () => {
+      return await supabaseBrowser
+        .from("ig_daily_followers")
+        .select("day,followers_count,created_at")
+        .eq("ig_user_id", igUserIdStr)
+        .order("day", { ascending: true })
+    }
+
+    const fetchWithoutCreatedAt = async () => {
+      return await supabaseBrowser
+        .from("ig_daily_followers")
+        .select("day,followers_count")
+        .eq("ig_user_id", igUserIdStr)
+        .order("day", { ascending: true })
+    }
+
     let cancelled = false
     ;(async () => {
       try {
-        const { data, error } = await supabaseBrowser
-          .from("ig_daily_followers")
-          .select("day,followers_count")
-          .eq("ig_user_id", igUserIdStr)
-          .order("day", { ascending: true })
+        let resp: any = await tryFetchWithCreatedAt()
+        if ((resp as any)?.error) {
+          resp = await fetchWithoutCreatedAt()
+        }
+
+        const data = (resp as any)?.data
+        const error = (resp as any)?.error
 
         if (cancelled) return
         if (error || !Array.isArray(data)) {
           setFollowersDailyRows([])
+          setFollowersLastWriteAt(null)
           return
         }
 
@@ -2467,6 +2484,16 @@ export default function ResultsClient() {
 
         setFollowersDailyRows(rows)
 
+        let lastWriteAt: string | null = null
+        for (let i = data.length - 1; i >= 0; i--) {
+          const ca = (data[i] as any)?.created_at
+          if (typeof ca === "string" && ca.trim()) {
+            lastWriteAt = ca.trim()
+            break
+          }
+        }
+        setFollowersLastWriteAt(lastWriteAt)
+
         if (__DEBUG_RESULTS__) {
           const firstDay = rows[0]?.day ?? ""
           const lastDay = rows[rows.length - 1]?.day ?? ""
@@ -2475,11 +2502,13 @@ export default function ResultsClient() {
             rows: rows.length,
             firstDay,
             lastDay,
+            lastWriteAt,
           })
         }
       } catch {
         if (cancelled) return
         setFollowersDailyRows([])
+        setFollowersLastWriteAt(null)
       }
     })()
 
@@ -4862,16 +4891,36 @@ export default function ResultsClient() {
 
                   const hoverPoint = clampedHoverIdx !== null ? dataForChart[clampedHoverIdx] : null
 
+                  const followersDeltas: Array<number | null> = (() => {
+                    if (!focusedIsFollowers) return []
+                    const values = Array.isArray(followersSeriesValues) ? followersSeriesValues : []
+                    if (values.length < 1) return []
+                    return values.map((v, i) => {
+                      if (i === 0) return null
+                      const prev = values[i - 1]
+                      if (typeof v !== "number" || !Number.isFinite(v)) return null
+                      if (typeof prev !== "number" || !Number.isFinite(prev)) return null
+                      return v - prev
+                    })
+                  })()
+
                   const tooltipItems = hoverPoint
                     ? (() => {
                         if (focusedIsFollowers) {
                           const v = typeof clampedHoverIdx === "number" ? followersSeriesValues[clampedHoverIdx] : null
                           if (typeof v !== "number" || !Number.isFinite(v)) return []
+
+                          const delta = typeof clampedHoverIdx === "number" ? followersDeltas[clampedHoverIdx] : null
+                          const deltaText =
+                            typeof delta === "number" && Number.isFinite(delta)
+                              ? `${delta >= 0 ? "+" : ""}${Math.round(delta).toLocaleString()}`
+                              : "—"
+
                           return [
                             {
                               label: labelFor("followers"),
                               color: colorFor("followers"),
-                              value: Math.round(v).toLocaleString(),
+                              value: `${Math.round(v).toLocaleString()}（Δ ${deltaText}）`,
                             },
                           ]
                         }
