@@ -4743,6 +4743,8 @@ export default function ResultsClient() {
                       })()
                     : []
 
+                  const hasValidFollowersCount = typeof followersCount === "number" && Number.isFinite(followersCount)
+
                   return (
                     <>
                       {focusedIsFollowers ? (
@@ -4835,32 +4837,26 @@ export default function ResultsClient() {
                           })()}
                         </div>
                       ) : null}
-                      {shouldShowTotalValuePanel ? null : dataForChart.length < 1 ? (
-                        <div className="w-full mt-2">
-                          <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
-                            {t("results.trend.noData")}
-                          </div>
-                        </div>
-                      ) : focusedIsFollowers && dataForChart.length === 1 ? (
+                      {shouldShowTotalValuePanel ? null : focusedIsFollowers && hasValidFollowersCount && dataForChart.length < 2 ? (
                         <div className="w-full mt-2 relative min-w-0">
                           <FollowersTrendFallback
                             point={(() => {
                               const first = dataForChart[0] as any
-                              const ts =
-                                typeof first?.ts === "number" && Number.isFinite(first.ts)
-                                  ? (first.ts as number)
-                                  : null
+                              const firstTs = typeof first?.ts === "number" && Number.isFinite(first.ts) ? (first.ts as number) : null
+                              const fetchedTs = trendFetchedAt ? new Date(trendFetchedAt).getTime() : null
+                              const ts = firstTs !== null ? firstTs : fetchedTs
                               const date = ts !== null ? new Date(ts).toISOString().slice(0, 10) : ""
-                              const value =
-                                typeof followersCount === "number" && Number.isFinite(followersCount)
-                                  ? Math.floor(followersCount)
-                                  : null
+                              const value = Math.floor(followersCount)
                               const capturedAt = ts !== null ? new Date(ts).toISOString() : undefined
                               return { date, value, capturedAt }
                             })()}
                             updatedAtLabel={trendFetchedAt ? formatTimeTW(trendFetchedAt) : undefined}
                             rangeLabel={trendMeta ? `${trendMeta.startLabel} – ${trendMeta.endLabel}` : undefined}
                           />
+                        </div>
+                      ) : dataForChart.length < 1 && !focusedIsFollowers ? (
+                        <div className="w-full mt-2">
+                          <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">{t("results.trend.noData")}</div>
                         </div>
                       ) : focusedIsFollowers && !followersSeries.ok ? (
                         <div className="w-full mt-2 relative min-w-0">
