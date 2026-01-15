@@ -728,6 +728,7 @@ export default function ResultsClient() {
     profileViews: number | null
     impressionsTotal: number | null
   } | null>(null)
+  const [dailySnapshotData, setDailySnapshotData] = useState<any>(null)
   const [dailySnapshotAvailableDays, setDailySnapshotAvailableDays] = useState<number | null>(null)
   const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
     loading: false,
@@ -1481,9 +1482,12 @@ export default function ResultsClient() {
 
         const json7 = await igRes.json().catch(() => null)
         if (!igRes.ok || !json7?.ok) {
+          setDailySnapshotData(null)
           setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
           return
         }
+
+        setDailySnapshotData(json7)
 
         const availableDaysFromApi = typeof json7?.available_days === "number" && Number.isFinite(json7.available_days) ? (json7.available_days as number) : null
         if (availableDaysFromApi !== null) setDailySnapshotAvailableDays(availableDaysFromApi)
@@ -1511,6 +1515,7 @@ export default function ResultsClient() {
         setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
       } catch (e: any) {
         if (e?.name === "AbortError") return
+        setDailySnapshotData(null)
         setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
       }
     })()
@@ -2380,13 +2385,24 @@ export default function ResultsClient() {
 
   const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
 
+  function extractIgUserIdFromInsightsId(v: unknown): string {
+    if (typeof v !== "string") return ""
+    const head = v.split("/")[0]?.trim() ?? ""
+    return /^\d+$/.test(head) ? head : ""
+  }
+
   useEffect(() => {
     if (!isConnectedInstagram) {
       setFollowersDailyRows([])
       return
     }
 
-    if (!meQuery.data && !getCookieValue("ig_ig_id").trim()) {
+    const igUserIdFromSnapshot = (() => {
+      const insightId = (dailySnapshotData as any)?.insights_daily_series?.[0]?.id
+      return extractIgUserIdFromInsightsId(insightId)
+    })()
+
+    if (!meQuery.data && !igUserIdFromSnapshot && !getCookieValue("ig_ig_id").trim()) {
       return
     }
 
@@ -2395,16 +2411,18 @@ export default function ResultsClient() {
         ? String((meQuery.data as any).igId).trim()
         : ""
     const igUserIdFromCookie = getCookieValue("ig_ig_id").trim()
-    const igUserIdStr = (igUserIdFromMe || igUserIdFromCookie).trim()
+    const igUserIdStr = (igUserIdFromMe || igUserIdFromSnapshot || igUserIdFromCookie).trim()
 
     if (__DEBUG_RESULTS__) {
       dlog("[followers] resolved igUserId", {
         igUserId: igUserIdStr || null,
         source: igUserIdFromMe
           ? "me"
-          : igUserIdFromCookie
-            ? "cookie"
-            : "none",
+          : igUserIdFromSnapshot
+            ? "snapshot"
+            : igUserIdFromCookie
+              ? "cookie"
+              : "none",
       })
     }
 
@@ -2468,7 +2486,7 @@ export default function ResultsClient() {
     return () => {
       cancelled = true
     }
-  }, [__DEBUG_RESULTS__, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
+  }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
 
   useEffect(() => {
     if (!isConnectedInstagram) return
