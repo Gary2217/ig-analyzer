@@ -4604,8 +4604,6 @@ export default function ResultsClient() {
                               totalFollowers={totalFollowers}
                               deltaYesterday={deltaYesterday}
                               growth7d={growth7d}
-                              growth30d={growth30d}
-                              lastDataDay={lastDataDay}
                             />
                           </div>
                         </div>
@@ -4796,26 +4794,6 @@ export default function ResultsClient() {
                     (focusedIsFollowers && hasVaryingTimeSeries("followers"))
                   const focusedTotal = getTotalValueForMetric(focusedAccountTrendMetric)
 
-                  const netFollowers7dText = (() => {
-                    if (!focusedIsFollowers) return ""
-                    if (followersSeriesValues.length < 1) return "—"
-                    const list = followersSeriesValues
-                    const n = Array.isArray(list) ? list.length : 0
-                    if (n < 2) return "—"
-                    const lastIdx = n - 1
-                    const baseIdx = Math.max(0, lastIdx - 6)
-                    const last = list[lastIdx]
-                    const base = list[baseIdx]
-                    if (typeof last !== "number" || !Number.isFinite(last)) return "—"
-                    if (typeof base !== "number" || !Number.isFinite(base)) return "—"
-                    const net7 = last - base
-                    const num = Math.round(net7)
-                    const abs = Math.abs(num).toLocaleString()
-                    if (num > 0) return `+${abs}`
-                    if (num < 0) return `-${abs}`
-                    return "0"
-                  })()
-
                   // UX rule: only Reach + Followers are allowed to render a line chart.
                   const shouldShowTotalValuePanel = !focusedIsReach && !focusedIsFollowers
 
@@ -4949,18 +4927,6 @@ export default function ResultsClient() {
 
                   return (
                     <>
-                      {focusedIsFollowers ? (
-                        <div className="mt-3 flex items-center justify-center sm:justify-end min-w-0">
-                          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 min-w-0">
-                            <div className="text-[10px] font-semibold text-white/70 leading-none min-w-0">
-                              <div className="whitespace-nowrap">近 7 天淨增</div>
-                              <div className="whitespace-nowrap">Net (7d)</div>
-                            </div>
-                            <div className="text-xs font-semibold text-white tabular-nums whitespace-nowrap">{netFollowers7dText}</div>
-                          </div>
-                        </div>
-                      ) : null}
-
                       {shouldShowTotalValuePanel ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
                           <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
