@@ -2448,29 +2448,14 @@ export default function ResultsClient() {
       dlog("[followers] fetch start", { igUserId: igUserIdStr })
     }
 
-    const tryFetchWithCreatedAt = async () => {
-      return await supabaseBrowser
-        .from("ig_daily_followers")
-        .select("day,followers_count,created_at")
-        .eq("ig_user_id", igUserIdStr)
-        .order("day", { ascending: true })
-    }
-
-    const fetchWithoutCreatedAt = async () => {
-      return await supabaseBrowser
-        .from("ig_daily_followers")
-        .select("day,followers_count")
-        .eq("ig_user_id", igUserIdStr)
-        .order("day", { ascending: true })
-    }
-
     let cancelled = false
     ;(async () => {
       try {
-        let resp: any = await tryFetchWithCreatedAt()
-        if ((resp as any)?.error) {
-          resp = await fetchWithoutCreatedAt()
-        }
+        const resp: any = await supabaseBrowser
+          .from("ig_daily_followers")
+          .select("day,followers_count")
+          .eq("ig_user_id", igUserIdStr)
+          .order("day", { ascending: true })
 
         const data = (resp as any)?.data
         const error = (resp as any)?.error
@@ -2499,15 +2484,7 @@ export default function ResultsClient() {
 
         setFollowersDailyRows(rows)
 
-        let lastWriteAt: string | null = null
-        for (let i = data.length - 1; i >= 0; i--) {
-          const ca = (data[i] as any)?.created_at
-          if (typeof ca === "string" && ca.trim()) {
-            lastWriteAt = ca.trim()
-            break
-          }
-        }
-        setFollowersLastWriteAt(lastWriteAt)
+        setFollowersLastWriteAt(null)
 
         if (__DEBUG_RESULTS__) {
           const firstDay = rows[0]?.day ?? ""
@@ -2517,7 +2494,9 @@ export default function ResultsClient() {
             rows: rows.length,
             firstDay,
             lastDay,
-            lastWriteAt,
+            lastWriteAt: null,
+            lastDataDay: lastDay,
+            fetchedAt: new Date().toISOString(),
           })
         }
       } catch {
@@ -4628,7 +4607,7 @@ export default function ResultsClient() {
 
                               return (
                                 <>
-                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0">
+                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0 min-w-[120px]">
                                     <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">
                                       Followers 粉絲總數
                                     </div>
@@ -4637,7 +4616,7 @@ export default function ResultsClient() {
                                     </div>
                                   </div>
 
-                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0">
+                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0 min-w-[120px]">
                                     <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">
                                       Δ Yesterday 昨日增加
                                     </div>
