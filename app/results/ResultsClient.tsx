@@ -218,6 +218,58 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   )
 }
 
+type TrendPoint = {
+  date: string;        // e.g. "2026-01-15"
+  value: number | null; // followers count
+  capturedAt?: string; // ISO timestamp (optional)
+};
+
+function FollowersTrendFallback(props: {
+  point: TrendPoint;
+  updatedAtLabel?: string; // e.g. "2026/01/15 12:13:30" (optional)
+  rangeLabel?: string;     // e.g. "2025/10/18 – 2026/01/15" (optional)
+}) {
+  const { point, updatedAtLabel, rangeLabel } = props;
+
+  const followersText =
+    typeof point.value === "number" ? point.value.toLocaleString() : "—";
+
+  // Prefer point.capturedAt if present; otherwise show updatedAtLabel if available.
+  const timeText =
+    (point.capturedAt ? new Date(point.capturedAt).toLocaleString() : undefined) ??
+    updatedAtLabel ??
+    "";
+
+  return (
+    <div className="rounded-xl border border-white/10 p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div className="text-lg font-semibold">粉絲 Followers</div>
+        {(timeText || rangeLabel) && (
+          <div className="text-xs text-white/60">
+            {rangeLabel ? <span>{rangeLabel}</span> : null}
+            {rangeLabel && timeText ? <span className="mx-2">·</span> : null}
+            {timeText ? <span>Updated {timeText}</span> : null}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-end justify-between gap-4">
+        <div>
+          <div className="text-3xl font-bold tabular-nums">{followersText}</div>
+          <div className="mt-1 text-sm text-white/60">
+            目前僅有 1 筆資料，需累積更多天數才會顯示趨勢圖。<br />
+            Only 1 snapshot collected—trend will appear after more data is collected.
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/70">
+          1 point / 1 筆
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GateShell(props: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <section className="w-full bg-[#0b1220] px-4 py-12 overflow-x-hidden">
@@ -4788,6 +4840,27 @@ export default function ResultsClient() {
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
                             {t("results.trend.noData")}
                           </div>
+                        </div>
+                      ) : focusedIsFollowers && dataForChart.length === 1 ? (
+                        <div className="w-full mt-2 relative min-w-0">
+                          <FollowersTrendFallback
+                            point={(() => {
+                              const first = dataForChart[0] as any
+                              const ts =
+                                typeof first?.ts === "number" && Number.isFinite(first.ts)
+                                  ? (first.ts as number)
+                                  : null
+                              const date = ts !== null ? new Date(ts).toISOString().slice(0, 10) : ""
+                              const value =
+                                typeof followersCount === "number" && Number.isFinite(followersCount)
+                                  ? Math.floor(followersCount)
+                                  : null
+                              const capturedAt = ts !== null ? new Date(ts).toISOString() : undefined
+                              return { date, value, capturedAt }
+                            })()}
+                            updatedAtLabel={trendFetchedAt ? formatTimeTW(trendFetchedAt) : undefined}
+                            rangeLabel={trendMeta ? `${trendMeta.startLabel} – ${trendMeta.endLabel}` : undefined}
+                          />
                         </div>
                       ) : focusedIsFollowers && !followersSeries.ok ? (
                         <div className="w-full mt-2 relative min-w-0">
