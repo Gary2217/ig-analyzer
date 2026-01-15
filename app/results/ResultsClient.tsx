@@ -4695,10 +4695,22 @@ export default function ResultsClient() {
                         </div>
                       ) : focusedIsFollowers && !followersSeries.ok ? (
                         <div className="w-full mt-2 relative min-w-0">
-                          <div className="h-[220px] sm:h-[280px] lg:h-[320px] flex flex-col justify-center min-w-0">
-                            <div className="text-sm sm:text-base text-white/80 leading-snug min-w-0">
-                              <div>尚無粉絲歷史資料</div>
-                              <div>No follower history data yet</div>
+                          <div className="h-[220px] sm:h-[280px] lg:h-[320px] flex items-center justify-center min-w-0">
+                            <div className="w-full max-w-[520px] px-3 text-center min-w-0">
+                              <div className="mx-auto mb-3 h-10 w-10 rounded-xl border border-dashed border-white/15 bg-white/[0.03] flex items-center justify-center">
+                                <div className="h-4 w-4 rounded-full border border-white/20" />
+                              </div>
+                              <div className="text-sm sm:text-base text-white/80 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                <div>尚無粉絲歷史資料</div>
+                                <div>No follower history data yet</div>
+                              </div>
+                              <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                <div>需要累積一段時間後才會顯示趨勢</div>
+                                <div>Trend will appear after enough data is collected</div>
+                              </div>
+                              <div className="mt-4">
+                                <div className="mx-auto h-px w-40 border-t border-dashed border-white/15" />
+                              </div>
                             </div>
                           </div>
                         </div>
