@@ -4860,6 +4860,30 @@ export default function ResultsClient() {
 
                   const hoverPoint = clampedHoverIdx !== null ? dataForChart[clampedHoverIdx] : null
 
+                  const reachRawByIndex = focusedIsReach
+                    ? dataForChart.map((p) => {
+                        const v = (p as any)?.reach
+                        return typeof v === "number" && Number.isFinite(v) ? v : null
+                      })
+                    : []
+
+                  const reachMa7ByIndex = focusedIsReach
+                    ? reachRawByIndex.map((_, i) => {
+                        const end = i
+                        const start = Math.max(0, i - 6)
+                        let sum = 0
+                        let count = 0
+                        for (let j = start; j <= end; j++) {
+                          const v = reachRawByIndex[j]
+                          if (typeof v !== "number" || !Number.isFinite(v)) return null
+                          sum += v
+                          count += 1
+                        }
+                        if (count < 1) return null
+                        return sum / count
+                      })
+                    : []
+
                   const tooltipItems = hoverPoint
                     ? (() => {
                         if (focusedIsFollowers) {
@@ -4877,6 +4901,28 @@ export default function ResultsClient() {
                               label: labelFor("followers"),
                               color: colorFor("followers"),
                               value: `${Math.round(v).toLocaleString()}（Δ ${deltaText}）`,
+                            },
+                          ]
+                        }
+
+                        if (focusedIsReach) {
+                          const raw = hoverPoint.reach
+                          const rawText =
+                            typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw).toLocaleString() : "—"
+                          const ma7 = typeof clampedHoverIdx === "number" ? reachMa7ByIndex[clampedHoverIdx] : null
+                          const ma7Text =
+                            typeof ma7 === "number" && Number.isFinite(ma7) ? Math.round(ma7).toLocaleString() : "—"
+
+                          return [
+                            {
+                              label: labelFor("reach"),
+                              color: colorFor("reach"),
+                              value: rawText,
+                            },
+                            {
+                              label: "MA7 (7d avg) 7日均線",
+                              color: "rgba(255,255,255,0.70)",
+                              value: ma7Text,
                             },
                           ]
                         }
@@ -5123,32 +5169,91 @@ export default function ResultsClient() {
 
                                   return ordered.map((s) => {
                                     const isFocused = s.k === focusedAccountTrendMetric
-                                  const d = s.points
-                                    .map((p, i) => {
-                                      const x = sx(p.i)
-                                      const y = sy(p.yNorm)
-                                      if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-                                      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`
-                                    })
-                                    .filter(Boolean)
-                                    .join(" ")
 
-                                  return (
-                                    <path
-                                      key={`trend-line-${s.k}`}
-                                      d={d}
-                                      stroke={s.color}
-                                      strokeWidth={1.5}
-                                      fill="none"
-                                      opacity={isFocused ? 0.99 : 0.55}
-                                    />
-                                  )
+                                    const buildSmoothPath = (pts: Array<{ x: number; y: number }>) => {
+                                      if (pts.length < 2) return ""
+                                      if (pts.length === 2) {
+                                        const a = pts[0]
+                                        const b = pts[1]
+                                        return `M${a.x.toFixed(1)},${a.y.toFixed(1)} L${b.x.toFixed(1)},${b.y.toFixed(1)}`
+                                      }
+                                      const d: string[] = []
+                                      d.push(`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`)
+                                      for (let i = 1; i < pts.length - 1; i++) {
+                                        const prev = pts[i - 1]
+                                        const cur = pts[i]
+                                        const next = pts[i + 1]
+                                        const mx = (cur.x + next.x) / 2
+                                        const my = (cur.y + next.y) / 2
+                                        d.push(`Q${cur.x.toFixed(1)},${cur.y.toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`)
+                                        if (i === pts.length - 2) {
+                                          d.push(`T${next.x.toFixed(1)},${next.y.toFixed(1)}`)
+                                        }
+                                      }
+                                      return d.join(" ")
+                                    }
+
+                                    if (focusedIsReach && s.k === "reach") {
+                                      const reachPts = s.points
+                                        .map((p) => {
+                                          const x = sx(p.i)
+                                          const y = sy(p.yNorm)
+                                          if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                          return { x, y }
+                                        })
+                                        .filter(Boolean) as Array<{ x: number; y: number }>
+
+                                      const reachPath = buildSmoothPath(reachPts)
+
+                                      const span = Math.max(s.max - s.min, 0)
+                                      const maPts = reachMa7ByIndex
+                                        .map((v, i) => {
+                                          if (typeof v !== "number" || !Number.isFinite(v)) return null
+                                          const norm = span > 0 ? ((v - s.min) / span) * 100 : 50
+                                          const x = sx(i)
+                                          const y = sy(Number.isFinite(norm) ? norm : 50)
+                                          if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                          return { x, y }
+                                        })
+                                        .filter(Boolean) as Array<{ x: number; y: number }>
+
+                                      const maPath = buildSmoothPath(maPts)
+
+                                      return (
+                                        <g key={`trend-line-${s.k}`}>
+                                          <path d={reachPath} stroke={s.color} strokeWidth={2} fill="none" opacity={0.42} />
+                                          <path d={maPath} stroke={s.color} strokeWidth={2.2} fill="none" opacity={0.92} />
+                                        </g>
+                                      )
+                                    }
+
+                                    const d = s.points
+                                      .map((p, i) => {
+                                        const x = sx(p.i)
+                                        const y = sy(p.yNorm)
+                                        if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                        return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`
+                                      })
+                                      .filter(Boolean)
+                                      .join(" ")
+
+                                    return (
+                                      <path
+                                        key={`trend-line-${s.k}`}
+                                        d={d}
+                                        stroke={s.color}
+                                        strokeWidth={1.5}
+                                        fill="none"
+                                        opacity={isFocused ? 0.99 : 0.55}
+                                      />
+                                    )
                                   })
                                 })()}
 
                                 {(() => {
                                   const focus = drawable.find((s) => s.k === focusedAccountTrendMetric)
                                   if (!focus) return null
+                                  if (focusedIsReach && focus.k === "reach") return null
                                   return focus.points.map((p) => {
                                     const cx = sx(p.i)
                                     const cy = sy(p.yNorm)
@@ -5266,13 +5371,20 @@ export default function ResultsClient() {
                                         if (!Number.isFinite(x)) return null
                                         return (
                                           <g key={`trend-xt-${i}`}>
-                                            <line x1={x} x2={x} y1={topY} y2={bottomY} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                                            <line
+                                              x1={x}
+                                              x2={x}
+                                              y1={topY}
+                                              y2={bottomY}
+                                              stroke={focusedIsReach ? "rgba(255,255,255,0.045)" : "rgba(255,255,255,0.06)"}
+                                              strokeWidth="1"
+                                            />
                                             <line
                                               x1={x}
                                               x2={x}
                                               y1={bottomY}
                                               y2={Math.min(h - 2, bottomY + 6)}
-                                              stroke="rgba(255,255,255,0.18)"
+                                              stroke={focusedIsReach ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.18)"}
                                               strokeWidth="1"
                                             />
                                           </g>
