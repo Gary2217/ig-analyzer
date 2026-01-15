@@ -4377,6 +4377,40 @@ export default function ResultsClient() {
                       ? trendPoints
                       : accountTrend
 
+                  const followersSeries = (() => {
+                    const n = dataForChart.length
+                    if (n < 1) return { ok: false as const, values: [] as number[] }
+
+                    // Real follower history requires BOTH:
+                    // - an anchor followers_count (latest)
+                    // - at least one numeric followerDelta from daily points
+                    const latest =
+                      typeof followersCount === "number" && Number.isFinite(followersCount)
+                        ? Math.max(0, Math.floor(followersCount))
+                        : null
+
+                    const deltas: Array<number | null> = dataForChart.map((p: any) => {
+                      const d = p?.followerDelta
+                      return typeof d === "number" && Number.isFinite(d) ? Math.floor(d) : null
+                    })
+
+                    const hasAnyDelta = deltas.some((d) => typeof d === "number")
+                    if (latest === null || !hasAnyDelta) return { ok: false as const, values: [] as number[] }
+
+                    const out: number[] = new Array(n).fill(latest)
+                    out[n - 1] = latest
+
+                    // Backfill backwards using the NEXT day's delta.
+                    for (let i = n - 2; i >= 0; i--) {
+                      const next = out[i + 1]
+                      const dNext = deltas[i + 1]
+                      out[i] = Math.max(0, next - (typeof dNext === "number" ? dNext : 0))
+                    }
+
+                    return { ok: true as const, values: out }
+                  })()
+                  const followersSeriesValues: number[] = followersSeries.values
+
                   const shouldShowTotalsFallback =
                     Boolean(dailySnapshotTotals) && (!Array.isArray(trendPoints) || trendPoints.length < 1)
 
@@ -4419,6 +4453,8 @@ export default function ResultsClient() {
                         const y =
                           k === "reach"
                             ? (p as any).reach
+                            : k === "followers"
+                              ? null
                             : k === "interactions"
                               ? (p as any).interactions
                               : k === "impressions"
@@ -4429,6 +4465,12 @@ export default function ResultsClient() {
                         return typeof y === "number" && Number.isFinite(y) ? y : null
                       })
                       .filter((x): x is number => typeof x === "number")
+
+                    if (k === "followers") {
+                      const list = followersSeriesValues
+                      return Array.isArray(list) ? list.filter((x) => typeof x === "number" && Number.isFinite(x)) : []
+                    }
+
                     return vals
                   }
 
@@ -4454,15 +4496,15 @@ export default function ResultsClient() {
 
                   const focusedIsReach = focusedAccountTrendMetric === "reach"
                   const focusedIsFollowers = focusedAccountTrendMetric === "followers"
-                  const focusedHasSeries = focusedIsReach && hasVaryingTimeSeries("reach")
+                  const focusedHasSeries =
+                    (focusedIsReach && hasVaryingTimeSeries("reach")) ||
+                    (focusedIsFollowers && hasVaryingTimeSeries("followers"))
                   const focusedTotal = getTotalValueForMetric(focusedAccountTrendMetric)
 
-                  // UX rule: ONLY reach can render a line chart.
-                  // Followers is shown as a placeholder panel (no chart) for now.
-                  const shouldShowFollowersComingSoonPanel = focusedIsFollowers
+                  // UX rule: only Reach + Followers are allowed to render a line chart.
                   const shouldShowTotalValuePanel = !focusedIsReach && !focusedIsFollowers
 
-                  const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : []
+                  const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : focusedIsFollowers ? ["followers"] : []
 
                   const series = seriesKeys.map((k) => {
                     const raw = dataForChart
@@ -4470,6 +4512,8 @@ export default function ResultsClient() {
                         const y =
                           k === "reach"
                             ? p.reach
+                            : k === "followers"
+                              ? followersSeriesValues[i]
                             : k === "interactions"
                               ? p.interactions
                               : k === "impressions"
@@ -4523,59 +4567,49 @@ export default function ResultsClient() {
                   const hoverPoint = clampedHoverIdx !== null ? dataForChart[clampedHoverIdx] : null
 
                   const tooltipItems = hoverPoint
-                    ? selected
-                        .map((k) => {
-                          const val =
-                            k === "reach"
-                              ? hoverPoint.reach
-                              : k === "interactions"
-                                ? hoverPoint.interactions
-                                : k === "impressions"
-                                  ? hoverPoint.impressions
-                                  : k === "engaged"
-                                    ? hoverPoint.engaged
-                                    : hoverPoint.followerDelta
-                          if (typeof val !== "number" || !Number.isFinite(val)) return null
-                          return {
-                            label: labelFor(k),
-                            color: colorFor(k),
-                            value:
-                              k === "followerDelta"
-                                ? `${val > 0 ? "+" : ""}${Math.round(val).toLocaleString()}`
-                                : Math.round(val).toLocaleString(),
-                          }
-                        })
-                        .filter(Boolean) as Array<{ label: string; color: string; value: string }>
+                    ? (() => {
+                        if (focusedIsFollowers) {
+                          const v = typeof clampedHoverIdx === "number" ? followersSeriesValues[clampedHoverIdx] : null
+                          if (typeof v !== "number" || !Number.isFinite(v)) return []
+                          return [
+                            {
+                              label: labelFor("followers"),
+                              color: colorFor("followers"),
+                              value: Math.round(v).toLocaleString(),
+                            },
+                          ]
+                        }
+
+                        return selected
+                          .map((k) => {
+                            if (k === "followers") return null
+                            const val =
+                              k === "reach"
+                                ? hoverPoint.reach
+                                : k === "interactions"
+                                  ? hoverPoint.interactions
+                                  : k === "impressions"
+                                    ? hoverPoint.impressions
+                                    : k === "engaged"
+                                      ? hoverPoint.engaged
+                                      : hoverPoint.followerDelta
+                            if (typeof val !== "number" || !Number.isFinite(val)) return null
+                            return {
+                              label: labelFor(k),
+                              color: colorFor(k),
+                              value:
+                                k === "followerDelta"
+                                  ? `${val > 0 ? "+" : ""}${Math.round(val).toLocaleString()}`
+                                  : Math.round(val).toLocaleString(),
+                            }
+                          })
+                          .filter(Boolean) as Array<{ label: string; color: string; value: string }>
+                      })()
                     : []
 
                   return (
                     <>
-                      {shouldShowFollowersComingSoonPanel ? (
-                        <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
-                          <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
-                            <div>粉絲趨勢即將支援</div>
-                            <div>Follower trend coming soon.</div>
-                          </div>
-                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">{labelFor(focusedAccountTrendMetric)}</div>
-                              <div className="mt-0.5 text-[clamp(14px,4.6vw,16px)] font-semibold text-white tabular-nums whitespace-nowrap truncate min-w-0">—</div>
-                              <div className="mt-0.5 text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
-                                <div>即將提供 Coming soon</div>
-                              </div>
-                            </div>
-                            <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                              <div className="text-[10px] font-semibold text-white/60 whitespace-nowrap truncate min-w-0">{t("results.trend.rangeLabel")}</div>
-                              <div className="mt-0.5 text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">
-                                {trendMeta ? `${trendMeta.startLabel} – ${trendMeta.endLabel}` : "—"}
-                              </div>
-                              <div className="mt-0.5 text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
-                                <div>區間 Period</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : shouldShowTotalValuePanel ? (
+                      {shouldShowTotalValuePanel ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
                           <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
                             <div>此指標目前沒有可用數據</div>
@@ -4653,10 +4687,19 @@ export default function ResultsClient() {
                           })()}
                         </div>
                       ) : null}
-                      {shouldShowFollowersComingSoonPanel || shouldShowTotalValuePanel ? null : dataForChart.length < 1 ? (
+                      {shouldShowTotalValuePanel ? null : dataForChart.length < 1 ? (
                         <div className="w-full mt-2">
                           <div className="py-3 text-sm text-white/75 text-center leading-snug min-w-0">
                             {t("results.trend.noData")}
+                          </div>
+                        </div>
+                      ) : focusedIsFollowers && !followersSeries.ok ? (
+                        <div className="w-full mt-2 relative min-w-0">
+                          <div className="h-[220px] sm:h-[280px] lg:h-[320px] flex flex-col justify-center min-w-0">
+                            <div className="text-sm sm:text-base text-white/80 leading-snug min-w-0">
+                              <div>尚無粉絲歷史資料</div>
+                              <div>No follower history data yet</div>
+                            </div>
                           </div>
                         </div>
                       ) : (
