@@ -200,10 +200,26 @@ function saWriteResultsCache(key: string, payload: ResultsCachePayloadV1) {
 function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   const FALLBACK_IMG = "/window.svg"
   const [currentSrc, setCurrentSrc] = useState<string>(src && src.length > 0 ? src : FALLBACK_IMG)
+  const [broken, setBroken] = useState(false)
 
   useEffect(() => {
+    setBroken(false)
     setCurrentSrc(src && src.length > 0 ? src : FALLBACK_IMG)
   }, [src])
+
+  const isVideoUrl = useMemo(() => {
+    const u = typeof currentSrc === "string" ? currentSrc.trim() : ""
+    if (!u) return false
+    return /\.mp4(\?|$)/i.test(u)
+  }, [currentSrc])
+
+  if (broken || isVideoUrl) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-white/5 text-[11px] font-semibold text-white/70" aria-label={alt}>
+        Video
+      </div>
+    )
+  }
 
   // eslint-disable-next-line @next/next/no-img-element
   return (
@@ -215,8 +231,44 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
       decoding="async"
       referrerPolicy="no-referrer"
       onError={() => {
-        if (currentSrc !== FALLBACK_IMG) setCurrentSrc(FALLBACK_IMG)
+        setBroken(true)
       }}
+    />
+  )
+}
+
+function SafeIgThumb(props: { src?: string; alt: string; className: string }) {
+  const { src, alt, className } = props
+  const [broken, setBroken] = useState(false)
+
+  useEffect(() => {
+    setBroken(false)
+  }, [src])
+
+  const isVideoUrl = useMemo(() => {
+    const u = typeof src === "string" ? src.trim() : ""
+    if (!u) return false
+    return /\.mp4(\?|$)/i.test(u)
+  }, [src])
+
+  if (!src || broken || isVideoUrl) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-white/5 text-[11px] font-semibold text-white/70`} aria-label={alt}>
+        Video
+      </div>
+    )
+  }
+
+  // eslint-disable-next-line @next/next/no-img-element
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
     />
   )
 }
@@ -3715,12 +3767,7 @@ export default function ResultsClient() {
                             <div className="aspect-square bg-black/20">
                               {mediaUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={mediaUrl}
-                                  alt={caption ? caption.slice(0, 40) : m.id}
-                                  className="h-full w-full object-cover"
-                                  referrerPolicy="no-referrer"
-                                />
+                                <SafeIgThumb src={mediaUrl} alt={caption ? caption.slice(0, 40) : m.id} className="h-full w-full object-cover" />
                               ) : (
                                 <div className="h-full w-full flex items-center justify-center text-sm text-slate-400">
                                   {t("results.instagram.recentPostsNoPreview")}
@@ -4297,124 +4344,44 @@ export default function ResultsClient() {
 
             <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardContent className="p-3 md:p-4">
-                <div className="relative">
-                  <div className="hidden sm:flex items-center gap-6 min-w-0">
-                    <div className="flex items-center gap-4 min-w-0">
-                      {(() => {
-                        const avatarUrl =
-                          (typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : "") ||
-                          (typeof (igMe as any)?.profile_picture_url === "string" ? String((igMe as any).profile_picture_url) : "") ||
-                          ""
-                        return avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={avatarUrl}
-                            alt={displayHandle}
-                            className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 object-cover shrink-0"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 bg-white/10 shrink-0" />
-                        )
-                      })()}
+                <div className="flex items-start gap-4">
+                  {(() => {
+                    const avatarUrl =
+                      typeof (igMe as any)?.profile_picture_url === "string"
+                        ? String((igMe as any).profile_picture_url)
+                        : typeof (igMe as any)?.profilePictureUrl === "string"
+                          ? String((igMe as any).profilePictureUrl)
+                          : ""
 
+                    return avatarUrl ? (
+                      <SafeIgThumb
+                        src={avatarUrl}
+                        alt={displayHandle}
+                        className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 bg-white/10 shrink-0" />
+                    )
+                  })()}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2 min-w-0">
                       <div className="min-w-0">
-                        <div className="text-base font-semibold text-white truncate">
-                          {displayName}
-                        </div>
-                        <div className="text-xs text-slate-300 truncate">
-                          {displayHandle}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex-1 flex items-center justify-center gap-3 md:gap-4 self-center min-w-0">
-                      <div className="w-[160px] md:w-[170px]">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">{t("results.profile.followers")}</div>
-                          <div className="mt-1 text-xl md:text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            {formatCompact(followersCount) ?? "—"}
-                          </div>
-                        </div>
+                        <div className="text-base font-semibold text-white truncate">{displayName}</div>
+                        <div className="text-xs text-slate-300 truncate">{displayHandle}</div>
                       </div>
 
-                      <div className="w-[160px] md:w-[170px]">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">{t("results.profile.following")}</div>
-                          <div className="mt-1 text-xl md:text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
-                            {formatCompact(followsCount) ?? "—"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="w-[160px] md:w-[170px]">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20">
-                          <div className="text-xs text-white/60 whitespace-nowrap">{t("results.profile.posts")}</div>
-                          <div className="mt-1 text-xl md:text-2xl font-semibold tabular-nums whitespace-nowrap truncate animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-                            {formatCompact(mediaCount) ?? "—"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-center">
-                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
-                        {safeT("results.proBadge")}
-                      </span>
-                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70 max-w-[160px] min-w-0 truncate">
-                        {t(
-                          selectedGoal
-                            ? `results.positioning.labels.${selectedGoal}`
-                            : "results.positioning.labels.default"
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="sm:hidden flex flex-col gap-2">
-                    <div className="flex items-start gap-4">
-                      {(() => {
-                        const avatarUrl =
-                          (typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : "") ||
-                          (typeof (igMe as any)?.profile_picture_url === "string" ? String((igMe as any).profile_picture_url) : "") ||
-                          ""
-                        return avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={avatarUrl}
-                            alt={displayHandle}
-                            className="h-16 w-16 rounded-full border border-white/10 object-cover shrink-0"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="h-16 w-16 rounded-full border border-white/10 bg-white/10 shrink-0" />
-                        )
-                      })()}
-
-                      <div className="min-w-0">
-                        <div className="text-base font-semibold text-white truncate">
-                          {displayName}
-                        </div>
-                        <div className="text-xs text-slate-300 truncate">
-                          {displayHandle}
-                        </div>
-                      </div>
-
-                      <div className="ml-auto flex items-center gap-2 shrink-0 min-w-0">
+                      <div className="flex items-center gap-2 shrink-0 min-w-0">
                         <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
                           {safeT("results.proBadge")}
                         </span>
                         <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/70 max-w-[160px] min-w-0 truncate">
-                          {t(
-                            selectedGoal
-                              ? `results.positioning.labels.${selectedGoal}`
-                              : "results.positioning.labels.default"
-                          )}
+                          {t(selectedGoal ? `results.positioning.labels.${selectedGoal}` : "results.positioning.labels.default")}
                         </span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="mt-3 grid grid-cols-3 gap-2">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
                         <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">{t("results.profile.followers")}</div>
                         <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
