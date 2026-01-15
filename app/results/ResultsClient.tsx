@@ -805,6 +805,24 @@ export default function ResultsClient() {
   const [focusedAccountTrendMetric, setFocusedAccountTrendMetric] = useState<AccountTrendMetricKey>("reach")
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
 
+  const followersSeries = useMemo(() => {
+    if (focusedAccountTrendMetric !== "followers") return { ok: false as const, values: [] as number[] }
+    const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
+    const values = list
+      .map((r) => {
+        const n = typeof r?.followers_count === "number" ? r.followers_count : Number((r as any)?.followers_count)
+        return Number.isFinite(n) ? Math.floor(n) : null
+      })
+      .filter((x): x is number => typeof x === "number")
+
+    if (values.length === 1) {
+      return { ok: true as const, values: [values[0], values[0]] }
+    }
+
+    return { ok: values.length >= 1, values }
+  }, [focusedAccountTrendMetric, followersDailyRows])
+  const followersSeriesValues: number[] = followersSeries.values
+
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const igRecentLen = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media.length : 0
   const mediaLen = Array.isArray(media) ? media.length : 0
@@ -4597,6 +4615,61 @@ export default function ResultsClient() {
                             </button>
                           )
                         })}
+
+                        {focusedAccountTrendMetric === "followers" ? (
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            {(() => {
+                              const rows = Array.isArray(followersDailyRows) ? followersDailyRows : []
+                              const valuesFallback = Array.isArray(followersSeriesValues) ? followersSeriesValues : []
+
+                              const totalFollowers =
+                                rows.length >= 1
+                                  ? rows[rows.length - 1]?.followers_count
+                                  : valuesFallback.length >= 1
+                                    ? valuesFallback[valuesFallback.length - 1]
+                                    : null
+
+                              const deltaYesterday =
+                                rows.length >= 2
+                                  ? rows[rows.length - 1]!.followers_count - rows[rows.length - 2]!.followers_count
+                                  : valuesFallback.length >= 2
+                                    ? valuesFallback[valuesFallback.length - 1]! - valuesFallback[valuesFallback.length - 2]!
+                                    : null
+
+                              const totalText =
+                                typeof totalFollowers === "number" && Number.isFinite(totalFollowers)
+                                  ? Math.round(totalFollowers).toLocaleString()
+                                  : "—"
+
+                              const deltaText =
+                                typeof deltaYesterday === "number" && Number.isFinite(deltaYesterday)
+                                  ? `${deltaYesterday >= 0 ? "+" : ""}${Math.round(deltaYesterday).toLocaleString()}`
+                                  : "—"
+
+                              return (
+                                <>
+                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0">
+                                    <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">
+                                      Followers 粉絲總數
+                                    </div>
+                                    <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">
+                                      {totalText}
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 min-w-0">
+                                    <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">
+                                      Δ Yesterday 昨日增加
+                                    </div>
+                                    <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">
+                                      {deltaText}
+                                    </div>
+                                  </div>
+                                </>
+                              )
+                            })()}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -4695,27 +4768,6 @@ export default function ResultsClient() {
                     }
                     return [p0 as AccountTrendPoint, p1]
                   })()
-
-                  const followersSeries = (() => {
-                    if (!focusedIsFollowers) return { ok: false as const, values: [] as number[] }
-                    const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
-                    const values = list
-                      .map((r) => {
-                        const n =
-                          typeof r?.followers_count === "number"
-                            ? r.followers_count
-                            : Number((r as any)?.followers_count)
-                        return Number.isFinite(n) ? Math.floor(n) : null
-                      })
-                      .filter((x): x is number => typeof x === "number")
-
-                    if (values.length === 1) {
-                      return { ok: true as const, values: [values[0], values[0]] }
-                    }
-
-                    return { ok: values.length >= 1, values }
-                  })()
-                  const followersSeriesValues: number[] = followersSeries.values
 
                   const shouldShowTotalsFallback =
                     Boolean(dailySnapshotTotals) && (!Array.isArray(trendPoints) || trendPoints.length < 1)
