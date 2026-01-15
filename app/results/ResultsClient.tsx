@@ -738,6 +738,10 @@ export default function ResultsClient() {
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
+  const [followersDailyRows, setFollowersDailyRows] = useState<
+    Array<{ day: string; followers_count: number }>
+  >([])
+
   const trendPointsHashRef = useRef<string>("")
   const hashTrendPoints = useCallback((pts: AccountTrendPoint[]) => {
     const list = Array.isArray(pts) ? pts : []
@@ -1252,6 +1256,50 @@ export default function ResultsClient() {
       return null
     }
   }, [])
+
+  useEffect(() => {
+    const igUserIdStr = getCookieValue("ig_ig_id")
+    if (!supabaseBrowser || !igUserIdStr) {
+      setFollowersDailyRows([])
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabaseBrowser
+          .from("ig_daily_followers")
+          .select("day,followers_count")
+          .eq("ig_user_id", igUserIdStr)
+          .order("day", { ascending: true })
+
+        if (cancelled) return
+        if (error || !Array.isArray(data)) {
+          setFollowersDailyRows([])
+          return
+        }
+
+        const rows = (data as any[])
+          .map((r) => {
+            const day = typeof r?.day === "string" ? r.day : ""
+            const n =
+              typeof r?.followers_count === "number" ? r.followers_count : Number(r?.followers_count)
+            if (!day || !Number.isFinite(n)) return null
+            return { day, followers_count: Math.floor(n) }
+          })
+          .filter(Boolean) as Array<{ day: string; followers_count: number }>
+
+        setFollowersDailyRows(rows)
+      } catch {
+        if (cancelled) return
+        setFollowersDailyRows([])
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [supabaseBrowser])
 
   function coerceDailySnapshotPointsToArray(points: unknown): any[] {
     if (Array.isArray(points)) return points
@@ -4487,43 +4535,54 @@ export default function ResultsClient() {
 
                 {(() => {
                   const selected = selectedAccountTrendMetrics
+                  const focusedIsFollowers = focusedAccountTrendMetric === "followers"
+                  const focusedIsReach = focusedAccountTrendMetric === "reach"
+
+                  const followersDailyPoints: AccountTrendPoint[] = (() => {
+                    const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
+                    return list
+                      .map((r) => {
+                        const day = typeof r?.day === "string" ? r.day : ""
+                        const ts = day
+                          ? Date.parse(`${day}T00:00:00.000Z`)
+                          : NaN
+                        if (!day || !Number.isFinite(ts)) return null
+                        const d = new Date(ts)
+                        const label = (() => {
+                          try {
+                            return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(d)
+                          } catch {
+                            const m = String(d.getMonth() + 1).padStart(2, "0")
+                            const dd = String(d.getDate()).padStart(2, "0")
+                            return `${m}/${dd}`
+                          }
+                        })()
+                        return { t: label, ts } as AccountTrendPoint
+                      })
+                      .filter(Boolean) as AccountTrendPoint[]
+                  })()
+
                   const dataForChart = shouldShowEmptySeriesHint
                     ? ([] as AccountTrendPoint[])
-                    : Array.isArray(trendPoints) && trendPoints.length >= 1
-                      ? trendPoints
-                      : accountTrend
+                    : focusedIsFollowers
+                      ? followersDailyPoints
+                      : Array.isArray(trendPoints) && trendPoints.length >= 1
+                        ? trendPoints
+                        : accountTrend
 
                   const followersSeries = (() => {
-                    const n = dataForChart.length
-                    if (n < 1) return { ok: false as const, values: [] as number[] }
-
-                    // Real follower history requires BOTH:
-                    // - an anchor followers_count (latest)
-                    // - at least one numeric followerDelta from daily points
-                    const latest =
-                      typeof followersCount === "number" && Number.isFinite(followersCount)
-                        ? Math.max(0, Math.floor(followersCount))
-                        : null
-
-                    const deltas: Array<number | null> = dataForChart.map((p: any) => {
-                      const d = p?.followerDelta
-                      return typeof d === "number" && Number.isFinite(d) ? Math.floor(d) : null
-                    })
-
-                    const hasAnyDelta = deltas.some((d) => typeof d === "number")
-                    if (latest === null || !hasAnyDelta) return { ok: false as const, values: [] as number[] }
-
-                    const out: number[] = new Array(n).fill(latest)
-                    out[n - 1] = latest
-
-                    // Backfill backwards using the NEXT day's delta.
-                    for (let i = n - 2; i >= 0; i--) {
-                      const next = out[i + 1]
-                      const dNext = deltas[i + 1]
-                      out[i] = Math.max(0, next - (typeof dNext === "number" ? dNext : 0))
-                    }
-
-                    return { ok: true as const, values: out }
+                    if (!focusedIsFollowers) return { ok: false as const, values: [] as number[] }
+                    const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
+                    const values = list
+                      .map((r) => {
+                        const n =
+                          typeof r?.followers_count === "number"
+                            ? r.followers_count
+                            : Number((r as any)?.followers_count)
+                        return Number.isFinite(n) ? Math.floor(n) : null
+                      })
+                      .filter((x): x is number => typeof x === "number")
+                    return { ok: values.length >= 1, values }
                   })()
                   const followersSeriesValues: number[] = followersSeries.values
 
@@ -4610,8 +4669,6 @@ export default function ResultsClient() {
                     return null
                   }
 
-                  const focusedIsReach = focusedAccountTrendMetric === "reach"
-                  const focusedIsFollowers = focusedAccountTrendMetric === "followers"
                   const focusedHasSeries =
                     (focusedIsReach && hasVaryingTimeSeries("reach")) ||
                     (focusedIsFollowers && hasVaryingTimeSeries("followers"))
@@ -4662,10 +4719,11 @@ export default function ResultsClient() {
                       })
                       .filter(Boolean) as Array<{ i: number; y: number }>
 
-                    if (raw.length < 2) return { k, label: labelFor(k), color: colorFor(k), min: 0, max: 0, points: [] }
+                    if (raw.length < 1) return { k, label: labelFor(k), color: colorFor(k), min: 0, max: 0, points: [] }
+                    if (!focusedIsFollowers && raw.length < 2) return { k, label: labelFor(k), color: colorFor(k), min: 0, max: 0, points: [] }
                     const firstY = raw[0]?.y
                     const isConstant = raw.every((p) => p.y === firstY)
-                    if (isConstant) return { k, label: labelFor(k), color: colorFor(k), min: firstY ?? 0, max: firstY ?? 0, points: [] }
+                    if (!focusedIsFollowers && isConstant) return { k, label: labelFor(k), color: colorFor(k), min: firstY ?? 0, max: firstY ?? 0, points: [] }
 
                     const ys = raw.map((p) => p.y)
                     const min = ys.length ? Math.min(...ys) : 0
