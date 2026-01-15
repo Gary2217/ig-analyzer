@@ -155,6 +155,18 @@ async function safeJson(res: Response) {
   }
 }
 
+function toFiniteNumOrNull(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v
+  if (typeof v === "string") {
+    const s = v.trim()
+    if (!s) return null
+    const n = Number(s)
+    return Number.isFinite(n) ? n : null
+  }
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 function jsonError(message: string, extra?: any, status = 400) {
   return NextResponse.json(
     { ok: false, error: message, ...(extra ?? null) },
@@ -460,6 +472,41 @@ export async function POST(req: Request) {
 
     if (!pageId) return jsonError(cronMode ? "missing_ids:page_id" : "missing_cookie:ig_page_id", null, 401)
     if (!igId) return jsonError(cronMode ? "missing_ids:ig_ig_id" : "missing_cookie:ig_ig_id", null, 401)
+
+    // Best-effort: write today's followers_count snapshot (do not affect API success)
+    try {
+      const meUrl = new URL(`${GRAPH_BASE}/${encodeURIComponent(igId)}`)
+      meUrl.searchParams.set("fields", "followers_count")
+      meUrl.searchParams.set("access_token", token)
+
+      const r = await fetch(meUrl.toString(), { method: "GET", cache: "no-store" })
+      const body = await safeJson(r)
+      const followersCountRaw = (body as any)?.followers_count
+      const followersCount = toFiniteNumOrNull(followersCountRaw)
+      if (followersCount !== null) {
+        const dayStr = todayUtcDateString()
+        const capturedAt = new Date().toISOString()
+        try {
+          await supabaseServer.from("ig_daily_followers").upsert(
+            {
+              ig_user_id: String(igId),
+              day: dayStr,
+              followers_count: Math.floor(followersCount),
+              captured_at: capturedAt,
+            } as any,
+            { onConflict: "ig_user_id,day" },
+          )
+        } catch (e: any) {
+          if (__DEBUG_DAILY_SNAPSHOT__) {
+            console.log("[daily-snapshot] followers_upsert_failed", { message: e?.message ?? String(e) })
+          }
+        }
+      }
+    } catch (e: any) {
+      if (__DEBUG_DAILY_SNAPSHOT__) {
+        console.log("[daily-snapshot] followers_fetch_failed", { message: e?.message ?? String(e) })
+      }
+    }
 
     const availableDays = (await getAvailableDaysCount({ igId, pageId })) ?? null
 
