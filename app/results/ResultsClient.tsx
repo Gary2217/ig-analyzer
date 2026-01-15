@@ -789,6 +789,8 @@ export default function ResultsClient() {
   const hasSuccessfulMePayloadRef = useRef(false)
   const lastMeFetchTickRef = useRef<number | null>(null)
 
+  const hasRestoredResultsScrollRef = useRef(false)
+
   const hasFetchedDailySnapshotRef = useRef(false)
   const hasAppliedDailySnapshotTrendRef = useRef(false)
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
@@ -828,6 +830,7 @@ export default function ResultsClient() {
       return Number.isFinite(n) ? n : null
     }
     const reach = pickMetric("reach")
+
     const interactions = pickMetric("total_interactions")
     const engaged = pickMetric("accounts_engaged")
     const profileViews = pickMetric("profile_views")
@@ -840,6 +843,67 @@ export default function ResultsClient() {
 
   const igCacheId = String(((igMe as any)?.profile?.id ?? (igMe as any)?.profile?.username ?? (igMe as any)?.username ?? "me") || "me")
   const resultsCacheKey = `results_cache:${igCacheId}:7`
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const key = "results:scrollY"
+
+    const save = () => {
+      try {
+        sessionStorage.setItem(key, String(Math.max(0, Math.floor(window.scrollY || 0))))
+      } catch {
+        // ignore
+      }
+    }
+
+    window.addEventListener("beforeunload", save)
+    window.addEventListener("pagehide", save)
+    return () => {
+      window.removeEventListener("beforeunload", save)
+      window.removeEventListener("pagehide", save)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (hasRestoredResultsScrollRef.current) return
+    const key = "results:scrollY"
+    let raw: string | null = null
+    try {
+      raw = sessionStorage.getItem(key)
+    } catch {
+      raw = null
+    }
+
+    const saved = raw !== null ? Number(raw) : null
+    if (saved === null || !Number.isFinite(saved) || saved < 1) return
+
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now()
+    const tryRestore = () => {
+      if (hasRestoredResultsScrollRef.current) return
+      const maxScroll = Math.max(0, (document.documentElement?.scrollHeight ?? 0) - window.innerHeight)
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now()
+
+      if (maxScroll >= saved - 2 || now - startedAt > 1200) {
+        try {
+          window.scrollTo({ top: saved, behavior: "auto" })
+        } finally {
+          hasRestoredResultsScrollRef.current = true
+          try {
+            sessionStorage.removeItem(key)
+          } catch {
+            // ignore
+          }
+        }
+        return
+      }
+      window.requestAnimationFrame(tryRestore)
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(tryRestore)
+    })
+  }, [])
 
   useEffect(() => {
     const legacyKeySameLocale = `results_cache:${igCacheId}:7:${activeLocale}`
