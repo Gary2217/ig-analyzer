@@ -180,23 +180,21 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                       )}
                     </div>
                   </div>
+
+                  <div className="mt-3 min-w-0">
+                    <div className="text-[clamp(18px,4.8vw,28px)] font-semibold text-white leading-tight break-words line-clamp-2 [overflow-wrap:anywhere]">
+                      {resolvedDisplayName}
+                    </div>
+                    <div className="mt-0.5 text-sm text-white/65 min-w-0 truncate">@{resolvedUsername}</div>
+                    <div className="mt-2 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 whitespace-nowrap">
+                      {t("results.mediaKit.rolePill")}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="md:col-span-8 min-w-0">
-                <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.kicker")}</div>
-
-                <div className="mt-1.5 text-[clamp(22px,5.2vw,34px)] font-semibold text-white leading-tight break-words line-clamp-2">
-                  {resolvedDisplayName}
-                </div>
-
-                <div className="mt-0.5 text-sm text-white/65 min-w-0 truncate">@{resolvedUsername}</div>
-
-                <div className="mt-1.5 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 whitespace-nowrap">
-                  {t("results.mediaKit.rolePill")}
-                </div>
-
-                <div className="mt-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0">
+                <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
                   <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                   <div className="mt-1 text-xs sm:text-sm leading-snug text-white/45 min-w-0 break-words line-clamp-4 [overflow-wrap:anywhere]">
                     {resolvedAboutText}
