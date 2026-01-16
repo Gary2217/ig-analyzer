@@ -3778,8 +3778,6 @@ export default function ResultsClient() {
 
   return (
     <>
-      <div className="max-w-6xl mx-auto px-4 md:px-6 pb-4">{creatorCardPreviewCard}</div>
-
       <ConnectedGate
         notConnectedUI={
           <>
@@ -5969,41 +5967,13 @@ export default function ResultsClient() {
               </CardContent>
             </Card>
 
+            {creatorCardPreviewCard}
+
             {selectedGoal === "brandCollaborationProfile" ? (
               <section id="insights-section" className="mt-3 scroll-mt-32">
                 {renderInsightsSection("desktop")}
               </section>
             ) : null}
-
-            <div className="hidden sm:block">
-              <Card className="mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                <CardContent className="p-4">
-                  <div className="text-xs text-muted-foreground">{t("results.cta.trust")}</div>
-
-                  <h2 className="mt-2 text-lg font-semibold">{t("results.cta.title")}</h2>
-
-                  <div className="mt-2 text-xs text-muted-foreground leading-snug">
-                    {t("results.cta.intro")}
-                  </div>
-                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    <li>{t("results.cta.bullets.1")}</li>
-                    <li>{t("results.cta.bullets.2")}</li>
-                    <li>{t("results.cta.bullets.3")}</li>
-                    <li>{t("results.cta.bullets.4")}</li>
-                  </ul>
-
-                  <Button
-                    type="button"
-                    className="mt-4 bg-emerald-500 hover:bg-emerald-600"
-                    onClick={() => {
-                      window.open("https://forms.gle/REPLACE_WITH_YOUR_FORM", "_blank")
-                    }}
-                  >
-                    {t("results.cta.button")}
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
           </div>
 
           {isProModalOpen && (
