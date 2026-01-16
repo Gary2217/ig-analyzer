@@ -4596,11 +4596,61 @@ export default function ResultsClient() {
                       <div
                         className={
                           "w-full min-w-0 mt-2 flex justify-center sm:justify-end min-h-[40px] " +
-                          (focusedAccountTrendMetric === "followers" ? "opacity-100" : "opacity-0 pointer-events-none")
+                          ((focusedAccountTrendMetric === "followers" || focusedAccountTrendMetric === "reach")
+                            ? "opacity-100"
+                            : "opacity-0 pointer-events-none")
                         }
                       >
                         <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
-                          <FollowersStatChips totalFollowers={totalFollowers} deltaYesterday={deltaYesterday} growth7d={growth7d} />
+                          {(() => {
+                            const reachSeriesForStats = shouldShowEmptySeriesHint
+                              ? ([] as AccountTrendPoint[])
+                              : Array.isArray(trendPoints) && trendPoints.length >= 1
+                                ? trendPoints
+                                : accountTrend
+                            const reachValues = reachSeriesForStats
+                              .map((p) => {
+                                const v = (p as any)?.reach
+                                return typeof v === "number" && Number.isFinite(v) ? v : null
+                              })
+                              .filter((x): x is number => typeof x === "number")
+                            const reachTotal = reachValues.length >= 1 ? reachValues[reachValues.length - 1] : null
+                            const reachDeltaYesterday =
+                              reachValues.length >= 2 ? reachValues[reachValues.length - 1] - reachValues[reachValues.length - 2] : null
+                            const reachGrowth7d = (() => {
+                              const n = reachValues.length
+                              if (n < 8) return null
+                              return reachValues[n - 1] - reachValues[Math.max(0, n - 1 - 7)]
+                            })()
+
+                            return (
+                              <>
+                                <div
+                                  className={
+                                    "" +
+                                    (focusedAccountTrendMetric === "reach" ? "opacity-100" : "opacity-0 pointer-events-none")
+                                  }
+                                >
+                                  <FollowersStatChips
+                                    totalFollowers={reachTotal}
+                                    deltaYesterday={reachDeltaYesterday}
+                                    growth7d={reachGrowth7d}
+                                    labelTotal="觸及總"
+                                    labelYesterday="昨日"
+                                    label7d="近7天"
+                                  />
+                                </div>
+                                <div
+                                  className={
+                                    "" +
+                                    (focusedAccountTrendMetric === "followers" ? "opacity-100" : "opacity-0 pointer-events-none")
+                                  }
+                                >
+                                  <FollowersStatChips totalFollowers={totalFollowers} deltaYesterday={deltaYesterday} growth7d={growth7d} />
+                                </div>
+                              </>
+                            )
+                          })()}
                         </div>
                       </div>
                     </div>

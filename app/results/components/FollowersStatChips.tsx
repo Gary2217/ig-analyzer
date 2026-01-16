@@ -4,8 +4,14 @@ export function FollowersStatChips(props: {
   totalFollowers: number | null
   deltaYesterday: number | null
   growth7d: number | null
+  labelTotal?: string
+  labelYesterday?: string
+  label7d?: string
 }) {
   const { totalFollowers, deltaYesterday, growth7d } = props
+  const labelTotal = typeof props.labelTotal === "string" ? props.labelTotal : "粉絲總"
+  const labelYesterday = typeof props.labelYesterday === "string" ? props.labelYesterday : "昨日"
+  const label7d = typeof props.label7d === "string" ? props.label7d : "近7天"
 
   const totalText = useMemo(() => {
     return typeof totalFollowers === "number" && Number.isFinite(totalFollowers) ? Math.round(totalFollowers).toLocaleString() : "—"
@@ -27,17 +33,17 @@ export function FollowersStatChips(props: {
     <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
       <div className="flex flex-nowrap items-center gap-2 min-w-0 max-w-full overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:whitespace-normal">
         <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] shrink-0 max-w-full">
-          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">粉絲總</div>
+          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{labelTotal}</div>
           <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">{totalText}</div>
         </div>
 
         <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] shrink-0 max-w-full">
-          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">昨日</div>
+          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{labelYesterday}</div>
           <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">{deltaText}</div>
         </div>
 
         <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] shrink-0 max-w-full">
-          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">近7天</div>
+          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{label7d}</div>
           <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">{growth7dText}</div>
         </div>
       </div>
