@@ -60,6 +60,45 @@
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
     "proReminder": "Pro includes deeper post-level details and more actionable recommendations.",
     "proBadge": "Pro",
+    "mediaKit": {
+      "kicker": "MEDIA KIT",
+      "rolePill": "Creator / Collab",
+      "about": {
+        "title": "About",
+        "placeholder": "No bio provided yet. Click \"Complete Card Info\" above to add one."
+      },
+      "stats": {
+        "followers": "Followers"
+      },
+      "kpis": {
+        "title": "Key KPIs",
+        "labels": {
+          "engagementRate": "Engagement Rate",
+          "avgStoryViews": "Avg Story Views",
+          "avgReelViews": "Avg Reel Views",
+          "audienceGender": "Audience Gender",
+          "topAgeRange": "Top Age Range",
+          "nicheFit": "Niche Fit"
+        },
+        "noData": "No data"
+      },
+      "featured": {
+        "title": "Featured Posts",
+        "empty": "No featured posts selected yet"
+      },
+      "services": {
+        "title": "Services / Collaboration Types",
+        "emptyServices": "No services added yet",
+        "emptyCollabTypes": "No collaboration types added yet"
+      },
+      "contact": {
+        "title": "Contact",
+        "email": "Email",
+        "instagram": "Instagram",
+        "other": "Other",
+        "notProvided": "Not provided"
+      }
+    },
     "syncingTitle": "Syncing your IG data",
     "syncingHint": "This usually takes 3–10 seconds.",
     "updating": "Updating…",

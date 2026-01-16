@@ -3637,7 +3637,7 @@ export default function ResultsClient() {
               </div>
 
               <div className="md:col-span-9 min-w-0">
-                <div className="text-[10px] tracking-widest font-semibold text-white/55">MEDIA KIT</div>
+                <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.kicker")}</div>
 
                 <div className="mt-1.5 text-[clamp(22px,5.2vw,34px)] font-semibold text-white leading-tight break-words line-clamp-2">
                   {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim() ? String((igProfile as any).name).trim() : displayUsername}
@@ -3646,11 +3646,14 @@ export default function ResultsClient() {
                 <div className="mt-0.5 text-sm text-white/65 min-w-0 truncate">@{displayUsername}</div>
 
                 <div className="mt-1.5 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 whitespace-nowrap">
-                  Creator / Collab
+                  {t("results.mediaKit.rolePill")}
                 </div>
 
-                <div className="mt-2 text-xs sm:text-sm leading-snug text-white/45 line-clamp-4">
-                  No bio provided yet
+                <div className="mt-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0">
+                  <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
+                  <div className="mt-1 text-xs sm:text-sm leading-snug text-white/45 min-w-0 break-words line-clamp-4">
+                    {t("results.mediaKit.about.placeholder")}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3658,7 +3661,7 @@ export default function ResultsClient() {
             <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 sm:px-4 sm:py-3 min-w-0">
               <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Followers</div>
+                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
                   <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (typeof followers === "number" && Number.isFinite(followers) ? "text-white" : "text-white/45")}>
                     {typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : "—"}
                   </div>
@@ -3681,19 +3684,21 @@ export default function ResultsClient() {
             </div>
 
             <div className="min-w-0">
-              <div className="text-[11px] font-semibold tracking-wide text-white/70">Key KPIs</div>
+              <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.kpis.title")}</div>
               <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
-                {[
-                  "Engagement Rate",
-                  "Avg Story Views",
-                  "Avg Reel Views",
-                  "Audience Gender",
-                  "Top Age Range",
-                  "Niche Fit",
-                ].map((label) => (
-                  <div key={label} className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{label}</div>
-                    <div className="mt-0.5 text-[12px] font-semibold text-white/40 min-w-0 truncate">No data</div>
+                {(
+                  [
+                    { k: "engagementRate", label: t("results.mediaKit.kpis.labels.engagementRate") },
+                    { k: "avgStoryViews", label: t("results.mediaKit.kpis.labels.avgStoryViews") },
+                    { k: "avgReelViews", label: t("results.mediaKit.kpis.labels.avgReelViews") },
+                    { k: "audienceGender", label: t("results.mediaKit.kpis.labels.audienceGender") },
+                    { k: "topAgeRange", label: t("results.mediaKit.kpis.labels.topAgeRange") },
+                    { k: "nicheFit", label: t("results.mediaKit.kpis.labels.nicheFit") },
+                  ] as const
+                ).map((item) => (
+                  <div key={item.k} className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{item.label}</div>
+                    <div className="mt-0.5 text-[12px] font-semibold text-white/40 min-w-0 truncate">{t("results.mediaKit.kpis.noData")}</div>
                   </div>
                 ))}
               </div>
@@ -3701,8 +3706,8 @@ export default function ResultsClient() {
 
             <div className="min-w-0">
               <div className="flex items-end justify-between gap-3 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">Featured Posts</div>
-                <div className="text-[11px] text-white/45 whitespace-nowrap">No featured posts selected yet</div>
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.featured.title")}</div>
+                <div className="text-[11px] text-white/45 whitespace-nowrap">{t("results.mediaKit.featured.empty")}</div>
               </div>
 
               <div className="mt-2 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-w-0">
@@ -3718,27 +3723,27 @@ export default function ResultsClient() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-w-0">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">Services / Collaboration Types</div>
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.services.title")}</div>
                 <ul className="mt-2 list-disc pl-5 space-y-1 text-[12px] leading-snug text-white/45">
-                  <li>No services added yet</li>
-                  <li>No collaboration types added yet</li>
+                  <li>{t("results.mediaKit.services.emptyServices")}</li>
+                  <li>{t("results.mediaKit.services.emptyCollabTypes")}</li>
                 </ul>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">Contact</div>
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.contact.title")}</div>
                 <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
                   <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">Email</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">Not provided</div>
+                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">Instagram</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">Not provided</div>
+                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">Other</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">Not provided</div>
+                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.other")}</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
                   </div>
                 </div>
               </div>

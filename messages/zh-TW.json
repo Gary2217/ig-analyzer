@@ -60,6 +60,45 @@
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
     "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
     "proBadge": "專業",
+    "mediaKit": {
+      "kicker": "媒體包",
+      "rolePill": "創作者／合作",
+      "about": {
+        "title": "自我介紹",
+        "placeholder": "尚未填寫自我介紹。請點右上「完善名片資料」補上。"
+      },
+      "stats": {
+        "followers": "粉絲"
+      },
+      "kpis": {
+        "title": "關鍵指標",
+        "labels": {
+          "engagementRate": "互動率",
+          "avgStoryViews": "限動平均觀看",
+          "avgReelViews": "Reels 平均觀看",
+          "audienceGender": "受眾性別",
+          "topAgeRange": "主要年齡層",
+          "nicheFit": "利基適配"
+        },
+        "noData": "尚無資料"
+      },
+      "featured": {
+        "title": "精選貼文",
+        "empty": "尚未選擇精選貼文"
+      },
+      "services": {
+        "title": "服務／合作形式",
+        "emptyServices": "尚未新增服務項目",
+        "emptyCollabTypes": "尚未新增合作形式"
+      },
+      "contact": {
+        "title": "聯絡方式",
+        "email": "Email",
+        "instagram": "Instagram",
+        "other": "其他",
+        "notProvided": "未提供"
+      }
+    },
     "syncingTitle": "正在同步你的 IG 資料",
     "syncingHint": "通常需要 3–10 秒，請稍等一下。",
     "updating": "更新中…",
