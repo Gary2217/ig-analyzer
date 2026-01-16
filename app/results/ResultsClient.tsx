@@ -3609,70 +3609,93 @@ export default function ResultsClient() {
       </CardHeader>
 
       <CardContent className="p-4 lg:p-6">
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4 min-w-0">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="h-12 w-12 shrink-0 rounded-full overflow-hidden border border-white/10 bg-white/5">
-              {(() => {
-                const u =
-                  typeof (igProfile as any)?.profile_picture_url === "string"
-                    ? String((igProfile as any).profile_picture_url)
-                    : typeof (igMe as any)?.profile_picture_url === "string"
-                      ? String((igMe as any).profile_picture_url)
-                      : ""
-                if (!u) {
-                  return <div className="h-full w-full flex items-center justify-center text-[11px] text-white/50">—</div>
-                }
-                return (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={u} alt="avatar" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-                )
-              })()}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-5 min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0">
+            <div className="md:col-span-5 min-w-0">
+              <div className="rounded-2xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
+                <div className="aspect-[3/4] w-full">
+                  {(() => {
+                    const u =
+                      typeof (igProfile as any)?.profile_picture_url === "string"
+                        ? String((igProfile as any).profile_picture_url)
+                        : typeof (igMe as any)?.profile_picture_url === "string"
+                          ? String((igMe as any).profile_picture_url)
+                          : ""
+                    if (!u) {
+                      return <div className="h-full w-full flex items-center justify-center text-sm text-white/50">—</div>
+                    }
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={u} alt="creator" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                    )
+                  })()}
+                </div>
+              </div>
             </div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2 min-w-0">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="text-sm font-semibold text-white min-w-0 truncate">
+            <div className="md:col-span-7 min-w-0">
+              <div className="min-w-0">
+                <div className="text-[10px] tracking-widest font-semibold text-white/55">MEDIA KIT</div>
+
+                <div className="mt-2 flex items-start justify-between gap-3 min-w-0">
+                  <div className="min-w-0">
+                    <div className="text-[clamp(20px,5vw,30px)] font-semibold text-white leading-tight min-w-0 truncate">
                       {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim() ? String((igProfile as any).name).trim() : displayUsername}
                     </div>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70 shrink-0 whitespace-nowrap">
-                      Preview
-                    </span>
+                    <div className="mt-1 text-sm text-white/65 min-w-0 truncate">@{displayUsername}</div>
+
+                    <div className="mt-2 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/75 whitespace-nowrap">
+                      Creator / Collab
+                    </div>
                   </div>
-                  <div className="mt-0.5 text-[11px] text-white/60 min-w-0 truncate">@{displayUsername}</div>
-                </div>
-              </div>
 
-              <div className="mt-2 text-[12px] text-slate-200/85 leading-snug min-w-0 line-clamp-2">—</div>
+                  <span className="shrink-0 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-white/70 whitespace-nowrap">
+                    Preview
+                  </span>
+                </div>
 
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-white/70 min-w-0">
-                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                  <div className="text-white/55">分類</div>
-                  <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
+                <div className="mt-3 text-[12px] sm:text-sm text-slate-200/85 leading-snug min-w-0 line-clamp-3">
+                  —
                 </div>
-                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                  <div className="text-white/55">地區</div>
-                  <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
-                </div>
-                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                  <div className="text-white/55">聯絡</div>
-                  <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
-                </div>
-              </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 min-w-0">
-                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                  <div className="text-[10px] text-white/55 whitespace-nowrap">Followers</div>
-                  <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{formatNum(followers)}</div>
+                <div className="mt-4 grid grid-cols-3 gap-2 min-w-0">
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Followers</div>
+                    <div className="mt-1 text-[clamp(16px,4.8vw,22px)] font-semibold text-white tabular-nums whitespace-nowrap">
+                      {formatNum(followers)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
+                    <div className="mt-1 text-[clamp(16px,4.8vw,22px)] font-semibold text-white tabular-nums whitespace-nowrap">
+                      {avgLikesFormatted}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
+                    <div className="mt-1 text-[clamp(16px,4.8vw,22px)] font-semibold text-white tabular-nums whitespace-nowrap">
+                      {avgCommentsFormatted}
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                  <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
-                  <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgLikesFormatted}</div>
-                </div>
-                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                  <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
-                  <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgCommentsFormatted}</div>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 min-w-0">
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Category</div>
+                    <div className="mt-1 text-[12px] font-semibold text-white/85 min-w-0 truncate">—</div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Region</div>
+                    <div className="mt-1 text-[12px] font-semibold text-white/85 min-w-0 truncate">—</div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Contact</div>
+                    <div className="mt-1 text-[12px] font-semibold text-white/85 min-w-0 break-words">—</div>
+                  </div>
                 </div>
               </div>
             </div>
