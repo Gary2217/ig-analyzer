@@ -1116,6 +1116,15 @@ export default function ResultsClient() {
   const clampBodyMobile = "min-w-0 overflow-hidden line-clamp-2 text-[11px] leading-snug"
   const numMono = "tabular-nums whitespace-nowrap"
 
+  const CARD_SHELL = "rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm text-slate-100 overflow-hidden"
+  const CARD_SHELL_HOVER =
+    CARD_SHELL + " transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg"
+  const CARD_HEADER_ROW =
+    "border-b border-white/10 px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-start sm:items-center justify-between gap-3 min-w-0"
+  const HEADER_RIGHT = "text-[11px] sm:text-sm text-slate-400 min-w-0 overflow-hidden max-w-[45%] text-left sm:text-right"
+  const HEADER_RIGHT_ZH = "min-w-0 truncate"
+  const HEADER_RIGHT_EN = "hidden sm:block min-w-0 truncate"
+
   const igProfile = ((igMe as any)?.profile ?? igMe) as any
   const isConnected =
     cookieConnected ||
@@ -3749,9 +3758,9 @@ export default function ResultsClient() {
 
           <div className="mt-3 sm:mt-4 space-y-4 sm:space-y-4">
             {isConnected && (
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
-                  <CardTitle className="text-xl font-bold text-white">{t("results.instagram.recentPostsTitle")}</CardTitle>
+              <Card className={CARD_SHELL}>
+                <CardHeader className={CARD_HEADER_ROW}>
+                  <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.instagram.recentPostsTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 md:p-5 lg:p-5">
                   {Array.isArray(recentPosts) && recentPosts.length > 0 ? (
@@ -3810,8 +3819,8 @@ export default function ResultsClient() {
             {/* Responsive grid: 手機 1 欄；有 sidebar 時 md+ 並排，無 sidebar 則單欄撐滿 */}
             <div className="grid grid-cols-1 gap-4 lg:gap-4">
               <div className="w-full lg:col-span-2 space-y-4 lg:space-y-4">
-                <Card id="results-section-performance" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                  <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
+                <Card id="results-section-performance" className={CARD_SHELL_HOVER}>
+                  <CardHeader className={CARD_HEADER_ROW}>
                     <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.performance.cardTitle")}</CardTitle>
                     <p className="text-sm text-slate-400 mt-1 min-w-0 line-clamp-2 leading-snug">
                       {t("results.performance.radarDesc")}
@@ -3830,9 +3839,9 @@ export default function ResultsClient() {
                   </CardContent>
                 </Card>
 
-                <Card id="results-section-monetization" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                  <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
-                    <CardTitle className="text-xl font-bold">{t("results.monetization.title")}</CardTitle>
+                <Card id="results-section-monetization" className={CARD_SHELL_HOVER}>
+                  <CardHeader className={CARD_HEADER_ROW}>
+                    <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.monetization.title")}</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 md:p-5 lg:p-5">
                     <p className="text-xs text-slate-400 mb-3">
@@ -3894,9 +3903,9 @@ export default function ResultsClient() {
                 </Card>
 
                 <section id="account-insights-section" className="scroll-mt-40">
-                  <Card className="mt-8 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                    <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
-                      <CardTitle className="text-xl font-bold">{t("results.insights.title")}</CardTitle>
+                  <Card className={"mt-8 " + CARD_SHELL_HOVER}>
+                    <CardHeader className={CARD_HEADER_ROW}>
+                      <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.insights.title")}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 lg:p-6">
                       <div className="space-y-2 sm:space-y-3">
@@ -3942,9 +3951,9 @@ export default function ResultsClient() {
 
               {hasSidebar && (
                 <div className="lg:col-span-1 w-full">
-                  <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg">
-                    <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
-                      <CardTitle className="text-base">{t("results.sidebar.title")}</CardTitle>
+                  <Card className={"lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] " + CARD_SHELL_HOVER}>
+                    <CardHeader className={CARD_HEADER_ROW}>
+                      <CardTitle className="text-base text-white min-w-0 truncate">{t("results.sidebar.title")}</CardTitle>
                       <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
                         {t("results.sidebar.subtitle")} @{displayUsername}
                       </p>
@@ -3968,9 +3977,9 @@ export default function ResultsClient() {
               )}
             </div>
 
-            <Card id="next-steps-section" className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:border-white/20 hover:shadow-lg scroll-mt-40">
-              <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
-                <CardTitle className="text-xl font-bold">{t("results.next.title")}</CardTitle>
+            <Card id="next-steps-section" className={"scroll-mt-40 " + CARD_SHELL_HOVER}>
+              <CardHeader className={CARD_HEADER_ROW}>
+                <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.next.title")}</CardTitle>
                 <p className="text-sm text-slate-400 mt-1">
                   {t("results.next.subtitle")}
                 </p>
@@ -4135,7 +4144,7 @@ export default function ResultsClient() {
               </CardContent>
             </Card>
 
-            <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+            <Card className={"mt-3 " + CARD_SHELL}>
               <CardContent className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 text-center">
                   <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
@@ -5518,11 +5527,11 @@ export default function ResultsClient() {
             <Card
               id="top-posts-section"
               data-testid="top-performing-posts"
-              className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm scroll-mt-40 overflow-hidden"
+              className={"mt-3 scroll-mt-40 " + CARD_SHELL}
             >
-              <CardHeader className="border-b border-white/10 px-3 pt-4 pb-1 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-center justify-between gap-3 min-w-0">
+              <CardHeader className={CARD_HEADER_ROW}>
                 <div className="min-w-0">
-                  <CardTitle className="text-sm text-white truncate">{t("results.topPosts.title")}</CardTitle>
+                  <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.topPosts.title")}</CardTitle>
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-2">
                     {t("results.topPosts.description")}
                   </p>
