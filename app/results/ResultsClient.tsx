@@ -3977,169 +3977,104 @@ export default function ResultsClient() {
               )}
             </div>
 
-            <Card id="next-steps-section" className={"scroll-mt-40 " + CARD_SHELL_HOVER}>
+            <Card id="creator-card-preview" className={"scroll-mt-40 " + CARD_SHELL_HOVER}>
               <CardHeader className={CARD_HEADER_ROW}>
-                <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.next.title")}</CardTitle>
-                <p className="text-sm text-slate-400 mt-1">
-                  {t("results.next.subtitle")}
-                </p>
-              </CardHeader>
-              <CardContent className="p-4 lg:p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {(() => {
-                    const status =
-                      safeResult.contentConsistency === "Consistent"
-                        ? "good"
-                        : safeResult.contentConsistency === "Mixed"
-                        ? "warning"
-                        : "risk"
-                    const tone = metricTone(status)
-                    const priority = nextPriorityLabel(status)
-                    return (
-                      <Card
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
-                          setActiveNextId("next-1")
-                          window.setTimeout(() => scrollToId("next-1"), 0)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            setActiveNextId("next-1")
-                            window.setTimeout(() => scrollToId("next-1"), 0)
-                          }
-                        }}
-                        className={`rounded-xl border border-white/10 bg-white/5 cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
-                          activeNextId === "next-1" ? "ring-2 ring-blue-500/40" : ""
-                        }`}
-                      >
-                        <CardContent className="p-4 h-full">
-                          <div className="flex items-center justify-between w-full">
-                            <div className="text-sm font-medium text-white">{t("results.next.step1")}</div>
-                            <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
-                            >
-                              {priority}
-                            </span>
-                          </div>
-                          <div className="mt-3 text-sm text-slate-300 leading-snug">{t("results.next.desc1")}</div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })()}
-
-                  {(() => {
-                    const status = engagementStatus
-                    const tone = metricTone(status)
-                    const priority = nextPriorityLabel(status)
-                    return (
-                      <Card
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
-                          setActiveNextId("next-2")
-                          window.setTimeout(() => scrollToId("next-2"), 0)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            setActiveNextId("next-2")
-                            window.setTimeout(() => scrollToId("next-2"), 0)
-                          }
-                        }}
-                        className={`rounded-xl border border-white/10 bg-white/5 cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
-                          activeNextId === "next-2" ? "ring-2 ring-blue-500/40" : ""
-                        }`}
-                      >
-                        <CardContent className="p-4 h-full">
-                          <div className="flex items-center justify-between w-full">
-                            <div className="text-sm font-medium text-white">{t("results.next.step2")}</div>
-                            <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
-                            >
-                              {priority}
-                            </span>
-                          </div>
-                          <div className="mt-3 text-sm text-slate-300 leading-snug">{t("results.next.desc2")}</div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })()}
-
-                  {(() => {
-                    const status = isSubscribed ? "good" : "warning"
-                    const tone = metricTone(status)
-                    const priority = status === "warning" ? t("results.priority.high") : t("results.priority.maintain")
-                    return (
-                      <Card
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
-                          setActiveNextId("next-3")
-                          window.setTimeout(() => scrollToId("next-3"), 0)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            setActiveNextId("next-3")
-                            window.setTimeout(() => scrollToId("next-3"), 0)
-                          }
-                        }}
-                        className={`rounded-xl border border-white/10 bg-white/5 cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
-                          activeNextId === "next-3" ? "ring-2 ring-blue-500/40" : ""
-                        }`}
-                      >
-                        <CardContent className="p-4 h-full">
-                          <div className="flex items-center justify-between w-full">
-                            <div className="text-sm font-medium text-white">{t("results.next.step3")}</div>
-                            <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full border border-white/10 ${tone.text} ${tone.bg}`}
-                            >
-                              {priority}
-                            </span>
-                          </div>
-                          <div className="mt-3 text-sm text-slate-300 leading-snug">{t("results.next.desc3")}</div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })()}
+                <div className="min-w-0">
+                  <CardTitle className="text-xl font-bold text-white min-w-0 truncate">名片預覽</CardTitle>
+                  <p className="mt-0.5 text-[11px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">品牌商將看到這張名片</p>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <Card
-                    id="next-1"
-                    className={`rounded-xl border border-white/10 bg-white/5 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
-                      activeNextId === "next-1" ? "ring-2 ring-blue-500/40" : ""
-                    }`}
+                <div className="shrink-0 flex items-center gap-2">
+                  <Link
+                    href={`/${activeLocale}/creator-card`}
+                    className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors whitespace-nowrap"
                   >
-                    <CardContent className="p-4">
-                      <div className="text-sm font-semibold text-white">{t("results.next.s1.title")}</div>
-                      <div className="mt-2 text-sm text-slate-300 leading-snug">{t("results.next.s1.line1")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.next.s1.line2")}</div>
-                    </CardContent>
-                  </Card>
-                  <Card
-                    id="next-2"
-                    className={`rounded-xl border border-white/10 bg-white/5 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
-                      activeNextId === "next-2" ? "ring-2 ring-blue-500/40" : ""
-                    }`}
+                    完善名片資料
+                  </Link>
+                  <button
+                    type="button"
+                    disabled
+                    className="hidden sm:inline-flex items-center justify-center rounded-full border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
+                    title={t("results.nextActions.cta.comingSoon")}
                   >
-                    <CardContent className="p-4">
-                      <div className="text-sm font-semibold text-white">{t("results.next.s2.title")}</div>
-                      <div className="mt-2 text-sm text-slate-300 leading-snug">{t("results.next.s2.line1")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.next.s2.line2")}</div>
-                    </CardContent>
-                  </Card>
-                  <Card
-                    id="next-3"
-                    className={`rounded-xl border border-white/10 bg-white/5 transition-transform duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg ${
-                      activeNextId === "next-3" ? "ring-2 ring-blue-500/40" : ""
-                    }`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="text-sm font-semibold text-white">{t("results.next.s3.title")}</div>
-                      <div className="mt-2 text-sm text-slate-300 leading-snug">{t("results.next.s3.line1")}</div>
-                      <div className="mt-1 text-sm text-slate-300 leading-snug">{t("results.next.s3.line2")}</div>
-                    </CardContent>
-                  </Card>
+                    {t("results.nextActions.cta.exportMediaKit")}
+                  </button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-4 lg:p-6">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 min-w-0">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="h-12 w-12 shrink-0 rounded-full overflow-hidden border border-white/10 bg-white/5">
+                      {(() => {
+                        const u =
+                          typeof (igProfile as any)?.profile_picture_url === "string"
+                            ? String((igProfile as any).profile_picture_url)
+                            : typeof (igMe as any)?.profile_picture_url === "string"
+                              ? String((igMe as any).profile_picture_url)
+                              : ""
+                        if (!u) {
+                          return <div className="h-full w-full flex items-center justify-center text-[11px] text-white/50">—</div>
+                        }
+                        return (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u} alt="avatar" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                        )
+                      })()}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2 min-w-0">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="text-sm font-semibold text-white min-w-0 truncate">
+                              {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim()
+                                ? String((igProfile as any).name).trim()
+                                : displayUsername}
+                            </div>
+                            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70 shrink-0 whitespace-nowrap">
+                              Preview
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-white/60 min-w-0 truncate">@{displayUsername}</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-[12px] text-slate-200/85 leading-snug min-w-0 line-clamp-2">
+                        —
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-white/70 min-w-0">
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                          <div className="text-white/55">分類</div>
+                          <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                          <div className="text-white/55">地區</div>
+                          <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                          <div className="text-white/55">聯絡</div>
+                          <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-2 min-w-0">
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                          <div className="text-[10px] text-white/55 whitespace-nowrap">Followers</div>
+                          <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{formatNum(followers)}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                          <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
+                          <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgLikesFormatted}</div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                          <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
+                          <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgCommentsFormatted}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -6202,13 +6137,6 @@ export default function ResultsClient() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Link
-                      href="#creator-card-section"
-                      className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors"
-                    >
-                      {t("results.nextActions.cta.buildCard")}
-                    </Link>
-
                     <button
                       type="button"
                       disabled
