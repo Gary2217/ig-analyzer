@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname, localePathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
+import { useInstagramMe } from "../../lib/useInstagramMe"
 
 type CreatorCardPayload = {
   handle?: string | null
@@ -107,6 +108,8 @@ export default function CreatorCardPage() {
   const [saveOk, setSaveOk] = useState(false)
 
   const [showNewCardHint, setShowNewCardHint] = useState(false)
+
+  const meQuery = useInstagramMe({ enabled: true })
 
   const [baseCard, setBaseCard] = useState<CreatorCardPayload | null>(null)
   const [deliverables, setDeliverables] = useState<string[]>([])
@@ -306,6 +309,32 @@ export default function CreatorCardPage() {
     const max = 20
     return t("creatorCardEditor.pastCollaborations.helper").replace("{count}", String(pastCollaborations.length)).replace("{max}", String(max))
   }, [pastCollaborations.length, t])
+
+  const igMe = meQuery.data as any
+  const igProfile = ((igMe as any)?.profile ?? igMe) as any
+
+  const displayUsername = useMemo(() => {
+    const raw = typeof igProfile?.username === "string" ? String(igProfile.username).trim() : ""
+    return raw
+  }, [igProfile?.username])
+
+  const displayName = useMemo(() => {
+    const raw = (igProfile?.name ?? igProfile?.display_name ?? igProfile?.displayName) as any
+    if (typeof raw === "string" && raw.trim()) return raw.trim()
+    return displayUsername ? displayUsername : "—"
+  }, [displayUsername, igProfile?.displayName, igProfile?.display_name, igProfile?.name])
+
+  const finiteNumOrNull = useCallback((v: unknown): number | null => {
+    const n = typeof v === "number" ? v : Number(v)
+    return Number.isFinite(n) ? n : null
+  }, [])
+
+  const formatNum = useCallback((n: number | null) => (n === null ? "—" : n.toLocaleString()), [])
+
+  const followersText = useMemo(() => {
+    const followers = finiteNumOrNull(igProfile?.followers_count)
+    return typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : null
+  }, [finiteNumOrNull, formatNum, igProfile?.followers_count])
 
   const loadingSkeleton = (
     <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0 animate-pulse">
@@ -516,13 +545,19 @@ export default function CreatorCardPage() {
             <CreatorCardPreview
               t={t}
               className="border-white/10 bg-transparent"
-              displayName={baseCard?.displayName ?? null}
-              username={baseCard?.handle ?? null}
+              headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+              username={displayUsername || null}
+              profileImageUrl={(() => {
+                const u = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                return u ? u : null
+              })()}
+              displayName={displayName}
               aboutText={baseCard?.audience ?? null}
               primaryNiche={baseCard?.niche ?? null}
               collaborationNiches={collaborationNiches}
               deliverables={deliverables}
               pastCollaborations={pastCollaborations}
+              followersText={followersText}
               highlightTarget={highlight}
             />
           </div>

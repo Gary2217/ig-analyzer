@@ -137,13 +137,22 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   const formatsHighlight = highlightClass(highlightTarget === "formats")
   const brandsHighlight = highlightClass(highlightTarget === "brands")
 
+  const hasFollowers = typeof followersText === "string" && followersText.trim().length > 0
+  const hasAvgLikes = typeof avgLikesText === "string" && avgLikesText.trim().length > 0
+  const hasAvgComments = typeof avgCommentsText === "string" && avgCommentsText.trim().length > 0
+  const showStatsRow = hasFollowers || hasAvgLikes || hasAvgComments
+
+  const hasEngagementRate = typeof engagementRateText === "string" && engagementRateText.trim().length > 0
+  const hasReach = typeof reachText === "string" && reachText.trim().length > 0
+  const showKpiGrid = hasEngagementRate || hasReach
+
   return (
     <Card id={id} className={"min-w-0 " + (className ?? "")}>
       <CardHeader className={headerClassName}>
         <div className="flex items-start justify-between gap-3 min-w-0">
           <div className="min-w-0">
-            <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.creatorCardPreview.title")}</CardTitle>
-            <p className="mt-0.5 text-[11px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">{t("results.creatorCardPreview.subtitle")}</p>
+            <CardTitle className="text-base sm:text-xl font-bold text-white min-w-0 truncate leading-snug sm:leading-tight">{t("results.creatorCardPreview.title")}</CardTitle>
+            <p className="mt-0 text-[10px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">{t("results.creatorCardPreview.subtitle")}</p>
           </div>
           {actions ? <div className="shrink-0">{actions}</div> : null}
         </div>
@@ -214,89 +223,79 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 sm:px-4 sm:py-3 min-w-0">
-              <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
-                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (followersText ? "text-white" : "text-white/45")}>
-                    {followersText ? followersText : "—"}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0 pl-3 sm:pl-4">
-                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgLikesLabel || "—"}</div>
-                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgLikesText ? "text-white" : "text-white/45")}>
-                    {avgLikesText ? avgLikesText : "—"}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0 pl-3 sm:pl-4">
-                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgCommentsLabel || "—"}</div>
-                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgCommentsText ? "text-white" : "text-white/45")}>
-                    {avgCommentsText ? avgCommentsText : "—"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.kpis.title")}</div>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
-                {(
-                  [
-                    {
-                      k: "engagementRate",
-                      label: t("results.mediaKit.kpis.labels.engagementRate"),
-                      value: engagementRateText,
-                      isNumeric: true,
-                    },
-                    {
-                      k: "avgViews",
-                      label: t("results.mediaKit.kpis.labels.avgViews"),
-                      value: null,
-                      isNumeric: true,
-                    },
-                    {
-                      k: "avgReach",
-                      label: t("results.mediaKit.kpis.labels.avgReach"),
-                      value: reachText,
-                      isNumeric: true,
-                    },
-                    {
-                      k: "topLocation",
-                      label: t("results.mediaKit.kpis.labels.topLocation"),
-                      value: null,
-                      isNumeric: false,
-                    },
-                    {
-                      k: "genderSplit",
-                      label: t("results.mediaKit.kpis.labels.genderSplit"),
-                      value: null,
-                      isNumeric: false,
-                    },
-                    {
-                      k: "topAgeRange",
-                      label: t("results.mediaKit.kpis.labels.topAgeRange"),
-                      value: null,
-                      isNumeric: false,
-                    },
-                  ] as const
-                ).map((item) => (
-                  <div key={item.k} className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{item.label}</div>
-                    <div
-                      className={
-                        "mt-0.5 text-[12px] font-semibold min-w-0 truncate " +
-                        (item.value ? "text-white/80" : "text-white/40") +
-                        (item.isNumeric ? " tabular-nums whitespace-nowrap" : "")
-                      }
-                    >
-                      {item.value ? item.value : t("results.mediaKit.kpis.noData")}
+            {showStatsRow ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 sm:px-4 sm:py-3 min-w-0">
+                <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
+                  {hasFollowers ? (
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
+                      <div className="mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap text-white">
+                        {followersText}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ) : null}
+
+                  {hasAvgLikes ? (
+                    <div className={(hasFollowers ? "flex-1 min-w-0 pl-3 sm:pl-4" : "flex-1 min-w-0") + (!hasFollowers ? " border-l-0" : "") }>
+                      <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgLikesLabel || "—"}</div>
+                      <div className="mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap text-white">
+                        {avgLikesText}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {hasAvgComments ? (
+                    <div className={(hasFollowers || hasAvgLikes ? "flex-1 min-w-0 pl-3 sm:pl-4" : "flex-1 min-w-0") + (!hasFollowers && !hasAvgLikes ? " border-l-0" : "") }>
+                      <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgCommentsLabel || "—"}</div>
+                      <div className="mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap text-white">
+                        {avgCommentsText}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            ) : null}
+
+            {showKpiGrid ? (
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.kpis.title")}</div>
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
+                  {(
+                    [
+                      hasEngagementRate
+                        ? {
+                            k: "engagementRate" as const,
+                            label: t("results.mediaKit.kpis.labels.engagementRate"),
+                            value: engagementRateText,
+                            isNumeric: true,
+                          }
+                        : null,
+                      hasReach
+                        ? {
+                            k: "avgReach" as const,
+                            label: t("results.mediaKit.kpis.labels.avgReach"),
+                            value: reachText,
+                            isNumeric: true,
+                          }
+                        : null,
+                    ].filter(Boolean) as Array<{ k: string; label: string; value: string | null; isNumeric: boolean }>
+                  ).map((item) => (
+                    <div key={item.k} className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 min-w-0">
+                      <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{item.label}</div>
+                      <div
+                        className={
+                          "mt-0.5 text-[12px] font-semibold min-w-0 truncate " +
+                          (item.value ? "text-white/80" : "text-white/40") +
+                          (item.isNumeric ? " tabular-nums whitespace-nowrap" : "")
+                        }
+                      >
+                        {item.value ? item.value : t("results.mediaKit.kpis.noData")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="min-w-0">
               <div className="flex items-end justify-between gap-3 min-w-0">
