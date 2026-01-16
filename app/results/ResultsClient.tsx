@@ -3610,11 +3610,12 @@ export default function ResultsClient() {
 
       <CardContent className="p-4 lg:p-6">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
-          <div className="flex flex-col gap-5 min-w-0">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 min-w-0">
-              <div className="md:col-span-5 min-w-0">
-                <div className="rounded-2xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
-                  <div className="aspect-[3/4] w-full">
+          <div className="flex flex-col gap-4 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0">
+              <div className="md:col-span-3 min-w-0">
+                <div className="mx-auto w-full max-w-[220px] md:max-w-[240px] lg:max-w-[280px]">
+                  <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
+                    <div className="aspect-[3/4] w-full">
                     {(() => {
                       const u =
                         typeof (igProfile as any)?.profile_picture_url === "string"
@@ -3630,31 +3631,32 @@ export default function ResultsClient() {
                         <img src={u} alt="creator" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
                       )
                     })()}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="md:col-span-7 min-w-0">
+              <div className="md:col-span-9 min-w-0">
                 <div className="text-[10px] tracking-widest font-semibold text-white/55">MEDIA KIT</div>
 
-                <div className="mt-2 text-[clamp(22px,5.2vw,34px)] font-semibold text-white leading-tight break-words">
+                <div className="mt-1.5 text-[clamp(22px,5.2vw,34px)] font-semibold text-white leading-tight break-words line-clamp-2">
                   {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim() ? String((igProfile as any).name).trim() : displayUsername}
                 </div>
 
-                <div className="mt-1 text-sm text-white/65 min-w-0 truncate">@{displayUsername}</div>
+                <div className="mt-0.5 text-sm text-white/65 min-w-0 truncate">@{displayUsername}</div>
 
-                <div className="mt-2 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 whitespace-nowrap">
+                <div className="mt-1.5 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 whitespace-nowrap">
                   Creator / Collab
                 </div>
 
-                <div className="mt-3 text-[12px] sm:text-sm leading-snug text-white/50 line-clamp-4">
+                <div className="mt-2 text-xs sm:text-sm leading-snug text-white/45 line-clamp-4">
                   No bio provided yet
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 sm:px-4 sm:py-3.5 min-w-0">
-              <div className="flex items-stretch justify-between gap-3 min-w-0">
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 sm:px-4 sm:py-3 min-w-0">
+              <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Followers</div>
                   <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (typeof followers === "number" && Number.isFinite(followers) ? "text-white" : "text-white/45")}>
@@ -3662,18 +3664,14 @@ export default function ResultsClient() {
                   </div>
                 </div>
 
-                <div className="w-px bg-white/10" />
-
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pl-3 sm:pl-4">
                   <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
                   <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgLikesFormatted && avgLikesFormatted !== "—" ? "text-white" : "text-white/45")}>
                     {avgLikesFormatted && avgLikesFormatted !== "—" ? avgLikesFormatted : "—"}
                   </div>
                 </div>
 
-                <div className="w-px bg-white/10" />
-
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pl-3 sm:pl-4">
                   <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
                   <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgCommentsFormatted && avgCommentsFormatted !== "—" ? "text-white" : "text-white/45")}>
                     {avgCommentsFormatted && avgCommentsFormatted !== "—" ? avgCommentsFormatted : "—"}
@@ -3693,9 +3691,9 @@ export default function ResultsClient() {
                   "Top Age Range",
                   "Niche Fit",
                 ].map((label) => (
-                  <div key={label} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                  <div key={label} className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 min-w-0">
                     <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{label}</div>
-                    <div className="mt-1 text-[12px] font-semibold text-white/45 min-w-0 truncate">No data</div>
+                    <div className="mt-0.5 text-[12px] font-semibold text-white/40 min-w-0 truncate">No data</div>
                   </div>
                 ))}
               </div>
@@ -3711,7 +3709,7 @@ export default function ResultsClient() {
                 {Array.from({ length: 5 }).map((_, idx) => (
                   <div
                     key={idx}
-                    className="h-16 w-16 shrink-0 rounded-xl border border-white/10 bg-black/20"
+                    className="h-12 w-12 shrink-0 rounded-lg border border-white/10 bg-black/20"
                     aria-hidden="true"
                   />
                 ))}
@@ -3721,7 +3719,7 @@ export default function ResultsClient() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-w-0">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
                 <div className="text-[11px] font-semibold tracking-wide text-white/70">Services / Collaboration Types</div>
-                <ul className="mt-2 list-disc pl-5 space-y-1 text-[12px] leading-snug text-white/50">
+                <ul className="mt-2 list-disc pl-5 space-y-1 text-[12px] leading-snug text-white/45">
                   <li>No services added yet</li>
                   <li>No collaboration types added yet</li>
                 </ul>
@@ -3732,15 +3730,15 @@ export default function ResultsClient() {
                 <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">Email</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words">Not provided</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">Not provided</div>
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">Instagram</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words">Not provided</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">Not provided</div>
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">Other</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words">Not provided</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">Not provided</div>
                   </div>
                 </div>
               </div>
