@@ -4497,9 +4497,9 @@ export default function ResultsClient() {
             <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardHeader className="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-start sm:items-center justify-between gap-3 min-w-0">
                 <CardTitle className="text-xl font-bold text-white min-w-0 truncate shrink-0">{t("results.trend.title")}</CardTitle>
-                <div className="text-[11px] sm:text-sm text-slate-400 min-w-0 leading-snug text-left sm:text-right overflow-hidden">
-                  <div className="min-w-0 break-words overflow-wrap-anywhere">帳號互動趨勢</div>
-                  <div className="min-w-0 break-words overflow-wrap-anywhere">Account engagement trend</div>
+                <div className="text-[11px] sm:text-sm text-slate-400 min-w-0 leading-snug text-left sm:text-right overflow-hidden max-w-[45%]">
+                  <div className="min-w-0 truncate">帳號互動趨勢</div>
+                  <div className="min-w-0 truncate hidden sm:block">Account engagement trend</div>
                 </div>
               </CardHeader>
               <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
@@ -4518,13 +4518,11 @@ export default function ResultsClient() {
                   <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
                     <div className="shrink-0">
                       <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 whitespace-nowrap">
-                        <span className="tabular-nums">已選 {trendFetchStatus.lastDays ?? 90} 天</span>
-                        <span className="mx-1 opacity-50">|</span>
-                        <span className="tabular-nums">Selected {trendFetchStatus.lastDays ?? 90} days</span>
+                        <span className="tabular-nums">90天數據</span>
                       </span>
                     </div>
 
-                    <div className="shrink-0 tabular-nums min-w-0 overflow-hidden text-ellipsis text-[10px] text-white/45 sm:text-xs sm:text-white/55 break-words overflow-wrap-anywhere whitespace-normal sm:whitespace-nowrap">
+                    <div className="hidden sm:inline-flex shrink-0 tabular-nums text-xs text-white/55 whitespace-nowrap">
                       <span>目前可用 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} 天</span>
                       <span className="mx-1 opacity-50">|</span>
                       <span>Available {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} days</span>
@@ -4564,17 +4562,16 @@ export default function ResultsClient() {
                         })}
                       </div>
 
-                      {focusedAccountTrendMetric === "followers" ? (
-                        <div className="w-full min-w-0 mt-2 flex justify-center sm:justify-end">
-                          <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
-                            <FollowersStatChips
-                              totalFollowers={totalFollowers}
-                              deltaYesterday={deltaYesterday}
-                              growth7d={growth7d}
-                            />
-                          </div>
+                      <div
+                        className={
+                          "w-full min-w-0 mt-2 flex justify-center sm:justify-end min-h-[40px] " +
+                          (focusedAccountTrendMetric === "followers" ? "opacity-100" : "opacity-0 pointer-events-none")
+                        }
+                      >
+                        <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
+                          <FollowersStatChips totalFollowers={totalFollowers} deltaYesterday={deltaYesterday} growth7d={growth7d} />
                         </div>
-                      ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
