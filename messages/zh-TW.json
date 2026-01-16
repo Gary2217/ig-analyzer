@@ -68,6 +68,10 @@
     },
     "errors": {
       "notConnected": "請先連結 Instagram。",
+      "supabaseInvalidKey": {
+        "title": "伺服器設定錯誤",
+        "body": "此部署的 Supabase 金鑰缺失或無效。請設定環境變數並重新部署。"
+      },
       "loadFailed": "載入名片資料失敗。",
       "saveFailed": "儲存失敗，請再試一次。"
     },

@@ -20,6 +20,7 @@ import { useInstagramMe } from "../lib/useInstagramMe"
 import { extractIgUserIdFromInsightsId } from "../lib/instagram"
 import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
 import { FollowersStatChips } from "./components/FollowersStatChips"
+import { CreatorCardPreview } from "../components/CreatorCardPreview"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 
@@ -3646,319 +3647,72 @@ export default function ResultsClient() {
   })()
 
   const creatorCardPreviewCard = (
-    <Card id="creator-card-preview" className={"mt-3 scroll-mt-40 " + CARD_SHELL_HOVER}>
-      <CardHeader className={CARD_HEADER_ROW}>
-        <div className="min-w-0">
-          <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.creatorCardPreview.title")}</CardTitle>
-          <p className="mt-0.5 text-[11px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">{t("results.creatorCardPreview.subtitle")}</p>
-        </div>
-
-        <div className="shrink-0 flex items-center gap-2">
-          <Link
-            href={`/${activeLocale}/creator-card`}
-            className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors whitespace-nowrap"
-          >
-            {t("results.creatorCardPreview.actions.complete")}
-          </Link>
-          <button
-            type="button"
-            disabled
-            className="hidden sm:inline-flex items-center justify-center rounded-full border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
-            title={t("results.nextActions.cta.comingSoon")}
-          >
-            {t("results.nextActions.cta.exportMediaKit")}
-          </button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-4 lg:p-6">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
-          <div className="flex flex-col gap-4 min-w-0">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0">
-              <div className="md:col-span-4 min-w-0">
-                <div className="mx-auto w-full max-w-[240px] md:max-w-[280px] lg:max-w-[320px]">
-                  <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
-                    <div className="aspect-[3/4] w-full">
-                    {(() => {
-                      const u =
-                        typeof (igProfile as any)?.profile_picture_url === "string"
-                          ? String((igProfile as any).profile_picture_url)
-                          : typeof (igMe as any)?.profile_picture_url === "string"
-                            ? String((igMe as any).profile_picture_url)
-                            : ""
-                      if (!u) {
-                        return <div className="h-full w-full flex items-center justify-center text-sm text-white/50">—</div>
-                      }
-                      return (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={u} alt="creator" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-                      )
-                    })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="md:col-span-8 min-w-0">
-                <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.kicker")}</div>
-
-                <div className="mt-1.5 text-[clamp(22px,5.2vw,34px)] font-semibold text-white leading-tight break-words line-clamp-2">
-                  {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim() ? String((igProfile as any).name).trim() : displayUsername}
-                </div>
-
-                <div className="mt-0.5 text-sm text-white/65 min-w-0 truncate">@{displayUsername}</div>
-
-                <div className="mt-1.5 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 whitespace-nowrap">
-                  {t("results.mediaKit.rolePill")}
-                </div>
-
-                <div className="mt-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0">
-                  <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
-                  <div className="mt-1 text-xs sm:text-sm leading-snug text-white/45 min-w-0 break-words line-clamp-4">
-                    {t("results.mediaKit.about.placeholder")}
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
-                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">
-                        {typeof (creatorCard as any)?.niche === "string" && String((creatorCard as any).niche).trim()
-                          ? String((creatorCard as any).niche).trim()
-                          : t("results.mediaKit.common.noData")}
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
-                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{t("results.mediaKit.common.noData")}</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationNiches.label")}</div>
-                    <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 break-words line-clamp-2">
-                      {(() => {
-                        const raw =
-                          (creatorCard as any)?.collaborationNiches ?? (creatorCard as any)?.collaboration_niches ?? []
-                        const ids = normalizeStringArray(raw, 20)
-                        if (ids.length === 0) return t("results.mediaKit.collaborationNiches.empty")
-
-                        const labelMap: Record<string, string> = {
-                          beauty: t("creatorCardEditor.niches.options.beauty"),
-                          fashion: t("creatorCardEditor.niches.options.fashion"),
-                          food: t("creatorCardEditor.niches.options.food"),
-                          travel: t("creatorCardEditor.niches.options.travel"),
-                          parenting: t("creatorCardEditor.niches.options.parenting"),
-                          fitness: t("creatorCardEditor.niches.options.fitness"),
-                          tech: t("creatorCardEditor.niches.options.tech"),
-                          finance: t("creatorCardEditor.niches.options.finance"),
-                          education: t("creatorCardEditor.niches.options.education"),
-                          gaming: t("creatorCardEditor.niches.options.gaming"),
-                          lifestyle: t("creatorCardEditor.niches.options.lifestyle"),
-                          pets: t("creatorCardEditor.niches.options.pets"),
-                          home: t("creatorCardEditor.niches.options.home"),
-                          ecommerce: t("creatorCardEditor.niches.options.ecommerce"),
-                        }
-
-                        const labels = ids.map((id) => labelMap[id] || id)
-                        return labels.join(" · ")
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 sm:px-4 sm:py-3 min-w-0">
-              <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
-                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (typeof followers === "number" && Number.isFinite(followers) ? "text-white" : "text-white/45")}>
-                    {typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : "—"}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0 pl-3 sm:pl-4">
-                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
-                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgLikesFormatted && avgLikesFormatted !== "—" ? "text-white" : "text-white/45")}>
-                    {avgLikesFormatted && avgLikesFormatted !== "—" ? avgLikesFormatted : "—"}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0 pl-3 sm:pl-4">
-                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
-                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgCommentsFormatted && avgCommentsFormatted !== "—" ? "text-white" : "text-white/45")}>
-                    {avgCommentsFormatted && avgCommentsFormatted !== "—" ? avgCommentsFormatted : "—"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.kpis.title")}</div>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
-                {(
-                  [
-                    {
-                      k: "engagementRate",
-                      label: t("results.mediaKit.kpis.labels.engagementRate"),
-                      value:
-                        typeof engagementRatePctFormatted === "string" && engagementRatePctFormatted !== "—"
-                          ? engagementRatePctFormatted
-                          : null,
-                      isNumeric: true,
-                    },
-                    {
-                      k: "avgViews",
-                      label: t("results.mediaKit.kpis.labels.avgViews"),
-                      value: null,
-                      isNumeric: true,
-                    },
-                    {
-                      k: "avgReach",
-                      label: t("results.mediaKit.kpis.labels.avgReach"),
-                      value:
-                        typeof dailySnapshotTotals?.reach === "number" && Number.isFinite(dailySnapshotTotals.reach)
-                          ? formatNum(dailySnapshotTotals.reach)
-                          : null,
-                      isNumeric: true,
-                    },
-                    {
-                      k: "topLocation",
-                      label: t("results.mediaKit.kpis.labels.topLocation"),
-                      value: null,
-                      isNumeric: false,
-                    },
-                    {
-                      k: "genderSplit",
-                      label: t("results.mediaKit.kpis.labels.genderSplit"),
-                      value: null,
-                      isNumeric: false,
-                    },
-                    {
-                      k: "topAgeRange",
-                      label: t("results.mediaKit.kpis.labels.topAgeRange"),
-                      value: null,
-                      isNumeric: false,
-                    },
-                  ] as const
-                ).map((item) => (
-                  <div key={item.k} className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{item.label}</div>
-                    <div
-                      className={
-                        "mt-0.5 text-[12px] font-semibold min-w-0 truncate " +
-                        (item.value ? "text-white/80" : "text-white/40") +
-                        (item.isNumeric ? " tabular-nums whitespace-nowrap" : "")
-                      }
-                    >
-                      {item.value ? item.value : t("results.mediaKit.kpis.noData")}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <div className="flex items-end justify-between gap-3 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.featured.title")}</div>
-                <div className="text-[11px] text-white/45 whitespace-nowrap">{t("results.mediaKit.featured.empty")}</div>
-              </div>
-
-              <div className="mt-2 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-w-0">
-                {Array.from({ length: 5 }).map((_, idx) => (
-                  <div
-                    key={idx}
-                    className="h-12 w-12 shrink-0 rounded-lg border border-white/10 bg-black/20"
-                    aria-hidden="true"
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-w-0">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.collaborationFormats.title")}</div>
-                <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-                  {(() => {
-                    const raw = (creatorCard as any)?.deliverables ?? []
-                    const ids = normalizeStringArray(raw, 50)
-                    if (ids.length === 0) {
-                      return (
-                        <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.collaborationFormats.empty")}</div>
-                      )
-                    }
-
-                    const labelMap: Record<string, string> = {
-                      reels: t("creatorCardEditor.formats.options.reels"),
-                      posts: t("creatorCardEditor.formats.options.posts"),
-                      stories: t("creatorCardEditor.formats.options.stories"),
-                      live: t("creatorCardEditor.formats.options.live"),
-                      ugc: t("creatorCardEditor.formats.options.ugc"),
-                      unboxing: t("creatorCardEditor.formats.options.unboxing"),
-                      giveaway: t("creatorCardEditor.formats.options.giveaway"),
-                      event: t("creatorCardEditor.formats.options.event"),
-                      affiliate: t("creatorCardEditor.formats.options.affiliate"),
-                    }
-
-                    const max = 6
-                    const visible = ids.slice(0, max)
-                    const extra = Math.max(0, ids.length - visible.length)
-                    return (
-                      <>
-                        {visible.map((id) => (
-                          <span
-                            key={id}
-                            className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75"
-                          >
-                            {labelMap[id] || id}
-                          </span>
-                        ))}
-                        {extra > 0 ? (
-                          <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/55 whitespace-nowrap">
-                            +{extra}
-                          </span>
-                        ) : null}
-                      </>
-                    )
-                  })()}
-                </div>
-                <div className="mt-3 text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.pastCollaborations.title")}</div>
-                <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words line-clamp-3">
-                  {(() => {
-                    const raw =
-                      (creatorCard as any)?.pastCollaborations ?? (creatorCard as any)?.past_collaborations ?? []
-                    const brands = normalizeStringArray(raw, 20)
-                    if (brands.length === 0) return t("results.mediaKit.pastCollaborations.empty")
-                    const max = 6
-                    const visible = brands.slice(0, max)
-                    const extra = Math.max(0, brands.length - visible.length)
-                    return `${visible.join(", ")}${extra > 0 ? ` +${extra}` : ""}`
-                  })()}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.contact.title")}</div>
-                <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.other")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+    <CreatorCardPreview
+      t={t}
+      id="creator-card"
+      className={"mt-3 scroll-mt-40 " + CARD_SHELL_HOVER}
+      headerClassName={CARD_HEADER_ROW}
+      actions={(() => {
+        const returnTo = `/${activeLocale}/results#creator-card`
+        return (
+          <div className="shrink-0 flex items-center gap-2">
+            <Link
+              href={`/${activeLocale}/creator-card?returnTo=${encodeURIComponent(returnTo)}`}
+              className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors whitespace-nowrap"
+            >
+              {t("results.creatorCardPreview.actions.complete")}
+            </Link>
+            <button
+              type="button"
+              disabled
+              className="hidden sm:inline-flex items-center justify-center rounded-full border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
+              title={t("results.nextActions.cta.comingSoon")}
+            >
+              {t("results.nextActions.cta.exportMediaKit")}
+            </button>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        )
+      })()}
+      profileImageUrl={(() => {
+        const u =
+          typeof (igProfile as any)?.profile_picture_url === "string"
+            ? String((igProfile as any).profile_picture_url)
+            : typeof (igMe as any)?.profile_picture_url === "string"
+              ? String((igMe as any).profile_picture_url)
+              : ""
+        return u || null
+      })()}
+      displayName={
+        typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim()
+          ? String((igProfile as any).name).trim()
+          : displayUsername
+      }
+      username={displayUsername}
+      aboutText={t("results.mediaKit.about.placeholder")}
+      primaryNiche={
+        typeof (creatorCard as any)?.niche === "string" && String((creatorCard as any).niche).trim()
+          ? String((creatorCard as any).niche).trim()
+          : null
+      }
+      collaborationNiches={(creatorCard as any)?.collaborationNiches ?? (creatorCard as any)?.collaboration_niches ?? null}
+      deliverables={(creatorCard as any)?.deliverables ?? null}
+      pastCollaborations={(creatorCard as any)?.pastCollaborations ?? (creatorCard as any)?.past_collaborations ?? null}
+      followersText={typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : null}
+      avgLikesLabel={uiCopy.avgLikesLabel}
+      avgLikesText={avgLikesFormatted && avgLikesFormatted !== "—" ? avgLikesFormatted : null}
+      avgCommentsLabel={uiCopy.avgCommentsLabel}
+      avgCommentsText={avgCommentsFormatted && avgCommentsFormatted !== "—" ? avgCommentsFormatted : null}
+      engagementRateText={
+        typeof engagementRatePctFormatted === "string" && engagementRatePctFormatted !== "—"
+          ? engagementRatePctFormatted
+          : null
+      }
+      reachText={
+        typeof dailySnapshotTotals?.reach === "number" && Number.isFinite(dailySnapshotTotals.reach)
+          ? formatNum(dailySnapshotTotals.reach)
+          : null
+      }
+    />
   )
 
   if (derivedGateState === "loading")

@@ -68,6 +68,10 @@
     },
     "errors": {
       "notConnected": "Please connect Instagram first.",
+      "supabaseInvalidKey": {
+        "title": "Server configuration error",
+        "body": "Supabase keys are missing/invalid on this deployment. Please set env vars and redeploy."
+      },
       "loadFailed": "Failed to load creator card.",
       "saveFailed": "Failed to save. Please try again."
     },

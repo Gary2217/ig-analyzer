@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { X } from "lucide-react"
 
 import { useI18n } from "../../../components/locale-provider"
@@ -9,6 +10,7 @@ import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname, localePathname } from "../../lib/locale-path"
+import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 
 type CreatorCardPayload = {
   handle?: string | null
@@ -46,128 +48,10 @@ function toggleInArray(values: string[], value: string) {
   return [...values, value]
 }
 
-function PreviewCard(props: {
-  t: (key: string) => string
-  deliverables: string[]
-  collaborationNiches: string[]
-  pastCollaborations: string[]
-  highlight: "formats" | "niches" | "brands" | null
-}) {
-  const { t, deliverables, collaborationNiches, pastCollaborations, highlight } = props
-
-  const nicheText = (() => {
-    const ids = normalizeStringArray(collaborationNiches, 20)
-    if (ids.length === 0) return t("results.mediaKit.collaborationNiches.empty")
-
-    const labelMap: Record<string, string> = {
-      beauty: t("creatorCardEditor.niches.options.beauty"),
-      fashion: t("creatorCardEditor.niches.options.fashion"),
-      food: t("creatorCardEditor.niches.options.food"),
-      travel: t("creatorCardEditor.niches.options.travel"),
-      parenting: t("creatorCardEditor.niches.options.parenting"),
-      fitness: t("creatorCardEditor.niches.options.fitness"),
-      tech: t("creatorCardEditor.niches.options.tech"),
-      finance: t("creatorCardEditor.niches.options.finance"),
-      education: t("creatorCardEditor.niches.options.education"),
-      gaming: t("creatorCardEditor.niches.options.gaming"),
-      lifestyle: t("creatorCardEditor.niches.options.lifestyle"),
-      pets: t("creatorCardEditor.niches.options.pets"),
-      home: t("creatorCardEditor.niches.options.home"),
-      ecommerce: t("creatorCardEditor.niches.options.ecommerce"),
-    }
-
-    return ids.map((id) => labelMap[id] || id).join(" · ")
-  })()
-
-  const formats = normalizeStringArray(deliverables, 50)
-  const formatLabelMap: Record<string, string> = {
-    reels: t("creatorCardEditor.formats.options.reels"),
-    posts: t("creatorCardEditor.formats.options.posts"),
-    stories: t("creatorCardEditor.formats.options.stories"),
-    live: t("creatorCardEditor.formats.options.live"),
-    ugc: t("creatorCardEditor.formats.options.ugc"),
-    unboxing: t("creatorCardEditor.formats.options.unboxing"),
-    giveaway: t("creatorCardEditor.formats.options.giveaway"),
-    event: t("creatorCardEditor.formats.options.event"),
-    affiliate: t("creatorCardEditor.formats.options.affiliate"),
-  }
-
-  const brandsText = (() => {
-    const brands = normalizeStringArray(pastCollaborations, 20)
-    if (brands.length === 0) return t("results.mediaKit.pastCollaborations.empty")
-    const max = 6
-    const visible = brands.slice(0, max)
-    const extra = Math.max(0, brands.length - visible.length)
-    return `${visible.join(", ")}${extra > 0 ? ` +${extra}` : ""}`
-  })()
-
-  const sectionClass = (key: "formats" | "niches" | "brands") => {
-    const isActive = highlight === key
-    return `rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0 transition-colors ${
-      isActive ? "ring-2 ring-emerald-400/70 bg-emerald-500/5" : ""
-    }`
-  }
-
-  return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base">{t("results.creatorCardPreview.title")}</CardTitle>
-        <div className="mt-1 text-sm text-slate-500">{t("results.creatorCardPreview.subtitle")}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3 min-w-0">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.about.title")}</div>
-            <div className="mt-2 text-[12px] leading-snug text-white/60 min-w-0 break-words [overflow-wrap:anywhere]">
-              {t("results.mediaKit.about.placeholder")}
-            </div>
-          </div>
-
-          <div className={sectionClass("niches")}>
-            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.collaborationNiches.label")}</div>
-            <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words [overflow-wrap:anywhere]">
-              {nicheText}
-            </div>
-          </div>
-
-          <div className={sectionClass("formats")}>
-            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.collaborationFormats.title")}</div>
-            <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-              {formats.length === 0 ? (
-                <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.collaborationFormats.empty")}</div>
-              ) : (
-                formats.slice(0, 6).map((id) => (
-                  <span
-                    key={id}
-                    className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75"
-                  >
-                    {formatLabelMap[id] || id}
-                  </span>
-                ))
-              )}
-              {formats.length > 6 ? (
-                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/55 whitespace-nowrap">
-                  +{Math.max(0, formats.length - 6)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className={sectionClass("brands")}>
-            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.pastCollaborations.title")}</div>
-            <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words [overflow-wrap:anywhere] line-clamp-4">
-              {brandsText}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 export default function CreatorCardPage() {
   const { t } = useI18n()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const activeLocale = useMemo(() => {
     if (typeof window === "undefined") return "en"
@@ -214,6 +98,9 @@ export default function CreatorCardPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadErrorKind, setLoadErrorKind] = useState<
+    "not_connected" | "supabase_invalid_key" | "load_failed" | null
+  >(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
 
@@ -263,6 +150,7 @@ export default function CreatorCardPage() {
     ;(async () => {
       setLoading(true)
       setLoadError(null)
+      setLoadErrorKind(null)
       setSaveOk(false)
       try {
         const res = await fetch("/api/creator-card/me", {
@@ -275,15 +163,20 @@ export default function CreatorCardPage() {
         if (cancelled) return
 
         if (!res.ok || !json?.ok) {
-          setBaseCard(null)
-          setDeliverables([])
-          setCollaborationNiches([])
-          setPastCollaborations([])
           if (res.status === 401) {
+            setLoadErrorKind("not_connected")
             setLoadError(t("creatorCardEditor.errors.notConnected"))
-          } else {
-            setLoadError(t("creatorCardEditor.errors.loadFailed"))
+            return
           }
+
+          if (res.status === 500 && json?.error === "supabase_invalid_key") {
+            setLoadErrorKind("supabase_invalid_key")
+            setLoadError(null)
+            return
+          }
+
+          setLoadErrorKind("load_failed")
+          setLoadError(t("creatorCardEditor.errors.loadFailed"))
           return
         }
 
@@ -318,6 +211,7 @@ export default function CreatorCardPage() {
         setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
       } catch {
         if (cancelled) return
+        setLoadErrorKind("load_failed")
         setLoadError(t("creatorCardEditor.errors.loadFailed"))
       } finally {
         if (cancelled) return
@@ -370,9 +264,19 @@ export default function CreatorCardPage() {
     }
   }, [baseCard, collaborationNiches, deliverables, pastCollaborations, saving, t])
 
+  const returnTo = useMemo(() => {
+    const raw = (searchParams?.get("returnTo") ?? "").trim()
+    if (raw) return raw
+    return `/${activeLocale}/results#creator-card`
+  }, [activeLocale, searchParams])
+
   const handleBack = useCallback(() => {
-    router.push(localePathname("/results", activeLocale as any))
-  }, [activeLocale, router])
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back()
+      return
+    }
+    router.push(returnTo)
+  }, [returnTo, router])
 
   const brandHelperText = useMemo(() => {
     const max = 20
@@ -391,11 +295,22 @@ export default function CreatorCardPage() {
           <Button variant="outline" onClick={handleBack} disabled={saving}>
             {t("creatorCardEditor.actions.back")}
           </Button>
-          <Button variant="primary" onClick={handleSave} disabled={saving || loading || Boolean(loadError)}>
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+          >
             {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
           </Button>
         </div>
       </div>
+
+      {loadErrorKind === "supabase_invalid_key" ? (
+        <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <div className="font-semibold">{t("creatorCardEditor.errors.supabaseInvalidKey.title")}</div>
+          <div className="mt-1 text-amber-100/80">{t("creatorCardEditor.errors.supabaseInvalidKey.body")}</div>
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">{loadError}</div>
@@ -525,12 +440,17 @@ export default function CreatorCardPage() {
 
         <div className="lg:col-span-7 min-w-0">
           <div className="lg:sticky lg:top-24">
-            <PreviewCard
+            <CreatorCardPreview
               t={t}
-              deliverables={deliverables}
+              className="border-white/10 bg-transparent"
+              displayName={baseCard?.displayName ?? null}
+              username={baseCard?.handle ?? null}
+              aboutText={baseCard?.audience ?? null}
+              primaryNiche={baseCard?.niche ?? null}
               collaborationNiches={collaborationNiches}
+              deliverables={deliverables}
               pastCollaborations={pastCollaborations}
-              highlight={highlight}
+              highlightTarget={highlight}
             />
           </div>
         </div>
