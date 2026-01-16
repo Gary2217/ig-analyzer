@@ -3609,92 +3609,138 @@ export default function ResultsClient() {
       </CardHeader>
 
       <CardContent className="p-4 lg:p-6">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-5 min-w-0">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0">
-            <div className="md:col-span-5 min-w-0">
-              <div className="rounded-2xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
-                <div className="aspect-[3/4] w-full">
-                  {(() => {
-                    const u =
-                      typeof (igProfile as any)?.profile_picture_url === "string"
-                        ? String((igProfile as any).profile_picture_url)
-                        : typeof (igMe as any)?.profile_picture_url === "string"
-                          ? String((igMe as any).profile_picture_url)
-                          : ""
-                    if (!u) {
-                      return <div className="h-full w-full flex items-center justify-center text-sm text-white/50">—</div>
-                    }
-                    return (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={u} alt="creator" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-                    )
-                  })()}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
+          <div className="flex flex-col gap-5 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 min-w-0">
+              <div className="md:col-span-5 min-w-0">
+                <div className="rounded-2xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
+                  <div className="aspect-[3/4] w-full">
+                    {(() => {
+                      const u =
+                        typeof (igProfile as any)?.profile_picture_url === "string"
+                          ? String((igProfile as any).profile_picture_url)
+                          : typeof (igMe as any)?.profile_picture_url === "string"
+                            ? String((igMe as any).profile_picture_url)
+                            : ""
+                      if (!u) {
+                        return <div className="h-full w-full flex items-center justify-center text-sm text-white/50">—</div>
+                      }
+                      return (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={u} alt="creator" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                      )
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-7 min-w-0">
+                <div className="text-[10px] tracking-widest font-semibold text-white/55">MEDIA KIT</div>
+
+                <div className="mt-2 text-[clamp(22px,5.2vw,34px)] font-semibold text-white leading-tight break-words">
+                  {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim() ? String((igProfile as any).name).trim() : displayUsername}
+                </div>
+
+                <div className="mt-1 text-sm text-white/65 min-w-0 truncate">@{displayUsername}</div>
+
+                <div className="mt-2 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 whitespace-nowrap">
+                  Creator / Collab
+                </div>
+
+                <div className="mt-3 text-[12px] sm:text-sm leading-snug text-white/50 line-clamp-4">
+                  No bio provided yet
                 </div>
               </div>
             </div>
 
-            <div className="md:col-span-7 min-w-0">
-              <div className="min-w-0">
-                <div className="text-[10px] tracking-widest font-semibold text-white/55">MEDIA KIT</div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 sm:px-4 sm:py-3.5 min-w-0">
+              <div className="flex items-stretch justify-between gap-3 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Followers</div>
+                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (typeof followers === "number" && Number.isFinite(followers) ? "text-white" : "text-white/45")}>
+                    {typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : "—"}
+                  </div>
+                </div>
 
-                <div className="mt-2 flex items-start justify-between gap-3 min-w-0">
+                <div className="w-px bg-white/10" />
+
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
+                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgLikesFormatted && avgLikesFormatted !== "—" ? "text-white" : "text-white/45")}>
+                    {avgLikesFormatted && avgLikesFormatted !== "—" ? avgLikesFormatted : "—"}
+                  </div>
+                </div>
+
+                <div className="w-px bg-white/10" />
+
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
+                  <div className={"mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap " + (avgCommentsFormatted && avgCommentsFormatted !== "—" ? "text-white" : "text-white/45")}>
+                    {avgCommentsFormatted && avgCommentsFormatted !== "—" ? avgCommentsFormatted : "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold tracking-wide text-white/70">Key KPIs</div>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
+                {[
+                  "Engagement Rate",
+                  "Avg Story Views",
+                  "Avg Reel Views",
+                  "Audience Gender",
+                  "Top Age Range",
+                  "Niche Fit",
+                ].map((label) => (
+                  <div key={label} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{label}</div>
+                    <div className="mt-1 text-[12px] font-semibold text-white/45 min-w-0 truncate">No data</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-end justify-between gap-3 min-w-0">
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">Featured Posts</div>
+                <div className="text-[11px] text-white/45 whitespace-nowrap">No featured posts selected yet</div>
+              </div>
+
+              <div className="mt-2 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-w-0">
+                {Array.from({ length: 5 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="h-16 w-16 shrink-0 rounded-xl border border-white/10 bg-black/20"
+                    aria-hidden="true"
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-w-0">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">Services / Collaboration Types</div>
+                <ul className="mt-2 list-disc pl-5 space-y-1 text-[12px] leading-snug text-white/50">
+                  <li>No services added yet</li>
+                  <li>No collaboration types added yet</li>
+                </ul>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">Contact</div>
+                <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
                   <div className="min-w-0">
-                    <div className="text-[clamp(20px,5vw,30px)] font-semibold text-white leading-tight min-w-0 truncate">
-                      {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim() ? String((igProfile as any).name).trim() : displayUsername}
-                    </div>
-                    <div className="mt-1 text-sm text-white/65 min-w-0 truncate">@{displayUsername}</div>
-
-                    <div className="mt-2 inline-flex items-center rounded-full border border-white/12 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/75 whitespace-nowrap">
-                      Creator / Collab
-                    </div>
+                    <div className="text-[10px] font-semibold text-white/55">Email</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words">Not provided</div>
                   </div>
-
-                  <span className="shrink-0 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-white/70 whitespace-nowrap">
-                    Preview
-                  </span>
-                </div>
-
-                <div className="mt-3 text-[12px] sm:text-sm text-slate-200/85 leading-snug min-w-0 line-clamp-3">
-                  —
-                </div>
-
-                <div className="mt-4 grid grid-cols-3 gap-2 min-w-0">
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Followers</div>
-                    <div className="mt-1 text-[clamp(16px,4.8vw,22px)] font-semibold text-white tabular-nums whitespace-nowrap">
-                      {formatNum(followers)}
-                    </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55">Instagram</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words">Not provided</div>
                   </div>
-
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
-                    <div className="mt-1 text-[clamp(16px,4.8vw,22px)] font-semibold text-white tabular-nums whitespace-nowrap">
-                      {avgLikesFormatted}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
-                    <div className="mt-1 text-[clamp(16px,4.8vw,22px)] font-semibold text-white tabular-nums whitespace-nowrap">
-                      {avgCommentsFormatted}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 min-w-0">
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Category</div>
-                    <div className="mt-1 text-[12px] font-semibold text-white/85 min-w-0 truncate">—</div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Region</div>
-                    <div className="mt-1 text-[12px] font-semibold text-white/85 min-w-0 truncate">—</div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">Contact</div>
-                    <div className="mt-1 text-[12px] font-semibold text-white/85 min-w-0 break-words">—</div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55">Other</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words">Not provided</div>
                   </div>
                 </div>
               </div>
