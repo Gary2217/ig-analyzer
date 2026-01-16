@@ -46,6 +46,125 @@ function toggleInArray(values: string[], value: string) {
   return [...values, value]
 }
 
+function PreviewCard(props: {
+  t: (key: string) => string
+  deliverables: string[]
+  collaborationNiches: string[]
+  pastCollaborations: string[]
+  highlight: "formats" | "niches" | "brands" | null
+}) {
+  const { t, deliverables, collaborationNiches, pastCollaborations, highlight } = props
+
+  const nicheText = (() => {
+    const ids = normalizeStringArray(collaborationNiches, 20)
+    if (ids.length === 0) return t("results.mediaKit.collaborationNiches.empty")
+
+    const labelMap: Record<string, string> = {
+      beauty: t("creatorCardEditor.niches.options.beauty"),
+      fashion: t("creatorCardEditor.niches.options.fashion"),
+      food: t("creatorCardEditor.niches.options.food"),
+      travel: t("creatorCardEditor.niches.options.travel"),
+      parenting: t("creatorCardEditor.niches.options.parenting"),
+      fitness: t("creatorCardEditor.niches.options.fitness"),
+      tech: t("creatorCardEditor.niches.options.tech"),
+      finance: t("creatorCardEditor.niches.options.finance"),
+      education: t("creatorCardEditor.niches.options.education"),
+      gaming: t("creatorCardEditor.niches.options.gaming"),
+      lifestyle: t("creatorCardEditor.niches.options.lifestyle"),
+      pets: t("creatorCardEditor.niches.options.pets"),
+      home: t("creatorCardEditor.niches.options.home"),
+      ecommerce: t("creatorCardEditor.niches.options.ecommerce"),
+    }
+
+    return ids.map((id) => labelMap[id] || id).join(" · ")
+  })()
+
+  const formats = normalizeStringArray(deliverables, 50)
+  const formatLabelMap: Record<string, string> = {
+    reels: t("creatorCardEditor.formats.options.reels"),
+    posts: t("creatorCardEditor.formats.options.posts"),
+    stories: t("creatorCardEditor.formats.options.stories"),
+    live: t("creatorCardEditor.formats.options.live"),
+    ugc: t("creatorCardEditor.formats.options.ugc"),
+    unboxing: t("creatorCardEditor.formats.options.unboxing"),
+    giveaway: t("creatorCardEditor.formats.options.giveaway"),
+    event: t("creatorCardEditor.formats.options.event"),
+    affiliate: t("creatorCardEditor.formats.options.affiliate"),
+  }
+
+  const brandsText = (() => {
+    const brands = normalizeStringArray(pastCollaborations, 20)
+    if (brands.length === 0) return t("results.mediaKit.pastCollaborations.empty")
+    const max = 6
+    const visible = brands.slice(0, max)
+    const extra = Math.max(0, brands.length - visible.length)
+    return `${visible.join(", ")}${extra > 0 ? ` +${extra}` : ""}`
+  })()
+
+  const sectionClass = (key: "formats" | "niches" | "brands") => {
+    const isActive = highlight === key
+    return `rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0 transition-colors ${
+      isActive ? "ring-2 ring-emerald-400/70 bg-emerald-500/5" : ""
+    }`
+  }
+
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle className="text-base">{t("results.creatorCardPreview.title")}</CardTitle>
+        <div className="mt-1 text-sm text-slate-500">{t("results.creatorCardPreview.subtitle")}</div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3 min-w-0">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
+            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.about.title")}</div>
+            <div className="mt-2 text-[12px] leading-snug text-white/60 min-w-0 break-words [overflow-wrap:anywhere]">
+              {t("results.mediaKit.about.placeholder")}
+            </div>
+          </div>
+
+          <div className={sectionClass("niches")}>
+            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.collaborationNiches.label")}</div>
+            <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words [overflow-wrap:anywhere]">
+              {nicheText}
+            </div>
+          </div>
+
+          <div className={sectionClass("formats")}>
+            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.collaborationFormats.title")}</div>
+            <div className="mt-2 flex flex-wrap gap-2 min-w-0">
+              {formats.length === 0 ? (
+                <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.collaborationFormats.empty")}</div>
+              ) : (
+                formats.slice(0, 6).map((id) => (
+                  <span
+                    key={id}
+                    className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75"
+                  >
+                    {formatLabelMap[id] || id}
+                  </span>
+                ))
+              )}
+              {formats.length > 6 ? (
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/55 whitespace-nowrap">
+                  +{Math.max(0, formats.length - 6)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className={sectionClass("brands")}>
+            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.pastCollaborations.title")}</div>
+            <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words [overflow-wrap:anywhere] line-clamp-4">
+              {brandsText}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function CreatorCardPage() {
   const { t } = useI18n()
   const router = useRouter()
@@ -106,13 +225,37 @@ export default function CreatorCardPage() {
   const [brandInput, setBrandInput] = useState("")
   const brandInputRef = useRef<HTMLInputElement | null>(null)
 
+  const [highlight, setHighlight] = useState<"formats" | "niches" | "brands" | null>(null)
+  const highlightTimerRef = useRef<number | null>(null)
+
+  const flashHighlight = useCallback((key: "formats" | "niches" | "brands") => {
+    setHighlight(key)
+    if (highlightTimerRef.current != null) {
+      window.clearTimeout(highlightTimerRef.current)
+    }
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlight(null)
+      highlightTimerRef.current = null
+    }, 1200)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current != null) {
+        window.clearTimeout(highlightTimerRef.current)
+        highlightTimerRef.current = null
+      }
+    }
+  }, [])
+
   const addBrandTag = useCallback(
     (raw: string) => {
       const next = normalizeStringArray([raw], 1)
       if (next.length === 0) return
       setPastCollaborations((prev) => normalizeStringArray([...prev, next[0]], 20))
+      flashHighlight("brands")
     },
-    [setPastCollaborations]
+    [flashHighlight, setPastCollaborations]
   )
 
   useEffect(() => {
@@ -237,7 +380,7 @@ export default function CreatorCardPage() {
   }, [pastCollaborations.length, t])
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold min-w-0 truncate">{t("creatorCardEditor.title")}</h1>
@@ -264,106 +407,133 @@ export default function CreatorCardPage() {
         <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{t("creatorCardEditor.success.saved")}</div>
       ) : null}
 
-      <div className="mt-6 space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("creatorCardEditor.formats.title")}</CardTitle>
-            <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.formats.subtitle")}</div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {formatOptions.map((opt) => {
-                const isActive = deliverables.includes(opt.id)
-                return (
-                  <Button
-                    key={opt.id}
-                    type="button"
-                    variant="pill"
-                    active={isActive}
-                    onClick={() => setDeliverables((prev) => toggleInArray(prev, opt.id))}
-                  >
-                    {t(opt.labelKey)}
-                  </Button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0">
+        <div className="lg:col-span-5 space-y-4 min-w-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("creatorCardEditor.formats.title")}</CardTitle>
+              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.formats.subtitle")}</div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {formatOptions.map((opt) => {
+                  const isActive = deliverables.includes(opt.id)
+                  return (
+                    <Button
+                      key={opt.id}
+                      type="button"
+                      variant="pill"
+                      active={isActive}
+                      onClick={() => {
+                        setDeliverables((prev) => toggleInArray(prev, opt.id))
+                        flashHighlight("formats")
+                      }}
+                    >
+                      {t(opt.labelKey)}
+                    </Button>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("creatorCardEditor.niches.title")}</CardTitle>
-            <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.niches.subtitle")}</div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {nicheOptions.map((opt) => {
-                const isActive = collaborationNiches.includes(opt.id)
-                return (
-                  <Button
-                    key={opt.id}
-                    type="button"
-                    variant="pill"
-                    active={isActive}
-                    onClick={() => setCollaborationNiches((prev) => toggleInArray(prev, opt.id))}
-                  >
-                    {t(opt.labelKey)}
-                  </Button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("creatorCardEditor.niches.title")}</CardTitle>
+              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.niches.subtitle")}</div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {nicheOptions.map((opt) => {
+                  const isActive = collaborationNiches.includes(opt.id)
+                  return (
+                    <Button
+                      key={opt.id}
+                      type="button"
+                      variant="pill"
+                      active={isActive}
+                      onClick={() => {
+                        setCollaborationNiches((prev) => toggleInArray(prev, opt.id))
+                        flashHighlight("niches")
+                      }}
+                    >
+                      {t(opt.labelKey)}
+                    </Button>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("creatorCardEditor.pastCollaborations.title")}</CardTitle>
-            <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.pastCollaborations.subtitle")}</div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {pastCollaborations.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                >
-                  <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                    onClick={() => setPastCollaborations((prev) => prev.filter((x) => x !== tag))}
-                    aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("creatorCardEditor.pastCollaborations.title")}</CardTitle>
+              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.pastCollaborations.subtitle")}</div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {pastCollaborations.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              ))}
-            </div>
+                    <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                      onClick={() => {
+                        setPastCollaborations((prev) => prev.filter((x) => x !== tag))
+                        flashHighlight("brands")
+                      }}
+                      aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
 
-            <div className="mt-3">
-              <Input
-                ref={(node) => {
-                  brandInputRef.current = node
-                }}
-                value={brandInput}
-                placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
-                onChange={(e) => setBrandInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addBrandTag(brandInput)
-                    setBrandInput("")
-                    return
-                  }
-                  if (e.key === "Backspace" && !brandInput.trim()) {
-                    setPastCollaborations((prev) => prev.slice(0, Math.max(0, prev.length - 1)))
-                  }
-                }}
-              />
-              <div className="mt-2 text-xs text-slate-500">{brandHelperText}</div>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="mt-3">
+                <Input
+                  ref={(node) => {
+                    brandInputRef.current = node
+                  }}
+                  value={brandInput}
+                  placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
+                  onChange={(e) => setBrandInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addBrandTag(brandInput)
+                      setBrandInput("")
+                      return
+                    }
+                    if (e.key === "Backspace" && !brandInput.trim()) {
+                      setPastCollaborations((prev) => {
+                        const next = prev.slice(0, Math.max(0, prev.length - 1))
+                        return next
+                      })
+                      flashHighlight("brands")
+                    }
+                  }}
+                />
+                <div className="mt-2 text-xs text-slate-500">{brandHelperText}</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-7 min-w-0">
+          <div className="lg:sticky lg:top-24">
+            <PreviewCard
+              t={t}
+              deliverables={deliverables}
+              collaborationNiches={collaborationNiches}
+              pastCollaborations={pastCollaborations}
+              highlight={highlight}
+            />
+          </div>
+        </div>
       </div>
     </main>
   )
