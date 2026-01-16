@@ -53,6 +53,8 @@ export default function CreatorCardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const [refetchTick, setRefetchTick] = useState(0)
+
   const activeLocale = useMemo(() => {
     if (typeof window === "undefined") return "en"
     return extractLocaleFromPathname(window.location.pathname)
@@ -104,6 +106,8 @@ export default function CreatorCardPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
 
+  const [showNewCardHint, setShowNewCardHint] = useState(false)
+
   const [baseCard, setBaseCard] = useState<CreatorCardPayload | null>(null)
   const [deliverables, setDeliverables] = useState<string[]>([])
   const [collaborationNiches, setCollaborationNiches] = useState<string[]>([])
@@ -152,6 +156,7 @@ export default function CreatorCardPage() {
       setLoadError(null)
       setLoadErrorKind(null)
       setSaveOk(false)
+      setShowNewCardHint(false)
       try {
         const res = await fetch("/api/creator-card/me", {
           method: "GET",
@@ -209,6 +214,21 @@ export default function CreatorCardPage() {
         setDeliverables(normalizeStringArray(nextBase?.deliverables ?? [], 50))
         setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
         setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
+
+        const isLikelyEmpty = (() => {
+          const hasAnyText =
+            Boolean(nextBase?.displayName && String(nextBase.displayName).trim()) ||
+            Boolean(nextBase?.niche && String(nextBase.niche).trim()) ||
+            Boolean(nextBase?.audience && String(nextBase.audience).trim()) ||
+            Boolean(nextBase?.contact && String(nextBase.contact).trim())
+          const hasAnyLists =
+            normalizeStringArray(nextBase?.deliverables ?? [], 1).length > 0 ||
+            normalizeStringArray(nextBase?.collaborationNiches ?? [], 1).length > 0 ||
+            normalizeStringArray(nextBase?.pastCollaborations ?? [], 1).length > 0
+          return !hasAnyText && !hasAnyLists
+        })()
+
+        setShowNewCardHint(isLikelyEmpty)
       } catch {
         if (cancelled) return
         setLoadErrorKind("load_failed")
@@ -222,7 +242,11 @@ export default function CreatorCardPage() {
     return () => {
       cancelled = true
     }
-  }, [t])
+  }, [refetchTick, t])
+
+  const handleRetryLoad = useCallback(() => {
+    setRefetchTick((x) => x + 1)
+  }, [])
 
   const handleSave = useCallback(async () => {
     if (saving) return
@@ -283,6 +307,36 @@ export default function CreatorCardPage() {
     return t("creatorCardEditor.pastCollaborations.helper").replace("{count}", String(pastCollaborations.length)).replace("{max}", String(max))
   }, [pastCollaborations.length, t])
 
+  const loadingSkeleton = (
+    <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0 animate-pulse">
+      <div className="lg:col-span-5 space-y-4 min-w-0">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <div key={idx} className="rounded-xl border border-slate-200 bg-white">
+            <div className="p-6">
+              <div className="h-4 w-40 bg-slate-200 rounded" />
+              <div className="mt-3 h-3 w-64 bg-slate-100 rounded" />
+              <div className="mt-4 flex flex-wrap gap-2">
+                {Array.from({ length: 6 }).map((__, j) => (
+                  <div key={j} className="h-9 w-24 rounded-full bg-slate-100" />
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="lg:col-span-7 min-w-0">
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="p-6">
+            <div className="h-4 w-48 bg-slate-200 rounded" />
+            <div className="mt-3 h-3 w-64 bg-slate-100 rounded" />
+            <div className="mt-6 h-72 w-full rounded-xl bg-slate-100" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <div className="flex items-center justify-between gap-3">
@@ -313,7 +367,16 @@ export default function CreatorCardPage() {
       ) : null}
 
       {loadError ? (
-        <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">{loadError}</div>
+        <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div className="min-w-0 break-words [overflow-wrap:anywhere]">{loadError}</div>
+          {loadErrorKind === "load_failed" ? (
+            <div className="mt-3">
+              <Button type="button" variant="outline" onClick={handleRetryLoad} disabled={loading || saving}>
+                {t("creatorCardEditor.actions.retry")}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {saveError ? (
         <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">{saveError}</div>
@@ -322,6 +385,16 @@ export default function CreatorCardPage() {
         <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{t("creatorCardEditor.success.saved")}</div>
       ) : null}
 
+      {showNewCardHint && !loading && !loadErrorKind ? (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+          <div className="font-semibold text-slate-900">{t("creatorCardEditor.empty.title")}</div>
+          <div className="mt-1 text-slate-600 min-w-0 break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.empty.body")}</div>
+        </div>
+      ) : null}
+
+      {loading ? (
+        loadingSkeleton
+      ) : (
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0">
         <div className="lg:col-span-5 space-y-4 min-w-0">
           <Card>
@@ -455,6 +528,7 @@ export default function CreatorCardPage() {
           </div>
         </div>
       </div>
+      )}
     </main>
   )
 }

@@ -60,8 +60,13 @@
     "subtitle": "Set your collaboration preferences so brands can quickly understand what you offer.",
     "actions": {
       "back": "Back",
+      "retry": "Retry",
       "save": "Save",
       "saving": "Saving…"
+    },
+    "empty": {
+      "title": "Start filling your card",
+      "body": "We created your Creator Card. Add your collaboration formats, niches, and past brand collaborations."
     },
     "success": {
       "saved": "Saved"
