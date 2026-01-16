@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server"
 import { supabaseServer } from "@/lib/supabase/server"
 
+function normalizeStringArray(value: unknown, maxLen: number) {
+  const raw = Array.isArray(value) ? value : []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== "string") continue
+    const s = item.trim()
+    if (!s) continue
+    const k = s.toLowerCase()
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(s)
+    if (out.length >= maxLen) break
+  }
+  return out
+}
+
 function slugify(input: string) {
   return input
     .toLowerCase()
@@ -100,14 +117,18 @@ export async function POST(req: Request) {
       }
     }
 
-    const payload = {
+    const deliverables = Array.isArray(body?.deliverables) ? body.deliverables : []
+    const collaborationNiches = normalizeStringArray((body as any)?.collaborationNiches, 20)
+    const pastCollaborations = normalizeStringArray((body as any)?.pastCollaborations, 20)
+
+    const payloadBase: any = {
       ig_user_id: igUserId,
       ig_username: igUsername,
       handle,
       display_name: String(body?.displayName ?? "").trim() || null,
       niche: String(body?.niche ?? "").trim() || null,
       audience: String(body?.audience ?? "").trim() || null,
-      deliverables: Array.isArray(body?.deliverables) ? body.deliverables : [],
+      deliverables,
       contact: String(body?.contact ?? "").trim() || null,
       portfolio: Array.isArray(body?.portfolio) ? body.portfolio : [],
       completion_pct: completionPct,
@@ -115,10 +136,31 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
     }
 
+    // Optional new columns (may not exist yet in DB)
+    if (collaborationNiches.length > 0) payloadBase.collaboration_niches = collaborationNiches
+    if (pastCollaborations.length > 0) payloadBase.past_collaborations = pastCollaborations
+
     const query = supabaseServer.from("creator_cards")
-    const { data, error } = existing.data?.id
-      ? await query.update(payload).eq("id", existing.data.id).select("*").maybeSingle()
-      : await query.insert(payload).select("*").maybeSingle()
+    const runUpsert = async (p: any) => {
+      return existing.data?.id
+        ? await query.update(p).eq("id", existing.data.id).select("*").maybeSingle()
+        : await query.insert(p).select("*").maybeSingle()
+    }
+
+    let { data, error } = await runUpsert(payloadBase)
+
+    // Best-effort fallback: if DB is missing new optional columns, retry once without them.
+    if (
+      error &&
+      typeof (error as any)?.message === "string" &&
+      (((error as any).message as string).includes("collaboration_niches") ||
+        ((error as any).message as string).includes("past_collaborations"))
+    ) {
+      const fallback = { ...payloadBase }
+      delete fallback.collaboration_niches
+      delete fallback.past_collaborations
+      ;({ data, error } = await runUpsert(fallback))
+    }
 
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })

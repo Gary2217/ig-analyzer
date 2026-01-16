@@ -40,7 +40,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, me: { igUserId, igUsername }, card: data ?? null })
+    const card =
+      data && typeof data === "object"
+        ? {
+            ...(data as any),
+            collaborationNiches: Array.isArray((data as any).collaboration_niches)
+              ? (data as any).collaboration_niches
+              : null,
+            pastCollaborations: Array.isArray((data as any).past_collaborations)
+              ? (data as any).past_collaborations
+              : null,
+          }
+        : null
+
+    return NextResponse.json({ ok: true, me: { igUserId, igUsername }, card })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 })
   }

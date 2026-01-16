@@ -37,6 +37,23 @@ function toNum(value: unknown): number | undefined {
   return undefined
 }
 
+function normalizeStringArray(value: unknown, maxLen: number) {
+  const raw = Array.isArray(value) ? value : []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== "string") continue
+    const s = item.trim()
+    if (!s) continue
+    const k = s.toLowerCase()
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(s)
+    if (out.length >= maxLen) break
+  }
+  return out
+}
+
 function getCookieValue(key: string): string {
   try {
     if (typeof document === "undefined") return ""
@@ -98,6 +115,12 @@ type IgMeResponse = {
     media_url?: string
     caption?: string
   }>
+}
+
+type CreatorCardMeResponse = {
+  ok: boolean
+  error?: string
+  card?: any
 }
 
 type FakeAnalysis = {
@@ -2467,6 +2490,9 @@ export default function ResultsClient() {
 
   const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
 
+  const [creatorCard, setCreatorCard] = useState<any | null>(null)
+  const creatorCardFetchedRef = useRef(false)
+
   useEffect(() => {
     if (!isConnectedInstagram) {
       setFollowersDailyRows([])
@@ -2575,6 +2601,43 @@ export default function ResultsClient() {
       cancelled = true
     }
   }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
+
+  useEffect(() => {
+    if (!isConnectedInstagram) {
+      setCreatorCard(null)
+      creatorCardFetchedRef.current = false
+      return
+    }
+
+    if (creatorCardFetchedRef.current) return
+    creatorCardFetchedRef.current = true
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/creator-card/me", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+        const json = (await res.json().catch(() => null)) as CreatorCardMeResponse | null
+        if (cancelled) return
+        if (!res.ok || !json?.ok) {
+          setCreatorCard(null)
+          return
+        }
+        setCreatorCard(json?.card && typeof json.card === "object" ? (json.card as any) : null)
+      } catch (e) {
+        if (cancelled) return
+        if (isAbortError(e)) return
+        setCreatorCard(null)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isConnectedInstagram])
 
   useEffect(() => {
     if (!isConnectedInstagram) return
@@ -3586,8 +3649,8 @@ export default function ResultsClient() {
     <Card id="creator-card-preview" className={"mt-3 scroll-mt-40 " + CARD_SHELL_HOVER}>
       <CardHeader className={CARD_HEADER_ROW}>
         <div className="min-w-0">
-          <CardTitle className="text-xl font-bold text-white min-w-0 truncate">名片預覽</CardTitle>
-          <p className="mt-0.5 text-[11px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">品牌商將看到這張名片</p>
+          <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.creatorCardPreview.title")}</CardTitle>
+          <p className="mt-0.5 text-[11px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">{t("results.creatorCardPreview.subtitle")}</p>
         </div>
 
         <div className="shrink-0 flex items-center gap-2">
@@ -3595,7 +3658,7 @@ export default function ResultsClient() {
             href={`/${activeLocale}/creator-card`}
             className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors whitespace-nowrap"
           >
-            完善名片資料
+            {t("results.creatorCardPreview.actions.complete")}
           </Link>
           <button
             type="button"
@@ -3658,11 +3721,47 @@ export default function ResultsClient() {
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
-                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{t("results.mediaKit.common.noData")}</div>
+                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">
+                        {typeof (creatorCard as any)?.niche === "string" && String((creatorCard as any).niche).trim()
+                          ? String((creatorCard as any).niche).trim()
+                          : t("results.mediaKit.common.noData")}
+                      </div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
                       <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{t("results.mediaKit.common.noData")}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationNiches.label")}</div>
+                    <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 break-words line-clamp-2">
+                      {(() => {
+                        const raw =
+                          (creatorCard as any)?.collaborationNiches ?? (creatorCard as any)?.collaboration_niches ?? []
+                        const ids = normalizeStringArray(raw, 20)
+                        if (ids.length === 0) return t("results.mediaKit.collaborationNiches.empty")
+
+                        const labelMap: Record<string, string> = {
+                          beauty: t("creatorCardEditor.niches.options.beauty"),
+                          fashion: t("creatorCardEditor.niches.options.fashion"),
+                          food: t("creatorCardEditor.niches.options.food"),
+                          travel: t("creatorCardEditor.niches.options.travel"),
+                          parenting: t("creatorCardEditor.niches.options.parenting"),
+                          fitness: t("creatorCardEditor.niches.options.fitness"),
+                          tech: t("creatorCardEditor.niches.options.tech"),
+                          finance: t("creatorCardEditor.niches.options.finance"),
+                          education: t("creatorCardEditor.niches.options.education"),
+                          gaming: t("creatorCardEditor.niches.options.gaming"),
+                          lifestyle: t("creatorCardEditor.niches.options.lifestyle"),
+                          pets: t("creatorCardEditor.niches.options.pets"),
+                          home: t("creatorCardEditor.niches.options.home"),
+                          ecommerce: t("creatorCardEditor.niches.options.ecommerce"),
+                        }
+
+                        const labels = ids.map((id) => labelMap[id] || id)
+                        return labels.join(" · ")
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -3778,11 +3877,64 @@ export default function ResultsClient() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-w-0">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.services.title")}</div>
-                <ul className="mt-2 list-disc pl-5 space-y-1 text-[12px] leading-snug text-white/45">
-                  <li>{t("results.mediaKit.services.emptyServices")}</li>
-                  <li>{t("results.mediaKit.services.emptyCollabTypes")}</li>
-                </ul>
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.collaborationFormats.title")}</div>
+                <div className="mt-2 flex flex-wrap gap-2 min-w-0">
+                  {(() => {
+                    const raw = (creatorCard as any)?.deliverables ?? []
+                    const ids = normalizeStringArray(raw, 50)
+                    if (ids.length === 0) {
+                      return (
+                        <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.collaborationFormats.empty")}</div>
+                      )
+                    }
+
+                    const labelMap: Record<string, string> = {
+                      reels: t("creatorCardEditor.formats.options.reels"),
+                      posts: t("creatorCardEditor.formats.options.posts"),
+                      stories: t("creatorCardEditor.formats.options.stories"),
+                      live: t("creatorCardEditor.formats.options.live"),
+                      ugc: t("creatorCardEditor.formats.options.ugc"),
+                      unboxing: t("creatorCardEditor.formats.options.unboxing"),
+                      giveaway: t("creatorCardEditor.formats.options.giveaway"),
+                      event: t("creatorCardEditor.formats.options.event"),
+                      affiliate: t("creatorCardEditor.formats.options.affiliate"),
+                    }
+
+                    const max = 6
+                    const visible = ids.slice(0, max)
+                    const extra = Math.max(0, ids.length - visible.length)
+                    return (
+                      <>
+                        {visible.map((id) => (
+                          <span
+                            key={id}
+                            className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75"
+                          >
+                            {labelMap[id] || id}
+                          </span>
+                        ))}
+                        {extra > 0 ? (
+                          <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/55 whitespace-nowrap">
+                            +{extra}
+                          </span>
+                        ) : null}
+                      </>
+                    )
+                  })()}
+                </div>
+                <div className="mt-3 text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.pastCollaborations.title")}</div>
+                <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words line-clamp-3">
+                  {(() => {
+                    const raw =
+                      (creatorCard as any)?.pastCollaborations ?? (creatorCard as any)?.past_collaborations ?? []
+                    const brands = normalizeStringArray(raw, 20)
+                    if (brands.length === 0) return t("results.mediaKit.pastCollaborations.empty")
+                    const max = 6
+                    const visible = brands.slice(0, max)
+                    const extra = Math.max(0, brands.length - visible.length)
+                    return `${visible.join(", ")}${extra > 0 ? ` +${extra}` : ""}`
+                  })()}
+                </div>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">

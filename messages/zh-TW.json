@@ -55,16 +55,86 @@
       "analyzing": "正在分析帳號..."
     }
   },
+  "creatorCardEditor": {
+    "title": "完善名片資料",
+    "subtitle": "設定你的合作偏好，讓品牌商更快理解你適合哪些合作。",
+    "actions": {
+      "back": "返回",
+      "save": "儲存",
+      "saving": "儲存中…"
+    },
+    "success": {
+      "saved": "已儲存"
+    },
+    "errors": {
+      "notConnected": "請先連結 Instagram。",
+      "loadFailed": "載入名片資料失敗。",
+      "saveFailed": "儲存失敗，請再試一次。"
+    },
+    "formats": {
+      "title": "合作形式",
+      "subtitle": "選擇你能提供的合作內容形式。",
+      "options": {
+        "reels": "Reels／短影片",
+        "posts": "貼文",
+        "stories": "限時動態",
+        "live": "直播",
+        "ugc": "UGC",
+        "unboxing": "開箱",
+        "giveaway": "抽獎",
+        "event": "活動／出席",
+        "affiliate": "聯盟行銷"
+      }
+    },
+    "niches": {
+      "title": "合作品類／擅長領域",
+      "subtitle": "選擇你最擅長合作的品類。",
+      "options": {
+        "beauty": "美妝",
+        "fashion": "穿搭",
+        "food": "美食",
+        "travel": "旅遊",
+        "parenting": "親子",
+        "fitness": "健身",
+        "tech": "科技",
+        "finance": "理財",
+        "education": "教育",
+        "gaming": "遊戲",
+        "lifestyle": "生活",
+        "pets": "寵物",
+        "home": "居家",
+        "ecommerce": "電商"
+      }
+    },
+    "pastCollaborations": {
+      "title": "合作品牌",
+      "subtitle": "加入曾合作品牌，建立信任。按 Enter 新增標籤。",
+      "placeholder": "輸入品牌名稱後按 Enter",
+      "helper": "{count}/{max} 個標籤",
+      "remove": "移除"
+    }
+  },
   "results": {
     "title": "帳號分析結果",
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
     "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
     "proBadge": "專業",
+    "creatorCardPreview": {
+      "title": "名片預覽",
+      "subtitle": "品牌商將看到這張名片",
+      "actions": {
+        "complete": "完善名片資料"
+      }
+    },
     "mediaKit": {
       "kicker": "媒體包",
       "rolePill": "創作者／合作",
       "common": {
         "noData": "尚無資料"
+      },
+      "collaborationNiches": {
+        "label": "合作品類",
+        "empty": "尚未設定合作品類"
       },
       "about": {
         "title": "自我介紹",
@@ -96,6 +166,14 @@
       "featured": {
         "title": "精選貼文",
         "empty": "尚未選擇精選貼文"
+      },
+      "collaborationFormats": {
+        "title": "合作形式",
+        "empty": "尚未新增合作形式"
+      },
+      "pastCollaborations": {
+        "title": "合作品牌",
+        "empty": "尚未新增合作品牌"
       },
       "services": {
         "title": "服務／合作形式",

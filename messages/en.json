@@ -55,16 +55,86 @@
       "analyzing": "Analyzing account..."
     }
   },
+  "creatorCardEditor": {
+    "title": "Complete Card Info",
+    "subtitle": "Set your collaboration preferences so brands can quickly understand what you offer.",
+    "actions": {
+      "back": "Back",
+      "save": "Save",
+      "saving": "Saving…"
+    },
+    "success": {
+      "saved": "Saved"
+    },
+    "errors": {
+      "notConnected": "Please connect Instagram first.",
+      "loadFailed": "Failed to load creator card.",
+      "saveFailed": "Failed to save. Please try again."
+    },
+    "formats": {
+      "title": "Collaboration formats",
+      "subtitle": "Select the content formats you can deliver.",
+      "options": {
+        "reels": "Reels",
+        "posts": "Posts",
+        "stories": "Stories",
+        "live": "Live",
+        "ugc": "UGC",
+        "unboxing": "Unboxing",
+        "giveaway": "Giveaway",
+        "event": "Event coverage",
+        "affiliate": "Affiliate"
+      }
+    },
+    "niches": {
+      "title": "Collaboration niches / categories",
+      "subtitle": "Select the categories you are best at.",
+      "options": {
+        "beauty": "Beauty",
+        "fashion": "Fashion",
+        "food": "Food",
+        "travel": "Travel",
+        "parenting": "Parenting",
+        "fitness": "Fitness",
+        "tech": "Tech",
+        "finance": "Finance",
+        "education": "Education",
+        "gaming": "Gaming",
+        "lifestyle": "Lifestyle",
+        "pets": "Pets",
+        "home": "Home",
+        "ecommerce": "E-commerce"
+      }
+    },
+    "pastCollaborations": {
+      "title": "Past collaborations / brands",
+      "subtitle": "Add brand names to build trust. Press Enter to add a tag.",
+      "placeholder": "Type a brand name and press Enter",
+      "helper": "{count}/{max} tags",
+      "remove": "Remove"
+    }
+  },
   "results": {
     "title": "Account Analysis Results",
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
     "proReminder": "Pro includes deeper post-level details and more actionable recommendations.",
     "proBadge": "Pro",
+    "creatorCardPreview": {
+      "title": "Creator Card Preview",
+      "subtitle": "Brands will see this card",
+      "actions": {
+        "complete": "Complete Card Info"
+      }
+    },
     "mediaKit": {
       "kicker": "MEDIA KIT",
       "rolePill": "Creator / Collab",
       "common": {
         "noData": "No data"
+      },
+      "collaborationNiches": {
+        "label": "Collaboration niches",
+        "empty": "No collaboration niches specified"
       },
       "about": {
         "title": "About",
@@ -96,6 +166,14 @@
       "featured": {
         "title": "Featured Posts",
         "empty": "No featured posts selected yet"
+      },
+      "collaborationFormats": {
+        "title": "Collaboration formats",
+        "empty": "No collaboration formats added yet"
+      },
+      "pastCollaborations": {
+        "title": "Past collaborations",
+        "empty": "No past collaboration brands added yet"
       },
       "services": {
         "title": "Services / Collaboration Types",
