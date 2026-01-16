@@ -3583,7 +3583,7 @@ export default function ResultsClient() {
   })()
 
   const creatorCardPreviewCard = (
-    <Card id="creator-card-preview" className={"scroll-mt-40 " + CARD_SHELL_HOVER}>
+    <Card id="creator-card-preview" className={"mt-3 scroll-mt-40 " + CARD_SHELL_HOVER}>
       <CardHeader className={CARD_HEADER_ROW}>
         <div className="min-w-0">
           <CardTitle className="text-xl font-bold text-white min-w-0 truncate">名片預覽</CardTitle>
