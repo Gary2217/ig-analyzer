@@ -90,6 +90,12 @@ export async function POST(req: Request) {
       .maybeSingle()
 
     if (existing.error) {
+      if (
+        typeof (existing.error as any)?.message === "string" &&
+        ((existing.error as any).message as string).includes("Invalid API key")
+      ) {
+        return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+      }
       return NextResponse.json({ ok: false, error: existing.error.message }, { status: 500 })
     }
 
@@ -106,7 +112,12 @@ export async function POST(req: Request) {
           .limit(1)
           .maybeSingle()
 
-        if (check.error) return NextResponse.json({ ok: false, error: check.error.message }, { status: 500 })
+        if (check.error) {
+          if (typeof (check.error as any)?.message === "string" && ((check.error as any).message as string).includes("Invalid API key")) {
+            return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+          }
+          return NextResponse.json({ ok: false, error: check.error.message }, { status: 500 })
+        }
 
         if (!check.data || (existing.data && check.data.id === existing.data.id)) {
           handle = candidate
@@ -163,11 +174,18 @@ export async function POST(req: Request) {
     }
 
     if (error) {
+      if (typeof (error as any)?.message === "string" && ((error as any).message as string).includes("Invalid API key")) {
+        return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+      }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true, card: data })
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 })
+    const msg = typeof e?.message === "string" ? e.message : "unknown"
+    if (msg.includes("Invalid API key")) {
+      return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+    }
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }

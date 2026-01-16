@@ -69,6 +69,9 @@ export async function GET(req: NextRequest) {
       .maybeSingle()
 
     if (error) {
+      if (typeof (error as any)?.message === "string" && ((error as any).message as string).includes("Invalid API key")) {
+        return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+      }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
@@ -87,6 +90,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, me: { igUserId, igUsername }, card })
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 })
+    const msg = typeof e?.message === "string" ? e.message : "unknown"
+    if (msg.includes("Invalid API key")) {
+      return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+    }
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }
