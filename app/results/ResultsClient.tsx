@@ -4595,7 +4595,7 @@ export default function ResultsClient() {
 
                       <div
                         className={
-                          "w-full min-w-0 mt-2 flex justify-center sm:justify-end min-h-[40px] " +
+                          "w-full min-w-0 mt-2 relative min-h-[40px] " +
                           ((focusedAccountTrendMetric === "followers" || focusedAccountTrendMetric === "reach")
                             ? "opacity-100"
                             : "opacity-0 pointer-events-none")
@@ -4627,7 +4627,7 @@ export default function ResultsClient() {
                               <>
                                 <div
                                   className={
-                                    "" +
+                                    "absolute inset-0 flex items-start justify-center sm:justify-end " +
                                     (focusedAccountTrendMetric === "reach" ? "opacity-100" : "opacity-0 pointer-events-none")
                                   }
                                 >
@@ -4642,7 +4642,7 @@ export default function ResultsClient() {
                                 </div>
                                 <div
                                   className={
-                                    "" +
+                                    "absolute inset-0 flex items-start justify-center sm:justify-end " +
                                     (focusedAccountTrendMetric === "followers" ? "opacity-100" : "opacity-0 pointer-events-none")
                                   }
                                 >
