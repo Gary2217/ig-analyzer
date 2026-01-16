@@ -3612,8 +3612,8 @@ export default function ResultsClient() {
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
           <div className="flex flex-col gap-4 min-w-0">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0">
-              <div className="md:col-span-3 min-w-0">
-                <div className="mx-auto w-full max-w-[220px] md:max-w-[240px] lg:max-w-[280px]">
+              <div className="md:col-span-4 min-w-0">
+                <div className="mx-auto w-full max-w-[240px] md:max-w-[280px] lg:max-w-[320px]">
                   <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
                     <div className="aspect-[3/4] w-full">
                     {(() => {
@@ -3636,7 +3636,7 @@ export default function ResultsClient() {
                 </div>
               </div>
 
-              <div className="md:col-span-9 min-w-0">
+              <div className="md:col-span-8 min-w-0">
                 <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.kicker")}</div>
 
                 <div className="mt-1.5 text-[clamp(22px,5.2vw,34px)] font-semibold text-white leading-tight break-words line-clamp-2">
@@ -3653,6 +3653,17 @@ export default function ResultsClient() {
                   <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                   <div className="mt-1 text-xs sm:text-sm leading-snug text-white/45 min-w-0 break-words line-clamp-4">
                     {t("results.mediaKit.about.placeholder")}
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
+                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{t("results.mediaKit.common.noData")}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
+                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{t("results.mediaKit.common.noData")}</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3688,17 +3699,61 @@ export default function ResultsClient() {
               <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
                 {(
                   [
-                    { k: "engagementRate", label: t("results.mediaKit.kpis.labels.engagementRate") },
-                    { k: "avgStoryViews", label: t("results.mediaKit.kpis.labels.avgStoryViews") },
-                    { k: "avgReelViews", label: t("results.mediaKit.kpis.labels.avgReelViews") },
-                    { k: "audienceGender", label: t("results.mediaKit.kpis.labels.audienceGender") },
-                    { k: "topAgeRange", label: t("results.mediaKit.kpis.labels.topAgeRange") },
-                    { k: "nicheFit", label: t("results.mediaKit.kpis.labels.nicheFit") },
+                    {
+                      k: "engagementRate",
+                      label: t("results.mediaKit.kpis.labels.engagementRate"),
+                      value:
+                        typeof engagementRatePctFormatted === "string" && engagementRatePctFormatted !== "—"
+                          ? engagementRatePctFormatted
+                          : null,
+                      isNumeric: true,
+                    },
+                    {
+                      k: "avgViews",
+                      label: t("results.mediaKit.kpis.labels.avgViews"),
+                      value: null,
+                      isNumeric: true,
+                    },
+                    {
+                      k: "avgReach",
+                      label: t("results.mediaKit.kpis.labels.avgReach"),
+                      value:
+                        typeof dailySnapshotTotals?.reach === "number" && Number.isFinite(dailySnapshotTotals.reach)
+                          ? formatNum(dailySnapshotTotals.reach)
+                          : null,
+                      isNumeric: true,
+                    },
+                    {
+                      k: "topLocation",
+                      label: t("results.mediaKit.kpis.labels.topLocation"),
+                      value: null,
+                      isNumeric: false,
+                    },
+                    {
+                      k: "genderSplit",
+                      label: t("results.mediaKit.kpis.labels.genderSplit"),
+                      value: null,
+                      isNumeric: false,
+                    },
+                    {
+                      k: "topAgeRange",
+                      label: t("results.mediaKit.kpis.labels.topAgeRange"),
+                      value: null,
+                      isNumeric: false,
+                    },
                   ] as const
                 ).map((item) => (
                   <div key={item.k} className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 min-w-0">
                     <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap truncate">{item.label}</div>
-                    <div className="mt-0.5 text-[12px] font-semibold text-white/40 min-w-0 truncate">{t("results.mediaKit.kpis.noData")}</div>
+                    <div
+                      className={
+                        "mt-0.5 text-[12px] font-semibold min-w-0 truncate " +
+                        (item.value ? "text-white/80" : "text-white/40") +
+                        (item.isNumeric ? " tabular-nums whitespace-nowrap" : "")
+                      }
+                    >
+                      {item.value ? item.value : t("results.mediaKit.kpis.noData")}
+                    </div>
                   </div>
                 ))}
               </div>

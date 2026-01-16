@@ -63,9 +63,16 @@
     "mediaKit": {
       "kicker": "媒體包",
       "rolePill": "創作者／合作",
+      "common": {
+        "noData": "尚無資料"
+      },
       "about": {
         "title": "自我介紹",
-        "placeholder": "尚未填寫自我介紹。請點右上「完善名片資料」補上。"
+        "placeholder": "尚未填寫自我介紹。請點右上「完善名片資料」補上。",
+        "lines": {
+          "primaryNiche": "主要領域",
+          "audienceSummary": "受眾摘要"
+        }
       },
       "stats": {
         "followers": "粉絲"
@@ -74,6 +81,10 @@
         "title": "關鍵指標",
         "labels": {
           "engagementRate": "互動率",
+          "avgViews": "平均觀看（Reels/影片）",
+          "avgReach": "平均觸及（30 天）",
+          "topLocation": "主要受眾地區",
+          "genderSplit": "受眾性別比例",
           "avgStoryViews": "限動平均觀看",
           "avgReelViews": "Reels 平均觀看",
           "audienceGender": "受眾性別",

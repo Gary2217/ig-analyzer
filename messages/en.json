@@ -63,9 +63,16 @@
     "mediaKit": {
       "kicker": "MEDIA KIT",
       "rolePill": "Creator / Collab",
+      "common": {
+        "noData": "No data"
+      },
       "about": {
         "title": "About",
-        "placeholder": "No bio provided yet. Click \"Complete Card Info\" above to add one."
+        "placeholder": "No bio provided yet. Click \"Complete Card Info\" above to add one.",
+        "lines": {
+          "primaryNiche": "Primary niche",
+          "audienceSummary": "Audience summary"
+        }
       },
       "stats": {
         "followers": "Followers"
@@ -74,6 +81,10 @@
         "title": "Key KPIs",
         "labels": {
           "engagementRate": "Engagement Rate",
+          "avgViews": "Avg Views (Reels/Video)",
+          "avgReach": "Avg Reach (30D)",
+          "topLocation": "Top audience location",
+          "genderSplit": "Audience gender split",
           "avgStoryViews": "Avg Story Views",
           "avgReelViews": "Avg Reel Views",
           "audienceGender": "Audience Gender",
