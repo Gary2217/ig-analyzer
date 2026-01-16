@@ -3092,7 +3092,7 @@ export default function ResultsClient() {
                     <div className="text-[12px] sm:text-[13px] font-semibold text-white leading-snug">
                       {t("results.creatorCard.brandPreview.title")}
                     </div>
-                    <div className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug line-clamp-2">
+                    <div className="mt-1 text-[11px] sm:text-[12px] text-white/60 leading-snug">
                       {t("results.creatorCard.brandPreview.subtitle")}
                     </div>
                   </div>
@@ -3582,6 +3582,106 @@ export default function ResultsClient() {
     return "ready"
   })()
 
+  const creatorCardPreviewCard = (
+    <Card id="creator-card-preview" className={"scroll-mt-40 " + CARD_SHELL_HOVER}>
+      <CardHeader className={CARD_HEADER_ROW}>
+        <div className="min-w-0">
+          <CardTitle className="text-xl font-bold text-white min-w-0 truncate">名片預覽</CardTitle>
+          <p className="mt-0.5 text-[11px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">品牌商將看到這張名片</p>
+        </div>
+
+        <div className="shrink-0 flex items-center gap-2">
+          <Link
+            href={`/${activeLocale}/creator-card`}
+            className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors whitespace-nowrap"
+          >
+            完善名片資料
+          </Link>
+          <button
+            type="button"
+            disabled
+            className="hidden sm:inline-flex items-center justify-center rounded-full border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
+            title={t("results.nextActions.cta.comingSoon")}
+          >
+            {t("results.nextActions.cta.exportMediaKit")}
+          </button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-4 lg:p-6">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 min-w-0">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="h-12 w-12 shrink-0 rounded-full overflow-hidden border border-white/10 bg-white/5">
+              {(() => {
+                const u =
+                  typeof (igProfile as any)?.profile_picture_url === "string"
+                    ? String((igProfile as any).profile_picture_url)
+                    : typeof (igMe as any)?.profile_picture_url === "string"
+                      ? String((igMe as any).profile_picture_url)
+                      : ""
+                if (!u) {
+                  return <div className="h-full w-full flex items-center justify-center text-[11px] text-white/50">—</div>
+                }
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={u} alt="avatar" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                )
+              })()}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="text-sm font-semibold text-white min-w-0 truncate">
+                      {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim() ? String((igProfile as any).name).trim() : displayUsername}
+                    </div>
+                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70 shrink-0 whitespace-nowrap">
+                      Preview
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-white/60 min-w-0 truncate">@{displayUsername}</div>
+                </div>
+              </div>
+
+              <div className="mt-2 text-[12px] text-slate-200/85 leading-snug min-w-0 line-clamp-2">—</div>
+
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-white/70 min-w-0">
+                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                  <div className="text-white/55">分類</div>
+                  <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                  <div className="text-white/55">地區</div>
+                  <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                  <div className="text-white/55">聯絡</div>
+                  <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2 min-w-0">
+                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                  <div className="text-[10px] text-white/55 whitespace-nowrap">Followers</div>
+                  <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{formatNum(followers)}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                  <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
+                  <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgLikesFormatted}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
+                  <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
+                  <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgCommentsFormatted}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   if (derivedGateState === "loading")
     return (
       <LoadingCard
@@ -3677,9 +3777,12 @@ export default function ResultsClient() {
     )
 
   return (
-    <ConnectedGate
-      notConnectedUI={
-        <>
+    <>
+      <div className="max-w-6xl mx-auto px-4 md:px-6 pb-4">{creatorCardPreviewCard}</div>
+
+      <ConnectedGate
+        notConnectedUI={
+          <>
           {hasAnyResultsData && isUpdating && (
             <div className="sticky top-[56px] sm:top-[60px] z-40 w-full border-b border-white/10 bg-[#0b1220]/85 backdrop-blur-md">
               <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-2">
@@ -3803,7 +3906,7 @@ export default function ResultsClient() {
             )}
             <div className="flex items-center justify-between w-full">
               <div>
-                <div className="text-sm text-slate-300">{t("results.performance.kicker")}</div>
+                <div className="text-sm text-green-400">{t("results.performance.kicker")}</div>
                 <h2 className="text-lg font-semibold text-white">{t("results.performance.title")}</h2>
               </div>
               <Button
@@ -3977,108 +4080,6 @@ export default function ResultsClient() {
               )}
             </div>
 
-            <Card id="creator-card-preview" className={"scroll-mt-40 " + CARD_SHELL_HOVER}>
-              <CardHeader className={CARD_HEADER_ROW}>
-                <div className="min-w-0">
-                  <CardTitle className="text-xl font-bold text-white min-w-0 truncate">名片預覽</CardTitle>
-                  <p className="mt-0.5 text-[11px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">品牌商將看到這張名片</p>
-                </div>
-
-                <div className="shrink-0 flex items-center gap-2">
-                  <Link
-                    href={`/${activeLocale}/creator-card`}
-                    className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors whitespace-nowrap"
-                  >
-                    完善名片資料
-                  </Link>
-                  <button
-                    type="button"
-                    disabled
-                    className="hidden sm:inline-flex items-center justify-center rounded-full border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
-                    title={t("results.nextActions.cta.comingSoon")}
-                  >
-                    {t("results.nextActions.cta.exportMediaKit")}
-                  </button>
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-4 lg:p-6">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 min-w-0">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="h-12 w-12 shrink-0 rounded-full overflow-hidden border border-white/10 bg-white/5">
-                      {(() => {
-                        const u =
-                          typeof (igProfile as any)?.profile_picture_url === "string"
-                            ? String((igProfile as any).profile_picture_url)
-                            : typeof (igMe as any)?.profile_picture_url === "string"
-                              ? String((igMe as any).profile_picture_url)
-                              : ""
-                        if (!u) {
-                          return <div className="h-full w-full flex items-center justify-center text-[11px] text-white/50">—</div>
-                        }
-                        return (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={u} alt="avatar" className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-                        )
-                      })()}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2 min-w-0">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="text-sm font-semibold text-white min-w-0 truncate">
-                              {typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim()
-                                ? String((igProfile as any).name).trim()
-                                : displayUsername}
-                            </div>
-                            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70 shrink-0 whitespace-nowrap">
-                              Preview
-                            </span>
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-white/60 min-w-0 truncate">@{displayUsername}</div>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 text-[12px] text-slate-200/85 leading-snug min-w-0 line-clamp-2">
-                        —
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-white/70 min-w-0">
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                          <div className="text-white/55">分類</div>
-                          <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
-                        </div>
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                          <div className="text-white/55">地區</div>
-                          <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
-                        </div>
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                          <div className="text-white/55">聯絡</div>
-                          <div className="mt-0.5 text-white/80 min-w-0 truncate">—</div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2 min-w-0">
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                          <div className="text-[10px] text-white/55 whitespace-nowrap">Followers</div>
-                          <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{formatNum(followers)}</div>
-                        </div>
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                          <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgLikesLabel}</div>
-                          <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgLikesFormatted}</div>
-                        </div>
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 min-w-0">
-                          <div className="text-[10px] text-white/55 whitespace-nowrap">{uiCopy.avgCommentsLabel}</div>
-                          <div className="mt-0.5 text-sm font-semibold text-white tabular-nums whitespace-nowrap">{avgCommentsFormatted}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card className={"mt-3 " + CARD_SHELL}>
               <CardContent className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 text-center">
@@ -4246,9 +4247,9 @@ export default function ResultsClient() {
             </div>
           )}
         </>
-      }
-      connectedUI={
-        <>
+        }
+        connectedUI={
+          <>
           <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-5">
             <div className="max-w-xl space-y-1">
               <div className="text-sm text-green-400">{t("results.instagram.connectedBadge")}</div>
@@ -6060,8 +6061,9 @@ export default function ResultsClient() {
               </div>
             </div>
           )}
-        </>
-      }
-    />
+          </>
+        }
+      />
+    </>
   )
 }
