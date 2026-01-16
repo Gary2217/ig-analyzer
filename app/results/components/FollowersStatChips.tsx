@@ -26,18 +26,18 @@ export function FollowersStatChips(props: {
   return (
     <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
       <div className="flex flex-nowrap items-center gap-2 min-w-0 max-w-full overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:whitespace-normal">
-        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[104px] shrink-0 max-w-full">
-          <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">Followers 粉絲總數</div>
+        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] shrink-0 max-w-full">
+          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">粉絲總</div>
           <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">{totalText}</div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[104px] shrink-0 max-w-full">
-          <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">Δ Yesterday 昨日增加</div>
+        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] shrink-0 max-w-full">
+          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">昨日</div>
           <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">{deltaText}</div>
         </div>
 
-        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[104px] shrink-0 max-w-full">
-          <div className="text-[10px] leading-tight text-white/60 min-w-0 truncate">Net 7d 近 7 天</div>
+        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] shrink-0 max-w-full">
+          <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">近7天</div>
           <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap">{growth7dText}</div>
         </div>
       </div>

@@ -4522,6 +4522,37 @@ export default function ResultsClient() {
                       </span>
                     </div>
 
+                    <div className="min-w-0 flex-1 flex justify-end overflow-x-auto flex-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden">
+                      <div className="inline-flex min-w-0 flex-nowrap items-center gap-2">
+                        {(
+                          [
+                            { k: "reach" as const, label: t("results.trend.legend.reach"), dot: "#34d399" },
+                            { k: "followers" as const, label: "粉絲 Followers", dot: "#fbbf24" },
+                          ] as const
+                        ).map((m) => {
+                          const pressed = focusedAccountTrendMetric === m.k
+                          return (
+                            <button
+                              key={`trend-mobile-${m.k}`}
+                              type="button"
+                              aria-pressed={pressed}
+                              onClick={() => {
+                                setFocusedAccountTrendMetric(m.k)
+                              }}
+                              className={
+                                `inline-flex items-center gap-2 rounded-full h-6 px-2 text-[11px] leading-none font-semibold border transition-colors whitespace-nowrap ` +
+                                `focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 ` +
+                                (pressed ? "bg-white/8 border-white/18 text-white" : "bg-white/[0.02] border-white/6 text-white/55 hover:bg-white/4")
+                              }
+                            >
+                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: m.dot }} />
+                              <span className="truncate min-w-0">{m.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
                     <div className="hidden sm:inline-flex shrink-0 tabular-nums text-xs text-white/55 whitespace-nowrap">
                       <span>目前可用 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} 天</span>
                       <span className="mx-1 opacity-50">|</span>
@@ -4531,7 +4562,7 @@ export default function ResultsClient() {
 
                   <div className="min-w-0 sm:flex-1 sm:flex sm:justify-center w-full overflow-hidden">
                     <div className="w-full min-w-0">
-                      <div className="w-full min-w-0 flex flex-wrap items-center justify-center gap-2">
+                      <div className="hidden sm:flex w-full min-w-0 flex flex-wrap items-center justify-center gap-2">
                         {(
                           [
                             { k: "reach" as const, label: t("results.trend.legend.reach"), dot: "#34d399" },
@@ -5185,8 +5216,8 @@ export default function ResultsClient() {
 
                                       return (
                                         <g key={`trend-line-${s.k}`}>
-                                          <path d={reachPath} stroke={s.color} strokeWidth={2} fill="none" opacity={0.42} />
-                                          <path d={maPath} stroke={s.color} strokeWidth={2.2} fill="none" opacity={0.92} />
+                                          <path d={reachPath} stroke={s.color} strokeWidth={isSmUp ? 2 : 1.4} fill="none" opacity={0.42} />
+                                          <path d={maPath} stroke={s.color} strokeWidth={isSmUp ? 2.2 : 1.6} fill="none" opacity={0.92} />
                                         </g>
                                       )
                                     }
@@ -5310,7 +5341,7 @@ export default function ResultsClient() {
                                   if (n <= 0) return null
                                   const last = n - 1
 
-                                  const maxTicks = isSmUp ? 8 : 5
+                                  const maxTicks = isSmUp ? 8 : 4
                                   const idxs = (() => {
                                     if (n <= maxTicks) return Array.from({ length: n }).map((_, i) => i)
                                     const out = new Set<number>()
@@ -5358,7 +5389,8 @@ export default function ResultsClient() {
                                       {idxs.map((i) => {
                                         const x = sx(i)
                                         if (!Number.isFinite(x)) return null
-                                        const label = dataForChart[i]?.t ?? ""
+                                        const labelRaw = dataForChart[i]?.t ?? ""
+                                        const label = !isSmUp && typeof labelRaw === "string" ? labelRaw.replace(/^0+/, "").replace("/0", "/") : labelRaw
                                         return (
                                           <text
                                             key={`trend-xlab-${i}`}
