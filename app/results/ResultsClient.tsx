@@ -210,7 +210,7 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   const isVideoUrl = useMemo(() => {
     const u = typeof currentSrc === "string" ? currentSrc.trim() : ""
     if (!u) return false
-    return /\.mp4(\?|$)/i.test(u)
+    return /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
   }, [currentSrc])
 
   if (broken || isVideoUrl) {
@@ -248,7 +248,7 @@ function SafeIgThumb(props: { src?: string; alt: string; className: string }) {
   const isVideoUrl = useMemo(() => {
     const u = typeof src === "string" ? src.trim() : ""
     if (!u) return false
-    return /\.mp4(\?|$)/i.test(u)
+    return /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
   }, [src])
 
   if (!src || broken || isVideoUrl) {
@@ -5554,7 +5554,7 @@ export default function ResultsClient() {
                           const tu = typeof (real as any)?.thumbnail_url === "string" ? String((real as any).thumbnail_url) : ""
                           const mu = typeof (real as any)?.media_url === "string" ? String((real as any).media_url) : ""
                           const isVideoType = mt === "VIDEO" || mt === "REELS"
-                          const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u)
+                          const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
                           const pick = isVideoType ? (tu || mu) : (mu || tu)
                           if (pick && isLikelyVideoUrl(pick)) return tu || ""
                           return pick || ""

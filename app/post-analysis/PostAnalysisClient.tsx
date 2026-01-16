@@ -158,7 +158,7 @@ function SafeIgThumb(props: { src: string; alt?: string; className: string }) {
   const isVideoUrl = useMemo(() => {
     const u = typeof src === "string" ? src.trim() : ""
     if (!u) return false
-    return /\.mp4(\?|$)/i.test(u)
+    return /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
   }, [src])
 
   const shouldShowPlaceholder = broken || !src || isVideoUrl
@@ -423,7 +423,7 @@ export default function PostAnalysisClient() {
     const thumb = typeof (analysisResult as any)?.thumbnail_url === "string" ? String((analysisResult as any).thumbnail_url) : ""
     const media = typeof (analysisResult as any)?.media_url === "string" ? String((analysisResult as any).media_url) : ""
 
-    const isVideo = (u: string) => /\.mp4(\?|$)/i.test(u)
+    const isVideo = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
     const pick = (u: string) => {
       const s = String(u || "").trim()
       if (!s) return ""
@@ -435,7 +435,7 @@ export default function PostAnalysisClient() {
   }, [analysisResult, officialPost])
 
   const safeImgSrc = useMemo(() => {
-    const isVideo = (u: string) => /\.mp4(\?|$)/i.test(u)
+    const isVideo = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
     return (u: string) => {
       const s = String(u || "").trim()
       if (!s) return ""
