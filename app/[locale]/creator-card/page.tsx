@@ -16,6 +16,7 @@ import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname, localePathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
+import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey } from "../../lib/creatorCardOptions"
 
 type CreatorCardPayload = {
   handle?: string | null
@@ -168,25 +169,11 @@ export default function CreatorCardPage() {
 
   const knownFormatIds = useMemo(
     () =>
-      new Set([
-        "reels",
-        "posts",
-        "stories",
-        "live",
-        "ugc",
-        "unboxing",
-        "giveaway",
-        "event",
-        "affiliate",
-        "tiktok",
-        "youtube",
-        "fb_post",
-        "fb",
-        "facebook",
-        "other",
-      ]),
+      new Set([...COLLAB_TYPE_OPTIONS, "fb", "facebook", "other"]),
     [],
   )
+
+  const knownCollabTypeIds = useMemo(() => new Set<string>(COLLAB_TYPE_OPTIONS as unknown as string[]), [])
 
   const [refetchTick, setRefetchTick] = useState(0)
   const [creatorId, setCreatorId] = useState<string | null>(null)
@@ -199,21 +186,10 @@ export default function CreatorCardPage() {
 
   const formatOptions = useMemo(
     () =>
-      [
-        { id: "reels", labelKey: "creatorCardEditor.formats.options.reels" },
-        { id: "posts", labelKey: "creatorCardEditor.formats.options.posts" },
-        { id: "stories", labelKey: "creatorCardEditor.formats.options.stories" },
-        { id: "live", labelKey: "creatorCardEditor.formats.options.live" },
-        { id: "ugc", labelKey: "creatorCardEditor.formats.options.ugc" },
-        { id: "unboxing", labelKey: "creatorCardEditor.formats.options.unboxing" },
-        { id: "giveaway", labelKey: "creatorCardEditor.formats.options.giveaway" },
-        { id: "event", labelKey: "creatorCardEditor.formats.options.event" },
-        { id: "affiliate", labelKey: "creatorCardEditor.formats.options.affiliate" },
-        { id: "tiktok", labelKey: "creatorCardEditor.formats.options.tiktok" },
-        { id: "youtube", labelKey: "creatorCardEditor.formats.options.youtube" },
-        { id: "fb_post", labelKey: "creatorCardEditor.formats.options.fbPost" },
+      ([
+        ...COLLAB_TYPE_OPTIONS.map((id) => ({ id, labelKey: collabTypeLabelKey(id) })),
         { id: "other", labelKey: "creatorCardEditor.formats.options.other" },
-      ] as const,
+      ] as const),
     []
   )
 
@@ -279,7 +255,8 @@ export default function CreatorCardPage() {
   const [suppressFeaturedTileClick, setSuppressFeaturedTileClick] = useState(false)
   const [editingFeaturedId, setEditingFeaturedId] = useState<string | null>(null)
   const [editingFeaturedBrand, setEditingFeaturedBrand] = useState("")
-  const [editingFeaturedCollabType, setEditingFeaturedCollabType] = useState("")
+  const [editingFeaturedCollabTypeSelect, setEditingFeaturedCollabTypeSelect] = useState("")
+  const [editingFeaturedCollabTypeCustom, setEditingFeaturedCollabTypeCustom] = useState("")
 
   const openAddFeatured = useCallback(() => {
     featuredAddInputRef.current?.click()
@@ -296,11 +273,22 @@ export default function CreatorCardPage() {
         const picked = prev.find((x) => x.id === id)
         setEditingFeaturedId(id)
         setEditingFeaturedBrand(typeof picked?.brand === "string" ? picked.brand : "")
-        setEditingFeaturedCollabType(typeof picked?.collabType === "string" ? picked.collabType : "")
+        const current = typeof picked?.collabType === "string" ? picked.collabType : ""
+        const presetLabels = COLLAB_TYPE_OPTIONS.map((optId) => t(collabTypeLabelKey(optId)))
+        if (current && presetLabels.includes(current)) {
+          setEditingFeaturedCollabTypeSelect(current)
+          setEditingFeaturedCollabTypeCustom("")
+        } else if (current) {
+          setEditingFeaturedCollabTypeSelect(COLLAB_TYPE_OTHER_VALUE)
+          setEditingFeaturedCollabTypeCustom(current)
+        } else {
+          setEditingFeaturedCollabTypeSelect("")
+          setEditingFeaturedCollabTypeCustom("")
+        }
         return prev
       })
     },
-    [setFeaturedItems]
+    [setFeaturedItems, t]
   )
 
   const serializedContact = useMemo(() => {
@@ -622,7 +610,7 @@ export default function CreatorCardPage() {
   const addOtherFormat = useCallback(() => {
     const trimmed = otherFormatInput.trim()
     if (!trimmed) return
-    setDeliverables((prev) => {
+    setPastCollaborations((prev) => {
       const lower = trimmed.toLowerCase()
       const hasDup = prev.some((x) => x.toLowerCase() === lower)
       if (hasDup) return prev
@@ -1244,20 +1232,38 @@ export default function CreatorCardPage() {
                       <div className="text-sm font-semibold text-slate-900">合作形式</div>
                       <div className="mt-2">
                         <select
-                          value={editingFeaturedCollabType}
-                          onChange={(e) => setEditingFeaturedCollabType(e.target.value)}
+                          value={editingFeaturedCollabTypeSelect}
+                          onChange={(e) => {
+                            const next = e.target.value
+                            setEditingFeaturedCollabTypeSelect(next)
+                            if (next !== COLLAB_TYPE_OTHER_VALUE) {
+                              setEditingFeaturedCollabTypeCustom("")
+                            }
+                          }}
                           className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                         >
                           <option value="">請選擇</option>
-                          <option value="Reels">Reels</option>
-                          <option value="貼文">貼文</option>
-                          <option value="限動">限動</option>
-                          <option value="UGC">UGC</option>
-                          <option value="開箱">開箱</option>
-                          <option value="直播">直播</option>
-                          <option value="其他">其他</option>
+                          {COLLAB_TYPE_OPTIONS.map((id) => {
+                            const label = t(collabTypeLabelKey(id))
+                            return (
+                              <option key={id} value={label}>
+                                {label}
+                              </option>
+                            )
+                          })}
+                          <option value={COLLAB_TYPE_OTHER_VALUE}>{t("creatorCardEditor.formats.options.other")}</option>
                         </select>
                       </div>
+
+                      {editingFeaturedCollabTypeSelect === COLLAB_TYPE_OTHER_VALUE ? (
+                        <div className="mt-2">
+                          <Input
+                            value={editingFeaturedCollabTypeCustom}
+                            placeholder="請輸入合作形式…"
+                            onChange={(e) => setEditingFeaturedCollabTypeCustom(e.target.value)}
+                          />
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="mt-5 flex justify-end gap-2">
@@ -1278,10 +1284,14 @@ export default function CreatorCardPage() {
                         onClick={() => {
                           const id = editingFeaturedId
                           if (!id) return
+                          const nextCollabType =
+                            editingFeaturedCollabTypeSelect === COLLAB_TYPE_OTHER_VALUE
+                              ? editingFeaturedCollabTypeCustom.trim()
+                              : editingFeaturedCollabTypeSelect
                           setFeaturedItems((prev) =>
                             prev.map((x) =>
                               x.id === id
-                                ? { ...x, brand: editingFeaturedBrand, collabType: editingFeaturedCollabType }
+                                ? { ...x, brand: editingFeaturedBrand, collabType: nextCollabType }
                                 : x
                             )
                           )
@@ -1342,6 +1352,25 @@ export default function CreatorCardPage() {
                     </Button>
                   )
                 })}
+
+                {(() => {
+                  const customs = pastCollaborations.filter((x) => !knownCollabTypeIds.has(x))
+                  if (customs.length === 0) return null
+                  return customs.map((tag) => (
+                    <Button
+                      key={tag}
+                      type="button"
+                      variant="pill"
+                      active
+                      onClick={() => {
+                        setPastCollaborations((prev) => prev.filter((x) => x !== tag))
+                        flashHighlight("formats")
+                      }}
+                    >
+                      {tag}
+                    </Button>
+                  ))
+                })()}
               </div>
 
               {otherFormatEnabled ? (
@@ -1371,33 +1400,7 @@ export default function CreatorCardPage() {
                     </Button>
                   </div>
 
-                  {(() => {
-                    const customs = deliverables.filter((x) => !knownFormatIds.has(x))
-                    if (customs.length === 0) return null
-                    return (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {customs.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                          >
-                            <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                            <button
-                              type="button"
-                              className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                              onClick={() => {
-                                setDeliverables((prev) => prev.filter((x) => x !== tag))
-                                flashHighlight("formats")
-                              }}
-                              aria-label={t("creatorCardEditor.pastCollaborations.remove")}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )
-                  })()}
+                  {null}
                 </div>
               ) : null}
             </CardContent>
