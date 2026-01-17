@@ -63,13 +63,25 @@ function SortableFeaturedTile(props: {
     >
       <button
         type="button"
-        className="absolute inset-0 z-0"
+        className={
+          "absolute inset-0 z-0 " +
+          (!item.url
+            ? "flex flex-col items-center justify-center gap-1 text-slate-600"
+            : "")
+        }
         onClick={() => {
           if (suppressClick) return
           onReplace(item.id)
         }}
-        aria-label="更換"
-      />
+        aria-label={item.url ? "更換" : "請選擇"}
+      >
+        {!item.url ? (
+          <span className="pointer-events-none flex flex-col items-center justify-center">
+            <span className="text-sm font-semibold">請選擇</span>
+            <span className="text-[11px] leading-4 text-slate-500">Choose</span>
+          </span>
+        ) : null}
+      </button>
 
       {item.url ? (
         <img src={item.url} alt="" className="h-full w-full object-cover" />
@@ -79,26 +91,28 @@ function SortableFeaturedTile(props: {
         </div>
       )}
 
-      <button
-        type="button"
-        className="absolute left-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
-        onPointerDownCapture={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onPointerDown={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          onEdit(item.id)
-        }}
-        aria-label="編輯"
-      >
-        <Pencil className="h-3.5 w-3.5 text-slate-700" />
-      </button>
+      {item.url ? (
+        <button
+          type="button"
+          className="absolute left-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+          onPointerDownCapture={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onPointerDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onEdit(item.id)
+          }}
+          aria-label="編輯"
+        >
+          <Pencil className="h-3.5 w-3.5 text-slate-700" />
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -228,6 +242,7 @@ export default function CreatorCardPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const saveInFlightRef = useRef(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadErrorKind, setLoadErrorKind] = useState<
     "not_connected" | "supabase_invalid_key" | "load_failed" | null
@@ -641,6 +656,8 @@ export default function CreatorCardPage() {
 
   const handleSave = useCallback(async () => {
     if (saving) return
+    if (saveInFlightRef.current) return
+    saveInFlightRef.current = true
     setSaving(true)
     setSaveError(null)
     setSaveOk(false)
@@ -713,6 +730,7 @@ export default function CreatorCardPage() {
     } catch {
       setSaveError(t("creatorCardEditor.errors.saveFailed"))
     } finally {
+      saveInFlightRef.current = false
       setSaving(false)
     }
   }, [audienceProfiles, baseCard, collaborationNiches, deliverables, featuredItems, pastCollaborations, saving, serializedContact, t, themeTypes])

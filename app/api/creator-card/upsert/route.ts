@@ -169,10 +169,15 @@ export async function POST(req: Request) {
     const { data, error } = await runUpsert(dbWrite)
 
     if (error) {
-      if (typeof (error as any)?.message === "string" && ((error as any).message as string).includes("Invalid API key")) {
+      const rawMsg = typeof (error as any)?.message === "string" ? String((error as any).message) : "unknown"
+      console.error("[creator-card/upsert] supabase error", { message: rawMsg, code: (error as any)?.code ?? null })
+      if (rawMsg.includes("Invalid API key")) {
         return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
       }
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+      return NextResponse.json(
+        { ok: false, error: "upsert_failed", message: rawMsg.slice(0, 400) },
+        { status: 400 },
+      )
     }
 
     return NextResponse.json({
@@ -182,9 +187,10 @@ export async function POST(req: Request) {
     })
   } catch (e: any) {
     const msg = typeof e?.message === "string" ? e.message : "unknown"
+    console.error("[creator-card/upsert] unexpected error", { message: msg })
     if (msg.includes("Invalid API key")) {
       return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
     }
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+    return NextResponse.json({ ok: false, error: "unexpected_error", message: msg.slice(0, 400) }, { status: 500 })
   }
 }
