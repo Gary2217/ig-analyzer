@@ -77,6 +77,8 @@ export default function CreatorCardPage() {
   )
 
   const [refetchTick, setRefetchTick] = useState(0)
+  const [creatorId, setCreatorId] = useState<string | null>(null)
+  const [creatorStats, setCreatorStats] = useState<any | null>(null)
 
   const activeLocale = useMemo(() => {
     if (typeof window === "undefined") return "en"
@@ -219,6 +221,10 @@ export default function CreatorCardPage() {
 
         const card = json?.card && typeof json.card === "object" ? (json.card as any) : null
 
+        const nextCreatorId =
+          json?.me && typeof (json as any).me?.igUserId === "string" ? String((json as any).me.igUserId).trim() : ""
+        setCreatorId(nextCreatorId || null)
+
         const nextBase: CreatorCardPayload | null = card
           ? {
               handle: typeof card.handle === "string" ? card.handle : null,
@@ -280,6 +286,38 @@ export default function CreatorCardPage() {
       cancelled = true
     }
   }, [refetchTick, t])
+
+  useEffect(() => {
+    if (!creatorId) {
+      setCreatorStats(null)
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+        const json: any = await res.json().catch(() => null)
+        if (cancelled) return
+        if (!res.ok || !json?.ok) {
+          setCreatorStats(null)
+          return
+        }
+        setCreatorStats(json?.stats ?? null)
+      } catch {
+        if (cancelled) return
+        setCreatorStats(null)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [creatorId])
 
   const handleRetryLoad = useCallback(() => {
     setRefetchTick((x) => x + 1)
@@ -387,6 +425,11 @@ export default function CreatorCardPage() {
     const posts = finiteNumOrNull(igProfile?.media_count)
     return typeof posts === "number" && Number.isFinite(posts) ? formatNum(posts) : null
   }, [finiteNumOrNull, formatNum, igProfile?.media_count])
+
+  const engagementRateText = useMemo(() => {
+    const pct = typeof creatorStats?.engagementRatePct === "number" ? creatorStats.engagementRatePct : null
+    return typeof pct === "number" && Number.isFinite(pct) ? `${pct.toFixed(2)}%` : null
+  }, [creatorStats?.engagementRatePct])
 
   const loadingSkeleton = (
     <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0 animate-pulse">
@@ -689,6 +732,7 @@ export default function CreatorCardPage() {
               pastCollaborations={pastCollaborations}
               followersText={followersText}
               postsText={postsText}
+              engagementRateText={engagementRateText}
               highlightTarget={highlight}
             />
           </div>

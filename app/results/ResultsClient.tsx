@@ -121,6 +121,7 @@ type IgMeResponse = {
 type CreatorCardMeResponse = {
   ok: boolean
   error?: string
+  me?: { igUserId?: string | null; igUsername?: string | null } | null
   card?: any
 }
 
@@ -2492,7 +2493,20 @@ export default function ResultsClient() {
   const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
 
   const [creatorCard, setCreatorCard] = useState<any | null>(null)
+  const [creatorStats, setCreatorStats] = useState<any | null>(null)
+  const [creatorIdFromCardMe, setCreatorIdFromCardMe] = useState<string | null>(null)
   const creatorCardFetchedRef = useRef(false)
+  const creatorStatsUpsertKeyRef = useRef<string>("")
+
+  const resolvedCreatorId = useMemo(() => {
+    const igUserIdFromSnapshot = (() => {
+      const insightId = (dailySnapshotData as any)?.insights_daily_series?.[0]?.id
+      return extractIgUserIdFromInsightsId(insightId)
+    })()
+    const igUserIdFromCookie = getCookieValue("ig_ig_id").trim()
+    const igUserIdStr = (creatorIdFromCardMe || igUserIdFromSnapshot || igUserIdFromCookie).trim()
+    return igUserIdStr || null
+  }, [creatorIdFromCardMe, dailySnapshotData])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
@@ -2607,6 +2621,9 @@ export default function ResultsClient() {
     if (!isConnectedInstagram) {
       setCreatorCard(null)
       creatorCardFetchedRef.current = false
+      setCreatorStats(null)
+      setCreatorIdFromCardMe(null)
+      creatorStatsUpsertKeyRef.current = ""
       return
     }
 
@@ -2627,6 +2644,9 @@ export default function ResultsClient() {
           setCreatorCard(null)
           return
         }
+        const nextCreatorId =
+          json?.me && typeof (json as any).me?.igUserId === "string" ? String((json as any).me.igUserId).trim() : ""
+        setCreatorIdFromCardMe(nextCreatorId || null)
         setCreatorCard(json?.card && typeof json.card === "object" ? (json.card as any) : null)
       } catch (e) {
         if (cancelled) return
@@ -2639,6 +2659,72 @@ export default function ResultsClient() {
       cancelled = true
     }
   }, [isConnectedInstagram])
+
+  useEffect(() => {
+    if (!isConnectedInstagram || !resolvedCreatorId) {
+      setCreatorStats(null)
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/creators/${encodeURIComponent(resolvedCreatorId)}/stats`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+        const json: any = await res.json().catch(() => null)
+        if (cancelled) return
+        if (!res.ok || !json?.ok) {
+          setCreatorStats(null)
+          return
+        }
+        setCreatorStats(json?.stats ?? null)
+      } catch (e) {
+        if (cancelled) return
+        if (isAbortError(e)) return
+        setCreatorStats(null)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isConnectedInstagram, resolvedCreatorId])
+
+  useEffect(() => {
+    if (!isConnectedInstagram || !resolvedCreatorId) return
+    if (!computedMetrics) return
+
+    const engagementRatePct = computedMetrics?.engagementRatePct
+    const avgLikes = computedMetrics?.avgLikes
+    const avgComments = computedMetrics?.avgComments
+    const followers = finiteNumOrNull((igProfile as any)?.followers_count)
+
+    const nextKey = JSON.stringify({ resolvedCreatorId, engagementRatePct, avgLikes, avgComments, followers })
+    if (creatorStatsUpsertKeyRef.current === nextKey) return
+    creatorStatsUpsertKeyRef.current = nextKey
+
+    ;(async () => {
+      try {
+        await fetch("/api/creator-stats/upsert", {
+          method: "POST",
+          cache: "no-store",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            engagementRatePct,
+            followers,
+            avgLikes,
+            avgComments,
+          }),
+        })
+      } catch {
+        // best-effort
+      }
+    })()
+  }, [computedMetrics, finiteNumOrNull, igProfile, isConnectedInstagram, resolvedCreatorId])
 
   useEffect(() => {
     if (!isConnectedInstagram) return
@@ -3647,11 +3733,13 @@ export default function ResultsClient() {
   })()
 
   const creatorCardEngagementRateText = (() => {
+    const dbPct = typeof creatorStats?.engagementRatePct === "number" ? creatorStats.engagementRatePct : null
+    if (typeof dbPct === "number" && Number.isFinite(dbPct)) return `${dbPct.toFixed(2)}%`
     if (typeof engagementRatePctFormatted === "string" && engagementRatePctFormatted.trim() && engagementRatePctFormatted !== "—") {
       return engagementRatePctFormatted
     }
     const pct = computedMetrics?.engagementRatePct
-    if (typeof pct === "number" && Number.isFinite(pct)) return `${pct.toFixed(1)}%`
+    if (typeof pct === "number" && Number.isFinite(pct)) return `${pct.toFixed(2)}%`
     return null
   })()
 
