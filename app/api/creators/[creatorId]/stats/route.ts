@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET(
-  _req: Request,
-  ctx: { params: { creatorId: string } },
+  _request: NextRequest,
+  context: { params: Promise<{ creatorId: string }> },
 ) {
   try {
-    const { creatorId } = ctx.params
+    const { creatorId } = await context.params
     const id = String(creatorId ?? "").trim()
     if (!id) return NextResponse.json({ ok: false, error: "missing_creator_id" }, { status: 400 })
 
