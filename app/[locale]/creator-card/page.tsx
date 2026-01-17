@@ -637,24 +637,26 @@ export default function CreatorCardPage() {
 
               <div className="mt-5 min-w-0">
                 <div className="text-sm font-semibold text-slate-900">{activeLocale === "zh-TW" ? "主要類型" : "Primary type"}</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {primaryTypeTags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                    >
-                      <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                        onClick={() => setPrimaryTypeTags((prev) => prev.filter((x) => x !== tag))}
-                        aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                {primaryTypeTags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {primaryTypeTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
+                        <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                          onClick={() => setPrimaryTypeTags((prev) => prev.filter((x) => x !== tag))}
+                          aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-3">
                   <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                     <Input
@@ -688,24 +690,26 @@ export default function CreatorCardPage() {
 
               <div className="mt-5 min-w-0">
                 <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.themeTitle")}</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {themeTypes.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                    >
-                      <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                        onClick={() => setThemeTypes((prev) => prev.filter((x) => x !== tag))}
-                        aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                {themeTypes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {themeTypes.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
+                        <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                          onClick={() => setThemeTypes((prev) => prev.filter((x) => x !== tag))}
+                          aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-3">
                   <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                     <Input
@@ -739,24 +743,26 @@ export default function CreatorCardPage() {
 
               <div className="mt-5 min-w-0">
                 <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.audienceTitle")}</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {audienceProfiles.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                    >
-                      <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                        onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
-                        aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                {audienceProfiles.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {audienceProfiles.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
+                        <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                          onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
+                          aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-3">
                   <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                     <Input
