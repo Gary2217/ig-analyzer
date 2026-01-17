@@ -35,8 +35,8 @@ type CreatorCardPayload = {
 type FeaturedItem = {
   id: string
   url: string
-  brand?: string
-  collabType?: string
+  brand: string
+  collabType: string
 }
 
 function SortableFeaturedTile(props: {
@@ -82,10 +82,16 @@ function SortableFeaturedTile(props: {
       <button
         type="button"
         className="absolute left-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+        onPointerDownCapture={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
         onPointerDown={(e) => {
+          e.preventDefault()
           e.stopPropagation()
         }}
         onClick={(e) => {
+          e.preventDefault()
           e.stopPropagation()
           onEdit(item.id)
         }}
@@ -97,10 +103,16 @@ function SortableFeaturedTile(props: {
       <button
         type="button"
         className="absolute right-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+        onPointerDownCapture={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
         onPointerDown={(e) => {
+          e.preventDefault()
           e.stopPropagation()
         }}
         onClick={(e) => {
+          e.preventDefault()
           e.stopPropagation()
           onRemove(item.id)
         }}
@@ -643,16 +655,42 @@ export default function CreatorCardPage() {
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
       }
 
-      const res = await fetch("/api/creator-card/upsert", {
+      const url = "/api/creator-card/upsert"
+      const res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
         body: JSON.stringify(payload),
       })
 
-      const json: any = await res.json().catch(() => null)
+      const json: any = await res.clone().json().catch(() => null)
+      const text = json ? null : await res.text().catch(() => null)
+
+      console.debug("[creator-card] save", {
+        url,
+        status: res.status,
+        ok: res.ok,
+        error: typeof json?.error === "string" ? json.error : null,
+        message: typeof json?.message === "string" ? json.message : null,
+        text: typeof text === "string" ? text.slice(0, 400) : null,
+      })
+
       if (!res.ok || !json?.ok) {
-        setSaveError(t("creatorCardEditor.errors.saveFailed"))
+        if (res.status === 401 || json?.error === "not_connected") {
+          setSaveError("未登入或登入已過期 / Not authenticated (session expired)")
+          return
+        }
+
+        const serverMsg =
+          typeof json?.error === "string"
+            ? json.error
+            : typeof json?.message === "string"
+              ? json.message
+              : typeof text === "string" && text.trim()
+                ? text.trim()
+                : null
+
+        setSaveError(serverMsg ? `${t("creatorCardEditor.errors.saveFailed")}: ${serverMsg}` : t("creatorCardEditor.errors.saveFailed"))
         return
       }
 
@@ -832,7 +870,11 @@ export default function CreatorCardPage() {
                     variant="primary"
                     size="sm"
                     className="absolute bottom-3 right-3"
-                    onClick={handleSave}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleSave()
+                    }}
                     disabled={
                       saving ||
                       loading ||

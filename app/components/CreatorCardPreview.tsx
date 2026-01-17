@@ -142,12 +142,10 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
     if (rawItems.length > 0) {
       for (const item of rawItems) {
-        const url = typeof item?.url === "string" ? item.url.trim() : ""
-        if (!url) continue
         const id = typeof item?.id === "string" && item.id ? item.id : `${out.length}`
         out.push({
           id,
-          url,
+          url: typeof item?.url === "string" ? item.url.trim() : "",
           brand: typeof item?.brand === "string" ? item.brand.trim() : "",
           collabType: typeof item?.collabType === "string" ? item.collabType.trim() : "",
         })
@@ -535,7 +533,13 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                         key={item.id}
                         className="relative shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
                       >
-                        <img src={item.url} alt="" className="h-full w-full object-cover" />
+                        {item.url ? (
+                          <img src={item.url} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <Plus className="h-7 w-7 text-white/25" />
+                          </div>
+                        )}
 
                         {item.brand || item.collabType ? (
                           <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1.5">
