@@ -152,6 +152,10 @@ export default function CreatorCardPage() {
 
   const [primaryTypeTags, setPrimaryTypeTags] = useState<string[]>([])
 
+  const [contactEmail, setContactEmail] = useState("")
+  const [contactInstagram, setContactInstagram] = useState("")
+  const [contactOther, setContactOther] = useState("")
+
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
 
@@ -309,6 +313,24 @@ export default function CreatorCardPage() {
         setThemeTypes(normalizeStringArray(nextBase?.themeTypes ?? [], 20))
         setAudienceProfiles(normalizeStringArray(nextBase?.audienceProfiles ?? [], 20))
 
+        const parsedContact = (() => {
+          const raw = typeof nextBase?.contact === "string" ? nextBase.contact.trim() : ""
+          if (!raw) return { email: "", instagram: "", other: "" }
+          try {
+            const obj = JSON.parse(raw) as any
+            return {
+              email: typeof obj?.email === "string" ? obj.email : "",
+              instagram: typeof obj?.instagram === "string" ? obj.instagram : "",
+              other: typeof obj?.other === "string" ? obj.other : "",
+            }
+          } catch {
+            return { email: "", instagram: "", other: raw }
+          }
+        })()
+        setContactEmail(parsedContact.email)
+        setContactInstagram(parsedContact.instagram)
+        setContactOther(parsedContact.other)
+
         const primaryParts = (() => {
           const raw = typeof nextBase?.niche === "string" ? nextBase.niche : ""
           if (!raw.trim()) return []
@@ -355,6 +377,18 @@ export default function CreatorCardPage() {
       cancelled = true
     }
   }, [refetchTick, t])
+
+  useEffect(() => {
+    setBaseCard((prev) => {
+      if (!prev) return prev
+      const email = contactEmail.trim()
+      const instagram = contactInstagram.trim()
+      const other = contactOther.trim()
+      const nextContact = email || instagram || other ? JSON.stringify({ email, instagram, other }) : null
+      if ((prev.contact ?? null) === nextContact) return prev
+      return { ...prev, contact: nextContact }
+    })
+  }, [contactEmail, contactInstagram, contactOther])
 
   useEffect(() => {
     if (!creatorId) {
@@ -761,6 +795,49 @@ export default function CreatorCardPage() {
 
           <Card>
             <CardHeader>
+              <CardTitle className="text-base">聯絡方式</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="min-w-0 space-y-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">Email</div>
+                  <div className="mt-2">
+                    <Input
+                      value={contactEmail}
+                      placeholder="例如：hello@email.com"
+                      onChange={(e) => setContactEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">Instagram</div>
+                  <div className="mt-2">
+                    <Input
+                      value={contactInstagram}
+                      placeholder="@username or https://instagram.com/..."
+                      onChange={(e) => setContactInstagram(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">Other</div>
+                  <div className="mt-2">
+                    <textarea
+                      value={contactOther}
+                      placeholder="例如：LINE / WhatsApp / 經紀窗口"
+                      onChange={(e) => setContactOther(e.target.value)}
+                      className="w-full min-h-[96px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="text-base">{t("creatorCardEditor.formats.title")}</CardTitle>
               <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.formats.subtitle")}</div>
             </CardHeader>
@@ -1051,6 +1128,7 @@ export default function CreatorCardPage() {
               displayName={displayName}
               aboutText={baseCard?.audience ?? null}
               primaryNiche={baseCard?.niche ?? null}
+              contact={baseCard?.contact ?? null}
               themeTypes={themeTypes}
               audienceProfiles={audienceProfiles}
               collaborationNiches={collaborationNiches}

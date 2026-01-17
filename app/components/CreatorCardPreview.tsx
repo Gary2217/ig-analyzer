@@ -23,6 +23,8 @@ export type CreatorCardPreviewProps = {
   aboutText?: string | null
   primaryNiche?: string | null
 
+  contact?: string | null
+
   themeTypes?: string[] | null
   audienceProfiles?: string[] | null
 
@@ -73,6 +75,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     username,
     aboutText,
     primaryNiche,
+    contact,
     themeTypes,
     audienceProfiles,
     collaborationNiches,
@@ -110,6 +113,21 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
   const resolvedDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : "—"
   const resolvedUsername = typeof username === "string" && username.trim() ? username.trim() : "—"
+
+  const parsedContact = useMemo(() => {
+    const raw = typeof contact === "string" ? contact.trim() : ""
+    if (!raw) return { email: "", instagram: "", other: "" }
+    try {
+      const obj = JSON.parse(raw) as any
+      return {
+        email: typeof obj?.email === "string" ? obj.email.trim() : "",
+        instagram: typeof obj?.instagram === "string" ? obj.instagram.trim() : "",
+        other: typeof obj?.other === "string" ? obj.other.trim() : "",
+      }
+    } catch {
+      return { email: "", instagram: "", other: raw }
+    }
+  }, [contact])
 
   const [photoOverrideUrl, setPhotoOverrideUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -423,15 +441,21 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
+                      {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
+                    </div>
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
+                      {parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}
+                    </div>
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.other")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">{t("results.mediaKit.contact.notProvided")}</div>
+                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
+                      {parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}
+                    </div>
                   </div>
                 </div>
               </div>
