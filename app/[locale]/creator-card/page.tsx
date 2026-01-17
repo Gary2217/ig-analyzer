@@ -938,46 +938,55 @@ export default function CreatorCardPage() {
                 }}
               />
 
-              {featuredItems.length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                  {featuredItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {featuredItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                  >
+                    <button
+                      type="button"
+                      className="absolute inset-0"
+                      onClick={() => {
+                        pendingFeaturedReplaceIdRef.current = item.id
+                        featuredReplaceInputRef.current?.click()
+                      }}
+                      aria-label="更換"
+                    />
+                    <img src={item.url} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setFeaturedItems((prev) => {
+                          const picked = prev.find((x) => x.id === item.id)
+                          if (picked?.url) URL.revokeObjectURL(picked.url)
+                          return prev.filter((x) => x.id !== item.id)
+                        })
+                      }}
+                      aria-label="移除"
                     >
-                      <button
-                        type="button"
-                        className="absolute inset-0"
-                        onClick={() => {
-                          pendingFeaturedReplaceIdRef.current = item.id
-                          featuredReplaceInputRef.current?.click()
-                        }}
-                        aria-label="更換"
-                      />
-                      <img src={item.url} alt="" className="h-full w-full object-cover" />
-                      <button
-                        type="button"
-                        className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setFeaturedItems((prev) => {
-                            const picked = prev.find((x) => x.id === item.id)
-                            if (picked?.url) URL.revokeObjectURL(picked.url)
-                            return prev.filter((x) => x.id !== item.id)
-                          })
-                        }}
-                        aria-label="移除"
-                      >
-                        <X className="h-3.5 w-3.5 text-slate-700" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
-                  尚未新增作品
-                </div>
-              )}
+                      <X className="h-3.5 w-3.5 text-slate-700" />
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                  onClick={() => featuredAddInputRef.current?.click()}
+                  aria-label="新增作品"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Plus className="h-7 w-7 text-slate-300 group-hover:text-slate-400" />
+                  </div>
+                </button>
+              </div>
+
+              {featuredItems.length === 0 ? (
+                <div className="mt-2 text-sm text-slate-500">尚未新增作品</div>
+              ) : null}
 
               <div className="mt-3 flex justify-end">
                 <Button

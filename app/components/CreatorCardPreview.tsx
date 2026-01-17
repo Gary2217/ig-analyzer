@@ -149,12 +149,54 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
   const featuredStripRef = useRef<HTMLDivElement | null>(null)
 
-  const scrollFeaturedBy = useCallback((dir: -1 | 1) => {
+  const [canScrollFeaturedLeft, setCanScrollFeaturedLeft] = useState(false)
+  const [canScrollFeaturedRight, setCanScrollFeaturedRight] = useState(false)
+
+  const updateFeaturedScrollState = useCallback(() => {
+    const el = featuredStripRef.current
+    if (!el) {
+      setCanScrollFeaturedLeft(false)
+      setCanScrollFeaturedRight(false)
+      return
+    }
+    const left = el.scrollLeft
+    const maxLeft = el.scrollWidth - el.clientWidth
+    setCanScrollFeaturedLeft(left > 0)
+    setCanScrollFeaturedRight(left < maxLeft - 1)
+  }, [])
+
+  const getFeaturedScrollStep = useCallback(() => {
+    const el = featuredStripRef.current
+    if (!el) return 186
+    const child = el.firstElementChild as HTMLElement | null
+    const width = child ? child.getBoundingClientRect().width : 170
+    const gap = 16
+    return Math.max(120, Math.round(width + gap))
+  }, [])
+
+  const scrollFeaturedBy = useCallback(
+    (dir: -1 | 1) => {
+      const el = featuredStripRef.current
+      if (!el) return
+      const step = getFeaturedScrollStep()
+      el.scrollBy({ left: dir * step, behavior: "smooth" })
+    },
+    [getFeaturedScrollStep]
+  )
+
+  useEffect(() => {
+    updateFeaturedScrollState()
     const el = featuredStripRef.current
     if (!el) return
-    const step = 186
-    el.scrollBy({ left: dir * step, behavior: "smooth" })
-  }, [])
+
+    const onScroll = () => updateFeaturedScrollState()
+    el.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", updateFeaturedScrollState)
+    return () => {
+      el.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", updateFeaturedScrollState)
+    }
+  }, [updateFeaturedScrollState])
 
   const [photoOverrideUrl, setPhotoOverrideUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -431,48 +473,60 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
                   <div className="text-[11px] text-white/35 whitespace-nowrap">已新增 {featuredCount} 件作品</div>
-                  {featuredCount === 0 ? (
-                    <div className="text-[11px] text-white/35 whitespace-nowrap">尚未新增作品</div>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => scrollFeaturedBy(-1)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10"
-                        aria-label="scroll left"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => scrollFeaturedBy(1)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10"
-                        aria-label="scroll right"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => scrollFeaturedBy(-1)}
+                    disabled={!canScrollFeaturedLeft}
+                    className={
+                      "inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none"
+                    }
+                    aria-label="scroll left"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollFeaturedBy(1)}
+                    disabled={!canScrollFeaturedRight}
+                    className={
+                      "inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none"
+                    }
+                    aria-label="scroll right"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
 
-              <div ref={featuredStripRef} className="mt-3 flex gap-4 overflow-x-auto pb-2 min-w-0">
-                {featuredCount === 0 ? (
-                  <div className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                    <div className="h-full w-full flex items-center justify-center">
-                      <Plus className="h-7 w-7 text-white/25" />
+              <div className="relative mt-3 min-w-0">
+                <div
+                  ref={featuredStripRef}
+                  className="flex gap-4 overflow-x-auto min-w-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {featuredCount === 0 ? (
+                    <div className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                      <div className="h-full w-full flex items-center justify-center">
+                        <Plus className="h-7 w-7 text-white/25" />
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  featuredUrls.map((url, idx) => (
-                    <div
-                      key={idx}
-                      className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
-                    >
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                    </div>
-                  ))
-                )}
+                  ) : (
+                    featuredUrls.map((url, idx) => (
+                      <div
+                        key={idx}
+                        className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                      >
+                        <img src={url} alt="" className="h-full w-full object-cover" />
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {canScrollFeaturedRight ? (
+                  <div className="pointer-events-none absolute right-0 top-0 h-full w-14 bg-gradient-to-l from-black/55 to-transparent" />
+                ) : null}
+                {canScrollFeaturedLeft ? (
+                  <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-black/55 to-transparent" />
+                ) : null}
               </div>
             </div>
 
