@@ -223,6 +223,31 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                       {nicheText}
                     </div>
                   </div>
+
+                  <div className={"mt-2 min-w-0 rounded-xl px-2 py-1.5 " + formatsHighlight}>
+                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationFormats.title")}</div>
+                    <div className="mt-2 flex flex-wrap gap-2 min-w-0">
+                      {formats.length === 0 ? (
+                        <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.collaborationFormats.empty")}</div>
+                      ) : (
+                        <>
+                          {formats.slice(0, 6).map((id) => (
+                            <span
+                              key={id}
+                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75"
+                            >
+                              {formatLabelMap[id] || id}
+                            </span>
+                          ))}
+                          {formats.length > 6 ? (
+                            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/55 whitespace-nowrap">
+                              +{Math.max(0, formats.length - 6)}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -318,34 +343,10 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               <div
                 className={
                   "rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0 transition-colors " +
-                  (highlightTarget === "formats" ? formatsHighlight : "") +
                   (highlightTarget === "brands" ? " " + brandsHighlight : "")
                 }
               >
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.collaborationFormats.title")}</div>
-                <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-                  {formats.length === 0 ? (
-                    <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.collaborationFormats.empty")}</div>
-                  ) : (
-                    <>
-                      {formats.slice(0, 6).map((id) => (
-                        <span
-                          key={id}
-                          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75"
-                        >
-                          {formatLabelMap[id] || id}
-                        </span>
-                      ))}
-                      {formats.length > 6 ? (
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/55 whitespace-nowrap">
-                          +{Math.max(0, formats.length - 6)}
-                        </span>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-
-                <div className="mt-3 text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.pastCollaborations.title")}</div>
+                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.pastCollaborations.title")}</div>
                 <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words line-clamp-3 [overflow-wrap:anywhere]">
                   {brandsText}
                 </div>
