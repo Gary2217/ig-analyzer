@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
             pastCollaborations: Array.isArray((data as any).past_collaborations)
               ? (data as any).past_collaborations
               : null,
+            themeTypes: Array.isArray((data as any).theme_types) ? (data as any).theme_types : null,
+            audienceProfiles: Array.isArray((data as any).audience_profiles) ? (data as any).audience_profiles : null,
           }
         : null
 

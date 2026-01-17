@@ -20,6 +20,9 @@ export type CreatorCardPreviewProps = {
   aboutText?: string | null
   primaryNiche?: string | null
 
+  themeTypes?: string[] | null
+  audienceProfiles?: string[] | null
+
   collaborationNiches?: string[] | null
   deliverables?: string[] | null
   pastCollaborations?: string[] | null
@@ -65,6 +68,8 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     username,
     aboutText,
     primaryNiche,
+    themeTypes,
+    audienceProfiles,
     collaborationNiches,
     deliverables,
     pastCollaborations,
@@ -79,9 +84,24 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     highlightTarget,
   } = props
 
-  const resolvedAboutText = typeof aboutText === "string" && aboutText.trim() ? aboutText.trim() : t("results.mediaKit.about.placeholder")
-  const resolvedPrimaryNiche =
-    typeof primaryNiche === "string" && primaryNiche.trim() ? primaryNiche.trim() : t("results.mediaKit.common.noData")
+  const bioText = typeof aboutText === "string" && aboutText.trim() ? aboutText.trim() : ""
+  const themeTypeText = useMemo(() => normalizeStringArray(themeTypes ?? [], 20), [themeTypes])
+  const audienceProfileText = useMemo(() => normalizeStringArray(audienceProfiles ?? [], 20), [audienceProfiles])
+
+  const resolvedAboutText = (() => {
+    if (bioText) return bioText
+    if (themeTypeText.length > 0) return themeTypeText.join(" · ")
+    if (audienceProfileText.length > 0) return audienceProfileText.join(" · ")
+    return t("results.mediaKit.about.placeholder")
+  })()
+
+  const resolvedPrimaryNiche = (() => {
+    if (typeof primaryNiche === "string" && primaryNiche.trim()) return primaryNiche.trim()
+    if (themeTypeText.length > 0) return themeTypeText.join(" · ")
+    return t("results.mediaKit.common.noData")
+  })()
+
+  const audienceSummaryText = audienceProfileText.length > 0 ? audienceProfileText.join(" · ") : t("results.mediaKit.common.noData")
 
   const resolvedDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : "—"
   const resolvedUsername = typeof username === "string" && username.trim() ? username.trim() : "—"
@@ -207,7 +227,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                     </div>
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
-                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{t("results.mediaKit.common.noData")}</div>
+                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{audienceSummaryText}</div>
                     </div>
                   </div>
 

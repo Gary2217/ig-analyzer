@@ -18,6 +18,8 @@ type CreatorCardPayload = {
   displayName?: string | null
   niche?: string | null
   audience?: string | null
+  themeTypes?: string[] | null
+  audienceProfiles?: string[] | null
   deliverables?: string[] | null
   contact?: string | null
   portfolio?: unknown[] | null
@@ -143,9 +145,14 @@ export default function CreatorCardPage() {
   const [deliverables, setDeliverables] = useState<string[]>([])
   const [collaborationNiches, setCollaborationNiches] = useState<string[]>([])
   const [pastCollaborations, setPastCollaborations] = useState<string[]>([])
+  const [themeTypes, setThemeTypes] = useState<string[]>([])
+  const [audienceProfiles, setAudienceProfiles] = useState<string[]>([])
 
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
+
+  const [themeTypeInput, setThemeTypeInput] = useState("")
+  const [audienceProfileInput, setAudienceProfileInput] = useState("")
 
   const [brandInput, setBrandInput] = useState("")
   const brandInputRef = useRef<HTMLInputElement | null>(null)
@@ -181,6 +188,24 @@ export default function CreatorCardPage() {
       flashHighlight("brands")
     },
     [flashHighlight, setPastCollaborations]
+  )
+
+  const addThemeTypeTag = useCallback(
+    (raw: string) => {
+      const next = normalizeStringArray([raw], 1)
+      if (next.length === 0) return
+      setThemeTypes((prev) => normalizeStringArray([...prev, next[0]], 20))
+    },
+    [setThemeTypes]
+  )
+
+  const addAudienceProfileTag = useCallback(
+    (raw: string) => {
+      const next = normalizeStringArray([raw], 1)
+      if (next.length === 0) return
+      setAudienceProfiles((prev) => normalizeStringArray([...prev, next[0]], 20))
+    },
+    [setAudienceProfiles]
   )
 
   useEffect(() => {
@@ -231,6 +256,16 @@ export default function CreatorCardPage() {
               displayName: typeof card.display_name === "string" ? card.display_name : null,
               niche: typeof card.niche === "string" ? card.niche : null,
               audience: typeof card.audience === "string" ? card.audience : null,
+              themeTypes: Array.isArray(card.themeTypes)
+                ? card.themeTypes
+                : Array.isArray(card.theme_types)
+                  ? card.theme_types
+                  : null,
+              audienceProfiles: Array.isArray(card.audienceProfiles)
+                ? card.audienceProfiles
+                : Array.isArray(card.audience_profiles)
+                  ? card.audience_profiles
+                  : null,
               deliverables: Array.isArray(card.deliverables) ? card.deliverables : null,
               contact: typeof card.contact === "string" ? card.contact : null,
               portfolio: Array.isArray(card.portfolio) ? card.portfolio : null,
@@ -253,6 +288,8 @@ export default function CreatorCardPage() {
         setDeliverables(nextDeliverables)
         setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
         setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
+        setThemeTypes(normalizeStringArray(nextBase?.themeTypes ?? [], 20))
+        setAudienceProfiles(normalizeStringArray(nextBase?.audienceProfiles ?? [], 20))
 
         const customs = nextDeliverables.filter((x) => !knownFormatIds.has(x))
         setOtherFormatEnabled(customs.length > 0)
@@ -347,6 +384,8 @@ export default function CreatorCardPage() {
         displayName: baseCard?.displayName ?? undefined,
         niche: baseCard?.niche ?? undefined,
         audience: baseCard?.audience ?? undefined,
+        themeTypes: normalizeStringArray(themeTypes, 20),
+        audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         contact: baseCard?.contact ?? undefined,
         portfolio: baseCard?.portfolio ?? undefined,
         isPublic: baseCard?.isPublic ?? undefined,
@@ -374,7 +413,7 @@ export default function CreatorCardPage() {
     } finally {
       setSaving(false)
     }
-  }, [baseCard, collaborationNiches, deliverables, pastCollaborations, saving, t])
+  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, pastCollaborations, saving, t, themeTypes])
 
   const returnTo = useMemo(() => {
     const raw = (searchParams?.get("returnTo") ?? "").trim()
@@ -521,6 +560,101 @@ export default function CreatorCardPage() {
       ) : (
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0">
         <div className="lg:col-span-5 space-y-4 min-w-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("creatorCardEditor.profile.title")}</CardTitle>
+              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.profile.subtitle")}</div>
+            </CardHeader>
+            <CardContent>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.bioTitle")}</div>
+                <div className="mt-2">
+                  <textarea
+                    value={baseCard?.audience ?? ""}
+                    placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setBaseCard((prev) => ({ ...(prev ?? {}), audience: v }))
+                    }}
+                    className="w-full min-h-[120px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 min-w-0">
+                <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.themeTitle")}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {themeTypes.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                    >
+                      <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                        onClick={() => setThemeTypes((prev) => prev.filter((x) => x !== tag))}
+                        aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <Input
+                    value={themeTypeInput}
+                    placeholder={t("creatorCardEditor.profile.tagsPlaceholder")}
+                    onChange={(e) => setThemeTypeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        addThemeTypeTag(themeTypeInput)
+                        setThemeTypeInput("")
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 min-w-0">
+                <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.audienceTitle")}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {audienceProfiles.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                    >
+                      <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                        onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
+                        aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <Input
+                    value={audienceProfileInput}
+                    placeholder={t("creatorCardEditor.profile.tagsPlaceholder")}
+                    onChange={(e) => setAudienceProfileInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        addAudienceProfileTag(audienceProfileInput)
+                        setAudienceProfileInput("")
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t("creatorCardEditor.formats.title")}</CardTitle>
@@ -727,6 +861,8 @@ export default function CreatorCardPage() {
               displayName={displayName}
               aboutText={baseCard?.audience ?? null}
               primaryNiche={baseCard?.niche ?? null}
+              themeTypes={themeTypes}
+              audienceProfiles={audienceProfiles}
               collaborationNiches={collaborationNiches}
               deliverables={deliverables}
               pastCollaborations={pastCollaborations}

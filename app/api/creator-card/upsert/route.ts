@@ -131,6 +131,8 @@ export async function POST(req: Request) {
     const deliverables = Array.isArray(body?.deliverables) ? body.deliverables : []
     const collaborationNiches = normalizeStringArray((body as any)?.collaborationNiches, 20)
     const pastCollaborations = normalizeStringArray((body as any)?.pastCollaborations, 20)
+    const themeTypes = normalizeStringArray((body as any)?.themeTypes, 20)
+    const audienceProfiles = normalizeStringArray((body as any)?.audienceProfiles, 20)
 
     const payloadBase: any = {
       ig_user_id: igUserId,
@@ -150,6 +152,8 @@ export async function POST(req: Request) {
     // Optional new columns (may not exist yet in DB)
     if (collaborationNiches.length > 0) payloadBase.collaboration_niches = collaborationNiches
     if (pastCollaborations.length > 0) payloadBase.past_collaborations = pastCollaborations
+    payloadBase.theme_types = themeTypes
+    payloadBase.audience_profiles = audienceProfiles
 
     const query = supabaseServer.from("creator_cards")
     const runUpsert = async (p: any) => {
@@ -165,11 +169,15 @@ export async function POST(req: Request) {
       error &&
       typeof (error as any)?.message === "string" &&
       (((error as any).message as string).includes("collaboration_niches") ||
-        ((error as any).message as string).includes("past_collaborations"))
+        ((error as any).message as string).includes("past_collaborations") ||
+        ((error as any).message as string).includes("theme_types") ||
+        ((error as any).message as string).includes("audience_profiles"))
     ) {
       const fallback = { ...payloadBase }
       delete fallback.collaboration_niches
       delete fallback.past_collaborations
+      delete fallback.theme_types
+      delete fallback.audience_profiles
       ;({ data, error } = await runUpsert(fallback))
     }
 

@@ -64,6 +64,15 @@
       "save": "儲存",
       "saving": "儲存中…"
     },
+    "profile": {
+      "title": "基本資料",
+      "subtitle": "填寫自我介紹與標籤，讓品牌更快理解你。",
+      "bioTitle": "自我介紹",
+      "bioPlaceholder": "請簡短介紹你自己…",
+      "themeTitle": "主題類型",
+      "audienceTitle": "受眾輪廓",
+      "tagsPlaceholder": "輸入後按 Enter"
+    },
     "empty": {
       "title": "開始填寫名片資料",
       "body": "我們已為你建立名片。你可以先填寫合作形式、合作品類與曾合作品牌。"
