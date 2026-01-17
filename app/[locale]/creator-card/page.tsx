@@ -637,55 +637,88 @@ export default function CreatorCardPage() {
 
               <div className="mt-5 min-w-0">
                 <div className="text-sm font-semibold text-slate-900">{activeLocale === "zh-TW" ? "主要類型" : "Primary type"}</div>
-                {primaryTypeTags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {primaryTypeTags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                      >
-                        <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                        <button
+                {primaryTypeTags.length > 0 ? (
+                  <>
+                    <div className="mt-3">
+                      <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                        <Input
+                          value={primaryTypeInput}
+                          placeholder=""
+                          onChange={(e) => setPrimaryTypeInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              addPrimaryTypeTag(primaryTypeInput)
+                              setPrimaryTypeInput("")
+                            }
+                          }}
+                        />
+                        <Button
                           type="button"
-                          className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                          onClick={() => setPrimaryTypeTags((prev) => prev.filter((x) => x !== tag))}
-                          aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                          variant="primary"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => {
+                            addPrimaryTypeTag(primaryTypeInput)
+                            setPrimaryTypeInput("")
+                          }}
+                          disabled={!primaryTypeInput.trim()}
                         >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-3">
-                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
-                    <Input
-                      value={primaryTypeInput}
-                      placeholder=""
-                      onChange={(e) => setPrimaryTypeInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
+                          {t("creatorCardEditor.formats.otherAdd")}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {primaryTypeTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                        >
+                          <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                            onClick={() => setPrimaryTypeTags((prev) => prev.filter((x) => x !== tag))}
+                            aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-0">
+                    <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                      <Input
+                        value={primaryTypeInput}
+                        placeholder=""
+                        onChange={(e) => setPrimaryTypeInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            addPrimaryTypeTag(primaryTypeInput)
+                            setPrimaryTypeInput("")
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => {
                           addPrimaryTypeTag(primaryTypeInput)
                           setPrimaryTypeInput("")
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={() => {
-                        addPrimaryTypeTag(primaryTypeInput)
-                        setPrimaryTypeInput("")
-                      }}
-                      disabled={!primaryTypeInput.trim()}
-                    >
-                      {t("creatorCardEditor.formats.otherAdd")}
-                    </Button>
+                        }}
+                        disabled={!primaryTypeInput.trim()}
+                      >
+                        {t("creatorCardEditor.formats.otherAdd")}
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="mt-5 min-w-0">
