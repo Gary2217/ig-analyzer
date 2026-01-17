@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import { supabaseServer } from "@/lib/supabase/server"
 
 function normalizeStringArray(value: unknown, maxLen: number) {
@@ -66,11 +67,25 @@ async function getIGMe(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const c = await cookies()
+    const token = (c.get("ig_access_token")?.value ?? "").trim()
+    if (!token) {
+      return NextResponse.json(
+        { ok: false, error: "unauthenticated", message: "missing_session" },
+        { status: 401 },
+      )
+    }
+
+    const cookieIgId = (c.get("ig_ig_id")?.value ?? "").trim()
+
     const me = await getIGMe(req)
-    const igUserId = me?.id ? String(me.id) : null
+    const igUserId = cookieIgId ? cookieIgId : null
     const igUsername = me?.username ? String(me.username) : null
     if (!igUserId) {
-      return NextResponse.json({ ok: false, error: "not_connected" }, { status: 401 })
+      return NextResponse.json(
+        { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
+        { status: 403 },
+      )
     }
 
     const body = await req.json().catch(() => null)

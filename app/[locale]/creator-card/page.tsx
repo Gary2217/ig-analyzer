@@ -676,8 +676,13 @@ export default function CreatorCardPage() {
       })
 
       if (!res.ok || !json?.ok) {
-        if (res.status === 401 || json?.error === "not_connected") {
+        if (res.status === 401) {
           setSaveError("未登入或登入已過期 / Not authenticated (session expired)")
+          return
+        }
+
+        if (res.status === 403 && json?.error === "not_connected") {
+          setSaveError("尚未連結 IG 或連結已失效，請重新連結 / IG not connected or expired, please reconnect")
           return
         }
 
