@@ -149,27 +149,33 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
   const featuredStripRef = useRef<HTMLDivElement | null>(null)
 
+  const [featuredHasOverflow, setFeaturedHasOverflow] = useState(false)
   const [canScrollFeaturedLeft, setCanScrollFeaturedLeft] = useState(false)
   const [canScrollFeaturedRight, setCanScrollFeaturedRight] = useState(false)
 
   const updateFeaturedScrollState = useCallback(() => {
     const el = featuredStripRef.current
     if (!el) {
+      setFeaturedHasOverflow(false)
       setCanScrollFeaturedLeft(false)
       setCanScrollFeaturedRight(false)
       return
     }
     const left = el.scrollLeft
-    const maxLeft = el.scrollWidth - el.clientWidth
+    const clientWidth = el.clientWidth
+    const scrollWidth = el.scrollWidth
+    const hasOverflow = scrollWidth > clientWidth + 1
+    setFeaturedHasOverflow(hasOverflow)
+
     setCanScrollFeaturedLeft(left > 0)
-    setCanScrollFeaturedRight(left < maxLeft - 1)
+    setCanScrollFeaturedRight(left + clientWidth < scrollWidth - 1)
   }, [])
 
   const getFeaturedScrollStep = useCallback(() => {
     const el = featuredStripRef.current
-    if (!el) return 186
+    if (!el) return 220
     const child = el.firstElementChild as HTMLElement | null
-    const width = child ? child.getBoundingClientRect().width : 170
+    const width = child ? child.getBoundingClientRect().width : 204
     const gap = 16
     return Math.max(120, Math.round(width + gap))
   }, [])
@@ -180,8 +186,12 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       if (!el) return
       const step = getFeaturedScrollStep()
       el.scrollBy({ left: dir * step, behavior: "smooth" })
+
+      requestAnimationFrame(() => {
+        updateFeaturedScrollState()
+      })
     },
-    [getFeaturedScrollStep]
+    [getFeaturedScrollStep, updateFeaturedScrollState]
   )
 
   useEffect(() => {
@@ -192,11 +202,22 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     const onScroll = () => updateFeaturedScrollState()
     el.addEventListener("scroll", onScroll, { passive: true })
     window.addEventListener("resize", updateFeaturedScrollState)
+
+    let ro: ResizeObserver | null = null
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => updateFeaturedScrollState())
+      ro.observe(el)
+    }
+
+    requestAnimationFrame(() => {
+      updateFeaturedScrollState()
+    })
     return () => {
       el.removeEventListener("scroll", onScroll)
       window.removeEventListener("resize", updateFeaturedScrollState)
+      if (ro) ro.disconnect()
     }
-  }, [updateFeaturedScrollState])
+  }, [featuredCount, updateFeaturedScrollState])
 
   const [photoOverrideUrl, setPhotoOverrideUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -473,28 +494,6 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
                   <div className="text-[11px] text-white/35 whitespace-nowrap">已新增 {featuredCount} 件作品</div>
-                  <button
-                    type="button"
-                    onClick={() => scrollFeaturedBy(-1)}
-                    disabled={!canScrollFeaturedLeft}
-                    className={
-                      "inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none"
-                    }
-                    aria-label="scroll left"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => scrollFeaturedBy(1)}
-                    disabled={!canScrollFeaturedRight}
-                    className={
-                      "inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none"
-                    }
-                    aria-label="scroll right"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
 
@@ -526,6 +525,29 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 ) : null}
                 {canScrollFeaturedLeft ? (
                   <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-black/55 to-transparent" />
+                ) : null}
+
+                {featuredCount > 1 && featuredHasOverflow ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => scrollFeaturedBy(-1)}
+                      disabled={!canScrollFeaturedLeft}
+                      className="pointer-events-auto absolute left-2 top-1/2 z-20 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white/85 backdrop-blur hover:bg-black/40 disabled:opacity-30 disabled:pointer-events-none"
+                      aria-label="scroll left"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scrollFeaturedBy(1)}
+                      disabled={!canScrollFeaturedRight}
+                      className="pointer-events-auto absolute right-2 top-1/2 z-20 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white/85 backdrop-blur hover:bg-black/40 disabled:opacity-30 disabled:pointer-events-none"
+                      aria-label="scroll right"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </>
                 ) : null}
               </div>
             </div>
