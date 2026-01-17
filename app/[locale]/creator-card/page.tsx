@@ -70,7 +70,14 @@ function SortableFeaturedTile(props: {
         }}
         aria-label="更換"
       />
-      <img src={item.url} alt="" className="h-full w-full object-cover" />
+
+      {item.url ? (
+        <img src={item.url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="h-full w-full flex items-center justify-center bg-slate-50">
+          <Plus className="h-7 w-7 text-slate-300" />
+        </div>
+      )}
 
       <button
         type="button"
@@ -448,6 +455,30 @@ export default function CreatorCardPage() {
         setContactInstagram(parsedContact.instagram)
         setContactOther(parsedContact.other)
 
+        const nextFeaturedItems = (() => {
+          const raw = Array.isArray(card?.portfolio) ? (card.portfolio as any[]) : []
+          const out: FeaturedItem[] = []
+          for (let i = 0; i < raw.length; i++) {
+            const it = raw[i]
+            if (!it || typeof it !== "object") continue
+            const idRaw = typeof (it as any).id === "string" ? String((it as any).id).trim() : ""
+            out.push({
+              id: idRaw || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              url: "",
+              brand: typeof (it as any).brand === "string" ? String((it as any).brand) : "",
+              collabType: typeof (it as any).collabType === "string" ? String((it as any).collabType) : "",
+            })
+          }
+          return out
+        })()
+
+        setFeaturedItems((prev) => {
+          for (const item of prev) {
+            if (typeof item.url === "string" && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url)
+          }
+          return nextFeaturedItems
+        })
+
         const primaryParts = (() => {
           const raw = typeof nextBase?.niche === "string" ? nextBase.niche : ""
           if (!raw.trim()) return []
@@ -506,7 +537,7 @@ export default function CreatorCardPage() {
   useEffect(() => {
     return () => {
       for (const item of featuredItemsRef.current) {
-        if (item.url) URL.revokeObjectURL(item.url)
+        if (typeof item.url === "string" && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url)
       }
     }
   }, [])
@@ -600,7 +631,12 @@ export default function CreatorCardPage() {
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         contact: serializedContact,
-        portfolio: baseCard?.portfolio ?? undefined,
+        portfolio: featuredItems.map((x, idx) => ({
+          id: x.id,
+          brand: typeof x.brand === "string" ? x.brand : "",
+          collabType: typeof x.collabType === "string" ? x.collabType : "",
+          order: idx,
+        })),
         isPublic: baseCard?.isPublic ?? undefined,
         deliverables: normalizeStringArray(deliverables, 50),
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
@@ -626,7 +662,7 @@ export default function CreatorCardPage() {
     } finally {
       setSaving(false)
     }
-  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, pastCollaborations, saving, serializedContact, t, themeTypes])
+  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, featuredItems, pastCollaborations, saving, serializedContact, t, themeTypes])
 
   const returnTo = useMemo(() => {
     const raw = (searchParams?.get("returnTo") ?? "").trim()
@@ -781,7 +817,7 @@ export default function CreatorCardPage() {
             <CardContent>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.bioTitle")}</div>
-                <div className="mt-2">
+                <div className="mt-2 relative">
                   <textarea
                     value={baseCard?.audience ?? ""}
                     placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
@@ -789,14 +825,13 @@ export default function CreatorCardPage() {
                       const v = e.target.value
                       setBaseCard((prev) => ({ ...(prev ?? {}), audience: v }))
                     }}
-                    className="w-full min-h-[120px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                    className="w-full min-h-[120px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 pr-24 pb-12 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                   />
-                </div>
-                <div className="mt-3 flex justify-end">
                   <Button
                     type="button"
                     variant="primary"
                     size="sm"
+                    className="absolute bottom-3 right-3"
                     onClick={handleSave}
                     disabled={
                       saving ||
@@ -1027,7 +1062,7 @@ export default function CreatorCardPage() {
                     }
                     const out = prev.slice()
                     const prevUrl = out[idx]?.url
-                    if (prevUrl) URL.revokeObjectURL(prevUrl)
+                    if (typeof prevUrl === "string" && prevUrl.startsWith("blob:")) URL.revokeObjectURL(prevUrl)
                     out[idx] = { ...out[idx], url: nextUrl }
                     return out
                   })
@@ -1072,7 +1107,7 @@ export default function CreatorCardPage() {
                         onRemove={(id) => {
                           setFeaturedItems((prev) => {
                             const picked = prev.find((x) => x.id === id)
-                            if (picked?.url) URL.revokeObjectURL(picked.url)
+                            if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
                             return prev.filter((x) => x.id !== id)
                           })
                         }}
@@ -1469,6 +1504,7 @@ export default function CreatorCardPage() {
               aboutText={baseCard?.audience ?? null}
               primaryNiche={baseCard?.niche ?? null}
               contact={serializedContact}
+              featuredItems={featuredItems}
               featuredImageUrls={featuredItems.map((x) => x.url)}
               themeTypes={themeTypes}
               audienceProfiles={audienceProfiles}
