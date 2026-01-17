@@ -84,7 +84,7 @@ export default function CreatorCardPage() {
 
   const activeLocale = useMemo(() => {
     if (typeof window === "undefined") return "en"
-    return extractLocaleFromPathname(window.location.pathname)
+    return extractLocaleFromPathname(window.location.pathname).locale ?? "en"
   }, [])
 
   const formatOptions = useMemo(
@@ -128,6 +128,8 @@ export default function CreatorCardPage() {
     []
   )
 
+  const knownNicheIds = useMemo<Set<string>>(() => new Set(nicheOptions.map((x) => x.id as string)), [nicheOptions])
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -148,8 +150,15 @@ export default function CreatorCardPage() {
   const [themeTypes, setThemeTypes] = useState<string[]>([])
   const [audienceProfiles, setAudienceProfiles] = useState<string[]>([])
 
+  const [primaryTypeTags, setPrimaryTypeTags] = useState<string[]>([])
+
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
+
+  const [otherNicheEnabled, setOtherNicheEnabled] = useState(false)
+  const [otherNicheInput, setOtherNicheInput] = useState("")
+
+  const [primaryTypeInput, setPrimaryTypeInput] = useState("")
 
   const [themeTypeInput, setThemeTypeInput] = useState("")
   const [audienceProfileInput, setAudienceProfileInput] = useState("")
@@ -206,6 +215,15 @@ export default function CreatorCardPage() {
       setAudienceProfiles((prev) => normalizeStringArray([...prev, next[0]], 20))
     },
     [setAudienceProfiles]
+  )
+
+  const addPrimaryTypeTag = useCallback(
+    (raw: string) => {
+      const next = normalizeStringArray([raw], 1)
+      if (next.length === 0) return
+      setPrimaryTypeTags((prev) => normalizeStringArray([...prev, next[0]], 6))
+    },
+    [setPrimaryTypeTags]
   )
 
   useEffect(() => {
@@ -291,9 +309,23 @@ export default function CreatorCardPage() {
         setThemeTypes(normalizeStringArray(nextBase?.themeTypes ?? [], 20))
         setAudienceProfiles(normalizeStringArray(nextBase?.audienceProfiles ?? [], 20))
 
+        const primaryParts = (() => {
+          const raw = typeof nextBase?.niche === "string" ? nextBase.niche : ""
+          if (!raw.trim()) return []
+          return raw
+            .split(/[,、·|]/g)
+            .map((x) => x.trim())
+            .filter(Boolean)
+        })()
+        setPrimaryTypeTags(normalizeStringArray(primaryParts, 6))
+
         const customs = nextDeliverables.filter((x) => !knownFormatIds.has(x))
         setOtherFormatEnabled(customs.length > 0)
         setOtherFormatInput("")
+
+        const nicheCustoms = normalizeStringArray(nextBase?.collaborationNiches ?? [], 20).filter((x) => !knownNicheIds.has(x))
+        setOtherNicheEnabled(nicheCustoms.length > 0)
+        setOtherNicheInput("")
 
         const isLikelyEmpty = (() => {
           const hasAnyText =
@@ -372,6 +404,28 @@ export default function CreatorCardPage() {
     setOtherFormatInput("")
     flashHighlight("formats")
   }, [flashHighlight, otherFormatInput])
+
+  const addOtherNiche = useCallback(() => {
+    const trimmed = otherNicheInput.trim()
+    if (!trimmed) return
+    setCollaborationNiches((prev) => {
+      const lower = trimmed.toLowerCase()
+      const hasDup = prev.some((x) => x.toLowerCase() === lower)
+      if (hasDup) return prev
+      return [...prev, trimmed]
+    })
+    setOtherNicheInput("")
+    flashHighlight("niches")
+  }, [flashHighlight, otherNicheInput])
+
+  useEffect(() => {
+    setBaseCard((prev) => {
+      if (!prev) return prev
+      const joined = primaryTypeTags.length > 0 ? primaryTypeTags.join(activeLocale === "zh-TW" ? "、" : ", ") : null
+      if ((prev.niche ?? null) === joined) return prev
+      return { ...prev, niche: joined }
+    })
+  }, [activeLocale, primaryTypeTags])
 
   const handleSave = useCallback(async () => {
     if (saving) return
@@ -582,6 +636,57 @@ export default function CreatorCardPage() {
               </div>
 
               <div className="mt-5 min-w-0">
+                <div className="text-sm font-semibold text-slate-900">{activeLocale === "zh-TW" ? "主要類型" : "Primary type"}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {primaryTypeTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                    >
+                      <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                        onClick={() => setPrimaryTypeTags((prev) => prev.filter((x) => x !== tag))}
+                        aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                    <Input
+                      value={primaryTypeInput}
+                      placeholder={t("creatorCardEditor.profile.tagsPlaceholder")}
+                      onChange={(e) => setPrimaryTypeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addPrimaryTypeTag(primaryTypeInput)
+                          setPrimaryTypeInput("")
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => {
+                        addPrimaryTypeTag(primaryTypeInput)
+                        setPrimaryTypeInput("")
+                      }}
+                      disabled={!primaryTypeInput.trim()}
+                    >
+                      {t("creatorCardEditor.formats.otherAdd")}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 min-w-0">
                 <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.themeTitle")}</div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {themeTypes.map((tag) => (
@@ -602,18 +707,33 @@ export default function CreatorCardPage() {
                   ))}
                 </div>
                 <div className="mt-3">
-                  <Input
-                    value={themeTypeInput}
-                    placeholder={t("creatorCardEditor.profile.tagsPlaceholder")}
-                    onChange={(e) => setThemeTypeInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
+                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                    <Input
+                      value={themeTypeInput}
+                      placeholder={activeLocale === "zh-TW" ? "例如：美妝、穿搭、科技" : "e.g. Beauty, Fashion, Tech"}
+                      onChange={(e) => setThemeTypeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addThemeTypeTag(themeTypeInput)
+                          setThemeTypeInput("")
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => {
                         addThemeTypeTag(themeTypeInput)
                         setThemeTypeInput("")
-                      }
-                    }}
-                  />
+                      }}
+                      disabled={!themeTypeInput.trim()}
+                    >
+                      {t("creatorCardEditor.formats.otherAdd")}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -638,18 +758,37 @@ export default function CreatorCardPage() {
                   ))}
                 </div>
                 <div className="mt-3">
-                  <Input
-                    value={audienceProfileInput}
-                    placeholder={t("creatorCardEditor.profile.tagsPlaceholder")}
-                    onChange={(e) => setAudienceProfileInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
+                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                    <Input
+                      value={audienceProfileInput}
+                      placeholder={
+                        activeLocale === "zh-TW"
+                          ? "例如：18–25 歲女性、上班族、新手創作者"
+                          : "e.g. Women 18–25, Office workers, New creators"
+                      }
+                      onChange={(e) => setAudienceProfileInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addAudienceProfileTag(audienceProfileInput)
+                          setAudienceProfileInput("")
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => {
                         addAudienceProfileTag(audienceProfileInput)
                         setAudienceProfileInput("")
-                      }
-                    }}
-                  />
+                      }}
+                      disabled={!audienceProfileInput.trim()}
+                    >
+                      {t("creatorCardEditor.formats.otherAdd")}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -785,7 +924,76 @@ export default function CreatorCardPage() {
                     </Button>
                   )
                 })}
+                <Button
+                  type="button"
+                  variant="pill"
+                  active={otherNicheEnabled}
+                  onClick={() => {
+                    // Toggle visibility only. Do NOT delete stored custom value(s) to avoid data loss.
+                    setOtherNicheEnabled((prev) => !prev)
+                    flashHighlight("niches")
+                  }}
+                >
+                  {t("creatorCardEditor.formats.options.other")}
+                </Button>
               </div>
+
+              {otherNicheEnabled ? (
+                <div className="mt-3 min-w-0">
+                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                    <Input
+                      value={otherNicheInput}
+                      placeholder={activeLocale === "zh-TW" ? "請輸入其他合作品類" : "Enter other niche"}
+                      disabled={!otherNicheEnabled}
+                      onChange={(e) => setOtherNicheInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addOtherNiche()
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={addOtherNiche}
+                      disabled={!otherNicheEnabled || !otherNicheInput.trim()}
+                    >
+                      {t("creatorCardEditor.formats.otherAdd")}
+                    </Button>
+                  </div>
+
+                  {(() => {
+                    const customs = collaborationNiches.filter((x) => !knownNicheIds.has(x))
+                    if (customs.length === 0) return null
+                    return (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {customs.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                          >
+                            <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                              onClick={() => {
+                                setCollaborationNiches((prev) => prev.filter((x) => x !== tag))
+                                flashHighlight("niches")
+                              }}
+                              aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -818,29 +1026,44 @@ export default function CreatorCardPage() {
               </div>
 
               <div className="mt-3">
-                <Input
-                  ref={(node) => {
-                    brandInputRef.current = node
-                  }}
-                  value={brandInput}
-                  placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
-                  onChange={(e) => setBrandInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
+                <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                  <Input
+                    ref={(node) => {
+                      brandInputRef.current = node
+                    }}
+                    value={brandInput}
+                    placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
+                    onChange={(e) => setBrandInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        addBrandTag(brandInput)
+                        setBrandInput("")
+                        return
+                      }
+                      if (e.key === "Backspace" && !brandInput.trim()) {
+                        setPastCollaborations((prev) => {
+                          const next = prev.slice(0, Math.max(0, prev.length - 1))
+                          return next
+                        })
+                        flashHighlight("brands")
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
                       addBrandTag(brandInput)
                       setBrandInput("")
-                      return
-                    }
-                    if (e.key === "Backspace" && !brandInput.trim()) {
-                      setPastCollaborations((prev) => {
-                        const next = prev.slice(0, Math.max(0, prev.length - 1))
-                        return next
-                      })
-                      flashHighlight("brands")
-                    }
-                  }}
-                />
+                    }}
+                    disabled={!brandInput.trim()}
+                  >
+                    {t("creatorCardEditor.formats.otherAdd")}
+                  </Button>
+                </div>
                 <div className="mt-2 text-xs text-slate-500">{brandHelperText}</div>
               </div>
             </CardContent>
