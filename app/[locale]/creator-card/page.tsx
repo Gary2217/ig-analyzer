@@ -28,6 +28,11 @@ type CreatorCardPayload = {
   pastCollaborations?: string[] | null
 }
 
+type FeaturedItem = {
+  id: string
+  url: string
+}
+
 function normalizeStringArray(value: unknown, maxLen: number) {
   const raw = Array.isArray(value) ? value : []
   const out: string[] = []
@@ -156,9 +161,11 @@ export default function CreatorCardPage() {
   const [contactInstagram, setContactInstagram] = useState("")
   const [contactOther, setContactOther] = useState("")
 
-  const [featuredPreviewUrls, setFeaturedPreviewUrls] = useState<(string | null)[]>(() => Array.from({ length: 5 }, () => null))
-  const featuredFileInputRef = useRef<HTMLInputElement | null>(null)
-  const pendingFeaturedIndexRef = useRef<number | null>(null)
+  const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
+  const featuredItemsRef = useRef<FeaturedItem[]>([])
+  const featuredAddInputRef = useRef<HTMLInputElement | null>(null)
+  const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
 
   const serializedContact = useMemo(() => {
     const email = contactEmail.trim()
@@ -400,11 +407,15 @@ export default function CreatorCardPage() {
 
   useEffect(() => {
     return () => {
-      for (const url of featuredPreviewUrls) {
-        if (url) URL.revokeObjectURL(url)
+      for (const item of featuredItemsRef.current) {
+        if (item.url) URL.revokeObjectURL(item.url)
       }
     }
-  }, [featuredPreviewUrls])
+  }, [])
+
+  useEffect(() => {
+    featuredItemsRef.current = featuredItems
+  }, [featuredItems])
 
   useEffect(() => {
     if (!creatorId) {
@@ -875,47 +886,110 @@ export default function CreatorCardPage() {
             </CardHeader>
             <CardContent>
               <input
-                ref={featuredFileInputRef}
+                ref={featuredAddInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  e.currentTarget.value = ""
+                  const files = Array.from(e.target.files ?? [])
+                  if (files.length === 0) return
+
+                  setFeaturedItems((prev) => {
+                    const next = prev.slice()
+                    for (const file of files) {
+                      const url = URL.createObjectURL(file)
+                      const id =
+                        typeof crypto !== "undefined" && typeof (crypto as any).randomUUID === "function"
+                          ? (crypto as any).randomUUID()
+                          : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+                      next.push({ id, url })
+                    }
+                    return next
+                  })
+                }}
+              />
+
+              <input
+                ref={featuredReplaceInputRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
-                  const idx = pendingFeaturedIndexRef.current
+                  const id = pendingFeaturedReplaceIdRef.current
                   const file = e.target.files?.[0]
                   e.currentTarget.value = ""
-                  if (idx == null || !file) return
+                  if (!id || !file) return
 
                   const nextUrl = URL.createObjectURL(file)
-                  setFeaturedPreviewUrls((prev) => {
+                  setFeaturedItems((prev) => {
+                    const idx = prev.findIndex((x) => x.id === id)
+                    if (idx < 0) {
+                      URL.revokeObjectURL(nextUrl)
+                      return prev
+                    }
                     const out = prev.slice()
-                    const prevUrl = out[idx]
+                    const prevUrl = out[idx]?.url
                     if (prevUrl) URL.revokeObjectURL(prevUrl)
-                    out[idx] = nextUrl
+                    out[idx] = { ...out[idx], url: nextUrl }
                     return out
                   })
                 }}
               />
 
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                {featuredPreviewUrls.map((url, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="group relative aspect-square w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
-                    onClick={() => {
-                      pendingFeaturedIndexRef.current = idx
-                      featuredFileInputRef.current?.click()
-                    }}
-                  >
-                    {url ? (
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Plus className="h-7 w-7 text-slate-400 transition-colors group-hover:text-slate-600" />
-                      </div>
-                    )}
-                  </button>
-                ))}
+              {featuredItems.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {featuredItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                    >
+                      <button
+                        type="button"
+                        className="absolute inset-0"
+                        onClick={() => {
+                          pendingFeaturedReplaceIdRef.current = item.id
+                          featuredReplaceInputRef.current?.click()
+                        }}
+                        aria-label="更換"
+                      />
+                      <img src={item.url} alt="" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setFeaturedItems((prev) => {
+                            const picked = prev.find((x) => x.id === item.id)
+                            if (picked?.url) URL.revokeObjectURL(picked.url)
+                            return prev.filter((x) => x.id !== item.id)
+                          })
+                        }}
+                        aria-label="移除"
+                      >
+                        <X className="h-3.5 w-3.5 text-slate-700" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
+                  尚未新增作品
+                </div>
+              )}
+
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => featuredAddInputRef.current?.click()}
+                >
+                  <Plus className="h-4 w-4" />
+                  新增作品
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1213,7 +1287,7 @@ export default function CreatorCardPage() {
               aboutText={baseCard?.audience ?? null}
               primaryNiche={baseCard?.niche ?? null}
               contact={serializedContact}
-              featuredImageUrls={featuredPreviewUrls}
+              featuredImageUrls={featuredItems.map((x) => x.url)}
               themeTypes={themeTypes}
               audienceProfiles={audienceProfiles}
               collaborationNiches={collaborationNiches}

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { Plus } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -134,13 +134,27 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   }, [contact])
 
   const featuredUrls = useMemo(() => {
-    return Array.from({ length: 5 }, (_, idx) => {
-      const url = featuredImageUrls?.[idx]
-      return typeof url === "string" && url.trim() ? url : null
-    })
+    const raw = Array.isArray(featuredImageUrls) ? featuredImageUrls : []
+    const out: string[] = []
+    for (const item of raw) {
+      if (typeof item !== "string") continue
+      const s = item.trim()
+      if (!s) continue
+      out.push(s)
+    }
+    return out
   }, [featuredImageUrls])
 
-  const hasAnyFeatured = useMemo(() => featuredUrls.some((x) => Boolean(x)), [featuredUrls])
+  const featuredCount = featuredUrls.length
+
+  const featuredStripRef = useRef<HTMLDivElement | null>(null)
+
+  const scrollFeaturedBy = useCallback((dir: -1 | 1) => {
+    const el = featuredStripRef.current
+    if (!el) return
+    const step = 186
+    el.scrollBy({ left: dir * step, behavior: "smooth" })
+  }, [])
 
   const [photoOverrideUrl, setPhotoOverrideUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -415,26 +429,50 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   <div className="text-[11px] font-semibold tracking-wide text-white/70">作品集展示</div>
                   <div className="mt-0.5 text-[11px] text-white/45">展示你的熱門貼文或合作作品</div>
                 </div>
-                {!hasAnyFeatured ? (
-                  <div className="text-[11px] text-white/35 whitespace-nowrap">尚未新增作品</div>
-                ) : null}
+                <div className="shrink-0 flex items-center gap-2">
+                  <div className="text-[11px] text-white/35 whitespace-nowrap">已新增 {featuredCount} 件作品</div>
+                  {featuredCount === 0 ? (
+                    <div className="text-[11px] text-white/35 whitespace-nowrap">尚未新增作品</div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => scrollFeaturedBy(-1)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10"
+                        aria-label="scroll left"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollFeaturedBy(1)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10"
+                        aria-label="scroll right"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
-              <div className="mt-3 flex gap-4 overflow-x-auto pb-2 min-w-0">
-                {featuredUrls.map((url, idx) => (
-                  <div
-                    key={idx}
-                    className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
-                  >
-                    {url ? (
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center">
-                        <Plus className="h-7 w-7 text-white/25" />
-                      </div>
-                    )}
+              <div ref={featuredStripRef} className="mt-3 flex gap-4 overflow-x-auto pb-2 min-w-0">
+                {featuredCount === 0 ? (
+                  <div className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Plus className="h-7 w-7 text-white/25" />
+                    </div>
                   </div>
-                ))}
+                ) : (
+                  featuredUrls.map((url, idx) => (
+                    <div
+                      key={idx}
+                      className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                    >
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
