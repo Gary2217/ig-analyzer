@@ -94,7 +94,8 @@ function SortableFeaturedTile(props: {
       {item.url ? (
         <button
           type="button"
-          className="absolute left-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+          className="absolute left-1 top-1 z-10 rounded-md bg-white/90 px-2 py-1 shadow-sm hover:bg-white"
+          aria-label="請選擇"
           onPointerDownCapture={(e) => {
             e.preventDefault()
             e.stopPropagation()
@@ -106,11 +107,10 @@ function SortableFeaturedTile(props: {
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            onReplace(item.id)
+            onEdit(item.id)
           }}
-          aria-label="編輯"
         >
-          <span className="text-xs font-medium text-white/90">請選擇</span>
+          <span className="text-[11px] font-semibold text-slate-700">請選擇</span>
         </button>
       ) : null}
 
