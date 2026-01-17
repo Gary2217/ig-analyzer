@@ -158,7 +158,6 @@ export async function POST(req: Request) {
       deliverables,
       contact: String(body?.contact ?? "").trim() || null,
       portfolio: Array.isArray(body?.portfolio) ? body.portfolio : [],
-      completion_pct: completionPct,
       is_public: Boolean(body?.isPublic),
       updated_at: new Date().toISOString(),
     }
@@ -202,7 +201,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, card: data })
+    return NextResponse.json({
+      ok: true,
+      card: data && typeof data === "object" ? { ...(data as any), completion_pct: completionPct } : data,
+      completionPct,
+    })
   } catch (e: any) {
     const msg = typeof e?.message === "string" ? e.message : "unknown"
     if (msg.includes("Invalid API key")) {
