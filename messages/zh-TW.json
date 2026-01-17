@@ -92,8 +92,13 @@
         "unboxing": "開箱",
         "giveaway": "抽獎",
         "event": "活動／出席",
-        "affiliate": "聯盟行銷"
-      }
+        "affiliate": "聯盟行銷",
+        "tiktok": "TikTok",
+        "youtube": "YouTube",
+        "fbPost": "FB貼文",
+        "other": "其他"
+      },
+      "otherPlaceholder": "請輸入其他合作形式"
     },
     "niches": {
       "title": "合作品類／擅長領域",

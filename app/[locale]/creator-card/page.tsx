@@ -54,6 +54,28 @@ export default function CreatorCardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const knownFormatIds = useMemo(
+    () =>
+      new Set([
+        "reels",
+        "posts",
+        "stories",
+        "live",
+        "ugc",
+        "unboxing",
+        "giveaway",
+        "event",
+        "affiliate",
+        "tiktok",
+        "youtube",
+        "fb_post",
+        "fb",
+        "facebook",
+        "other",
+      ]),
+    [],
+  )
+
   const [refetchTick, setRefetchTick] = useState(0)
 
   const activeLocale = useMemo(() => {
@@ -73,6 +95,10 @@ export default function CreatorCardPage() {
         { id: "giveaway", labelKey: "creatorCardEditor.formats.options.giveaway" },
         { id: "event", labelKey: "creatorCardEditor.formats.options.event" },
         { id: "affiliate", labelKey: "creatorCardEditor.formats.options.affiliate" },
+        { id: "tiktok", labelKey: "creatorCardEditor.formats.options.tiktok" },
+        { id: "youtube", labelKey: "creatorCardEditor.formats.options.youtube" },
+        { id: "fb_post", labelKey: "creatorCardEditor.formats.options.fbPost" },
+        { id: "other", labelKey: "creatorCardEditor.formats.options.other" },
       ] as const,
     []
   )
@@ -115,6 +141,10 @@ export default function CreatorCardPage() {
   const [deliverables, setDeliverables] = useState<string[]>([])
   const [collaborationNiches, setCollaborationNiches] = useState<string[]>([])
   const [pastCollaborations, setPastCollaborations] = useState<string[]>([])
+
+  const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
+  const [otherFormatInput, setOtherFormatInput] = useState("")
+  const otherFormatStoredRef = useRef<string>("")
 
   const [brandInput, setBrandInput] = useState("")
   const brandInputRef = useRef<HTMLInputElement | null>(null)
@@ -214,9 +244,21 @@ export default function CreatorCardPage() {
           : null
 
         setBaseCard(nextBase)
-        setDeliverables(normalizeStringArray(nextBase?.deliverables ?? [], 50))
+        const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
+        setDeliverables(nextDeliverables)
         setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
         setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
+
+        const custom = nextDeliverables.find((x) => !knownFormatIds.has(x))
+        if (custom) {
+          otherFormatStoredRef.current = custom
+          setOtherFormatEnabled(true)
+          setOtherFormatInput(custom)
+        } else {
+          otherFormatStoredRef.current = ""
+          setOtherFormatEnabled(false)
+          setOtherFormatInput("")
+        }
 
         const isLikelyEmpty = (() => {
           const hasAnyText =
@@ -257,6 +299,17 @@ export default function CreatorCardPage() {
     setSaveError(null)
     setSaveOk(false)
     try {
+      const trimmedOther = otherFormatInput.trim()
+      const normalizedDeliverables = (() => {
+        const base = normalizeStringArray(deliverables, 50)
+        // Explicit clear: if Other is enabled but empty, remove the previously stored custom value.
+        if (otherFormatEnabled && !trimmedOther) {
+          const stored = otherFormatStoredRef.current
+          if (stored) return base.filter((x) => x !== stored)
+        }
+        return base
+      })()
+
       const payload: any = {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
@@ -265,7 +318,7 @@ export default function CreatorCardPage() {
         contact: baseCard?.contact ?? undefined,
         portfolio: baseCard?.portfolio ?? undefined,
         isPublic: baseCard?.isPublic ?? undefined,
-        deliverables: normalizeStringArray(deliverables, 50),
+        deliverables: normalizedDeliverables,
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
       }
@@ -434,7 +487,12 @@ export default function CreatorCardPage() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {formatOptions.map((opt) => {
-                  const isActive = deliverables.includes(opt.id)
+                  const isActive =
+                    opt.id === "other"
+                      ? otherFormatEnabled
+                      : opt.id === "fb_post"
+                        ? deliverables.includes("fb_post") || deliverables.includes("fb") || deliverables.includes("facebook")
+                        : deliverables.includes(opt.id)
                   return (
                     <Button
                       key={opt.id}
@@ -442,6 +500,22 @@ export default function CreatorCardPage() {
                       variant="pill"
                       active={isActive}
                       onClick={() => {
+                        if (opt.id === "other") {
+                          // Toggle visibility only. Do NOT delete the stored custom value to avoid data loss.
+                          setOtherFormatEnabled((prev) => !prev)
+                          flashHighlight("formats")
+                          return
+                        }
+                        if (opt.id === "fb_post") {
+                          setDeliverables((prev) => {
+                            const hasAny = prev.includes("fb_post") || prev.includes("fb") || prev.includes("facebook")
+                            if (hasAny) return prev.filter((x) => x !== "fb_post" && x !== "fb" && x !== "facebook")
+                            return [...prev, "fb_post"]
+                          })
+                          flashHighlight("formats")
+                          return
+                        }
+
                         setDeliverables((prev) => toggleInArray(prev, opt.id))
                         flashHighlight("formats")
                       }}
@@ -451,6 +525,40 @@ export default function CreatorCardPage() {
                   )
                 })}
               </div>
+
+              {otherFormatEnabled ? (
+                <div className="mt-3 min-w-0">
+                  <Input
+                    value={otherFormatInput}
+                    placeholder={t("creatorCardEditor.formats.otherPlaceholder")}
+                    disabled={!otherFormatEnabled}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setOtherFormatInput(raw)
+
+                      const trimmed = raw.trim()
+                      setDeliverables((prev) => {
+                        const stored = otherFormatStoredRef.current
+                        let next = stored ? prev.filter((x) => x !== stored) : prev
+
+                        if (trimmed) {
+                          const lower = trimmed.toLowerCase()
+                          const hasDup = next.some((x) => x.toLowerCase() === lower)
+                          if (!hasDup) {
+                            next = [...next, trimmed]
+                          }
+                          otherFormatStoredRef.current = hasDup ? "" : trimmed
+                        } else {
+                          otherFormatStoredRef.current = ""
+                        }
+
+                        return next
+                      })
+                      flashHighlight("formats")
+                    }}
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

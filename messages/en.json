@@ -92,8 +92,13 @@
         "unboxing": "Unboxing",
         "giveaway": "Giveaway",
         "event": "Event coverage",
-        "affiliate": "Affiliate"
-      }
+        "affiliate": "Affiliate",
+        "tiktok": "TikTok",
+        "youtube": "YouTube",
+        "fbPost": "FB Post",
+        "other": "Other"
+      },
+      "otherPlaceholder": "Enter other collaboration format"
     },
     "niches": {
       "title": "Collaboration niches / categories",

@@ -128,6 +128,12 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     giveaway: t("creatorCardEditor.formats.options.giveaway"),
     event: t("creatorCardEditor.formats.options.event"),
     affiliate: t("creatorCardEditor.formats.options.affiliate"),
+    tiktok: t("creatorCardEditor.formats.options.tiktok"),
+    youtube: t("creatorCardEditor.formats.options.youtube"),
+    fb_post: t("creatorCardEditor.formats.options.fbPost"),
+    fb: t("creatorCardEditor.formats.options.fbPost"),
+    facebook: t("creatorCardEditor.formats.options.fbPost"),
+    other: t("creatorCardEditor.formats.options.other"),
   }
 
   const highlightClass = (active: boolean) =>
