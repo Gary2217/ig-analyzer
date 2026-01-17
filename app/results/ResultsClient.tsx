@@ -3791,6 +3791,7 @@ export default function ResultsClient() {
           ? String((creatorCard as any).niche).trim()
           : null
       }
+      contact={(creatorCard as any)?.contact ?? null}
       collaborationNiches={(creatorCard as any)?.collaborationNiches ?? (creatorCard as any)?.collaboration_niches ?? null}
       deliverables={(creatorCard as any)?.deliverables ?? null}
       pastCollaborations={(creatorCard as any)?.pastCollaborations ?? (creatorCard as any)?.past_collaborations ?? null}
