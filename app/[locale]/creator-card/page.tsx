@@ -167,6 +167,10 @@ export default function CreatorCardPage() {
   const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
   const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
 
+  const openAddFeatured = useCallback(() => {
+    featuredAddInputRef.current?.click()
+  }, [])
+
   const serializedContact = useMemo(() => {
     const email = contactEmail.trim()
     const instagram = contactInstagram.trim()
@@ -892,22 +896,18 @@ export default function CreatorCardPage() {
                 multiple
                 className="hidden"
                 onChange={(e) => {
-                  e.currentTarget.value = ""
-                  const files = Array.from(e.target.files ?? [])
-                  if (files.length === 0) return
+                  const files = Array.from(e.currentTarget.files ?? [])
+                  if (!files.length) return
 
-                  setFeaturedItems((prev) => {
-                    const next = prev.slice()
-                    for (const file of files) {
-                      const url = URL.createObjectURL(file)
-                      const id =
-                        typeof crypto !== "undefined" && typeof (crypto as any).randomUUID === "function"
-                          ? (crypto as any).randomUUID()
-                          : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-                      next.push({ id, url })
-                    }
-                    return next
-                  })
+                  setFeaturedItems((prev) => [
+                    ...prev,
+                    ...files.map((file) => ({
+                      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                      url: URL.createObjectURL(file),
+                    })),
+                  ])
+
+                  e.currentTarget.value = ""
                 }}
               />
 
@@ -975,7 +975,7 @@ export default function CreatorCardPage() {
                 <button
                   type="button"
                   className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
-                  onClick={() => featuredAddInputRef.current?.click()}
+                  onClick={openAddFeatured}
                   aria-label="新增作品"
                 >
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -994,7 +994,7 @@ export default function CreatorCardPage() {
                   variant="outline"
                   size="sm"
                   className="gap-2"
-                  onClick={() => featuredAddInputRef.current?.click()}
+                  onClick={openAddFeatured}
                 >
                   <Plus className="h-4 w-4" />
                   新增作品
