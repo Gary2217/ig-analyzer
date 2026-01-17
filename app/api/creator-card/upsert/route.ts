@@ -155,7 +155,6 @@ export async function POST(req: Request) {
       handle,
       display_name: String(body?.displayName ?? "").trim() || null,
       niche: String(body?.niche ?? "").trim() || null,
-      audience: String(body?.audience ?? "").trim() || null,
       deliverables,
       contact: String(body?.contact ?? "").trim() || null,
       portfolio: Array.isArray(body?.portfolio) ? body.portfolio : [],
