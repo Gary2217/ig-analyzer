@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
-import { X } from "lucide-react"
+import { Plus, X } from "lucide-react"
 
 import { useI18n } from "../../../components/locale-provider"
 import { Button } from "../../../components/ui/button"
@@ -155,6 +155,10 @@ export default function CreatorCardPage() {
   const [contactEmail, setContactEmail] = useState("")
   const [contactInstagram, setContactInstagram] = useState("")
   const [contactOther, setContactOther] = useState("")
+
+  const [featuredPreviewUrls, setFeaturedPreviewUrls] = useState<(string | null)[]>(() => Array.from({ length: 5 }, () => null))
+  const featuredFileInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingFeaturedIndexRef = useRef<number | null>(null)
 
   const serializedContact = useMemo(() => {
     const email = contactEmail.trim()
@@ -393,6 +397,14 @@ export default function CreatorCardPage() {
       return { ...(prev ?? {}), contact: nextContact }
     })
   }, [serializedContact])
+
+  useEffect(() => {
+    return () => {
+      for (const url of featuredPreviewUrls) {
+        if (url) URL.revokeObjectURL(url)
+      }
+    }
+  }, [featuredPreviewUrls])
 
   useEffect(() => {
     if (!creatorId) {
@@ -853,6 +865,57 @@ export default function CreatorCardPage() {
                     {t("creatorCardEditor.formats.otherAdd")}
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("results.mediaKit.featured.title")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <input
+                ref={featuredFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const idx = pendingFeaturedIndexRef.current
+                  const file = e.target.files?.[0]
+                  e.currentTarget.value = ""
+                  if (idx == null || !file) return
+
+                  const nextUrl = URL.createObjectURL(file)
+                  setFeaturedPreviewUrls((prev) => {
+                    const out = prev.slice()
+                    const prevUrl = out[idx]
+                    if (prevUrl) URL.revokeObjectURL(prevUrl)
+                    out[idx] = nextUrl
+                    return out
+                  })
+                }}
+              />
+
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                {featuredPreviewUrls.map((url, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="group relative aspect-square w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                    onClick={() => {
+                      pendingFeaturedIndexRef.current = idx
+                      featuredFileInputRef.current?.click()
+                    }}
+                  >
+                    {url ? (
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Plus className="h-7 w-7 text-slate-400 transition-colors group-hover:text-slate-600" />
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             </CardContent>
           </Card>
