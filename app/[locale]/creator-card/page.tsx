@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { Plus, X } from "lucide-react"
 
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core"
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+
 import { useI18n } from "../../../components/locale-provider"
 import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
@@ -31,6 +35,55 @@ type CreatorCardPayload = {
 type FeaturedItem = {
   id: string
   url: string
+}
+
+function SortableFeaturedTile(props: {
+  item: FeaturedItem
+  onReplace: (id: string) => void
+  onRemove: (id: string) => void
+  suppressClick: boolean
+}) {
+  const { item, onReplace, onRemove, suppressClick } = props
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={
+        "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-shadow " +
+        (isDragging ? "scale-[1.03] shadow-lg ring-2 ring-slate-950/10" : "hover:border-slate-300") +
+        " cursor-grab"
+      }
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={() => {
+          if (suppressClick) return
+          onReplace(item.id)
+        }}
+        aria-label="更換"
+      />
+      <img src={item.url} alt="" className="h-full w-full object-cover" />
+      <button
+        type="button"
+        className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+        onPointerDown={(e) => {
+          e.stopPropagation()
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove(item.id)
+        }}
+        aria-label="移除"
+      >
+        <X className="h-3.5 w-3.5 text-slate-700" />
+      </button>
+    </div>
+  )
 }
 
 function normalizeStringArray(value: unknown, maxLen: number) {
@@ -166,10 +219,16 @@ export default function CreatorCardPage() {
   const featuredAddInputRef = useRef<HTMLInputElement | null>(null)
   const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
   const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
+  const [suppressFeaturedTileClick, setSuppressFeaturedTileClick] = useState(false)
 
   const openAddFeatured = useCallback(() => {
     featuredAddInputRef.current?.click()
   }, [])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const serializedContact = useMemo(() => {
     const email = contactEmail.trim()
@@ -939,38 +998,48 @@ export default function CreatorCardPage() {
               />
 
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {featuredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
-                  >
-                    <button
-                      type="button"
-                      className="absolute inset-0"
-                      onClick={() => {
-                        pendingFeaturedReplaceIdRef.current = item.id
-                        featuredReplaceInputRef.current?.click()
-                      }}
-                      aria-label="更換"
-                    />
-                    <img src={item.url} alt="" className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setFeaturedItems((prev) => {
-                          const picked = prev.find((x) => x.id === item.id)
-                          if (picked?.url) URL.revokeObjectURL(picked.url)
-                          return prev.filter((x) => x.id !== item.id)
-                        })
-                      }}
-                      aria-label="移除"
-                    >
-                      <X className="h-3.5 w-3.5 text-slate-700" />
-                    </button>
-                  </div>
-                ))}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(event) => {
+                    const { active, over } = event
+                    if (!over) return
+                    if (active.id === over.id) return
+                    setFeaturedItems((prev) => {
+                      const oldIndex = prev.findIndex((x) => x.id === active.id)
+                      const newIndex = prev.findIndex((x) => x.id === over.id)
+                      if (oldIndex < 0 || newIndex < 0) return prev
+                      return arrayMove(prev, oldIndex, newIndex)
+                    })
+                    setSuppressFeaturedTileClick(true)
+                    window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
+                  }}
+                  onDragCancel={() => {
+                    setSuppressFeaturedTileClick(true)
+                    window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
+                  }}
+                >
+                  <SortableContext items={featuredItems.map((x) => x.id)}>
+                    {featuredItems.map((item) => (
+                      <SortableFeaturedTile
+                        key={item.id}
+                        item={item}
+                        suppressClick={suppressFeaturedTileClick}
+                        onReplace={(id) => {
+                          pendingFeaturedReplaceIdRef.current = id
+                          featuredReplaceInputRef.current?.click()
+                        }}
+                        onRemove={(id) => {
+                          setFeaturedItems((prev) => {
+                            const picked = prev.find((x) => x.id === id)
+                            if (picked?.url) URL.revokeObjectURL(picked.url)
+                            return prev.filter((x) => x.id !== id)
+                          })
+                        }}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
 
                 <button
                   type="button"
