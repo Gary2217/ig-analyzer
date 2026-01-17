@@ -144,7 +144,6 @@ export default function CreatorCardPage() {
 
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
-  const otherFormatStoredRef = useRef<string>("")
 
   const [brandInput, setBrandInput] = useState("")
   const brandInputRef = useRef<HTMLInputElement | null>(null)
@@ -249,16 +248,9 @@ export default function CreatorCardPage() {
         setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
         setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
 
-        const custom = nextDeliverables.find((x) => !knownFormatIds.has(x))
-        if (custom) {
-          otherFormatStoredRef.current = custom
-          setOtherFormatEnabled(true)
-          setOtherFormatInput(custom)
-        } else {
-          otherFormatStoredRef.current = ""
-          setOtherFormatEnabled(false)
-          setOtherFormatInput("")
-        }
+        const customs = nextDeliverables.filter((x) => !knownFormatIds.has(x))
+        setOtherFormatEnabled(customs.length > 0)
+        setOtherFormatInput("")
 
         const isLikelyEmpty = (() => {
           const hasAnyText =
@@ -293,23 +285,25 @@ export default function CreatorCardPage() {
     setRefetchTick((x) => x + 1)
   }, [])
 
+  const addOtherFormat = useCallback(() => {
+    const trimmed = otherFormatInput.trim()
+    if (!trimmed) return
+    setDeliverables((prev) => {
+      const lower = trimmed.toLowerCase()
+      const hasDup = prev.some((x) => x.toLowerCase() === lower)
+      if (hasDup) return prev
+      return [...prev, trimmed]
+    })
+    setOtherFormatInput("")
+    flashHighlight("formats")
+  }, [flashHighlight, otherFormatInput])
+
   const handleSave = useCallback(async () => {
     if (saving) return
     setSaving(true)
     setSaveError(null)
     setSaveOk(false)
     try {
-      const trimmedOther = otherFormatInput.trim()
-      const normalizedDeliverables = (() => {
-        const base = normalizeStringArray(deliverables, 50)
-        // Explicit clear: if Other is enabled but empty, remove the previously stored custom value.
-        if (otherFormatEnabled && !trimmedOther) {
-          const stored = otherFormatStoredRef.current
-          if (stored) return base.filter((x) => x !== stored)
-        }
-        return base
-      })()
-
       const payload: any = {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
@@ -318,7 +312,7 @@ export default function CreatorCardPage() {
         contact: baseCard?.contact ?? undefined,
         portfolio: baseCard?.portfolio ?? undefined,
         isPublic: baseCard?.isPublic ?? undefined,
-        deliverables: normalizedDeliverables,
+        deliverables: normalizeStringArray(deliverables, 50),
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
       }
@@ -528,35 +522,58 @@ export default function CreatorCardPage() {
 
               {otherFormatEnabled ? (
                 <div className="mt-3 min-w-0">
-                  <Input
-                    value={otherFormatInput}
-                    placeholder={t("creatorCardEditor.formats.otherPlaceholder")}
-                    disabled={!otherFormatEnabled}
-                    onChange={(e) => {
-                      const raw = e.target.value
-                      setOtherFormatInput(raw)
-
-                      const trimmed = raw.trim()
-                      setDeliverables((prev) => {
-                        const stored = otherFormatStoredRef.current
-                        let next = stored ? prev.filter((x) => x !== stored) : prev
-
-                        if (trimmed) {
-                          const lower = trimmed.toLowerCase()
-                          const hasDup = next.some((x) => x.toLowerCase() === lower)
-                          if (!hasDup) {
-                            next = [...next, trimmed]
-                          }
-                          otherFormatStoredRef.current = hasDup ? "" : trimmed
-                        } else {
-                          otherFormatStoredRef.current = ""
+                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                    <Input
+                      value={otherFormatInput}
+                      placeholder={t("creatorCardEditor.formats.otherPlaceholder")}
+                      disabled={!otherFormatEnabled}
+                      onChange={(e) => setOtherFormatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addOtherFormat()
                         }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={addOtherFormat}
+                      disabled={!otherFormatEnabled || !otherFormatInput.trim()}
+                    >
+                      {t("creatorCardEditor.formats.otherAdd")}
+                    </Button>
+                  </div>
 
-                        return next
-                      })
-                      flashHighlight("formats")
-                    }}
-                  />
+                  {(() => {
+                    const customs = deliverables.filter((x) => !knownFormatIds.has(x))
+                    if (customs.length === 0) return null
+                    return (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {customs.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                          >
+                            <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                              onClick={() => {
+                                setDeliverables((prev) => prev.filter((x) => x !== tag))
+                                flashHighlight("formats")
+                              }}
+                              aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </div>
               ) : null}
             </CardContent>

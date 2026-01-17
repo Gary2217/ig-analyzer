@@ -98,7 +98,8 @@
         "fbPost": "FB貼文",
         "other": "其他"
       },
-      "otherPlaceholder": "請輸入其他合作形式"
+      "otherPlaceholder": "請輸入其他合作形式",
+      "otherAdd": "新增"
     },
     "niches": {
       "title": "合作品類／擅長領域",

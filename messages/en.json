@@ -98,7 +98,8 @@
         "fbPost": "FB Post",
         "other": "Other"
       },
-      "otherPlaceholder": "Enter other collaboration format"
+      "otherPlaceholder": "Enter other collaboration format",
+      "otherAdd": "Add"
     },
     "niches": {
       "title": "Collaboration niches / categories",
