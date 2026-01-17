@@ -156,6 +156,14 @@ export default function CreatorCardPage() {
   const [contactInstagram, setContactInstagram] = useState("")
   const [contactOther, setContactOther] = useState("")
 
+  const serializedContact = useMemo(() => {
+    const email = contactEmail.trim()
+    const instagram = contactInstagram.trim()
+    const other = contactOther.trim()
+    if (!email && !instagram && !other) return null
+    return JSON.stringify({ email, instagram, other })
+  }, [contactEmail, contactInstagram, contactOther])
+
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
 
@@ -380,15 +388,11 @@ export default function CreatorCardPage() {
 
   useEffect(() => {
     setBaseCard((prev) => {
-      if (!prev) return prev
-      const email = contactEmail.trim()
-      const instagram = contactInstagram.trim()
-      const other = contactOther.trim()
-      const nextContact = email || instagram || other ? JSON.stringify({ email, instagram, other }) : null
-      if ((prev.contact ?? null) === nextContact) return prev
-      return { ...prev, contact: nextContact }
+      const nextContact = serializedContact
+      if ((prev?.contact ?? null) === nextContact) return prev
+      return { ...(prev ?? {}), contact: nextContact }
     })
-  }, [contactEmail, contactInstagram, contactOther])
+  }, [serializedContact])
 
   useEffect(() => {
     if (!creatorId) {
@@ -474,7 +478,7 @@ export default function CreatorCardPage() {
         audience: baseCard?.audience ?? undefined,
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
-        contact: baseCard?.contact ?? undefined,
+        contact: serializedContact,
         portfolio: baseCard?.portfolio ?? undefined,
         isPublic: baseCard?.isPublic ?? undefined,
         deliverables: normalizeStringArray(deliverables, 50),
@@ -501,7 +505,7 @@ export default function CreatorCardPage() {
     } finally {
       setSaving(false)
     }
-  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, pastCollaborations, saving, t, themeTypes])
+  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, pastCollaborations, saving, serializedContact, t, themeTypes])
 
   const returnTo = useMemo(() => {
     const raw = (searchParams?.get("returnTo") ?? "").trim()
@@ -832,6 +836,23 @@ export default function CreatorCardPage() {
                     />
                   </div>
                 </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={
+                      saving ||
+                      loading ||
+                      loadErrorKind === "not_connected" ||
+                      loadErrorKind === "supabase_invalid_key"
+                    }
+                  >
+                    {t("creatorCardEditor.formats.otherAdd")}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1128,7 +1149,7 @@ export default function CreatorCardPage() {
               displayName={displayName}
               aboutText={baseCard?.audience ?? null}
               primaryNiche={baseCard?.niche ?? null}
-              contact={baseCard?.contact ?? null}
+              contact={serializedContact}
               themeTypes={themeTypes}
               audienceProfiles={audienceProfiles}
               collaborationNiches={collaborationNiches}
