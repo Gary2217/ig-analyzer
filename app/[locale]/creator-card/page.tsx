@@ -659,7 +659,7 @@ export default function CreatorCardPage() {
                   <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                     <Input
                       value={primaryTypeInput}
-                      placeholder={t("creatorCardEditor.profile.tagsPlaceholder")}
+                      placeholder={t("creatorCardEditor.profile.primaryTypePlaceholder")}
                       onChange={(e) => setPrimaryTypeInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -710,7 +710,7 @@ export default function CreatorCardPage() {
                   <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                     <Input
                       value={themeTypeInput}
-                      placeholder={activeLocale === "zh-TW" ? "例如：美妝、穿搭、科技" : "e.g. Beauty, Fashion, Tech"}
+                      placeholder={t("creatorCardEditor.profile.themePlaceholder")}
                       onChange={(e) => setThemeTypeInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -761,11 +761,7 @@ export default function CreatorCardPage() {
                   <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                     <Input
                       value={audienceProfileInput}
-                      placeholder={
-                        activeLocale === "zh-TW"
-                          ? "例如：18–25 歲女性、上班族、新手創作者"
-                          : "e.g. Women 18–25, Office workers, New creators"
-                      }
+                      placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
                       onChange={(e) => setAudienceProfileInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {

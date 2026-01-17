@@ -71,7 +71,10 @@
       "bioPlaceholder": "Write a short self-introduction…",
       "themeTitle": "Theme types",
       "audienceTitle": "Audience profiles",
-      "tagsPlaceholder": "Type and press Enter"
+      "tagsPlaceholder": "Type and press Enter",
+      "primaryTypePlaceholder": "Type and click Add",
+      "themePlaceholder": "e.g. Beauty, Fashion, Tech",
+      "audiencePlaceholder": "e.g. Women 18–25, Office workers, New creators"
     },
     "empty": {
       "title": "Start filling your card",

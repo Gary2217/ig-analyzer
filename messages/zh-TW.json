@@ -71,7 +71,10 @@
       "bioPlaceholder": "請簡短介紹你自己…",
       "themeTitle": "主題類型",
       "audienceTitle": "受眾輪廓",
-      "tagsPlaceholder": "輸入後按 Enter"
+      "tagsPlaceholder": "輸入後按 Enter",
+      "primaryTypePlaceholder": "輸入後點『新增』",
+      "themePlaceholder": "例如：美妝、穿搭、科技",
+      "audiencePlaceholder": "例如：18–25 歲女性、上班族、新手創作者"
     },
     "empty": {
       "title": "開始填寫名片資料",
