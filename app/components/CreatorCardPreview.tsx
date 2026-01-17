@@ -109,14 +109,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   }, [collaborationNiches, t])
 
   const formats = useMemo(() => normalizeStringArray(deliverables ?? [], 50), [deliverables])
-  const brandsText = useMemo(() => {
-    const brands = normalizeStringArray(pastCollaborations ?? [], 20)
-    if (brands.length === 0) return t("results.mediaKit.pastCollaborations.empty")
-    const max = 6
-    const visible = brands.slice(0, max)
-    const extra = Math.max(0, brands.length - visible.length)
-    return `${visible.join(", ")}${extra > 0 ? ` +${extra}` : ""}`
-  }, [pastCollaborations, t])
+  const brands = useMemo(() => normalizeStringArray(pastCollaborations ?? [], Number.POSITIVE_INFINITY), [pastCollaborations])
 
   const formatLabelMap: Record<string, string> = {
     reels: t("creatorCardEditor.formats.options.reels"),
@@ -168,7 +161,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
           <div className="flex flex-col gap-4 min-w-0">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0">
-              <div className="md:col-span-4 min-w-0">
+              <div className="md:col-span-3 min-w-0">
                 <div className="mx-auto w-full max-w-[240px] md:max-w-[280px] lg:max-w-[320px]">
                   <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
                     <div className="aspect-[3/4] w-full">
@@ -199,7 +192,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 </div>
               </div>
 
-              <div className="md:col-span-8 min-w-0">
+              <div className="md:col-span-9 min-w-0">
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
                   <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                   <div className="mt-1 text-xs sm:text-sm leading-snug text-white/45 min-w-0 break-words line-clamp-4 [overflow-wrap:anywhere]">
@@ -231,19 +224,14 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                         <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.collaborationFormats.empty")}</div>
                       ) : (
                         <>
-                          {formats.slice(0, 6).map((id) => (
+                          {formats.map((id) => (
                             <span
                               key={id}
-                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75"
+                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 min-w-0 max-w-[220px] truncate whitespace-nowrap"
                             >
                               {formatLabelMap[id] || id}
                             </span>
                           ))}
-                          {formats.length > 6 ? (
-                            <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/55 whitespace-nowrap">
-                              +{Math.max(0, formats.length - 6)}
-                            </span>
-                          ) : null}
                         </>
                       )}
                     </div>
@@ -253,30 +241,30 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
             </div>
 
             {showStatsRow ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 sm:px-4 sm:py-3 min-w-0">
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
                 <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
                   {hasFollowers ? (
                     <div className="flex-1 min-w-0">
                       <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
-                      <div className="mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap text-white">
+                      <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white">
                         {followersText}
                       </div>
                     </div>
                   ) : null}
 
                   {hasAvgLikes ? (
-                    <div className={(hasFollowers ? "flex-1 min-w-0 pl-3 sm:pl-4" : "flex-1 min-w-0") + (!hasFollowers ? " border-l-0" : "") }>
+                    <div className={(hasFollowers ? "flex-1 min-w-0 pl-2.5 sm:pl-3" : "flex-1 min-w-0") + (!hasFollowers ? " border-l-0" : "") }>
                       <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgLikesLabel || "—"}</div>
-                      <div className="mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap text-white">
+                      <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white">
                         {avgLikesText}
                       </div>
                     </div>
                   ) : null}
 
                   {hasAvgComments ? (
-                    <div className={(hasFollowers || hasAvgLikes ? "flex-1 min-w-0 pl-3 sm:pl-4" : "flex-1 min-w-0") + (!hasFollowers && !hasAvgLikes ? " border-l-0" : "") }>
+                    <div className={(hasFollowers || hasAvgLikes ? "flex-1 min-w-0 pl-2.5 sm:pl-3" : "flex-1 min-w-0") + (!hasFollowers && !hasAvgLikes ? " border-l-0" : "") }>
                       <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgCommentsLabel || "—"}</div>
-                      <div className="mt-1 text-[clamp(18px,5.2vw,26px)] font-semibold tabular-nums whitespace-nowrap text-white">
+                      <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white">
                         {avgCommentsText}
                       </div>
                     </div>
@@ -332,9 +320,9 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 <div className="text-[11px] text-white/45 whitespace-nowrap">{t("results.mediaKit.featured.empty")}</div>
               </div>
 
-              <div className="mt-2 flex gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden min-w-0">
+              <div className="mt-2 flex flex-wrap gap-2 min-w-0">
                 {Array.from({ length: 5 }).map((_, idx) => (
-                  <div key={idx} className="h-12 w-12 shrink-0 rounded-lg border border-white/10 bg-black/20" aria-hidden="true" />
+                  <div key={idx} className="h-12 w-12 rounded-lg border border-white/10 bg-black/20" aria-hidden="true" />
                 ))}
               </div>
             </div>
@@ -347,8 +335,22 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 }
               >
                 <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.pastCollaborations.title")}</div>
-                <div className="mt-2 text-[12px] leading-snug text-white/45 min-w-0 break-words line-clamp-3 [overflow-wrap:anywhere]">
-                  {brandsText}
+                <div className="mt-2 flex flex-wrap gap-2 min-w-0">
+                  {brands.length === 0 ? (
+                    <div className="text-[12px] leading-snug text-white/45">{t("results.mediaKit.pastCollaborations.empty")}</div>
+                  ) : (
+                    <>
+                      {brands.map((brand) => (
+                        <span
+                          key={brand}
+                          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 min-w-0 max-w-full truncate whitespace-nowrap"
+                        >
+                          <span className="min-w-0 truncate">{brand}</span>
+                          <span className="shrink-0 text-white/35" aria-hidden="true">×</span>
+                        </span>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
 
