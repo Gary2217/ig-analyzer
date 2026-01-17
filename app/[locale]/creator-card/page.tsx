@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
-import { Plus, X } from "lucide-react"
+import { Pencil, Plus, X } from "lucide-react"
 
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core"
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable"
@@ -35,15 +35,18 @@ type CreatorCardPayload = {
 type FeaturedItem = {
   id: string
   url: string
+  brand?: string
+  collabType?: string
 }
 
 function SortableFeaturedTile(props: {
   item: FeaturedItem
   onReplace: (id: string) => void
   onRemove: (id: string) => void
+  onEdit: (id: string) => void
   suppressClick: boolean
 }) {
-  const { item, onReplace, onRemove, suppressClick } = props
+  const { item, onReplace, onRemove, onEdit, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
 
   return (
@@ -53,14 +56,14 @@ function SortableFeaturedTile(props: {
       className={
         "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-shadow " +
         (isDragging ? "scale-[1.03] shadow-lg ring-2 ring-slate-950/10" : "hover:border-slate-300") +
-        " cursor-grab"
+        (isDragging ? " cursor-grabbing" : " cursor-grab")
       }
       {...attributes}
       {...listeners}
     >
       <button
         type="button"
-        className="absolute inset-0"
+        className="absolute inset-0 z-0"
         onClick={() => {
           if (suppressClick) return
           onReplace(item.id)
@@ -68,9 +71,25 @@ function SortableFeaturedTile(props: {
         aria-label="更換"
       />
       <img src={item.url} alt="" className="h-full w-full object-cover" />
+
       <button
         type="button"
-        className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+        className="absolute left-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+        onPointerDown={(e) => {
+          e.stopPropagation()
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          onEdit(item.id)
+        }}
+        aria-label="編輯"
+      >
+        <Pencil className="h-3.5 w-3.5 text-slate-700" />
+      </button>
+
+      <button
+        type="button"
+        className="absolute right-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
         onPointerDown={(e) => {
           e.stopPropagation()
         }}
@@ -220,6 +239,9 @@ export default function CreatorCardPage() {
   const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
   const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
   const [suppressFeaturedTileClick, setSuppressFeaturedTileClick] = useState(false)
+  const [editingFeaturedId, setEditingFeaturedId] = useState<string | null>(null)
+  const [editingFeaturedBrand, setEditingFeaturedBrand] = useState("")
+  const [editingFeaturedCollabType, setEditingFeaturedCollabType] = useState("")
 
   const openAddFeatured = useCallback(() => {
     featuredAddInputRef.current?.click()
@@ -228,6 +250,19 @@ export default function CreatorCardPage() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const openEditFeatured = useCallback(
+    (id: string) => {
+      setFeaturedItems((prev) => {
+        const picked = prev.find((x) => x.id === id)
+        setEditingFeaturedId(id)
+        setEditingFeaturedBrand(typeof picked?.brand === "string" ? picked.brand : "")
+        setEditingFeaturedCollabType(typeof picked?.collabType === "string" ? picked.collabType : "")
+        return prev
+      })
+    },
+    [setFeaturedItems]
   )
 
   const serializedContact = useMemo(() => {
@@ -963,6 +998,8 @@ export default function CreatorCardPage() {
                     ...files.map((file) => ({
                       id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
                       url: URL.createObjectURL(file),
+                      brand: "",
+                      collabType: "",
                     })),
                   ])
 
@@ -1029,6 +1066,9 @@ export default function CreatorCardPage() {
                           pendingFeaturedReplaceIdRef.current = id
                           featuredReplaceInputRef.current?.click()
                         }}
+                        onEdit={(id) => {
+                          openEditFeatured(id)
+                        }}
                         onRemove={(id) => {
                           setFeaturedItems((prev) => {
                             const picked = prev.find((x) => x.id === id)
@@ -1057,18 +1097,82 @@ export default function CreatorCardPage() {
                 <div className="mt-2 text-sm text-slate-500">尚未新增作品</div>
               ) : null}
 
-              <div className="mt-3 flex justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={openAddFeatured}
-                >
-                  <Plus className="h-4 w-4" />
-                  新增作品
-                </Button>
-              </div>
+              {editingFeaturedId ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                  <div
+                    className="absolute inset-0 bg-black/40"
+                    onClick={() => {
+                      setEditingFeaturedId(null)
+                    }}
+                  />
+                  <div className="relative z-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                    <div className="text-sm font-semibold text-slate-900">編輯作品資訊</div>
+
+                    <div className="mt-3">
+                      <div className="text-sm font-semibold text-slate-900">品牌</div>
+                      <div className="mt-2">
+                        <Input
+                          value={editingFeaturedBrand}
+                          placeholder="例如：Nike / Apple / 某某品牌"
+                          onChange={(e) => setEditingFeaturedBrand(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="text-sm font-semibold text-slate-900">合作形式</div>
+                      <div className="mt-2">
+                        <select
+                          value={editingFeaturedCollabType}
+                          onChange={(e) => setEditingFeaturedCollabType(e.target.value)}
+                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                        >
+                          <option value="">請選擇</option>
+                          <option value="Reels">Reels</option>
+                          <option value="貼文">貼文</option>
+                          <option value="限動">限動</option>
+                          <option value="UGC">UGC</option>
+                          <option value="開箱">開箱</option>
+                          <option value="直播">直播</option>
+                          <option value="其他">其他</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingFeaturedId(null)
+                        }}
+                      >
+                        取消
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          const id = editingFeaturedId
+                          if (!id) return
+                          setFeaturedItems((prev) =>
+                            prev.map((x) =>
+                              x.id === id
+                                ? { ...x, brand: editingFeaturedBrand, collabType: editingFeaturedCollabType }
+                                : x
+                            )
+                          )
+                          setEditingFeaturedId(null)
+                        }}
+                      >
+                        儲存
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

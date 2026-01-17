@@ -26,6 +26,8 @@ export type CreatorCardPreviewProps = {
 
   contact?: string | null
 
+  featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null }[]
+
   featuredImageUrls?: (string | null)[]
 
   themeTypes?: string[] | null
@@ -79,6 +81,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     aboutText,
     primaryNiche,
     contact,
+    featuredItems,
     featuredImageUrls,
     themeTypes,
     audienceProfiles,
@@ -133,19 +136,37 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     }
   }, [contact])
 
-  const featuredUrls = useMemo(() => {
-    const raw = Array.isArray(featuredImageUrls) ? featuredImageUrls : []
-    const out: string[] = []
-    for (const item of raw) {
+  const featuredTiles = useMemo(() => {
+    const rawItems = Array.isArray(featuredItems) ? featuredItems : []
+    const out: Array<{ id: string; url: string; brand: string; collabType: string }> = []
+
+    if (rawItems.length > 0) {
+      for (const item of rawItems) {
+        const url = typeof item?.url === "string" ? item.url.trim() : ""
+        if (!url) continue
+        const id = typeof item?.id === "string" && item.id ? item.id : `${out.length}`
+        out.push({
+          id,
+          url,
+          brand: typeof item?.brand === "string" ? item.brand.trim() : "",
+          collabType: typeof item?.collabType === "string" ? item.collabType.trim() : "",
+        })
+      }
+      return out
+    }
+
+    const rawUrls = Array.isArray(featuredImageUrls) ? featuredImageUrls : []
+    for (let i = 0; i < rawUrls.length; i++) {
+      const item = rawUrls[i]
       if (typeof item !== "string") continue
       const s = item.trim()
       if (!s) continue
-      out.push(s)
+      out.push({ id: String(i), url: s, brand: "", collabType: "" })
     }
     return out
-  }, [featuredImageUrls])
+  }, [featuredImageUrls, featuredItems])
 
-  const featuredCount = featuredUrls.length
+  const featuredCount = featuredTiles.length
 
   const featuredStripRef = useRef<HTMLDivElement | null>(null)
 
@@ -509,12 +530,27 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                       </div>
                     </div>
                   ) : (
-                    featuredUrls.map((url, idx) => (
+                    featuredTiles.map((item) => (
                       <div
-                        key={idx}
-                        className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                        key={item.id}
+                        className="relative shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
                       >
-                        <img src={url} alt="" className="h-full w-full object-cover" />
+                        <img src={item.url} alt="" className="h-full w-full object-cover" />
+
+                        {item.brand || item.collabType ? (
+                          <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1.5">
+                            {item.brand ? (
+                              <span className="inline-flex items-center rounded-full bg-black/40 px-2 py-1 text-[12px] font-semibold text-white/90 backdrop-blur">
+                                {item.brand}
+                              </span>
+                            ) : null}
+                            {item.collabType ? (
+                              <span className="inline-flex items-center rounded-full bg-black/35 px-2 py-1 text-[11px] font-semibold text-white/85 backdrop-blur">
+                                {item.collabType}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   )}
