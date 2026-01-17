@@ -1041,6 +1041,8 @@ export default function CreatorCardPage() {
               t={t}
               className="border-white/10 bg-transparent"
               headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+              useWidePhotoLayout
+              photoUploadEnabled
               username={displayUsername || null}
               profileImageUrl={(() => {
                 const u = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""

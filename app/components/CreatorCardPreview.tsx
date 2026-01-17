@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -12,6 +12,9 @@ export type CreatorCardPreviewProps = {
   id?: string
   headerClassName?: string
   actions?: ReactNode
+
+  useWidePhotoLayout?: boolean
+  photoUploadEnabled?: boolean
 
   profileImageUrl?: string | null
   displayName?: string | null
@@ -63,6 +66,8 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     className,
     headerClassName,
     actions,
+    useWidePhotoLayout,
+    photoUploadEnabled,
     profileImageUrl,
     displayName,
     username,
@@ -105,6 +110,23 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
   const resolvedDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : "—"
   const resolvedUsername = typeof username === "string" && username.trim() ? username.trim() : "—"
+
+  const [photoOverrideUrl, setPhotoOverrideUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (photoOverrideUrl) URL.revokeObjectURL(photoOverrideUrl)
+    }
+  }, [photoOverrideUrl])
+
+  const effectivePhotoUrl = photoOverrideUrl ?? profileImageUrl ?? null
+  const wideLayout = Boolean(useWidePhotoLayout)
+  const leftSpanClassName = wideLayout ? "md:col-span-4" : "md:col-span-3"
+  const rightSpanClassName = wideLayout ? "md:col-span-8" : "md:col-span-9"
+  const photoMaxWidthClassName = wideLayout
+    ? "max-w-[280px] md:max-w-[340px] lg:max-w-[400px]"
+    : "max-w-[240px] md:max-w-[280px] lg:max-w-[320px]"
 
   const nicheText = useMemo(() => {
     const ids = normalizeStringArray(collaborationNiches ?? [], 20)
@@ -181,14 +203,14 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       <CardContent className="p-4 lg:p-6">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
           <div className="flex flex-col gap-4 min-w-0">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0">
-              <div className="md:col-span-3 min-w-0">
-                <div className="mx-auto w-full max-w-[240px] md:max-w-[280px] lg:max-w-[320px]">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0 items-stretch">
+              <div className={leftSpanClassName + " min-w-0 h-full flex"}>
+                <div className={"mx-auto w-full " + photoMaxWidthClassName + " h-full flex flex-col"}>
                   <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
                     <div className="aspect-[3/4] w-full">
-                      {profileImageUrl ? (
+                      {effectivePhotoUrl ? (
                         <img
-                          src={profileImageUrl}
+                          src={effectivePhotoUrl}
                           alt="creator"
                           className="h-full w-full object-cover"
                           loading="lazy"
@@ -201,7 +223,34 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                     </div>
                   </div>
 
-                  <div className="mt-3 min-w-0">
+                  {photoUploadEnabled ? (
+                    <div className="mt-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null
+                          if (!file) return
+                          const nextUrl = URL.createObjectURL(file)
+                          setPhotoOverrideUrl((prev) => {
+                            if (prev) URL.revokeObjectURL(prev)
+                            return nextUrl
+                          })
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="w-full rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        上傳照片
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-auto pt-3 min-w-0">
                     <div className="text-[clamp(18px,4.8vw,28px)] font-semibold text-white leading-tight break-words line-clamp-2 [overflow-wrap:anywhere]">
                       {resolvedDisplayName}
                     </div>
@@ -213,7 +262,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 </div>
               </div>
 
-              <div className="md:col-span-9 min-w-0">
+              <div className={rightSpanClassName + " min-w-0"}>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
                   <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                   <div className="mt-1 text-xs sm:text-sm leading-snug text-white/45 min-w-0 break-words line-clamp-4 [overflow-wrap:anywhere]">
