@@ -237,6 +237,10 @@ export default function CreatorCardPage() {
 
   const [showNewCardHint, setShowNewCardHint] = useState(false)
 
+  const [introDraft, setIntroDraft] = useState("")
+  const [introAppliedHint, setIntroAppliedHint] = useState(false)
+  const introAppliedHintTimerRef = useRef<number | null>(null)
+
   const meQuery = useInstagramMe({ enabled: true })
 
   const [baseCard, setBaseCard] = useState<CreatorCardPayload | null>(null)
@@ -325,6 +329,11 @@ export default function CreatorCardPage() {
       if (highlightTimerRef.current != null) {
         window.clearTimeout(highlightTimerRef.current)
         highlightTimerRef.current = null
+      }
+
+      if (introAppliedHintTimerRef.current != null) {
+        window.clearTimeout(introAppliedHintTimerRef.current)
+        introAppliedHintTimerRef.current = null
       }
     }
   }, [])
@@ -442,6 +451,7 @@ export default function CreatorCardPage() {
           : null
 
         setBaseCard(nextBase)
+        setIntroDraft(typeof nextBase?.audience === "string" ? nextBase.audience : "")
         const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
         setDeliverables(nextDeliverables)
         setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
@@ -862,11 +872,10 @@ export default function CreatorCardPage() {
                 <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.bioTitle")}</div>
                 <div className="mt-2 relative">
                   <textarea
-                    value={baseCard?.audience ?? ""}
+                    value={introDraft}
                     placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
                     onChange={(e) => {
-                      const v = e.target.value
-                      setBaseCard((prev) => ({ ...(prev ?? {}), audience: v }))
+                      setIntroDraft(e.target.value)
                     }}
                     className="w-full min-h-[120px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 pr-24 pb-12 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                   />
@@ -878,7 +887,15 @@ export default function CreatorCardPage() {
                     onClick={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
-                      handleSave()
+                      setBaseCard((prev) => ({ ...(prev ?? {}), audience: introDraft }))
+                      setIntroAppliedHint(true)
+                      if (introAppliedHintTimerRef.current != null) {
+                        window.clearTimeout(introAppliedHintTimerRef.current)
+                      }
+                      introAppliedHintTimerRef.current = window.setTimeout(() => {
+                        setIntroAppliedHint(false)
+                        introAppliedHintTimerRef.current = null
+                      }, 1600)
                     }}
                     disabled={
                       saving ||
@@ -890,6 +907,10 @@ export default function CreatorCardPage() {
                     {t("creatorCardEditor.formats.otherAdd")}
                   </Button>
                 </div>
+
+                {introAppliedHint ? (
+                  <div className="mt-2 text-xs text-slate-600">已套用到預覽，記得按右上儲存</div>
+                ) : null}
               </div>
 
               <div className="mt-5 min-w-0">

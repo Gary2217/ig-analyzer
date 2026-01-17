@@ -143,30 +143,21 @@ export async function POST(req: Request) {
       }
     }
 
-    const deliverables = Array.isArray(body?.deliverables) ? body.deliverables : []
-    const collaborationNiches = normalizeStringArray((body as any)?.collaborationNiches, 20)
-    const pastCollaborations = normalizeStringArray((body as any)?.pastCollaborations, 20)
     const themeTypes = normalizeStringArray((body as any)?.themeTypes, 20)
     const audienceProfiles = normalizeStringArray((body as any)?.audienceProfiles, 20)
 
-    const payloadBase: any = {
+    const dbWrite: any = {
       ig_user_id: igUserId,
       ig_username: igUsername,
       handle,
       display_name: String(body?.displayName ?? "").trim() || null,
       niche: String(body?.niche ?? "").trim() || null,
-      deliverables,
-      contact: String(body?.contact ?? "").trim() || null,
       portfolio: Array.isArray(body?.portfolio) ? body.portfolio : [],
       is_public: Boolean(body?.isPublic),
+      theme_types: themeTypes,
+      audience_profiles: audienceProfiles,
       updated_at: new Date().toISOString(),
     }
-
-    // Optional new columns (may not exist yet in DB)
-    if (collaborationNiches.length > 0) payloadBase.collaboration_niches = collaborationNiches
-    if (pastCollaborations.length > 0) payloadBase.past_collaborations = pastCollaborations
-    payloadBase.theme_types = themeTypes
-    payloadBase.audience_profiles = audienceProfiles
 
     const query = supabaseServer.from("creator_cards")
     const runUpsert = async (p: any) => {
@@ -175,24 +166,7 @@ export async function POST(req: Request) {
         : await query.insert(p).select("*").maybeSingle()
     }
 
-    let { data, error } = await runUpsert(payloadBase)
-
-    // Best-effort fallback: if DB is missing new optional columns, retry once without them.
-    if (
-      error &&
-      typeof (error as any)?.message === "string" &&
-      (((error as any).message as string).includes("collaboration_niches") ||
-        ((error as any).message as string).includes("past_collaborations") ||
-        ((error as any).message as string).includes("theme_types") ||
-        ((error as any).message as string).includes("audience_profiles"))
-    ) {
-      const fallback = { ...payloadBase }
-      delete fallback.collaboration_niches
-      delete fallback.past_collaborations
-      delete fallback.theme_types
-      delete fallback.audience_profiles
-      ;({ data, error } = await runUpsert(fallback))
-    }
+    const { data, error } = await runUpsert(dbWrite)
 
     if (error) {
       if (typeof (error as any)?.message === "string" && ((error as any).message as string).includes("Invalid API key")) {
