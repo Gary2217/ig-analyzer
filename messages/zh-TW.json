@@ -160,7 +160,8 @@
         }
       },
       "stats": {
-        "followers": "粉絲"
+        "followers": "粉絲",
+        "posts": "貼文數"
       },
       "kpis": {
         "title": "關鍵指標",

@@ -25,6 +25,7 @@ export type CreatorCardPreviewProps = {
   pastCollaborations?: string[] | null
 
   followersText?: string | null
+  postsText?: string | null
   avgLikesLabel?: string | null
   avgLikesText?: string | null
   avgCommentsLabel?: string | null
@@ -68,6 +69,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     deliverables,
     pastCollaborations,
     followersText,
+    postsText,
     avgLikesLabel,
     avgLikesText,
     avgCommentsLabel,
@@ -137,13 +139,12 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   const brandsHighlight = highlightClass(highlightTarget === "brands")
 
   const hasFollowers = typeof followersText === "string" && followersText.trim().length > 0
-  const hasAvgLikes = typeof avgLikesText === "string" && avgLikesText.trim().length > 0
-  const hasAvgComments = typeof avgCommentsText === "string" && avgCommentsText.trim().length > 0
-  const showStatsRow = hasFollowers || hasAvgLikes || hasAvgComments
-
+  const hasPosts = typeof postsText === "string" && postsText.trim().length > 0
   const hasEngagementRate = typeof engagementRateText === "string" && engagementRateText.trim().length > 0
+  const showStatsRow = hasFollowers || hasPosts || hasEngagementRate
+
   const hasReach = typeof reachText === "string" && reachText.trim().length > 0
-  const showKpiGrid = hasEngagementRate || hasReach
+  const showKpiGrid = hasReach
 
   return (
     <Card id={id} className={"min-w-0 " + (className ?? "")}>
@@ -243,32 +244,26 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
             {showStatsRow ? (
               <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
                 <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
-                  {hasFollowers ? (
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
-                      <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white">
-                        {followersText}
-                      </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
+                    <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
+                      {hasFollowers ? followersText : "—"}
                     </div>
-                  ) : null}
+                  </div>
 
-                  {hasAvgLikes ? (
-                    <div className={(hasFollowers ? "flex-1 min-w-0 pl-2.5 sm:pl-3" : "flex-1 min-w-0") + (!hasFollowers ? " border-l-0" : "") }>
-                      <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgLikesLabel || "—"}</div>
-                      <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white">
-                        {avgLikesText}
-                      </div>
+                  <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.posts")}</div>
+                    <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
+                      {hasPosts ? postsText : "—"}
                     </div>
-                  ) : null}
+                  </div>
 
-                  {hasAvgComments ? (
-                    <div className={(hasFollowers || hasAvgLikes ? "flex-1 min-w-0 pl-2.5 sm:pl-3" : "flex-1 min-w-0") + (!hasFollowers && !hasAvgLikes ? " border-l-0" : "") }>
-                      <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{avgCommentsLabel || "—"}</div>
-                      <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white">
-                        {avgCommentsText}
-                      </div>
+                  <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
+                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
+                    <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
+                      {hasEngagementRate ? engagementRateText : "—"}
                     </div>
-                  ) : null}
+                  </div>
                 </div>
               </div>
             ) : null}

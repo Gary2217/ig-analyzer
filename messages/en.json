@@ -160,7 +160,8 @@
         }
       },
       "stats": {
-        "followers": "Followers"
+        "followers": "Followers",
+        "posts": "Posts"
       },
       "kpis": {
         "title": "Key KPIs",

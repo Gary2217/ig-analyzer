@@ -3698,6 +3698,7 @@ export default function ResultsClient() {
       deliverables={(creatorCard as any)?.deliverables ?? null}
       pastCollaborations={(creatorCard as any)?.pastCollaborations ?? (creatorCard as any)?.past_collaborations ?? null}
       followersText={typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : null}
+      postsText={typeof mediaCount === "number" && Number.isFinite(mediaCount) ? formatCompact(mediaCount) : null}
       avgLikesLabel={uiCopy.avgLikesLabel}
       avgLikesText={avgLikesFormatted && avgLikesFormatted !== "—" ? avgLikesFormatted : null}
       avgCommentsLabel={uiCopy.avgCommentsLabel}

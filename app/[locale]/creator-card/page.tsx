@@ -383,6 +383,11 @@ export default function CreatorCardPage() {
     return typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : null
   }, [finiteNumOrNull, formatNum, igProfile?.followers_count])
 
+  const postsText = useMemo(() => {
+    const posts = finiteNumOrNull(igProfile?.media_count)
+    return typeof posts === "number" && Number.isFinite(posts) ? formatNum(posts) : null
+  }, [finiteNumOrNull, formatNum, igProfile?.media_count])
+
   const loadingSkeleton = (
     <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0 animate-pulse">
       <div className="lg:col-span-5 space-y-4 min-w-0">
@@ -683,6 +688,7 @@ export default function CreatorCardPage() {
               deliverables={deliverables}
               pastCollaborations={pastCollaborations}
               followersText={followersText}
+              postsText={postsText}
               highlightTarget={highlight}
             />
           </div>
