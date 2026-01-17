@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { Plus } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -138,6 +139,8 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       return typeof url === "string" && url.trim() ? url : null
     })
   }, [featuredImageUrls])
+
+  const hasAnyFeatured = useMemo(() => featuredUrls.some((x) => Boolean(x)), [featuredUrls])
 
   const [photoOverrideUrl, setPhotoOverrideUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -408,23 +411,30 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
             <div className="min-w-0">
               <div className="flex items-end justify-between gap-3 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.featured.title")}</div>
-                <div className="text-[11px] text-white/45 whitespace-nowrap">{t("results.mediaKit.featured.empty")}</div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold tracking-wide text-white/70">作品集展示</div>
+                  <div className="mt-0.5 text-[11px] text-white/45">展示你的熱門貼文或合作作品</div>
+                </div>
+                {!hasAnyFeatured ? (
+                  <div className="text-[11px] text-white/35 whitespace-nowrap">尚未新增作品</div>
+                ) : null}
               </div>
 
-              <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-                {featuredUrls.map((url, idx) =>
-                  url ? (
-                    <img
-                      key={idx}
-                      src={url}
-                      alt=""
-                      className="h-12 w-12 rounded-lg object-cover border border-white/10"
-                    />
-                  ) : (
-                    <div key={idx} className="h-12 w-12 rounded-lg border border-white/10 bg-black/20" aria-hidden="true" />
-                  ),
-                )}
+              <div className="mt-3 flex gap-4 overflow-x-auto pb-2 min-w-0">
+                {featuredUrls.map((url, idx) => (
+                  <div
+                    key={idx}
+                    className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                  >
+                    {url ? (
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center">
+                        <Plus className="h-7 w-7 text-white/25" />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 
