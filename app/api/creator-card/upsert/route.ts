@@ -2,6 +2,18 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { supabaseServer } from "@/lib/supabase/server"
 
+function toSupabaseErrorResponse(err: any, where: string) {
+  const rawMsg = typeof err?.message === "string" ? String(err.message) : "unknown"
+  console.error("[creator-card/upsert] supabase error", { where, message: rawMsg, code: err?.code ?? null })
+  if (rawMsg.includes("Invalid API key")) {
+    return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+  }
+  return NextResponse.json(
+    { ok: false, error: "upsert_failed", message: rawMsg.slice(0, 400) },
+    { status: 400 },
+  )
+}
+
 function normalizeStringArray(value: unknown, maxLen: number) {
   const raw = Array.isArray(value) ? value : []
   const out: string[] = []
@@ -105,13 +117,7 @@ export async function POST(req: Request) {
       .maybeSingle()
 
     if (existing.error) {
-      if (
-        typeof (existing.error as any)?.message === "string" &&
-        ((existing.error as any).message as string).includes("Invalid API key")
-      ) {
-        return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
-      }
-      return NextResponse.json({ ok: false, error: existing.error.message }, { status: 500 })
+      return toSupabaseErrorResponse(existing.error, "select existing")
     }
 
     const wantsNewHandle = Boolean(proposed) && slugify(proposed) !== (existing.data?.handle || "")
@@ -128,10 +134,7 @@ export async function POST(req: Request) {
           .maybeSingle()
 
         if (check.error) {
-          if (typeof (check.error as any)?.message === "string" && ((check.error as any).message as string).includes("Invalid API key")) {
-            return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
-          }
-          return NextResponse.json({ ok: false, error: check.error.message }, { status: 500 })
+          return toSupabaseErrorResponse(check.error, "check handle uniqueness")
         }
 
         if (!check.data || (existing.data && check.data.id === existing.data.id)) {
@@ -169,15 +172,7 @@ export async function POST(req: Request) {
     const { data, error } = await runUpsert(dbWrite)
 
     if (error) {
-      const rawMsg = typeof (error as any)?.message === "string" ? String((error as any).message) : "unknown"
-      console.error("[creator-card/upsert] supabase error", { message: rawMsg, code: (error as any)?.code ?? null })
-      if (rawMsg.includes("Invalid API key")) {
-        return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
-      }
-      return NextResponse.json(
-        { ok: false, error: "upsert_failed", message: rawMsg.slice(0, 400) },
-        { status: 400 },
-      )
+      return toSupabaseErrorResponse(error, "upsert")
     }
 
     return NextResponse.json({

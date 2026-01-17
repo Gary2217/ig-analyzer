@@ -1209,7 +1209,10 @@ export default function CreatorCardPage() {
                   aria-label="新增作品"
                 >
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Plus className="h-7 w-7 text-slate-300 group-hover:text-slate-400" />
+                    <div className="flex flex-col items-center justify-center gap-1 text-slate-600">
+                      <div className="text-sm font-semibold">請選擇</div>
+                      <div className="text-[11px] leading-4 text-slate-500">Choose</div>
+                    </div>
                   </div>
                 </button>
               </div>
