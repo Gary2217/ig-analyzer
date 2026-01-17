@@ -659,7 +659,7 @@ export default function CreatorCardPage() {
                   <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                     <Input
                       value={primaryTypeInput}
-                      placeholder={t("creatorCardEditor.profile.primaryTypePlaceholder")}
+                      placeholder=""
                       onChange={(e) => setPrimaryTypeInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
