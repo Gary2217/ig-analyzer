@@ -3646,6 +3646,15 @@ export default function ResultsClient() {
     return "ready"
   })()
 
+  const creatorCardEngagementRateText = (() => {
+    if (typeof engagementRatePctFormatted === "string" && engagementRatePctFormatted.trim() && engagementRatePctFormatted !== "—") {
+      return engagementRatePctFormatted
+    }
+    const pct = computedMetrics?.engagementRatePct
+    if (typeof pct === "number" && Number.isFinite(pct)) return `${pct.toFixed(1)}%`
+    return null
+  })()
+
   const creatorCardPreviewCard = (
     <CreatorCardPreview
       t={t}
@@ -3703,11 +3712,7 @@ export default function ResultsClient() {
       avgLikesText={avgLikesFormatted && avgLikesFormatted !== "—" ? avgLikesFormatted : null}
       avgCommentsLabel={uiCopy.avgCommentsLabel}
       avgCommentsText={avgCommentsFormatted && avgCommentsFormatted !== "—" ? avgCommentsFormatted : null}
-      engagementRateText={
-        typeof engagementRatePctFormatted === "string" && engagementRatePctFormatted !== "—"
-          ? engagementRatePctFormatted
-          : null
-      }
+      engagementRateText={creatorCardEngagementRateText}
       reachText={
         typeof dailySnapshotTotals?.reach === "number" && Number.isFinite(dailySnapshotTotals.reach)
           ? formatNum(dailySnapshotTotals.reach)
