@@ -106,11 +106,11 @@ function SortableFeaturedTile(props: {
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            onEdit(item.id)
+            onReplace(item.id)
           }}
           aria-label="編輯"
         >
-          <Pencil className="h-3.5 w-3.5 text-slate-700" />
+          <span className="text-xs font-medium text-white/90">請選擇</span>
         </button>
       ) : null}
 
@@ -1209,10 +1209,7 @@ export default function CreatorCardPage() {
                   aria-label="新增作品"
                 >
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="flex flex-col items-center justify-center gap-1 text-slate-600">
-                      <div className="text-sm font-semibold">請選擇</div>
-                      <div className="text-[11px] leading-4 text-slate-500">Choose</div>
-                    </div>
+                    <Plus className="h-7 w-7 text-slate-300 group-hover:text-slate-400" />
                   </div>
                 </button>
               </div>
