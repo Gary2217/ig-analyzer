@@ -1213,6 +1213,7 @@ export default function CreatorCardPage() {
               aboutText={baseCard?.audience ?? null}
               primaryNiche={baseCard?.niche ?? null}
               contact={serializedContact}
+              featuredImageUrls={featuredPreviewUrls}
               themeTypes={themeTypes}
               audienceProfiles={audienceProfiles}
               collaborationNiches={collaborationNiches}

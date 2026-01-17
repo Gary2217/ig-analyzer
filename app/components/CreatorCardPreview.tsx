@@ -25,6 +25,8 @@ export type CreatorCardPreviewProps = {
 
   contact?: string | null
 
+  featuredImageUrls?: (string | null)[]
+
   themeTypes?: string[] | null
   audienceProfiles?: string[] | null
 
@@ -76,6 +78,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     aboutText,
     primaryNiche,
     contact,
+    featuredImageUrls,
     themeTypes,
     audienceProfiles,
     collaborationNiches,
@@ -128,6 +131,13 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       return { email: "", instagram: "", other: raw }
     }
   }, [contact])
+
+  const featuredUrls = useMemo(() => {
+    return Array.from({ length: 5 }, (_, idx) => {
+      const url = featuredImageUrls?.[idx]
+      return typeof url === "string" && url.trim() ? url : null
+    })
+  }, [featuredImageUrls])
 
   const [photoOverrideUrl, setPhotoOverrideUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -403,9 +413,18 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               </div>
 
               <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-                {Array.from({ length: 5 }).map((_, idx) => (
-                  <div key={idx} className="h-12 w-12 rounded-lg border border-white/10 bg-black/20" aria-hidden="true" />
-                ))}
+                {featuredUrls.map((url, idx) =>
+                  url ? (
+                    <img
+                      key={idx}
+                      src={url}
+                      alt=""
+                      className="h-12 w-12 rounded-lg object-cover border border-white/10"
+                    />
+                  ) : (
+                    <div key={idx} className="h-12 w-12 rounded-lg border border-white/10 bg-black/20" aria-hidden="true" />
+                  ),
+                )}
               </div>
             </div>
 
