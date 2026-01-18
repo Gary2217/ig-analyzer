@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { Pencil, Plus, X } from "lucide-react"
@@ -10,6 +10,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } 
 import { CSS } from "@dnd-kit/utilities"
 
 import { useI18n } from "../../../components/locale-provider"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Input } from "../../../components/ui/input"
@@ -17,6 +18,73 @@ import { extractLocaleFromPathname, localePathname } from "../../lib/locale-path
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey } from "../../lib/creatorCardOptions"
+
+type CreatorStats = {
+  engagementRatePct?: number
+}
+
+type InstagramProfileLite = {
+  username?: string
+  name?: string
+  display_name?: string
+  displayName?: string
+  profile_picture_url?: string
+  followers_count?: number
+  media_count?: number
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null
+  return value as Record<string, unknown>
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" ? value : null
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+type CreatorCardMeResponse = {
+  ok: boolean
+  card?: unknown
+  me?: unknown
+  error?: unknown
+}
+
+type CreatorStatsResponse = {
+  ok: boolean
+  stats?: unknown
+}
+
+type CreatorCardUpsertResponse = {
+  ok: boolean
+  error?: unknown
+  message?: unknown
+}
+
+type CreatorCardPortfolioItem = {
+  id: string
+  brand: string
+  collabType: string
+  order: number
+}
+
+type CreatorCardUpsertPayload = {
+  handle?: string
+  displayName?: string
+  niche?: string
+  audience?: string
+  themeTypes?: string[]
+  audienceProfiles?: string[]
+  contact?: string | null
+  portfolio?: CreatorCardPortfolioItem[]
+  isPublic?: boolean
+  deliverables?: string[]
+  collaborationNiches?: string[]
+  pastCollaborations?: string[]
+}
 
 type CreatorCardPayload = {
   handle?: string | null
@@ -177,7 +245,7 @@ export default function CreatorCardPage() {
 
   const [refetchTick, setRefetchTick] = useState(0)
   const [creatorId, setCreatorId] = useState<string | null>(null)
-  const [creatorStats, setCreatorStats] = useState<any | null>(null)
+  const [creatorStats, setCreatorStats] = useState<CreatorStats | null>(null)
 
   const activeLocale = useMemo(() => {
     if (typeof window === "undefined") return "en"
@@ -393,7 +461,8 @@ export default function CreatorCardPage() {
           credentials: "include",
         })
 
-        const json: any = await res.json().catch(() => null)
+        const jsonRaw: unknown = await res.json().catch(() => null)
+        const json = (asRecord(jsonRaw) as unknown as CreatorCardMeResponse) ?? null
         if (cancelled) return
 
         if (!res.ok || !json?.ok) {
@@ -414,41 +483,44 @@ export default function CreatorCardPage() {
           return
         }
 
-        const card = json?.card && typeof json.card === "object" ? (json.card as any) : null
+        const card = asRecord(json?.card) ?? null
 
-        const nextCreatorId =
-          json?.me && typeof (json as any).me?.igUserId === "string" ? String((json as any).me.igUserId).trim() : ""
+        const meObj = asRecord(json?.me)
+        const nextCreatorIdRaw = meObj ? readString(meObj.igUserId) : null
+        const nextCreatorId = nextCreatorIdRaw ? String(nextCreatorIdRaw).trim() : ""
         setCreatorId(nextCreatorId || null)
 
         const nextBase: CreatorCardPayload | null = card
           ? {
-              handle: typeof card.handle === "string" ? card.handle : null,
-              displayName: typeof card.display_name === "string" ? card.display_name : null,
-              niche: typeof card.niche === "string" ? card.niche : null,
-              audience: typeof card.audience === "string" ? card.audience : null,
-              themeTypes: Array.isArray(card.themeTypes)
-                ? card.themeTypes
-                : Array.isArray(card.theme_types)
-                  ? card.theme_types
+              handle: readString(card?.handle) ?? null,
+              displayName: readString(card?.display_name) ?? null,
+              niche: readString(card?.niche) ?? null,
+              audience: readString(card?.audience) ?? null,
+              themeTypes: Array.isArray(card?.themeTypes)
+                ? (card?.themeTypes as unknown[]).filter((x): x is string => typeof x === "string")
+                : Array.isArray(card?.theme_types)
+                  ? (card?.theme_types as unknown[]).filter((x): x is string => typeof x === "string")
                   : null,
-              audienceProfiles: Array.isArray(card.audienceProfiles)
-                ? card.audienceProfiles
-                : Array.isArray(card.audience_profiles)
-                  ? card.audience_profiles
+              audienceProfiles: Array.isArray(card?.audienceProfiles)
+                ? (card?.audienceProfiles as unknown[]).filter((x): x is string => typeof x === "string")
+                : Array.isArray(card?.audience_profiles)
+                  ? (card?.audience_profiles as unknown[]).filter((x): x is string => typeof x === "string")
                   : null,
-              deliverables: Array.isArray(card.deliverables) ? card.deliverables : null,
-              contact: typeof card.contact === "string" ? card.contact : null,
-              portfolio: Array.isArray(card.portfolio) ? card.portfolio : null,
-              isPublic: typeof card.is_public === "boolean" ? card.is_public : null,
-              collaborationNiches: Array.isArray(card.collaborationNiches)
-                ? card.collaborationNiches
-                : Array.isArray(card.collaboration_niches)
-                  ? card.collaboration_niches
+              deliverables: Array.isArray(card?.deliverables)
+                ? (card?.deliverables as unknown[]).filter((x): x is string => typeof x === "string")
+                : null,
+              contact: readString(card?.contact) ?? null,
+              portfolio: Array.isArray(card?.portfolio) ? (card?.portfolio as unknown[]) : null,
+              isPublic: typeof card?.is_public === "boolean" ? (card.is_public as boolean) : null,
+              collaborationNiches: Array.isArray(card?.collaborationNiches)
+                ? (card?.collaborationNiches as unknown[]).filter((x): x is string => typeof x === "string")
+                : Array.isArray(card?.collaboration_niches)
+                  ? (card?.collaboration_niches as unknown[]).filter((x): x is string => typeof x === "string")
                   : null,
-              pastCollaborations: Array.isArray(card.pastCollaborations)
-                ? card.pastCollaborations
-                : Array.isArray(card.past_collaborations)
-                  ? card.past_collaborations
+              pastCollaborations: Array.isArray(card?.pastCollaborations)
+                ? (card?.pastCollaborations as unknown[]).filter((x): x is string => typeof x === "string")
+                : Array.isArray(card?.past_collaborations)
+                  ? (card?.past_collaborations as unknown[]).filter((x): x is string => typeof x === "string")
                   : null,
             }
           : null
@@ -466,11 +538,11 @@ export default function CreatorCardPage() {
           const raw = typeof nextBase?.contact === "string" ? nextBase.contact.trim() : ""
           if (!raw) return { email: "", instagram: "", other: "" }
           try {
-            const obj = JSON.parse(raw) as any
+            const obj = asRecord(JSON.parse(raw) as unknown)
             return {
-              email: typeof obj?.email === "string" ? obj.email : "",
-              instagram: typeof obj?.instagram === "string" ? obj.instagram : "",
-              other: typeof obj?.other === "string" ? obj.other : "",
+              email: readString(obj?.email) ?? "",
+              instagram: readString(obj?.instagram) ?? "",
+              other: readString(obj?.other) ?? "",
             }
           } catch {
             return { email: "", instagram: "", other: raw }
@@ -481,17 +553,18 @@ export default function CreatorCardPage() {
         setContactOther(parsedContact.other)
 
         const nextFeaturedItems = (() => {
-          const raw = Array.isArray(card?.portfolio) ? (card.portfolio as any[]) : []
+          const raw = Array.isArray(card?.portfolio) ? (card?.portfolio as unknown[]) : []
           const out: FeaturedItem[] = []
           for (let i = 0; i < raw.length; i++) {
             const it = raw[i]
             if (!it || typeof it !== "object") continue
-            const idRaw = typeof (it as any).id === "string" ? String((it as any).id).trim() : ""
+            const itObj = asRecord(it)
+            const idRaw = itObj ? (readString(itObj.id) ?? "").trim() : ""
             out.push({
               id: idRaw || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
               url: "",
-              brand: typeof (it as any).brand === "string" ? String((it as any).brand) : "",
-              collabType: typeof (it as any).collabType === "string" ? String((it as any).collabType) : "",
+              brand: itObj ? (readString(itObj.brand) ?? "") : "",
+              collabType: itObj ? (readString(itObj.collabType) ?? "") : "",
             })
           }
           return out
@@ -585,13 +658,16 @@ export default function CreatorCardPage() {
           cache: "no-store",
           credentials: "include",
         })
-        const json: any = await res.json().catch(() => null)
+        const jsonRaw: unknown = await res.json().catch(() => null)
+        const json = (asRecord(jsonRaw) as unknown as CreatorStatsResponse) ?? null
         if (cancelled) return
         if (!res.ok || !json?.ok) {
           setCreatorStats(null)
           return
         }
-        setCreatorStats(json?.stats ?? null)
+        const statsObj = asRecord(json?.stats)
+        const engagementRatePct = statsObj ? readNumber(statsObj.engagementRatePct) : null
+        setCreatorStats(engagementRatePct == null ? null : { engagementRatePct })
       } catch {
         if (cancelled) return
         setCreatorStats(null)
@@ -650,7 +726,7 @@ export default function CreatorCardPage() {
     setSaveError(null)
     setSaveOk(false)
     try {
-      const payload: any = {
+      const payload: CreatorCardUpsertPayload = {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
         niche: baseCard?.niche ?? undefined,
@@ -678,7 +754,8 @@ export default function CreatorCardPage() {
         body: JSON.stringify(payload),
       })
 
-      const json: any = await res.clone().json().catch(() => null)
+      const jsonRaw: unknown = await res.clone().json().catch(() => null)
+      const json = (asRecord(jsonRaw) as unknown as CreatorCardUpsertResponse) ?? null
       const text = json ? null : await res.text().catch(() => null)
 
       console.debug("[creator-card] save", {
@@ -742,8 +819,9 @@ export default function CreatorCardPage() {
     return t("creatorCardEditor.pastCollaborations.helper").replace("{count}", String(pastCollaborations.length)).replace("{max}", String(max))
   }, [pastCollaborations.length, t])
 
-  const igMe = meQuery.data as any
-  const igProfile = ((igMe as any)?.profile ?? igMe) as any
+  const igMe = meQuery.data as unknown
+  const igMeObj = asRecord(igMe)
+  const igProfile = (asRecord(igMeObj?.profile) ?? igMeObj) as unknown as InstagramProfileLite
 
   const displayUsername = useMemo(() => {
     const raw = typeof igProfile?.username === "string" ? String(igProfile.username).trim() : ""
@@ -751,7 +829,7 @@ export default function CreatorCardPage() {
   }, [igProfile?.username])
 
   const displayName = useMemo(() => {
-    const raw = (igProfile?.name ?? igProfile?.display_name ?? igProfile?.displayName) as any
+    const raw = (igProfile?.name ?? igProfile?.display_name ?? igProfile?.displayName) as unknown
     if (typeof raw === "string" && raw.trim()) return raw.trim()
     return displayUsername ? displayUsername : "—"
   }, [displayUsername, igProfile?.displayName, igProfile?.display_name, igProfile?.name])
@@ -866,617 +944,540 @@ export default function CreatorCardPage() {
       {loading ? (
         loadingSkeleton
       ) : (
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0">
-        <div className="lg:col-span-5 space-y-4 min-w-0">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("creatorCardEditor.profile.title")}</CardTitle>
-              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.profile.subtitle")}</div>
-            </CardHeader>
-            <CardContent>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.bioTitle")}</div>
-                <div className="mt-2 relative">
-                  <textarea
-                    value={introDraft}
-                    placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
-                    onChange={(e) => {
-                      setIntroDraft(e.target.value)
-                    }}
-                    className="w-full min-h-[120px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 pr-24 pb-12 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
-                  />
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    className="absolute bottom-3 right-3"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      setBaseCard((prev) => ({ ...(prev ?? {}), audience: introDraft }))
-                      setIntroAppliedHint(true)
-                      if (introAppliedHintTimerRef.current != null) {
-                        window.clearTimeout(introAppliedHintTimerRef.current)
-                      }
-                      introAppliedHintTimerRef.current = window.setTimeout(() => {
-                        setIntroAppliedHint(false)
-                        introAppliedHintTimerRef.current = null
-                      }, 1600)
-                    }}
-                    disabled={
-                      saving ||
-                      loading ||
-                      loadErrorKind === "not_connected" ||
-                      loadErrorKind === "supabase_invalid_key"
-                    }
-                  >
-                    {t("creatorCardEditor.formats.otherAdd")}
-                  </Button>
-                </div>
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0">
+          <div className="lg:col-span-5 min-w-0">
+            {(() => {
+              type LocalMobileSectionKey =
+                | "profile"
+                | "contact"
+                | "featured"
+                | "formats"
+                | "niches"
+                | "brands"
+                | "past"
 
-                {introAppliedHint ? (
-                  <div className="mt-2 text-xs text-slate-600">已套用到預覽，記得按右上儲存</div>
-                ) : null}
-              </div>
+              const sections: Array<{
+                key: LocalMobileSectionKey
+                titleZh: string
+                titleEn: string
+                render: () => ReactNode
+              }> = [
+                {
+                  key: "profile",
+                  titleZh: "基本資料",
+                  titleEn: "Basic Info",
+                  render: () => (
+                    <>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.bioTitle")}</div>
+                        <div className="mt-2 relative">
+                          <textarea
+                            value={introDraft}
+                            placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
+                            onChange={(e) => setIntroDraft(e.target.value)}
+                            className="w-full min-h-[96px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 pr-24 pb-12 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                          />
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            className="absolute bottom-3 right-3"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setBaseCard((prev) => ({ ...(prev ?? {}), audience: introDraft }))
+                              setIntroAppliedHint(true)
+                              if (introAppliedHintTimerRef.current != null) window.clearTimeout(introAppliedHintTimerRef.current)
+                              introAppliedHintTimerRef.current = window.setTimeout(() => {
+                                setIntroAppliedHint(false)
+                                introAppliedHintTimerRef.current = null
+                              }, 1600)
+                            }}
+                            disabled={
+                              saving ||
+                              loading ||
+                              loadErrorKind === "not_connected" ||
+                              loadErrorKind === "supabase_invalid_key"
+                            }
+                          >
+                            {t("creatorCardEditor.formats.otherAdd")}
+                          </Button>
+                        </div>
+                        {introAppliedHint ? (
+                          <div className="mt-2 text-xs text-slate-600">已套用到預覽，記得按右上儲存</div>
+                        ) : null}
+                      </div>
 
-              <div className="mt-5 min-w-0">
-                <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.themeTitle")}</div>
-                <div className="mt-3">
-                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
-                    <Input
-                      value={themeTypeInput}
-                      placeholder={t("creatorCardEditor.profile.themePlaceholder")}
-                      onChange={(e) => setThemeTypeInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          addThemeTypeTag(themeTypeInput)
-                          setThemeTypeInput("")
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={() => {
-                        addThemeTypeTag(themeTypeInput)
-                        setThemeTypeInput("")
-                      }}
-                      disabled={!themeTypeInput.trim()}
-                    >
-                      {t("creatorCardEditor.formats.otherAdd")}
-                    </Button>
-                  </div>
-                </div>
-                {themeTypes.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {themeTypes.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                      >
-                        <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                        <button
-                          type="button"
-                          className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                          onClick={() => setThemeTypes((prev) => prev.filter((x) => x !== tag))}
-                          aria-label={t("creatorCardEditor.pastCollaborations.remove")}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.themeTitle")}</div>
+                        <div className="mt-2">
+                          <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                            <Input
+                              value={themeTypeInput}
+                              placeholder={t("creatorCardEditor.profile.themePlaceholder")}
+                              onChange={(e) => setThemeTypeInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  addThemeTypeTag(themeTypeInput)
+                                  setThemeTypeInput("")
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                addThemeTypeTag(themeTypeInput)
+                                setThemeTypeInput("")
+                              }}
+                              disabled={!themeTypeInput.trim()}
+                            >
+                              {t("creatorCardEditor.formats.otherAdd")}
+                            </Button>
+                          </div>
+                        </div>
+                        {themeTypes.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {themeTypes.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                              >
+                                <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  onClick={() => setThemeTypes((prev) => prev.filter((x) => x !== tag))}
+                                  aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-              <div className="mt-5 min-w-0">
-                <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.audienceTitle")}</div>
-                {audienceProfiles.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {audienceProfiles.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                      >
-                        <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                        <button
-                          type="button"
-                          className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                          onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
-                          aria-label={t("creatorCardEditor.pastCollaborations.remove")}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-3">
-                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
-                    <Input
-                      value={audienceProfileInput}
-                      placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
-                      onChange={(e) => setAudienceProfileInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          addAudienceProfileTag(audienceProfileInput)
-                          setAudienceProfileInput("")
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={() => {
-                        addAudienceProfileTag(audienceProfileInput)
-                        setAudienceProfileInput("")
-                      }}
-                      disabled={!audienceProfileInput.trim()}
-                    >
-                      {t("creatorCardEditor.formats.otherAdd")}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.audienceTitle")}</div>
+                        {audienceProfiles.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {audienceProfiles.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                              >
+                                <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
+                                  aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-2">
+                          <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                            <Input
+                              value={audienceProfileInput}
+                              placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
+                              onChange={(e) => setAudienceProfileInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  addAudienceProfileTag(audienceProfileInput)
+                                  setAudienceProfileInput("")
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                addAudienceProfileTag(audienceProfileInput)
+                                setAudienceProfileInput("")
+                              }}
+                              disabled={!audienceProfileInput.trim()}
+                            >
+                              {t("creatorCardEditor.formats.otherAdd")}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ),
+                },
+                {
+                  key: "contact",
+                  titleZh: "聯絡方式",
+                  titleEn: "Contact",
+                  render: () => (
+                    <>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">Email</div>
+                        <div className="mt-2">
+                          <Input value={contactEmail} placeholder="例如：hello@email.com" onChange={(e) => setContactEmail(e.target.value)} />
+                        </div>
+                      </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">聯絡方式</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="min-w-0 space-y-4">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-900">Email</div>
-                  <div className="mt-2">
-                    <Input
-                      value={contactEmail}
-                      placeholder="例如：hello@email.com"
-                      onChange={(e) => setContactEmail(e.target.value)}
-                    />
-                  </div>
-                </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">Instagram</div>
+                        <div className="mt-2">
+                          <Input
+                            value={contactInstagram}
+                            placeholder="@username or https://instagram.com/..."
+                            onChange={(e) => setContactInstagram(e.target.value)}
+                          />
+                        </div>
+                      </div>
 
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-900">Instagram</div>
-                  <div className="mt-2">
-                    <Input
-                      value={contactInstagram}
-                      placeholder="@username or https://instagram.com/..."
-                      onChange={(e) => setContactInstagram(e.target.value)}
-                    />
-                  </div>
-                </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">Other</div>
+                        <div className="mt-2">
+                          <textarea
+                            value={contactOther}
+                            placeholder="例如：LINE / WhatsApp / 經紀窗口"
+                            onChange={(e) => setContactOther(e.target.value)}
+                            className="w-full min-h-[72px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ),
+                },
+                {
+                  key: "featured",
+                  titleZh: "精選貼文",
+                  titleEn: "Featured",
+                  render: () => (
+                    <>
+                      <input
+                        ref={featuredAddInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.currentTarget.files ?? [])
+                          if (!files.length) return
 
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-900">Other</div>
-                  <div className="mt-2">
-                    <textarea
-                      value={contactOther}
-                      placeholder="例如：LINE / WhatsApp / 經紀窗口"
-                      onChange={(e) => setContactOther(e.target.value)}
-                      className="w-full min-h-[96px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
-                    />
-                  </div>
-                </div>
+                          setFeaturedItems((prev) => [
+                            ...prev,
+                            ...files.map((file) => ({
+                              id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                              url: URL.createObjectURL(file),
+                              brand: "",
+                              collabType: "",
+                            })),
+                          ])
 
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={
-                      saving ||
-                      loading ||
-                      loadErrorKind === "not_connected" ||
-                      loadErrorKind === "supabase_invalid_key"
-                    }
-                  >
-                    {t("creatorCardEditor.formats.otherAdd")}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("results.mediaKit.featured.title")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <input
-                ref={featuredAddInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.currentTarget.files ?? [])
-                  if (!files.length) return
-
-                  setFeaturedItems((prev) => [
-                    ...prev,
-                    ...files.map((file) => ({
-                      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                      url: URL.createObjectURL(file),
-                      brand: "",
-                      collabType: "",
-                    })),
-                  ])
-
-                  e.currentTarget.value = ""
-                }}
-              />
-
-              <input
-                ref={featuredReplaceInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const id = pendingFeaturedReplaceIdRef.current
-                  const file = e.target.files?.[0]
-                  e.currentTarget.value = ""
-                  if (!id || !file) return
-
-                  const nextUrl = URL.createObjectURL(file)
-                  setFeaturedItems((prev) => {
-                    const idx = prev.findIndex((x) => x.id === id)
-                    if (idx < 0) {
-                      URL.revokeObjectURL(nextUrl)
-                      return prev
-                    }
-                    const out = prev.slice()
-                    const prevUrl = out[idx]?.url
-                    if (typeof prevUrl === "string" && prevUrl.startsWith("blob:")) URL.revokeObjectURL(prevUrl)
-                    out[idx] = { ...out[idx], url: nextUrl }
-                    return out
-                  })
-                }}
-              />
-
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={(event) => {
-                    const { active, over } = event
-                    if (!over) return
-                    if (active.id === over.id) return
-                    setFeaturedItems((prev) => {
-                      const oldIndex = prev.findIndex((x) => x.id === active.id)
-                      const newIndex = prev.findIndex((x) => x.id === over.id)
-                      if (oldIndex < 0 || newIndex < 0) return prev
-                      return arrayMove(prev, oldIndex, newIndex)
-                    })
-                    setSuppressFeaturedTileClick(true)
-                    window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
-                  }}
-                  onDragCancel={() => {
-                    setSuppressFeaturedTileClick(true)
-                    window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
-                  }}
-                >
-                  <SortableContext items={featuredItems.map((x) => x.id)}>
-                    {featuredItems.map((item) => (
-                      <SortableFeaturedTile
-                        key={item.id}
-                        item={item}
-                        suppressClick={suppressFeaturedTileClick}
-                        onReplace={(id) => {
-                          pendingFeaturedReplaceIdRef.current = id
-                          featuredReplaceInputRef.current?.click()
+                          e.currentTarget.value = ""
                         }}
-                        onEdit={(id) => {
-                          openEditFeatured(id)
-                        }}
-                        onRemove={(id) => {
+                      />
+
+                      <input
+                        ref={featuredReplaceInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const id = pendingFeaturedReplaceIdRef.current
+                          const file = e.target.files?.[0]
+                          e.currentTarget.value = ""
+                          if (!id || !file) return
+
+                          const nextUrl = URL.createObjectURL(file)
                           setFeaturedItems((prev) => {
-                            const picked = prev.find((x) => x.id === id)
-                            if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
-                            return prev.filter((x) => x.id !== id)
+                            const idx = prev.findIndex((x) => x.id === id)
+                            if (idx < 0) {
+                              URL.revokeObjectURL(nextUrl)
+                              return prev
+                            }
+                            const out = prev.slice()
+                            const prevUrl = out[idx]?.url
+                            if (typeof prevUrl === "string" && prevUrl.startsWith("blob:")) URL.revokeObjectURL(prevUrl)
+                            out[idx] = { ...out[idx], url: nextUrl }
+                            return out
                           })
                         }}
                       />
-                    ))}
-                  </SortableContext>
-                </DndContext>
 
-                <button
-                  type="button"
-                  className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
-                  onClick={openAddFeatured}
-                  aria-label="新增作品"
-                >
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Plus className="h-7 w-7 text-slate-300 group-hover:text-slate-400" />
-                  </div>
-                </button>
-              </div>
-
-              {featuredItems.length === 0 ? (
-                <div className="mt-2 text-sm text-slate-500">尚未新增作品</div>
-              ) : null}
-
-              {editingFeaturedId ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-                  <div
-                    className="absolute inset-0 bg-black/40"
-                    onClick={() => {
-                      setEditingFeaturedId(null)
-                    }}
-                  />
-                  <div className="relative z-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-                    <div className="text-sm font-semibold text-slate-900">編輯作品資訊</div>
-
-                    <div className="mt-3">
-                      <div className="text-sm font-semibold text-slate-900">品牌</div>
-                      <div className="mt-2">
-                        <Input
-                          value={editingFeaturedBrand}
-                          placeholder="例如：Nike / Apple / 某某品牌"
-                          onChange={(e) => setEditingFeaturedBrand(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="text-sm font-semibold text-slate-900">合作形式</div>
-                      <div className="mt-2">
-                        <select
-                          value={editingFeaturedCollabTypeSelect}
-                          onChange={(e) => {
-                            const next = e.target.value
-                            setEditingFeaturedCollabTypeSelect(next)
-                            if (next !== COLLAB_TYPE_OTHER_VALUE) {
-                              setEditingFeaturedCollabTypeCustom("")
-                            }
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={(event) => {
+                            const { active, over } = event
+                            if (!over) return
+                            if (active.id === over.id) return
+                            setFeaturedItems((prev) => {
+                              const oldIndex = prev.findIndex((x) => x.id === active.id)
+                              const newIndex = prev.findIndex((x) => x.id === over.id)
+                              if (oldIndex < 0 || newIndex < 0) return prev
+                              return arrayMove(prev, oldIndex, newIndex)
+                            })
+                            setSuppressFeaturedTileClick(true)
+                            window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
                           }}
-                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                          onDragCancel={() => {
+                            setSuppressFeaturedTileClick(true)
+                            window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
+                          }}
                         >
-                          <option value="">請選擇</option>
-                          {COLLAB_TYPE_OPTIONS.map((id) => {
-                            const label = t(collabTypeLabelKey(id))
-                            return (
-                              <option key={id} value={label}>
-                                {label}
-                              </option>
-                            )
-                          })}
-                          <option value={COLLAB_TYPE_OTHER_VALUE}>{t("creatorCardEditor.formats.options.other")}</option>
-                        </select>
+                          <SortableContext items={featuredItems.map((x) => x.id)}>
+                            {featuredItems.map((item) => (
+                              <SortableFeaturedTile
+                                key={item.id}
+                                item={item}
+                                suppressClick={suppressFeaturedTileClick}
+                                onReplace={(id) => {
+                                  pendingFeaturedReplaceIdRef.current = id
+                                  featuredReplaceInputRef.current?.click()
+                                }}
+                                onEdit={(id) => {
+                                  openEditFeatured(id)
+                                }}
+                                onRemove={(id) => {
+                                  setFeaturedItems((prev) => {
+                                    const picked = prev.find((x) => x.id === id)
+                                    if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
+                                    return prev.filter((x) => x.id !== id)
+                                  })
+                                }}
+                              />
+                            ))}
+                          </SortableContext>
+                        </DndContext>
+
+                        <button
+                          type="button"
+                          className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                          onClick={openAddFeatured}
+                          aria-label="新增作品"
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Plus className="h-7 w-7 text-slate-300 group-hover:text-slate-400" />
+                          </div>
+                        </button>
                       </div>
 
-                      {editingFeaturedCollabTypeSelect === COLLAB_TYPE_OTHER_VALUE ? (
-                        <div className="mt-2">
-                          <Input
-                            value={editingFeaturedCollabTypeCustom}
-                            placeholder="請輸入合作形式…"
-                            onChange={(e) => setEditingFeaturedCollabTypeCustom(e.target.value)}
-                          />
+                      {featuredItems.length === 0 ? (
+                        <div className="mt-2 text-sm text-slate-500">尚未新增作品</div>
+                      ) : null}
+                    </>
+                  ),
+                },
+                {
+                  key: "formats",
+                  titleZh: "合作形式",
+                  titleEn: "Formats",
+                  render: () => (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {formatOptions.map((opt) => {
+                          const isActive =
+                            opt.id === "other"
+                              ? otherFormatEnabled
+                              : opt.id === "fb_post"
+                                ? deliverables.includes("fb_post") || deliverables.includes("fb") || deliverables.includes("facebook")
+                                : deliverables.includes(opt.id)
+                          return (
+                            <Button
+                              key={opt.id}
+                              type="button"
+                              variant="pill"
+                              active={isActive}
+                              onClick={() => {
+                                if (opt.id === "other") {
+                                  setOtherFormatEnabled((prev) => !prev)
+                                  flashHighlight("formats")
+                                  return
+                                }
+                                if (opt.id === "fb_post") {
+                                  setDeliverables((prev) => {
+                                    const hasAny = prev.includes("fb_post") || prev.includes("fb") || prev.includes("facebook")
+                                    if (hasAny) return prev.filter((x) => x !== "fb_post" && x !== "fb" && x !== "facebook")
+                                    return [...prev, "fb_post"]
+                                  })
+                                  flashHighlight("formats")
+                                  return
+                                }
+
+                                setDeliverables((prev) => toggleInArray(prev, opt.id))
+                                flashHighlight("formats")
+                              }}
+                            >
+                              {t(opt.labelKey)}
+                            </Button>
+                          )
+                        })}
+
+                        {(() => {
+                          const customs = pastCollaborations.filter((x) => !knownCollabTypeIds.has(x))
+                          if (customs.length === 0) return null
+                          return customs.map((tag) => (
+                            <Button
+                              key={tag}
+                              type="button"
+                              variant="pill"
+                              active
+                              onClick={() => {
+                                setPastCollaborations((prev) => prev.filter((x) => x !== tag))
+                                flashHighlight("formats")
+                              }}
+                            >
+                              {tag}
+                            </Button>
+                          ))
+                        })()}
+                      </div>
+
+                      {otherFormatEnabled ? (
+                        <div className="mt-3 min-w-0">
+                          <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                            <Input
+                              value={otherFormatInput}
+                              placeholder={t("creatorCardEditor.formats.otherPlaceholder")}
+                              disabled={!otherFormatEnabled}
+                              onChange={(e) => setOtherFormatInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  addOtherFormat()
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={addOtherFormat}
+                              disabled={!otherFormatEnabled || !otherFormatInput.trim()}
+                            >
+                              {t("creatorCardEditor.formats.otherAdd")}
+                            </Button>
+                          </div>
+
+                          {null}
                         </div>
                       ) : null}
-                    </div>
-
-                    <div className="mt-5 flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditingFeaturedId(null)
-                        }}
-                      >
-                        取消
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        onClick={() => {
-                          const id = editingFeaturedId
-                          if (!id) return
-                          const nextCollabType =
-                            editingFeaturedCollabTypeSelect === COLLAB_TYPE_OTHER_VALUE
-                              ? editingFeaturedCollabTypeCustom.trim()
-                              : editingFeaturedCollabTypeSelect
-                          setFeaturedItems((prev) =>
-                            prev.map((x) =>
-                              x.id === id
-                                ? { ...x, brand: editingFeaturedBrand, collabType: nextCollabType }
-                                : x
-                            )
+                    </>
+                  ),
+                },
+                {
+                  key: "niches",
+                  titleZh: "合作品類",
+                  titleEn: "Niches",
+                  render: () => (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {nicheOptions.map((opt) => {
+                          const isActive = collaborationNiches.includes(opt.id)
+                          return (
+                            <Button
+                              key={opt.id}
+                              type="button"
+                              variant="pill"
+                              active={isActive}
+                              onClick={() => {
+                                setCollaborationNiches((prev) => toggleInArray(prev, opt.id))
+                                flashHighlight("niches")
+                              }}
+                            >
+                              {t(opt.labelKey)}
+                            </Button>
                           )
-                          setEditingFeaturedId(null)
-                        }}
-                      >
-                        儲存
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+                        })}
+                        <Button
+                          type="button"
+                          variant="pill"
+                          active={otherNicheEnabled}
+                          onClick={() => {
+                            setOtherNicheEnabled((prev) => !prev)
+                            flashHighlight("niches")
+                          }}
+                        >
+                          {t("creatorCardEditor.formats.options.other")}
+                        </Button>
+                      </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("creatorCardEditor.formats.title")}</CardTitle>
-              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.formats.subtitle")}</div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {formatOptions.map((opt) => {
-                  const isActive =
-                    opt.id === "other"
-                      ? otherFormatEnabled
-                      : opt.id === "fb_post"
-                        ? deliverables.includes("fb_post") || deliverables.includes("fb") || deliverables.includes("facebook")
-                        : deliverables.includes(opt.id)
-                  return (
-                    <Button
-                      key={opt.id}
-                      type="button"
-                      variant="pill"
-                      active={isActive}
-                      onClick={() => {
-                        if (opt.id === "other") {
-                          // Toggle visibility only. Do NOT delete the stored custom value to avoid data loss.
-                          setOtherFormatEnabled((prev) => !prev)
-                          flashHighlight("formats")
-                          return
-                        }
-                        if (opt.id === "fb_post") {
-                          setDeliverables((prev) => {
-                            const hasAny = prev.includes("fb_post") || prev.includes("fb") || prev.includes("facebook")
-                            if (hasAny) return prev.filter((x) => x !== "fb_post" && x !== "fb" && x !== "facebook")
-                            return [...prev, "fb_post"]
-                          })
-                          flashHighlight("formats")
-                          return
-                        }
+                      {otherNicheEnabled ? (
+                        <div className="mt-3 min-w-0">
+                          <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                            <Input
+                              value={otherNicheInput}
+                              placeholder={activeLocale === "zh-TW" ? "請輸入其他合作品類" : "Enter other niche"}
+                              disabled={!otherNicheEnabled}
+                              onChange={(e) => setOtherNicheInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  addOtherNiche()
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={addOtherNiche}
+                              disabled={!otherNicheEnabled || !otherNicheInput.trim()}
+                            >
+                              {t("creatorCardEditor.formats.otherAdd")}
+                            </Button>
+                          </div>
 
-                        setDeliverables((prev) => toggleInArray(prev, opt.id))
-                        flashHighlight("formats")
-                      }}
-                    >
-                      {t(opt.labelKey)}
-                    </Button>
-                  )
-                })}
-
-                {(() => {
-                  const customs = pastCollaborations.filter((x) => !knownCollabTypeIds.has(x))
-                  if (customs.length === 0) return null
-                  return customs.map((tag) => (
-                    <Button
-                      key={tag}
-                      type="button"
-                      variant="pill"
-                      active
-                      onClick={() => {
-                        setPastCollaborations((prev) => prev.filter((x) => x !== tag))
-                        flashHighlight("formats")
-                      }}
-                    >
-                      {tag}
-                    </Button>
-                  ))
-                })()}
-              </div>
-
-              {otherFormatEnabled ? (
-                <div className="mt-3 min-w-0">
-                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
-                    <Input
-                      value={otherFormatInput}
-                      placeholder={t("creatorCardEditor.formats.otherPlaceholder")}
-                      disabled={!otherFormatEnabled}
-                      onChange={(e) => setOtherFormatInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          addOtherFormat()
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={addOtherFormat}
-                      disabled={!otherFormatEnabled || !otherFormatInput.trim()}
-                    >
-                      {t("creatorCardEditor.formats.otherAdd")}
-                    </Button>
-                  </div>
-
-                  {null}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("creatorCardEditor.niches.title")}</CardTitle>
-              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.niches.subtitle")}</div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {nicheOptions.map((opt) => {
-                  const isActive = collaborationNiches.includes(opt.id)
-                  return (
-                    <Button
-                      key={opt.id}
-                      type="button"
-                      variant="pill"
-                      active={isActive}
-                      onClick={() => {
-                        setCollaborationNiches((prev) => toggleInArray(prev, opt.id))
-                        flashHighlight("niches")
-                      }}
-                    >
-                      {t(opt.labelKey)}
-                    </Button>
-                  )
-                })}
-                <Button
-                  type="button"
-                  variant="pill"
-                  active={otherNicheEnabled}
-                  onClick={() => {
-                    // Toggle visibility only. Do NOT delete stored custom value(s) to avoid data loss.
-                    setOtherNicheEnabled((prev) => !prev)
-                    flashHighlight("niches")
-                  }}
-                >
-                  {t("creatorCardEditor.formats.options.other")}
-                </Button>
-              </div>
-
-              {otherNicheEnabled ? (
-                <div className="mt-3 min-w-0">
-                  <div className="flex flex-col sm:flex-row gap-2 min-w-0">
-                    <Input
-                      value={otherNicheInput}
-                      placeholder={activeLocale === "zh-TW" ? "請輸入其他合作品類" : "Enter other niche"}
-                      disabled={!otherNicheEnabled}
-                      onChange={(e) => setOtherNicheInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          addOtherNiche()
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={addOtherNiche}
-                      disabled={!otherNicheEnabled || !otherNicheInput.trim()}
-                    >
-                      {t("creatorCardEditor.formats.otherAdd")}
-                    </Button>
-                  </div>
-
-                  {(() => {
-                    const customs = collaborationNiches.filter((x) => !knownNicheIds.has(x))
-                    if (customs.length === 0) return null
-                    return (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {customs.map((tag) => (
+                          {(() => {
+                            const customs = collaborationNiches.filter((x) => !knownNicheIds.has(x))
+                            if (customs.length === 0) return null
+                            return (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {customs.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                                  >
+                                    <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                    <button
+                                      type="button"
+                                      className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                      onClick={() => {
+                                        setCollaborationNiches((prev) => prev.filter((x) => x !== tag))
+                                        flashHighlight("niches")
+                                      }}
+                                      aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      ) : null}
+                    </>
+                  ),
+                },
+                {
+                  key: "brands",
+                  titleZh: "合作品牌",
+                  titleEn: "Brands",
+                  render: () => (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {pastCollaborations.map((tag) => (
                           <span
                             key={tag}
                             className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
@@ -1486,8 +1487,8 @@ export default function CreatorCardPage() {
                               type="button"
                               className="shrink-0 rounded-full p-1 hover:bg-slate-100"
                               onClick={() => {
-                                setCollaborationNiches((prev) => prev.filter((x) => x !== tag))
-                                flashHighlight("niches")
+                                setPastCollaborations((prev) => prev.filter((x) => x !== tag))
+                                flashHighlight("brands")
                               }}
                               aria-label={t("creatorCardEditor.pastCollaborations.remove")}
                             >
@@ -1496,118 +1497,128 @@ export default function CreatorCardPage() {
                           </span>
                         ))}
                       </div>
-                    )
-                  })()}
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("creatorCardEditor.pastCollaborations.title")}</CardTitle>
-              <div className="mt-1 text-sm text-slate-500">{t("creatorCardEditor.pastCollaborations.subtitle")}</div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {pastCollaborations.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
-                  >
-                    <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                      onClick={() => {
-                        setPastCollaborations((prev) => prev.filter((x) => x !== tag))
-                        flashHighlight("brands")
-                      }}
-                      aria-label={t("creatorCardEditor.pastCollaborations.remove")}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
+                      <div className="mt-3">
+                        <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                          <Input
+                            ref={(node) => {
+                              brandInputRef.current = node
+                            }}
+                            value={brandInput}
+                            placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
+                            onChange={(e) => setBrandInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                addBrandTag(brandInput)
+                                setBrandInput("")
+                                return
+                              }
+                              if (e.key === "Backspace" && !brandInput.trim()) {
+                                setPastCollaborations((prev) => prev.slice(0, Math.max(0, prev.length - 1)))
+                                flashHighlight("brands")
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => {
+                              addBrandTag(brandInput)
+                              setBrandInput("")
+                            }}
+                            disabled={!brandInput.trim()}
+                          >
+                            {t("creatorCardEditor.formats.otherAdd")}
+                          </Button>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">{brandHelperText}</div>
+                      </div>
+                    </>
+                  ),
+                },
+                {
+                  key: "past",
+                  titleZh: "過往合作",
+                  titleEn: "Past Collabs",
+                  render: () => null,
+                },
+              ]
 
-              <div className="mt-3">
-                <div className="flex flex-col sm:flex-row gap-2 min-w-0">
-                  <Input
-                    ref={(node) => {
-                      brandInputRef.current = node
-                    }}
-                    value={brandInput}
-                    placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
-                    onChange={(e) => setBrandInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        addBrandTag(brandInput)
-                        setBrandInput("")
-                        return
-                      }
-                      if (e.key === "Backspace" && !brandInput.trim()) {
-                        setPastCollaborations((prev) => {
-                          const next = prev.slice(0, Math.max(0, prev.length - 1))
-                          return next
-                        })
-                        flashHighlight("brands")
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      addBrandTag(brandInput)
-                      setBrandInput("")
-                    }}
-                    disabled={!brandInput.trim()}
-                  >
-                    {t("creatorCardEditor.formats.otherAdd")}
-                  </Button>
-                </div>
-                <div className="mt-2 text-xs text-slate-500">{brandHelperText}</div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              return (
+                <>
+                  <div className="lg:hidden">
+                    <Accordion type="single" collapsible defaultValue="profile" className="w-full">
+                      {sections.map((s) => (
+                        <AccordionItem key={s.key} value={s.key}>
+                          <AccordionTrigger className="text-left">
+                            <span className="min-w-0 truncate">
+                              {s.titleZh} / {s.titleEn}
+                            </span>
+                          </AccordionTrigger>
+                          <AccordionContent forceMount>
+                            <div className="space-y-3">{s.render()}</div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </div>
 
-        <div className="lg:col-span-7 min-w-0">
-          <div className="lg:sticky lg:top-24">
-            <CreatorCardPreview
-              t={t}
-              className="border-white/10 bg-transparent"
-              headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
-              useWidePhotoLayout
-              photoUploadEnabled
-              username={displayUsername || null}
-              profileImageUrl={(() => {
-                const u = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                return u ? u : null
-              })()}
-              displayName={displayName}
-              aboutText={baseCard?.audience ?? null}
-              primaryNiche={baseCard?.niche ?? null}
-              contact={serializedContact}
-              featuredItems={featuredItems}
-              featuredImageUrls={featuredItems.map((x) => x.url)}
-              themeTypes={themeTypes}
-              audienceProfiles={audienceProfiles}
-              collaborationNiches={collaborationNiches}
-              deliverables={deliverables}
-              pastCollaborations={pastCollaborations}
-              followersText={followersText}
-              postsText={postsText}
-              engagementRateText={engagementRateText}
-              highlightTarget={highlight}
-            />
+                  <div className="hidden lg:block">
+                    <div className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:pr-1 overscroll-contain lg:[scrollbar-gutter:stable] space-y-4">
+                      {sections.map((s) => (
+                        <Card key={s.key} className="overflow-hidden">
+                          <CardHeader className="px-4 pt-4 lg:px-6 lg:pt-6">
+                            <CardTitle className="text-base">
+                              {s.titleZh} / {s.titleEn}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="px-4 pb-4 lg:px-6 lg:pb-6">
+                            <div className="space-y-3">{s.render()}</div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+
+          <div className="lg:col-span-7 min-w-0">
+            <div className="lg:sticky lg:top-24">
+              <CreatorCardPreview
+                t={t}
+                className="border-white/10 bg-transparent"
+                headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+                useWidePhotoLayout
+                photoUploadEnabled
+                username={displayUsername || null}
+                profileImageUrl={(() => {
+                  const u = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                  return u ? u : null
+                })()}
+                displayName={displayName}
+                aboutText={baseCard?.audience ?? null}
+                primaryNiche={baseCard?.niche ?? null}
+                contact={serializedContact}
+                featuredItems={featuredItems}
+                featuredImageUrls={featuredItems.map((x) => x.url)}
+                themeTypes={themeTypes}
+                audienceProfiles={audienceProfiles}
+                collaborationNiches={collaborationNiches}
+                deliverables={deliverables}
+                pastCollaborations={pastCollaborations}
+                followersText={followersText}
+                postsText={postsText}
+                engagementRateText={engagementRateText}
+                highlightTarget={highlight}
+              />
+            </div>
           </div>
         </div>
-      </div>
       )}
     </main>
   )

@@ -5,6 +5,11 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+ function asRecord(value: unknown): Record<string, unknown> | null {
+   if (!value || typeof value !== "object") return null
+   return value as Record<string, unknown>
+ }
+
 export type CreatorCardPreviewHighlightTarget = "formats" | "niches" | "brands" | null
 
 export type CreatorCardPreviewProps = {
@@ -125,11 +130,11 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     const raw = typeof contact === "string" ? contact.trim() : ""
     if (!raw) return { email: "", instagram: "", other: "" }
     try {
-      const obj = JSON.parse(raw) as any
+      const obj = asRecord(JSON.parse(raw) as unknown)
       return {
-        email: typeof obj?.email === "string" ? obj.email.trim() : "",
-        instagram: typeof obj?.instagram === "string" ? obj.instagram.trim() : "",
-        other: typeof obj?.other === "string" ? obj.other.trim() : "",
+        email: typeof obj?.email === "string" ? String(obj.email).trim() : "",
+        instagram: typeof obj?.instagram === "string" ? String(obj.instagram).trim() : "",
+        other: typeof obj?.other === "string" ? String(obj.other).trim() : "",
       }
     } catch {
       return { email: "", instagram: "", other: raw }
@@ -214,9 +219,12 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   )
 
   useEffect(() => {
-    updateFeaturedScrollState()
     const el = featuredStripRef.current
     if (!el) return
+
+    const raf = window.requestAnimationFrame(() => {
+      updateFeaturedScrollState()
+    })
 
     const onScroll = () => updateFeaturedScrollState()
     el.addEventListener("scroll", onScroll, { passive: true })
@@ -228,10 +236,8 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       ro.observe(el)
     }
 
-    requestAnimationFrame(() => {
-      updateFeaturedScrollState()
-    })
     return () => {
+      window.cancelAnimationFrame(raf)
       el.removeEventListener("scroll", onScroll)
       window.removeEventListener("resize", updateFeaturedScrollState)
       if (ro) ro.disconnect()
@@ -624,13 +630,13 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
+                    <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
                     </div>
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
+                    <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}
                     </div>
                   </div>
