@@ -329,9 +329,12 @@ export default function CreatorCardPage() {
 
   const [primaryTypeTags, setPrimaryTypeTags] = useState<string[]>([])
 
-  const [contactEmail, setContactEmail] = useState("")
-  const [contactInstagram, setContactInstagram] = useState("")
-  const [contactOther, setContactOther] = useState("")
+  const [contactEmails, setContactEmails] = useState<string[]>([])
+  const [contactInstagrams, setContactInstagrams] = useState<string[]>([])
+  const [contactOthers, setContactOthers] = useState<string[]>([])
+  const [contactEmailInput, setContactEmailInput] = useState("")
+  const [contactInstagramInput, setContactInstagramInput] = useState("")
+  const [contactOtherInput, setContactOtherInput] = useState("")
 
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
@@ -383,12 +386,17 @@ export default function CreatorCardPage() {
   )
 
   const serializedContact = useMemo(() => {
-    const email = contactEmail.trim()
-    const instagram = contactInstagram.trim()
-    const other = contactOther.trim()
-    if (!email && !instagram && !other) return null
-    return JSON.stringify({ email, instagram, other })
-  }, [contactEmail, contactInstagram, contactOther])
+    const emails = normalizeStringArray(contactEmails, 20)
+    const instagrams = normalizeStringArray(contactInstagrams, 20)
+    const others = normalizeStringArray(contactOthers, 20)
+
+    const email = (emails[0] ?? "").trim()
+    const instagram = (instagrams[0] ?? "").trim()
+    const other = (others[0] ?? "").trim()
+
+    if (!email && !instagram && !other && emails.length === 0 && instagrams.length === 0 && others.length === 0) return null
+    return JSON.stringify({ email, instagram, other, emails, instagrams, others })
+  }, [contactEmails, contactInstagrams, contactOthers])
 
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
@@ -559,21 +567,44 @@ export default function CreatorCardPage() {
 
         const parsedContact = (() => {
           const raw = typeof nextBase?.contact === "string" ? nextBase.contact.trim() : ""
-          if (!raw) return { email: "", instagram: "", other: "" }
+          if (!raw) return { emails: [] as string[], instagrams: [] as string[], others: [] as string[] }
           try {
             const obj = asRecord(JSON.parse(raw) as unknown)
-            return {
-              email: readString(obj?.email) ?? "",
-              instagram: readString(obj?.instagram) ?? "",
-              other: readString(obj?.other) ?? "",
-            }
+            const emails = normalizeStringArray(
+              Array.isArray(obj?.emails)
+                ? (obj.emails as unknown[])
+                : typeof obj?.email === "string"
+                  ? [obj.email]
+                  : [],
+              20
+            )
+            const instagrams = normalizeStringArray(
+              Array.isArray(obj?.instagrams)
+                ? (obj.instagrams as unknown[])
+                : typeof obj?.instagram === "string"
+                  ? [obj.instagram]
+                  : [],
+              20
+            )
+            const others = normalizeStringArray(
+              Array.isArray(obj?.others)
+                ? (obj.others as unknown[])
+                : typeof obj?.other === "string"
+                  ? [obj.other]
+                  : [],
+              20
+            )
+            return { emails, instagrams, others }
           } catch {
-            return { email: "", instagram: "", other: raw }
+            return { emails: [] as string[], instagrams: [] as string[], others: raw ? [raw] : [] }
           }
         })()
-        setContactEmail(parsedContact.email)
-        setContactInstagram(parsedContact.instagram)
-        setContactOther(parsedContact.other)
+        setContactEmails(parsedContact.emails)
+        setContactInstagrams(parsedContact.instagrams)
+        setContactOthers(parsedContact.others)
+        setContactEmailInput("")
+        setContactInstagramInput("")
+        setContactOtherInput("")
 
         const nextFeaturedItems = (() => {
           const raw = Array.isArray(card?.portfolio) ? (card?.portfolio as unknown[]) : []
@@ -1178,44 +1209,197 @@ export default function CreatorCardPage() {
                     <>
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">Email</div>
+                        {contactEmails.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {contactEmails.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                              >
+                                <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  onClick={() => {
+                                    setContactEmails((prev) => prev.filter((x) => x !== tag))
+                                    markDirty()
+                                  }}
+                                  aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="mt-2">
-                          <Input
-                            value={contactEmail}
-                            placeholder="例如：hello@email.com"
-                            onChange={(e) => {
-                              setContactEmail(e.target.value)
-                              markDirty()
-                            }}
-                          />
+                          <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                            <Input
+                              value={contactEmailInput}
+                              placeholder="例如：hello@email.com"
+                              onChange={(e) => {
+                                setContactEmailInput(e.target.value)
+                                markDirty()
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  const next = normalizeStringArray([contactEmailInput], 1)
+                                  if (next.length === 0) return
+                                  setContactEmails((prev) => normalizeStringArray([...prev, next[0]], 20))
+                                  setContactEmailInput("")
+                                  markDirty()
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                const next = normalizeStringArray([contactEmailInput], 1)
+                                if (next.length === 0) return
+                                setContactEmails((prev) => normalizeStringArray([...prev, next[0]], 20))
+                                setContactEmailInput("")
+                                markDirty()
+                              }}
+                              disabled={!contactEmailInput.trim()}
+                            >
+                              {t("creatorCardEditor.formats.otherAdd")}
+                            </Button>
+                          </div>
                         </div>
                       </div>
 
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">Instagram</div>
+                        {contactInstagrams.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {contactInstagrams.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                              >
+                                <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  onClick={() => {
+                                    setContactInstagrams((prev) => prev.filter((x) => x !== tag))
+                                    markDirty()
+                                  }}
+                                  aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="mt-2">
-                          <Input
-                            value={contactInstagram}
-                            placeholder="@username or https://instagram.com/..."
-                            onChange={(e) => {
-                              setContactInstagram(e.target.value)
-                              markDirty()
-                            }}
-                          />
+                          <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                            <Input
+                              value={contactInstagramInput}
+                              placeholder="@username or https://instagram.com/..."
+                              onChange={(e) => {
+                                setContactInstagramInput(e.target.value)
+                                markDirty()
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  const next = normalizeStringArray([contactInstagramInput], 1)
+                                  if (next.length === 0) return
+                                  setContactInstagrams((prev) => normalizeStringArray([...prev, next[0]], 20))
+                                  setContactInstagramInput("")
+                                  markDirty()
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                const next = normalizeStringArray([contactInstagramInput], 1)
+                                if (next.length === 0) return
+                                setContactInstagrams((prev) => normalizeStringArray([...prev, next[0]], 20))
+                                setContactInstagramInput("")
+                                markDirty()
+                              }}
+                              disabled={!contactInstagramInput.trim()}
+                            >
+                              {t("creatorCardEditor.formats.otherAdd")}
+                            </Button>
+                          </div>
                         </div>
                       </div>
 
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">Other</div>
+                        {contactOthers.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {contactOthers.map((tag) => (
+                              <span
+                                key={tag}
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                              >
+                                <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                <button
+                                  type="button"
+                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  onClick={() => {
+                                    setContactOthers((prev) => prev.filter((x) => x !== tag))
+                                    markDirty()
+                                  }}
+                                  aria-label={t("creatorCardEditor.pastCollaborations.remove")}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="mt-2">
                           <textarea
-                            value={contactOther}
+                            value={contactOtherInput}
                             placeholder="例如：LINE / WhatsApp / 經紀窗口"
                             onChange={(e) => {
-                              setContactOther(e.target.value)
+                              setContactOtherInput(e.target.value)
                               markDirty()
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                e.preventDefault()
+                                const next = normalizeStringArray([contactOtherInput], 1)
+                                if (next.length === 0) return
+                                setContactOthers((prev) => normalizeStringArray([...prev, next[0]], 20))
+                                setContactOtherInput("")
+                                markDirty()
+                              }
                             }}
                             className="w-full min-h-[72px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                           />
+                          <div className="mt-2 flex justify-end">
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="shrink-0"
+                              onClick={() => {
+                                const next = normalizeStringArray([contactOtherInput], 1)
+                                if (next.length === 0) return
+                                setContactOthers((prev) => normalizeStringArray([...prev, next[0]], 20))
+                                setContactOtherInput("")
+                                markDirty()
+                              }}
+                              disabled={!contactOtherInput.trim()}
+                            >
+                              {t("creatorCardEditor.formats.otherAdd")}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </>
