@@ -1,8 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Pencil, Plus, X } from "lucide-react"
 import { createPortal } from "react-dom"
 
@@ -235,6 +234,7 @@ export default function CreatorCardPage() {
   const { t } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const returnTo = searchParams.get("returnTo")
 
   const knownFormatIds = useMemo(
     () =>
@@ -879,20 +879,13 @@ export default function CreatorCardPage() {
     }
   }, [audienceProfiles, baseCard, collaborationNiches, deliverables, featuredItems, pastCollaborations, saving, serializedContact, t, themeTypes])
 
-  const returnTo = useMemo(() => {
-    const raw = (searchParams?.get("returnTo") ?? "").trim()
-    if (raw) return raw
-    return `/${activeLocale}/results#creator-card`
-  }, [activeLocale, searchParams])
-
-  const handleBack = useCallback(() => {
-    if (!confirmLeaveIfDirty()) return
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back()
+  const handleBack = () => {
+    if (returnTo) {
+      router.push(returnTo)
       return
     }
-    router.push(returnTo)
-  }, [confirmLeaveIfDirty, returnTo, router])
+    router.back()
+  }
 
   const brandHelperText = useMemo(() => {
     const max = 20
@@ -975,8 +968,8 @@ export default function CreatorCardPage() {
         </div>
 
         <div className="shrink-0 flex items-center gap-2">
-          <Button variant="outline" onClick={handleBack} disabled={saving}>
-            {t("creatorCardEditor.actions.back")}
+          <Button type="button" variant="outline" onClick={handleBack}>
+            返回
           </Button>
           <Button
             variant="primary"
