@@ -1532,8 +1532,8 @@ export default function CreatorCardPage() {
                 },
                 {
                   key: "brands",
-                  titleZh: "合作品牌",
-                  titleEn: "Brands",
+                  titleZh: "過往合作",
+                  titleEn: "Past Collabs",
                   render: () => (
                     <>
                       <div className="flex flex-wrap gap-2">
@@ -1598,12 +1598,6 @@ export default function CreatorCardPage() {
                       </div>
                     </>
                   ),
-                },
-                {
-                  key: "past",
-                  titleZh: "過往合作",
-                  titleEn: "Past Collabs",
-                  render: () => null,
                 },
               ]
 
