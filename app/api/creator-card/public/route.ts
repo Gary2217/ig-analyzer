@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { supabaseServer } from "@/lib/supabase/server"
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null
+  return value as Record<string, unknown>
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -9,7 +14,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabaseServer
       .from("creator_cards")
-      .select("*")
+      .select("*, portfolio")
       .eq("handle", handle)
       .eq("is_public", true)
       .limit(1)
@@ -19,7 +24,9 @@ export async function GET(req: Request) {
     if (!data) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 })
 
     return NextResponse.json({ ok: true, card: data })
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 })
+  } catch (e: unknown) {
+    const errObj = asRecord(e)
+    const msg = typeof errObj?.message === "string" ? errObj.message : "unknown"
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }
