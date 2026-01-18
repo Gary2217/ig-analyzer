@@ -2,9 +2,15 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { supabaseServer } from "@/lib/supabase/server"
 
-function toSupabaseErrorResponse(err: any, where: string) {
-  const rawMsg = typeof err?.message === "string" ? String(err.message) : "unknown"
-  console.error("[creator-card/upsert] supabase error", { where, message: rawMsg, code: err?.code ?? null })
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null
+  return value as Record<string, unknown>
+}
+
+function toSupabaseErrorResponse(err: unknown, where: string) {
+  const errObj = asRecord(err)
+  const rawMsg = typeof errObj?.message === "string" ? String(errObj.message) : "unknown"
+  console.error("[creator-card/upsert] supabase error", { where, message: rawMsg, code: errObj?.code ?? null })
   if (rawMsg.includes("Invalid API key")) {
     return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
   }
@@ -41,12 +47,13 @@ function slugify(input: string) {
     .replace(/^-|-$/g, "")
 }
 
-function computeCompletion(payload: any) {
-  const niche = String(payload?.niche ?? "").trim()
-  const audience = String(payload?.audience ?? "").trim()
-  const deliverables = Array.isArray(payload?.deliverables) ? payload.deliverables : []
-  const contact = String(payload?.contact ?? "").trim()
-  const portfolio = Array.isArray(payload?.portfolio) ? payload.portfolio : []
+function computeCompletion(payload: unknown) {
+  const p = asRecord(payload)
+  const niche = String(p?.niche ?? "").trim()
+  const audience = String(p?.audience ?? "").trim()
+  const deliverables = Array.isArray(p?.deliverables) ? p.deliverables : []
+  const contact = String(p?.contact ?? "").trim()
+  const portfolio = Array.isArray(p?.portfolio) ? p.portfolio : []
 
   const checks = [
     niche.length > 0,
@@ -100,12 +107,13 @@ export async function POST(req: Request) {
       )
     }
 
-    const body = await req.json().catch(() => null)
+    const bodyUnknown: unknown = await req.json().catch(() => null)
+    const body = asRecord(bodyUnknown)
     if (!body) return NextResponse.json({ ok: false, error: "bad_json" }, { status: 400 })
 
     const completionPct = computeCompletion(body)
 
-    const proposed = String(body?.handle ?? "").trim()
+    const proposed = String(body.handle ?? "").trim()
     let base = proposed ? slugify(proposed) : slugify(igUsername || "creator")
     if (!base) base = "creator"
 
@@ -146,23 +154,37 @@ export async function POST(req: Request) {
       }
     }
 
-    const themeTypes = normalizeStringArray((body as any)?.themeTypes, 20)
-    const audienceProfiles = normalizeStringArray((body as any)?.audienceProfiles, 20)
+    const themeTypes = normalizeStringArray(body.themeTypes, 20)
+    const audienceProfiles = normalizeStringArray(body.audienceProfiles, 20)
 
-    const dbWrite: any = {
+    const audience = String(body.audience ?? "").trim()
+
+    const collaborationNiches = normalizeStringArray(body.collaborationNiches, 50)
+    const deliverables = normalizeStringArray(body.deliverables, 50)
+    const pastCollaborations = normalizeStringArray(body.pastCollaborations, 50)
+
+    const contactRaw = typeof body.contact === "string" ? body.contact.trim() : ""
+    const contact = contactRaw ? contactRaw : null
+
+    const dbWrite: Record<string, unknown> = {
       ig_user_id: igUserId,
       ig_username: igUsername,
       handle,
-      niche: String(body?.niche ?? "").trim() || null,
-      portfolio: Array.isArray(body?.portfolio) ? body.portfolio : [],
-      is_public: Boolean(body?.isPublic),
+      niche: String(body.niche ?? "").trim() || null,
+      audience: audience || null,
+      contact,
+      collaboration_niches: collaborationNiches,
+      deliverables,
+      past_collaborations: pastCollaborations,
+      portfolio: Array.isArray(body.portfolio) ? body.portfolio : [],
+      is_public: Boolean(body.isPublic),
       theme_types: themeTypes,
       audience_profiles: audienceProfiles,
       updated_at: new Date().toISOString(),
     }
 
     const query = supabaseServer.from("creator_cards")
-    const runUpsert = async (p: any) => {
+    const runUpsert = async (p: Record<string, unknown>) => {
       return existing.data?.id
         ? await query.update(p).eq("id", existing.data.id).select("*").maybeSingle()
         : await query.insert(p).select("*").maybeSingle()
@@ -176,11 +198,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      card: data && typeof data === "object" ? { ...(data as any), completion_pct: completionPct } : data,
+      card: data && typeof data === "object" ? { ...(data as Record<string, unknown>), completion_pct: completionPct } : data,
       completionPct,
     })
-  } catch (e: any) {
-    const msg = typeof e?.message === "string" ? e.message : "unknown"
+  } catch (e: unknown) {
+    const errObj = asRecord(e)
+    const msg = typeof errObj?.message === "string" ? errObj.message : "unknown"
     console.error("[creator-card/upsert] unexpected error", { message: msg })
     if (msg.includes("Invalid API key")) {
       return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
