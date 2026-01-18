@@ -1199,6 +1199,12 @@ export default function CreatorCardPage() {
                           />
                         </div>
                       </div>
+
+                      <div className="flex justify-end">
+                        <Button type="button" variant="primary" size="sm" className="shrink-0" onClick={handleSave}>
+                          {t("creatorCardEditor.formats.otherAdd")}
+                        </Button>
+                      </div>
                     </>
                   ),
                 },
@@ -1615,7 +1621,7 @@ export default function CreatorCardPage() {
                   </div>
 
                   <div className="hidden lg:block">
-                    <div className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:pr-1 overscroll-contain lg:[scrollbar-gutter:stable] space-y-4">
+                    <div className="space-y-4">
                       {sections.map((s) => (
                         <Card key={s.key} className="overflow-hidden">
                           <CardHeader className="px-4 pt-4 lg:px-6 lg:pt-6">
