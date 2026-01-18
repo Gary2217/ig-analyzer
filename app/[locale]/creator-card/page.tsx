@@ -296,6 +296,23 @@ export default function CreatorCardPage() {
 
   const [showNewCardHint, setShowNewCardHint] = useState(false)
 
+  const isDirtyRef = useRef(false)
+
+  const markDirty = useCallback(() => {
+    isDirtyRef.current = true
+  }, [])
+
+  const clearDirty = useCallback(() => {
+    isDirtyRef.current = false
+  }, [])
+
+  const confirmLeaveIfDirty = useCallback(() => {
+    if (!isDirtyRef.current) return true
+    const zh = "你有尚未儲存的變更，確定要離開嗎？"
+    const en = "You have unsaved changes. Leave without saving?"
+    return window.confirm(`${zh}\n${en}`)
+  }, [])
+
   const [introDraft, setIntroDraft] = useState("")
   const [introAppliedHint, setIntroAppliedHint] = useState(false)
   const introAppliedHintTimerRef = useRef<number | null>(null)
@@ -645,6 +662,30 @@ export default function CreatorCardPage() {
   }, [featuredItems])
 
   useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [])
+
+  useEffect(() => {
+    history.pushState(null, "", location.href)
+
+    const onPopState = () => {
+      if (!isDirtyRef.current) return
+      const ok = confirmLeaveIfDirty()
+      if (ok) return
+      history.pushState(null, "", location.href)
+    }
+
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [confirmLeaveIfDirty])
+
+  useEffect(() => {
     if (!creatorId) {
       setCreatorStats(null)
       return
@@ -792,6 +833,12 @@ export default function CreatorCardPage() {
       }
 
       setSaveOk(true)
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("creatorCard:updated", "1")
+      }
+
+      clearDirty()
     } catch {
       setSaveError(t("creatorCardEditor.errors.saveFailed"))
     } finally {
@@ -807,12 +854,13 @@ export default function CreatorCardPage() {
   }, [activeLocale, searchParams])
 
   const handleBack = useCallback(() => {
+    if (!confirmLeaveIfDirty()) return
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back()
       return
     }
     router.push(returnTo)
-  }, [returnTo, router])
+  }, [confirmLeaveIfDirty, returnTo, router])
 
   const brandHelperText = useMemo(() => {
     const max = 20
@@ -945,7 +993,7 @@ export default function CreatorCardPage() {
         loadingSkeleton
       ) : (
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0">
-          <div className="lg:col-span-5 min-w-0">
+          <div className="lg:col-span-5 min-w-0" onChangeCapture={markDirty} onInputCapture={markDirty}>
             {(() => {
               type LocalMobileSectionKey =
                 | "profile"

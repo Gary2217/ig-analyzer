@@ -79,11 +79,25 @@ function getCookieValue(key: string): string {
 }
 
 function isAbortError(err: unknown): boolean {
-  const anyErr = err as any
-  const name = typeof anyErr?.name === "string" ? anyErr.name : ""
-  const msg = typeof anyErr?.message === "string" ? anyErr.message : ""
+  if (!isRecord(err)) return false
+  const name = typeof err.name === "string" ? err.name : ""
+  const msg = typeof err.message === "string" ? err.message : ""
   const s = `${name} ${msg}`.toLowerCase()
   return name === "AbortError" || s.includes("abort") || s.includes("canceled") || s.includes("cancelled")
+}
+
+type UnknownRecord = Record<string, unknown>
+function isRecord(v: unknown): v is UnknownRecord {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
+}
+function asNumber(v: unknown): number | undefined {
+  return typeof v === "number" ? v : undefined
+}
+function asString(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined
+}
+function asArray(v: unknown): unknown[] | undefined {
+  return Array.isArray(v) ? v : undefined
 }
 
 type IgMeResponse = {
@@ -122,7 +136,7 @@ type CreatorCardMeResponse = {
   ok: boolean
   error?: string
   me?: { igUserId?: string | null; igUsername?: string | null } | null
-  card?: any
+  card?: unknown
 }
 
 type FakeAnalysis = {
@@ -228,8 +242,11 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   const [broken, setBroken] = useState(false)
 
   useEffect(() => {
-    setBroken(false)
-    setCurrentSrc(src && src.length > 0 ? src : FALLBACK_IMG)
+    const raf = requestAnimationFrame(() => {
+      setBroken(false)
+      setCurrentSrc(src && src.length > 0 ? src : FALLBACK_IMG)
+    })
+    return () => cancelAnimationFrame(raf)
   }, [src])
 
   const isVideoUrl = useMemo(() => {
@@ -267,7 +284,10 @@ function SafeIgThumb(props: { src?: string; alt: string; className: string }) {
   const [broken, setBroken] = useState(false)
 
   useEffect(() => {
-    setBroken(false)
+    const raf = requestAnimationFrame(() => {
+      setBroken(false)
+    })
+    return () => cancelAnimationFrame(raf)
   }, [src])
 
   const isVideoUrl = useMemo(() => {
@@ -541,7 +561,7 @@ function ProgressRing({
   )
 }
 
-function normalizeMedia(raw: any):
+function normalizeMedia(raw: unknown):
   Array<{
     id: string
     like_count?: number
@@ -553,10 +573,11 @@ function normalizeMedia(raw: any):
     thumbnail_url?: string
     caption?: string
   }> {
-  const src = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : []
+  const src = Array.isArray(raw) ? raw : (isRecord(raw) && Array.isArray(raw.data)) ? raw.data : []
 
   return src
-    .map((m: any) => {
+    .map((m: unknown) => {
+      if (!isRecord(m)) return null
       const id = typeof m?.id === "string" ? m.id : String(m?.id ?? "")
       if (!id) return null
 
@@ -575,11 +596,21 @@ function normalizeMedia(raw: any):
         caption: typeof m?.caption === "string" ? m.caption : undefined,
       }
     })
-    .filter(Boolean) as any
+    .filter((x): x is NonNullable<typeof x> => x !== null) as Array<{
+      id: string
+      like_count?: number
+      comments_count?: number
+      timestamp?: string
+      media_type?: string
+      permalink?: string
+      media_url?: string
+      thumbnail_url?: string
+      caption?: string
+    }>
 }
 
 const normalizeMe = (raw: unknown): IgMeResponse | null => {
-  const isRec = (v: unknown): v is Record<string, any> => Boolean(v && typeof v === "object")
+  const isRec = (v: unknown): v is UnknownRecord => Boolean(v && typeof v === "object" && !Array.isArray(v))
   const toNumOrNull = (v: unknown): number | null => {
     if (typeof v === "number" && Number.isFinite(v)) return v
     const n = Number(v)
@@ -595,13 +626,13 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
   if (!isRec(raw)) return null
 
   // Accept multiple wrappers: {data:{...}}, {me:{...}}, or direct.
-  const base: Record<string, any> = (isRec(raw.data) ? raw.data : isRec(raw.me) ? raw.me : raw) as any
-  const connected = Boolean((raw as any)?.connected ?? base?.connected)
+  const base: UnknownRecord = (isRec(raw.data) ? raw.data : isRec(raw.me) ? raw.me : raw)
+  const connected = Boolean(isRecord(raw) && raw.connected !== undefined ? raw.connected : base?.connected)
 
-  const profileRaw: Record<string, any> | null =
+  const profileRaw: UnknownRecord | null =
     (isRec(base?.profile) ? base.profile : null) ||
-    (isRec(base?.data?.profile) ? base.data.profile : null) ||
-    (isRec((raw as any)?.profile) ? (raw as any).profile : null)
+    (isRecord(base?.data) && isRec(base.data.profile) ? base.data.profile : null) ||
+    (isRecord(raw) && isRec(raw.profile) ? raw.profile : null)
 
   // If backend returns flat fields, synthesize a profile object.
   const flatHasAny =
@@ -611,14 +642,14 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
     typeof base?.follows_count !== "undefined" ||
     typeof base?.media_count !== "undefined"
 
-  const p = (profileRaw ?? (flatHasAny ? base : null)) as any
+  const p = (profileRaw ?? (flatHasAny ? base : null))
   if (!p && !connected) return null
 
   const profile = p
     ? {
         id: pickStr(p?.id),
-        username: pickStr(p?.username, base?.username, (raw as any)?.username),
-        name: pickStr(p?.name, base?.name, (raw as any)?.name, base?.display_name),
+        username: pickStr(isRecord(p) ? p.username : undefined, base?.username, isRecord(raw) ? raw.username : undefined),
+        name: pickStr(isRecord(p) ? p.name : undefined, base?.name, isRecord(raw) ? raw.name : undefined, base?.display_name),
         profile_picture_url: pickStr(p?.profile_picture_url, base?.profile_picture_url),
         followers_count: toNumOrNull(p?.followers_count),
         follows_count: toNumOrNull(p?.follows_count ?? p?.following_count),
@@ -628,7 +659,7 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
 
   return {
     connected,
-    provider: typeof (raw as any)?.provider === "string" ? (raw as any).provider : undefined,
+    provider: isRecord(raw) && typeof raw.provider === "string" ? raw.provider : undefined,
     profile,
     username: profile?.username,
     name: profile?.name,
@@ -636,7 +667,7 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
     followers_count: typeof profile?.followers_count === "number" ? profile.followers_count : undefined,
     follows_count: typeof profile?.follows_count === "number" ? profile.follows_count : undefined,
     media_count: typeof profile?.media_count === "number" ? profile.media_count : undefined,
-    recent_media: Array.isArray(base?.recent_media) ? base.recent_media : Array.isArray((raw as any)?.recent_media) ? (raw as any).recent_media : undefined,
+    recent_media: Array.isArray(base?.recent_media) ? base.recent_media : (isRecord(raw) && Array.isArray(raw.recent_media) ? raw.recent_media : undefined),
   }
 }
 
@@ -644,7 +675,7 @@ export default function ResultsClient() {
   const __DEV__ = process.env.NODE_ENV !== "production"
   const __DEBUG_RESULTS__ = process.env.NEXT_PUBLIC_DEBUG_RESULTS === "1"
   const dlog = useCallback(
-    (...args: any[]) => {
+    (...args: unknown[]) => {
       if (__DEV__) console.debug(...args)
     },
     [__DEV__]
@@ -682,12 +713,13 @@ export default function ResultsClient() {
 
   const isPro = false
 
-  const getPostPermalink = (post: any): string => {
+  const getPostPermalink = (post: unknown): string => {
+    if (!isRecord(post)) return ""
     return (
-      (typeof post?.permalink === "string" ? post.permalink : "") ||
-      (typeof post?.url === "string" ? post.url : "") ||
-      (typeof post?.link === "string" ? post.link : "") ||
-      (typeof post?.post_url === "string" ? post.post_url : "") ||
+      (typeof post.permalink === "string" ? post.permalink : "") ||
+      (typeof post.url === "string" ? post.url : "") ||
+      (typeof post.link === "string" ? post.link : "") ||
+      (typeof post.post_url === "string" ? post.post_url : "") ||
       ""
     )
   }
@@ -808,7 +840,7 @@ export default function ResultsClient() {
     profileViews: number | null
     impressionsTotal: number | null
   } | null>(null)
-  const [dailySnapshotData, setDailySnapshotData] = useState<any>(null)
+  const [dailySnapshotData, setDailySnapshotData] = useState<unknown>(null)
   const [dailySnapshotAvailableDays, setDailySnapshotAvailableDays] = useState<number | null>(null)
   const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
     loading: false,
@@ -829,7 +861,7 @@ export default function ResultsClient() {
     const list = Array.isArray(pts) ? pts : []
     try {
       return JSON.stringify(
-        list.map((p: any) => [
+        list.map((p) => [
           typeof p?.ts === "number" && Number.isFinite(p.ts) ? p.ts : null,
           typeof p?.reach === "number" && Number.isFinite(p.reach) ? p.reach : 0,
           typeof p?.impressions === "number" && Number.isFinite(p.impressions) ? p.impressions : 0,
@@ -902,16 +934,16 @@ export default function ResultsClient() {
   } = followersMetrics
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
-  const igRecentLen = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media.length : 0
+  const igRecentLen = isRecord(igMe) && Array.isArray(igMe.recent_media) ? igMe.recent_media.length : 0
   const mediaLen = Array.isArray(media) ? media.length : 0
   const effectiveRecentMedia = useMemo(() => {
     const fromApi = Array.isArray(media) ? media : []
     if (fromApi.length > 0) return fromApi
 
-    const fromMe = Array.isArray((igMe as any)?.recent_media) ? (igMe as any).recent_media : []
+    const fromMe = isRecord(igMe) && Array.isArray(igMe.recent_media) ? igMe.recent_media : []
     if (fromMe.length > 0) return fromMe
 
-    return [] as any[]
+    return []
   }, [igMe, media])
 
   const effectiveRecentLen = Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia.length : 0
@@ -919,9 +951,9 @@ export default function ResultsClient() {
 
   // Profile stats (UI-only)
   // Source of truth: Meta returns these on `profile`.
-  const profileStats = ((igMe as any)?.profile ?? null) as any
+  const profileStats = isRecord(igMe) && isRecord(igMe.profile) ? igMe.profile : null
   const followersCount = toNum(profileStats?.followers_count)
-  const followsCount = toNum(profileStats?.follows_count ?? profileStats?.following_count)
+  const followsCount = toNum(profileStats?.follows_count)
   const mediaCount = toNum(profileStats?.media_count) ?? (mediaLoaded && Array.isArray(media) ? media.length : undefined)
   const formatCompact = (n?: number) => {
     if (typeof n !== "number" || !Number.isFinite(n)) return "—"
@@ -933,7 +965,12 @@ export default function ResultsClient() {
   }
 
   // Determine whether "recent_media" looks like real IG media (numeric id) — DEV logging only
-  const recentFirstId = String((((igMe as any)?.recent_media?.[0] as any)?.id ?? ""))
+  const recentFirstId = (() => {
+    if (!isRecord(igMe) || !Array.isArray(igMe.recent_media) || igMe.recent_media.length === 0) return ""
+    const first = igMe.recent_media[0]
+    if (!isRecord(first)) return ""
+    return String(first.id ?? "")
+  })()
   const topPostsFirstId = recentFirstId
   const topPostsHasReal = igRecentLen > 0 && /^\d+$/.test(recentFirstId)
 
@@ -970,7 +1007,7 @@ export default function ResultsClient() {
   }, [])
 
   const normalizeTotalsFromInsightsDaily = useCallback(
-    (insightsDaily: any[]): {
+    (insightsDaily: unknown[]): {
       reach: number | null
       interactions: number | null
       engaged: number | null
@@ -979,8 +1016,13 @@ export default function ResultsClient() {
     } | null => {
     const list = Array.isArray(insightsDaily) ? insightsDaily : []
     const pickMetric = (metricName: string): number | null => {
-      const it = list.find((x) => String(x?.name || "").trim() === metricName)
-      const v = it?.total_value?.value
+      const it = list.find((x) => {
+        if (!isRecord(x)) return false
+        return String(x.name || "").trim() === metricName
+      })
+      if (!isRecord(it)) return null
+      const totalValue = isRecord(it.total_value) ? it.total_value : null
+      const v = totalValue?.value
       const n = typeof v === "number" ? v : Number(v)
       return Number.isFinite(n) ? n : null
     }
@@ -996,7 +1038,7 @@ export default function ResultsClient() {
     [],
   )
 
-  const igCacheId = String(((igMe as any)?.profile?.id ?? (igMe as any)?.profile?.username ?? (igMe as any)?.username ?? "me") || "me")
+  const igCacheId = String((isRecord(igMe) && isRecord(igMe.profile) ? (igMe.profile.id ?? igMe.profile.username) : isRecord(igMe) ? igMe.username : "me") || "me")
   const resultsCacheKey = `results_cache:${igCacheId}:7`
 
   useEffect(() => {
@@ -1150,12 +1192,12 @@ export default function ResultsClient() {
   const HEADER_RIGHT_ZH = "min-w-0 truncate"
   const HEADER_RIGHT_EN = "hidden sm:block min-w-0 truncate"
 
-  const igProfile = ((igMe as any)?.profile ?? igMe) as any
+  const igProfile = isRecord(igMe) && isRecord(igMe.profile) ? igMe.profile : (isRecord(igMe) ? igMe : null)
   const isConnected =
     cookieConnected ||
-    Boolean((igMe as any)?.connected === true) ||
-    Boolean(((igMe as any)?.connected ? igProfile?.username : igMe?.username))
-  const isConnectedInstagram = cookieConnected || Boolean((igMe as any)?.connected === true) || isConnected
+    Boolean(isRecord(igMe) && igMe.connected === true) ||
+    Boolean(isRecord(igMe) && igMe.connected ? (isRecord(igProfile) ? igProfile.username : undefined) : (isRecord(igMe) ? igMe.username : undefined))
+  const isConnectedInstagram = cookieConnected || Boolean(isRecord(igMe) && igMe.connected === true) || isConnected
 
   const hasAnyResultsData = Boolean(effectiveRecentLen > 0 || trendPoints.length > 0 || igMe)
 
@@ -1163,9 +1205,9 @@ export default function ResultsClient() {
 
   useEffect(() => {
     if (!cookieConnected) return
-    setIgMe((prev: any) => {
-      if (prev && prev.connected === true) return prev
-      return { ...(prev ?? {}), connected: true }
+    setIgMe((prev) => {
+      if (isRecord(prev) && prev.connected === true) return prev
+      return { ...(isRecord(prev) ? prev : {}), connected: true }
     })
   }, [cookieConnected])
 
@@ -1179,7 +1221,7 @@ export default function ResultsClient() {
     `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
   const formatTimeTW = (ms: number) => new Date(ms).toLocaleString("zh-TW", { hour12: false })
 
-  const normalizeDailyInsightsToTrendPoints = useCallback((insightsDaily: any[]): AccountTrendPoint[] => {
+  const normalizeDailyInsightsToTrendPoints = useCallback((insightsDaily: unknown[]): AccountTrendPoint[] => {
     const toNum = (v: unknown) => {
       const n = typeof v === "number" ? v : Number(v)
       return Number.isFinite(n) ? n : null
@@ -1214,10 +1256,12 @@ export default function ResultsClient() {
 
     const list = Array.isArray(insightsDaily) ? insightsDaily : []
     for (const item of list) {
-      const name = String(item?.name || "").trim()
-      const values = Array.isArray(item?.values) ? item.values : []
+      if (!isRecord(item)) continue
+      const name = String(item.name || "").trim()
+      const values = Array.isArray(item.values) ? item.values : []
       for (const v of values) {
-        const endTime = typeof v?.end_time === "string" ? v.end_time : ""
+        if (!isRecord(v)) continue
+        const endTime = typeof v.end_time === "string" ? v.end_time : ""
         const ms = endTime ? Date.parse(endTime) : NaN
         if (!Number.isFinite(ms)) continue
         const p = ensure(ms)
@@ -1275,14 +1319,15 @@ export default function ResultsClient() {
         >()
 
         for (const it of Array.isArray(arr) ? arr : []) {
-          const ymd = typeof (it as any)?.day === "string" ? String((it as any).day).trim() : ""
+          if (!isRecord(it)) continue
+          const ymd = typeof it.day === "string" ? String(it.day).trim() : ""
           if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue
 
           map.set(ymd, {
-            reach: toSafeInt((it as any)?.reach),
-            impressions: toSafeInt((it as any)?.impressions),
-            total_interactions: toSafeInt((it as any)?.total_interactions),
-            accounts_engaged: toSafeInt((it as any)?.accounts_engaged),
+            reach: toSafeInt(it.reach),
+            impressions: toSafeInt(it.impressions),
+            total_interactions: toSafeInt(it.total_interactions),
+            accounts_engaged: toSafeInt(it.accounts_engaged),
           })
         }
 
@@ -1297,16 +1342,17 @@ export default function ResultsClient() {
         >()
 
         for (const it of Array.isArray(arr) ? arr : []) {
+          if (!isRecord(it)) continue
           const ymd =
-            (typeof (it as any)?.date === "string" ? String((it as any).date).trim() : "") ||
-            (typeof (it as any)?.day === "string" ? String((it as any).day).trim() : "")
+            (typeof it.date === "string" ? String(it.date).trim() : "") ||
+            (typeof it.day === "string" ? String(it.day).trim() : "")
           if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue
 
           map.set(ymd, {
-            reach: toSafeInt((it as any)?.reach),
-            impressions: toSafeInt((it as any)?.impressions),
-            total_interactions: toSafeInt((it as any)?.interactions ?? (it as any)?.total_interactions),
-            accounts_engaged: toSafeInt((it as any)?.engaged_accounts ?? (it as any)?.accounts_engaged ?? (it as any)?.engaged),
+            reach: toSafeInt(it.reach),
+            impressions: toSafeInt(it.impressions),
+            total_interactions: toSafeInt(it.interactions ?? it.total_interactions),
+            accounts_engaged: toSafeInt(it.engaged_accounts ?? it.accounts_engaged ?? it.engaged),
           })
         }
 
@@ -1326,7 +1372,7 @@ export default function ResultsClient() {
         const ts = parseYmd(ymd)
         const safeTs = ts ?? Date.now() - i * 24 * 60 * 60 * 1000
 
-        const p: any = {
+        const p: AccountTrendPoint = {
           t: (() => {
             try {
               return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(safeTs))
@@ -1343,10 +1389,7 @@ export default function ResultsClient() {
           interactions: row.total_interactions,
           engaged: row.accounts_engaged,
         }
-        p.total_interactions = row.total_interactions
-        p.engaged_accounts = row.accounts_engaged
-        p.accounts_engaged = row.accounts_engaged
-        out.push(p as AccountTrendPoint)
+        out.push(p)
       }
 
       return out
@@ -1365,7 +1408,7 @@ export default function ResultsClient() {
     }
   }, [])
 
-  function coerceDailySnapshotPointsToArray(points: unknown): any[] {
+  function coerceDailySnapshotPointsToArray(points: unknown): unknown[] {
     if (Array.isArray(points)) return points
     if (!points || typeof points !== "object") return []
 
@@ -1392,34 +1435,32 @@ export default function ResultsClient() {
     }
 
     const parseValueMs = (v: unknown): number | null => {
-      if (!v || typeof v !== "object") return null
-      const obj: any = v as any
-      if (typeof obj.ts === "number" && Number.isFinite(obj.ts)) return obj.ts
+      if (!isRecord(v)) return null
+      if (typeof v.ts === "number" && Number.isFinite(v.ts)) return v.ts
       const dateRaw =
-        (typeof obj.timestamp === "string" ? obj.timestamp : null) ??
-        (typeof obj.date === "string" ? obj.date : null) ??
-        (typeof obj.day === "string" ? obj.day : null)
+        (typeof v.timestamp === "string" ? v.timestamp : null) ??
+        (typeof v.date === "string" ? v.date : null) ??
+        (typeof v.day === "string" ? v.day : null)
       if (!dateRaw) return null
       const ms = Date.parse(String(dateRaw))
       return Number.isFinite(ms) ? ms : null
     }
 
     const looksLikePoint = (v: unknown): boolean => {
-      if (!v || typeof v !== "object") return false
-      const obj: any = v as any
+      if (!isRecord(v)) return false
       const hasTime =
-        (typeof obj.date === "string" && obj.date.trim()) ||
-        (typeof obj.day === "string" && obj.day.trim()) ||
-        (typeof obj.timestamp === "string" && obj.timestamp.trim()) ||
-        (typeof obj.ts === "number" && Number.isFinite(obj.ts))
+        (typeof v.date === "string" && v.date.trim()) ||
+        (typeof v.day === "string" && v.day.trim()) ||
+        (typeof v.timestamp === "string" && v.timestamp.trim()) ||
+        (typeof v.ts === "number" && Number.isFinite(v.ts))
 
       const hasMetric =
-        obj.reach !== undefined ||
-        obj.impressions !== undefined ||
-        obj.interactions !== undefined ||
-        obj.total_interactions !== undefined ||
-        obj.engaged_accounts !== undefined ||
-        obj.accounts_engaged !== undefined
+        v.reach !== undefined ||
+        v.impressions !== undefined ||
+        v.interactions !== undefined ||
+        v.total_interactions !== undefined ||
+        v.engaged_accounts !== undefined ||
+        v.accounts_engaged !== undefined
 
       return Boolean(hasTime || hasMetric)
     }
@@ -1445,7 +1486,7 @@ export default function ResultsClient() {
     return sorted.map((x) => x.v)
   }
 
-  const normalizeDailySnapshotPointsToTrendPoints = useCallback((pointsRaw: any[]): AccountTrendPoint[] => {
+  const normalizeDailySnapshotPointsToTrendPoints = useCallback((pointsRaw: unknown[]): AccountTrendPoint[] => {
     const toNum = (v: unknown) => {
       const n = typeof v === "number" ? v : Number(v)
       return Number.isFinite(n) ? n : null
@@ -1468,11 +1509,12 @@ export default function ResultsClient() {
     const out: AccountTrendPoint[] = []
 
     for (let idx = 0; idx < list.length; idx++) {
-      const it = list[idx] as any
+      const it = list[idx]
+      if (!isRecord(it)) continue
       const dateRaw =
-        (typeof it?.date === "string" ? it.date : null) ??
-        (typeof it?.day === "string" ? it.day : null) ??
-        (typeof it?.t === "string" ? it.t : null)
+        (typeof it.date === "string" ? it.date : null) ??
+        (typeof it.day === "string" ? it.day : null) ??
+        (typeof it.t === "string" ? it.t : null)
 
       const ts = (() => {
         if (typeof it?.ts === "number" && Number.isFinite(it.ts)) return it.ts
@@ -1487,12 +1529,12 @@ export default function ResultsClient() {
         return now - (list.length - 1 - idx) * dayMs
       })()
 
-      const reach = toNum(it?.reach) ?? 0
-      const impressions = toNum(it?.impressions) ?? 0
-      const interactions = toNum(it?.interactions) ?? toNum(it?.total_interactions) ?? 0
-      const engaged = toNum(it?.engaged_accounts) ?? toNum(it?.accounts_engaged) ?? 0
+      const reach = toNum(it.reach) ?? 0
+      const impressions = toNum(it.impressions) ?? 0
+      const interactions = toNum(it.interactions) ?? toNum(it.total_interactions) ?? 0
+      const engaged = toNum(it.engaged_accounts) ?? toNum(it.accounts_engaged) ?? 0
 
-      const p: any = {
+      const p: AccountTrendPoint = {
         t: fmtLabel(ts),
         ts,
         reach,
@@ -1500,10 +1542,7 @@ export default function ResultsClient() {
         interactions,
         engaged,
       }
-      p.total_interactions = interactions
-      p.engaged_accounts = engaged
-      p.accounts_engaged = engaged
-      out.push(p as AccountTrendPoint)
+      out.push(p)
     }
 
     return out
@@ -1577,7 +1616,7 @@ export default function ResultsClient() {
                 return `${y}-${m}-${dd}`
               })())
               .order("day", { ascending: true })
-          : Promise.resolve({ data: [], error: null } as any)
+          : Promise.resolve({ data: [], error: null })
 
         const [igRes, dbRes] = await Promise.all([igReq, dbReq])
 
@@ -1610,7 +1649,7 @@ export default function ResultsClient() {
         const totalsRaw = Array.isArray(json7?.insights_daily) ? json7.insights_daily : []
         setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
 
-        const dbRows = (dbRes as any)?.data
+        const dbRows = isRecord(dbRes) ? dbRes.data : null
         const merged90 = mergeToContinuousTrendPoints({ days: 90, baseDbRowsRaw: dbRows, overridePointsRaw: json7?.points })
 
         if (merged90.length >= 1) {
@@ -1620,8 +1659,8 @@ export default function ResultsClient() {
         }
 
         setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
-      } catch (e: any) {
-        if (e?.name === "AbortError") return
+      } catch (e: unknown) {
+        if (isRecord(e) && e.name === "AbortError") return
         setDailySnapshotData(null)
         setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
       }
@@ -1795,8 +1834,8 @@ export default function ResultsClient() {
 
   const trendMeta = useMemo(() => {
     if (!trendPoints || trendPoints.length === 0) return null
-    const first = trendPoints[0] as any
-    const last = trendPoints[trendPoints.length - 1] as any
+    const first = trendPoints[0]
+    const last = trendPoints[trendPoints.length - 1]
     const firstTs = typeof first?.ts === "number" && Number.isFinite(first.ts) ? first.ts : null
     const lastTs = typeof last?.ts === "number" && Number.isFinite(last.ts) ? last.ts : null
     if (firstTs === null || lastTs === null) return null
@@ -1836,14 +1875,14 @@ export default function ResultsClient() {
     }
   }, [trendMeta?.endKey])
 
-  const hasConnectedFlag = (igMe as any)?.connected === true
+  const hasConnectedFlag = isRecord(igMe) && igMe.connected === true
   const hasRealProfile = Boolean(isConnected)
   const allowDemoProfile = !hasConnectedFlag && !hasRealProfile && !igMeLoading
 
   const recentPosts = igMe?.recent_media
 
   const needsDataRefetch = useMemo(() => {
-    const hasProfile = Boolean(igProfile && (igProfile?.id || igProfile?.username))
+    const hasProfile = Boolean(igProfile && (igProfile.username))
     const hasMedia = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
     const hasTopPosts = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
     return !hasProfile || !hasMedia || !hasTopPosts
@@ -1917,7 +1956,7 @@ export default function ResultsClient() {
     dlog("[media] fetch (from ConnectedGate)")
     fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
       .then(async (res) => {
-        let body: any = null
+        let body: unknown = null
         try {
           body = await res.json()
         } catch {
@@ -1939,8 +1978,8 @@ export default function ResultsClient() {
         // Accept both shapes:
         // - { data: [...] }
         // - [...] (raw array)
-        const rawMedia = Array.isArray((json as any)?.data)
-          ? (json as any).data
+        const rawMedia = isRecord(json) && Array.isArray(json.data)
+          ? json.data
           : Array.isArray(json)
             ? json
             : []
@@ -1948,20 +1987,21 @@ export default function ResultsClient() {
         const items = normalizeMedia(rawMedia)
 
         dlog("[media] response received:", {
-          hasDataArray: Array.isArray((json as any)?.data),
-          dataLength: Array.isArray((json as any)?.data) ? (json as any).data.length : Array.isArray(json) ? json.length : 0,
-          hasPaging: !!(json as any)?.paging,
+          hasDataArray: isRecord(json) && Array.isArray(json.data),
+          dataLength: isRecord(json) && Array.isArray(json.data) ? json.data.length : Array.isArray(json) ? json.length : 0,
+          hasPaging: isRecord(json) && !!json.paging,
           normalizedLen: items.length,
         })
 
         if (__DEBUG_RESULTS__) {
           try {
             const dataArr = Array.isArray(rawMedia) ? rawMedia : []
-            const first: any = Array.isArray(dataArr) && dataArr.length > 0 ? dataArr[0] : null
-            const firstKeys = first && typeof first === "object" ? Object.keys(first).slice(0, 50) : []
+            const first = Array.isArray(dataArr) && dataArr.length > 0 ? dataArr[0] : null
+            const firstKeys = isRecord(first) ? Object.keys(first).slice(0, 50) : []
             const byType: Record<string, number> = {}
             for (const it of Array.isArray(dataArr) ? dataArr : []) {
-              const mt = String((it as any)?.media_type ?? (it as any)?.mediaType ?? "") || "(unknown)"
+              if (!isRecord(it)) continue
+              const mt = String(it.media_type ?? it.mediaType ?? "") || "(unknown)"
               byType[mt] = (byType[mt] ?? 0) + 1
             }
 
@@ -1994,15 +2034,14 @@ export default function ResultsClient() {
           }
         }
 
-        setMedia((prev: any) => {
+        setMedia((prev) => {
           if (Array.isArray(prev) && prev.length > 0 && items.length === 0) return prev
           return items
         })
 
-        setIgMe((prev: any) => {
-          const base = (prev ?? {}) as any
-          if (Array.isArray(base?.recent_media) && base.recent_media.length > 0 && items.length === 0) return base
-          return { ...base, recent_media: items }
+        setIgMe((prev) => {
+          if (prev && isRecord(prev) && Array.isArray(prev.recent_media) && prev.recent_media.length > 0 && items.length === 0) return prev
+          return { ...(prev ?? {}), recent_media: items } as IgMeResponse
         })
 
         setMediaLoaded(true)
@@ -2011,10 +2050,10 @@ export default function ResultsClient() {
         if (cancelled) return
         if (reqId !== mediaReqIdRef.current) return
 
-        const status = (err as any)?.status
-        const body = (err as any)?.body
+        const status = isRecord(err) ? err.status : undefined
+        const body = isRecord(err) ? err.body : undefined
 
-        const bodyError = typeof body?.error === "string" ? body.error : ""
+        const bodyError = isRecord(body) && typeof body.error === "string" ? body.error : ""
         const isExpectedAuthFailure =
           status === 401 ||
           (status === 403 && (bodyError.startsWith("missing_cookie") || bodyError.startsWith("missing_token")))
@@ -2026,12 +2065,12 @@ export default function ResultsClient() {
         }
 
         const reason = bodyError ? bodyError : `http_${typeof status === "number" ? status : 0}`
-        const detail = typeof body?.detail === "string" && body.detail ? `: ${body.detail}` : ""
+        const detail = isRecord(body) && typeof body.detail === "string" && body.detail ? `: ${body.detail}` : ""
         setMediaError(`${reason}${detail}`)
 
         if (__DEV__) {
           const reason = bodyError || null
-          const detail = typeof body?.detail === "string" ? body.detail : null
+          const detail = isRecord(body) && typeof body.detail === "string" ? body.detail : null
           dlog("[media] fetch failed", { status, reason, detail })
         }
 
@@ -2077,7 +2116,12 @@ export default function ResultsClient() {
   useEffect(() => {
     // Dev-only: do not rely on any `topPosts` variable existing in this file scope.
     // We only log whether recent_media looks real.
-    const firstId = String((((igMe as any)?.recent_media?.[0] as any)?.id ?? ""))
+    const firstId = (() => {
+      if (!isRecord(igMe) || !Array.isArray(igMe.recent_media) || igMe.recent_media.length === 0) return ""
+      const first = igMe.recent_media[0]
+      if (!isRecord(first)) return ""
+      return String(first.id ?? "")
+    })()
     const hasRealTopPosts = igRecentLen > 0 && /^\d+$/.test(firstId)
 
     dlog("[top-posts][compute] enter", {
@@ -2091,12 +2135,12 @@ export default function ResultsClient() {
   }, [__DEV__, dlog, igMe, igRecentLen, isConnected, isConnectedInstagram, topPostsLen, mediaLen])
 
   const displayUsername = hasRealProfile
-    ? (typeof igProfile?.username === "string" ? String(igProfile.username).trim() : "")
+    ? (isRecord(igProfile) && typeof igProfile.username === "string" ? String(igProfile.username).trim() : "")
     : ""
 
   const displayName = (() => {
     if (allowDemoProfile) return mockAnalysis.profile.displayName
-    const raw = igProfile?.name ?? igProfile?.display_name ?? igProfile?.displayName
+    const raw = isRecord(igProfile) && typeof igProfile.name === "string" ? igProfile.name : null
     if (typeof raw === "string" && raw.trim()) return raw.trim()
     return displayUsername ? displayUsername : "—"
   })()
@@ -2136,17 +2180,10 @@ export default function ResultsClient() {
     const posts = effectiveRecentMedia
       .slice(0, 25)
       .map((p) => {
-        const likes =
-          finiteNumOrNull((p as any)?.like_count) ??
-          finiteNumOrNull((p as any)?.likes_count) ??
-          finiteNumOrNull((p as any)?.likes) ??
-          0
-        const comments =
-          finiteNumOrNull((p as any)?.comments_count) ??
-          finiteNumOrNull((p as any)?.comment_count) ??
-          finiteNumOrNull((p as any)?.comments) ??
-          0
-        const timestamp = typeof (p as any)?.timestamp === "string" ? String((p as any).timestamp) : null
+        if (!isRecord(p)) return { likes: 0, comments: 0, timestamp: null }
+        const likes = finiteNumOrNull(p.like_count) ?? 0
+        const comments = finiteNumOrNull(p.comments_count) ?? 0
+        const timestamp = typeof p.timestamp === "string" ? String(p.timestamp) : null
         return { likes, comments, timestamp }
       })
 
@@ -2206,9 +2243,9 @@ export default function ResultsClient() {
   const isPreview = (n: number | null) => isConnected && n === null
 
   // KPI numbers should accept numeric strings from API responses.
-  const kpiFollowers = finiteNumOrNull(igProfile?.followers_count)
-  const kpiFollowing = finiteNumOrNull(igProfile?.follows_count ?? igProfile?.following_count)
-  const kpiMediaCount = finiteNumOrNull(igProfile?.media_count)
+  const kpiFollowers = finiteNumOrNull(isRecord(igProfile) ? igProfile.followers_count : null)
+  const kpiFollowing = finiteNumOrNull(isRecord(igProfile) ? igProfile.follows_count : null)
+  const kpiMediaCount = finiteNumOrNull(isRecord(igProfile) ? igProfile.media_count : null)
   const kpiPosts = kpiMediaCount
 
   // Treat any non-empty media array as real media; do NOT require like/comment metrics.
@@ -2219,10 +2256,10 @@ export default function ResultsClient() {
 
     const copy = [...effectiveRecentMedia]
     copy.sort((a, b) => {
-      const al = toNum((a as any)?.like_count) ?? 0
-      const ac = toNum((a as any)?.comments_count) ?? 0
-      const bl = toNum((b as any)?.like_count) ?? 0
-      const bc = toNum((b as any)?.comments_count) ?? 0
+      const al = isRecord(a) ? (toNum(a.like_count) ?? 0) : 0
+      const ac = isRecord(a) ? (toNum(a.comments_count) ?? 0) : 0
+      const bl = isRecord(b) ? (toNum(b.like_count) ?? 0) : 0
+      const bc = isRecord(b) ? (toNum(b.comments_count) ?? 0) : 0
       return (bl + bc) - (al + ac)
     })
     return copy.slice(0, 3)
@@ -2230,7 +2267,7 @@ export default function ResultsClient() {
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return
-    const first = hasRealMedia ? ((effectiveRecentMedia as any[])?.[0] as any) : null
+    const first = hasRealMedia && Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0 ? effectiveRecentMedia[0] : null
     // eslint-disable-next-line no-console
     console.log("[top-posts]", {
       mediaLen: Array.isArray(media) ? media.length : 0,
@@ -2251,7 +2288,7 @@ export default function ResultsClient() {
   useEffect(() => {
     if (!__DEV__) return
     try {
-      const first: any = Array.isArray(topPerformingPosts) && topPerformingPosts.length > 0 ? topPerformingPosts[0] : null
+      const first = Array.isArray(topPerformingPosts) && topPerformingPosts.length > 0 ? topPerformingPosts[0] : null
       dlog("[top-posts] computed", {
         mediaLen,
         effectiveRecentLen,
@@ -2277,16 +2314,16 @@ export default function ResultsClient() {
     if (!__DEBUG_RESULTS__) return
     try {
       const arr = Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia : []
-      const first: any = arr[0] || null
+      const first = arr[0] || null
       if (!first) {
         // eslint-disable-next-line no-console
         console.debug("[DEBUG_RESULTS] media: empty")
         return
       }
 
-      const mediaType = String(first?.media_type ?? first?.mediaType ?? "")
-      const mediaUrl = String(first?.media_url ?? first?.mediaUrl ?? "")
-      const thumbUrl = String(first?.thumbnail_url ?? first?.thumbnailUrl ?? "")
+      const mediaType = isRecord(first) ? String(first.media_type ?? "") : ""
+      const mediaUrl = isRecord(first) ? String(first.media_url ?? "") : ""
+      const thumbUrl = isRecord(first) ? String(first.thumbnail_url ?? "") : ""
       const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
       const previewUrl = isVideo ? (thumbUrl || "") : (mediaUrl || thumbUrl || "")
       const mediaExt = (() => {
@@ -2309,8 +2346,8 @@ export default function ResultsClient() {
         media_url_ext: mediaExt,
         has_thumbnail_url: Boolean(thumbUrl),
         preview_host: previewHost,
-        has_like_count: typeof first?.like_count !== "undefined" || typeof first?.likeCount !== "undefined",
-        has_comments_count: typeof first?.comments_count !== "undefined" || typeof first?.commentsCount !== "undefined",
+        has_like_count: isRecord(first) && typeof first.like_count !== "undefined",
+        has_comments_count: isRecord(first) && typeof first.comments_count !== "undefined",
       })
     } catch {
       // ignore
@@ -2321,17 +2358,20 @@ export default function ResultsClient() {
     try {
       if (typeof window === "undefined") return
       if (!Array.isArray(topPerformingPosts) || topPerformingPosts.length === 0) return
-      const top3 = topPerformingPosts.slice(0, 3).map((p: any) => ({
-        id: p?.id ?? "",
-        media_type: p?.media_type ?? "",
-        thumbnail_url: p?.thumbnail_url ?? "",
-        media_url: p?.media_url ?? "",
-        permalink: getPostPermalink(p),
-        like_count: typeof p?.like_count === "number" ? p.like_count : (typeof p?.likeCount === "number" ? p.likeCount : null),
-        comments_count: typeof p?.comments_count === "number" ? p.comments_count : (typeof p?.commentsCount === "number" ? p.commentsCount : null),
-        engagement: p?.engagement ?? null,
-        timestamp: p?.timestamp ?? "",
-      }))
+      const top3 = topPerformingPosts.slice(0, 3).map((p: unknown) => {
+        if (!isRecord(p)) return { id: "", media_type: "", thumbnail_url: "", media_url: "", permalink: "", like_count: null, comments_count: null, engagement: null, timestamp: "" }
+        return {
+          id: typeof p.id === "string" ? p.id : "",
+          media_type: typeof p.media_type === "string" ? p.media_type : "",
+          thumbnail_url: typeof p.thumbnail_url === "string" ? p.thumbnail_url : "",
+          media_url: typeof p.media_url === "string" ? p.media_url : "",
+          permalink: getPostPermalink(p),
+          like_count: typeof p.like_count === "number" ? p.like_count : (typeof p.likeCount === "number" ? p.likeCount : null),
+          comments_count: typeof p.comments_count === "number" ? p.comments_count : (typeof p.commentsCount === "number" ? p.commentsCount : null),
+          engagement: typeof p.engagement === "number" ? p.engagement : null,
+          timestamp: typeof p.timestamp === "string" ? p.timestamp : "",
+        }
+      })
       window.localStorage.setItem(
         "sa_top_posts_snapshot_v1",
         JSON.stringify({
@@ -2363,7 +2403,8 @@ export default function ResultsClient() {
 
     let c30 = 0
     for (const m of media) {
-      const ts = (m as any)?.timestamp
+      if (!isRecord(m)) continue
+      const ts = m.timestamp
       if (!ts) continue
       const tms = new Date(ts).getTime()
       if (Number.isNaN(tms)) continue
@@ -2382,8 +2423,9 @@ export default function ResultsClient() {
     const vals: number[] = []
 
     for (const m of sample) {
-      const likes = numOrNull((m as any)?.like_count) ?? 0
-      const comments = numOrNull((m as any)?.comments_count) ?? 0
+      if (!isRecord(m)) continue
+      const likes = numOrNull(m.like_count) ?? 0
+      const comments = numOrNull(m.comments_count) ?? 0
       const v = likes + comments
       if (v > 0) vals.push(v)
     }
@@ -2492,15 +2534,19 @@ export default function ResultsClient() {
 
   const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
 
-  const [creatorCard, setCreatorCard] = useState<any | null>(null)
-  const [creatorStats, setCreatorStats] = useState<any | null>(null)
+  const [creatorCard, setCreatorCard] = useState<unknown>(null)
+  const [creatorStats, setCreatorStats] = useState<unknown>(null)
   const [creatorIdFromCardMe, setCreatorIdFromCardMe] = useState<string | null>(null)
+  const [creatorCardReload, setCreatorCardReload] = useState(0)
   const creatorCardFetchedRef = useRef(false)
   const creatorStatsUpsertKeyRef = useRef<string>("")
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
-      const insightId = (dailySnapshotData as any)?.insights_daily_series?.[0]?.id
+      if (!isRecord(dailySnapshotData)) return ""
+      const series = isRecord(dailySnapshotData.insights_daily_series) || Array.isArray(dailySnapshotData.insights_daily_series) ? dailySnapshotData.insights_daily_series : null
+      const firstItem = Array.isArray(series) && series.length > 0 ? series[0] : null
+      const insightId = isRecord(firstItem) && typeof firstItem.id === "string" ? firstItem.id : ""
       return extractIgUserIdFromInsightsId(insightId)
     })()
     const igUserIdFromCookie = getCookieValue("ig_ig_id").trim()
@@ -2516,7 +2562,10 @@ export default function ResultsClient() {
     }
 
     const igUserIdFromSnapshot = (() => {
-      const insightId = (dailySnapshotData as any)?.insights_daily_series?.[0]?.id
+      if (!isRecord(dailySnapshotData)) return ""
+      const series = isRecord(dailySnapshotData.insights_daily_series) || Array.isArray(dailySnapshotData.insights_daily_series) ? dailySnapshotData.insights_daily_series : null
+      const firstItem = Array.isArray(series) && series.length > 0 ? series[0] : null
+      const insightId = isRecord(firstItem) && typeof firstItem.id === "string" ? firstItem.id : ""
       return extractIgUserIdFromInsightsId(insightId)
     })()
 
@@ -2525,8 +2574,8 @@ export default function ResultsClient() {
     }
 
     const igUserIdFromMe =
-      typeof (meQuery.data as any)?.igId === "string"
-        ? String((meQuery.data as any).igId).trim()
+      isRecord(meQuery.data) && typeof meQuery.data.igId === "string"
+        ? String(meQuery.data.igId).trim()
         : ""
     const igUserIdFromCookie = getCookieValue("ig_ig_id").trim()
     const igUserIdStr = (igUserIdFromMe || igUserIdFromSnapshot || igUserIdFromCookie).trim()
@@ -2557,14 +2606,14 @@ export default function ResultsClient() {
     let cancelled = false
     ;(async () => {
       try {
-        const resp: any = await supabaseBrowser
+        const resp = await supabaseBrowser
           .from("ig_daily_followers")
           .select("day,followers_count")
           .eq("ig_user_id", igUserIdStr)
           .order("day", { ascending: true })
 
-        const data = (resp as any)?.data
-        const error = (resp as any)?.error
+        const data = isRecord(resp) ? resp.data : null
+        const error = isRecord(resp) ? resp.error : null
 
         if (cancelled) return
         if (error || !Array.isArray(data)) {
@@ -2573,20 +2622,18 @@ export default function ResultsClient() {
           return
         }
 
-        const rows = (data as any[])
+        const rows = (Array.isArray(data) ? data : [])
           .map((r) => {
-            const day = typeof r?.day === "string" ? r.day : ""
+            if (!isRecord(r)) return null
+            const day = typeof r.day === "string" ? r.day : ""
             const n =
-              typeof r?.followers_count === "number"
+              typeof r.followers_count === "number"
                 ? r.followers_count
-                : Number(r?.followers_count)
+                : Number(r.followers_count)
             if (!day || !Number.isFinite(n)) return null
             return { day, followers_count: Math.floor(n) }
           })
-          .filter(Boolean) as Array<{
-            day: string
-            followers_count: number
-          }>
+          .filter((x): x is { day: string; followers_count: number } => x !== null)
 
         setFollowersDailyRows(rows)
 
@@ -2618,6 +2665,15 @@ export default function ResultsClient() {
   }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (sessionStorage.getItem("creatorCard:updated") === "1") {
+        sessionStorage.removeItem("creatorCard:updated")
+        setCreatorCardReload((v) => v + 1)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isConnectedInstagram) {
       setCreatorCard(null)
       creatorCardFetchedRef.current = false
@@ -2627,7 +2683,7 @@ export default function ResultsClient() {
       return
     }
 
-    if (creatorCardFetchedRef.current) return
+    if (creatorCardFetchedRef.current && creatorCardReload === 0) return
     creatorCardFetchedRef.current = true
 
     let cancelled = false
@@ -2645,9 +2701,9 @@ export default function ResultsClient() {
           return
         }
         const nextCreatorId =
-          json?.me && typeof (json as any).me?.igUserId === "string" ? String((json as any).me.igUserId).trim() : ""
+          isRecord(json) && isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
         setCreatorIdFromCardMe(nextCreatorId || null)
-        setCreatorCard(json?.card && typeof json.card === "object" ? (json.card as any) : null)
+        setCreatorCard(isRecord(json) && json.card ? json.card : null)
       } catch (e) {
         if (cancelled) return
         if (isAbortError(e)) return
@@ -2658,7 +2714,7 @@ export default function ResultsClient() {
     return () => {
       cancelled = true
     }
-  }, [isConnectedInstagram])
+  }, [creatorCardReload, isConnectedInstagram])
 
   useEffect(() => {
     if (!isConnectedInstagram || !resolvedCreatorId) {
@@ -2674,13 +2730,13 @@ export default function ResultsClient() {
           cache: "no-store",
           credentials: "include",
         })
-        const json: any = await res.json().catch(() => null)
+        const json: unknown = await res.json().catch(() => null)
         if (cancelled) return
-        if (!res.ok || !json?.ok) {
+        if (!res.ok || !isRecord(json) || !json.ok) {
           setCreatorStats(null)
           return
         }
-        setCreatorStats(json?.stats ?? null)
+        setCreatorStats(isRecord(json) && json.stats ? json.stats : null)
       } catch (e) {
         if (cancelled) return
         if (isAbortError(e)) return
@@ -2700,7 +2756,7 @@ export default function ResultsClient() {
     const engagementRatePct = computedMetrics?.engagementRatePct
     const avgLikes = computedMetrics?.avgLikes
     const avgComments = computedMetrics?.avgComments
-    const followers = finiteNumOrNull((igProfile as any)?.followers_count)
+    const followers = finiteNumOrNull(isRecord(igProfile) ? igProfile.followers_count : null)
 
     const nextKey = JSON.stringify({ resolvedCreatorId, engagementRatePct, avgLikes, avgComments, followers })
     if (creatorStatsUpsertKeyRef.current === nextKey) return
@@ -3733,7 +3789,7 @@ export default function ResultsClient() {
   })()
 
   const creatorCardEngagementRateText = (() => {
-    const dbPct = typeof creatorStats?.engagementRatePct === "number" ? creatorStats.engagementRatePct : null
+    const dbPct = isRecord(creatorStats) && typeof creatorStats.engagementRatePct === "number" ? creatorStats.engagementRatePct : null
     if (typeof dbPct === "number" && Number.isFinite(dbPct)) return `${dbPct.toFixed(2)}%`
     if (typeof engagementRatePctFormatted === "string" && engagementRatePctFormatted.trim() && engagementRatePctFormatted !== "—") {
       return engagementRatePctFormatted
@@ -3772,29 +3828,41 @@ export default function ResultsClient() {
       })()}
       profileImageUrl={(() => {
         const u =
-          typeof (igProfile as any)?.profile_picture_url === "string"
-            ? String((igProfile as any).profile_picture_url)
-            : typeof (igMe as any)?.profile_picture_url === "string"
-              ? String((igMe as any).profile_picture_url)
+          isRecord(igProfile) && typeof igProfile.profile_picture_url === "string"
+            ? String(igProfile.profile_picture_url)
+            : isRecord(igMe) && typeof igMe.profile_picture_url === "string"
+              ? String(igMe.profile_picture_url)
               : ""
         return u || null
       })()}
       displayName={
-        typeof (igProfile as any)?.name === "string" && String((igProfile as any).name).trim()
-          ? String((igProfile as any).name).trim()
+        isRecord(igProfile) && typeof igProfile.name === "string" && String(igProfile.name).trim()
+          ? String(igProfile.name).trim()
           : displayUsername
       }
       username={displayUsername}
       aboutText={t("results.mediaKit.about.placeholder")}
       primaryNiche={
-        typeof (creatorCard as any)?.niche === "string" && String((creatorCard as any).niche).trim()
-          ? String((creatorCard as any).niche).trim()
+        isRecord(creatorCard) && typeof creatorCard.niche === "string" && String(creatorCard.niche).trim()
+          ? String(creatorCard.niche).trim()
           : null
       }
-      contact={(creatorCard as any)?.contact ?? null}
-      collaborationNiches={(creatorCard as any)?.collaborationNiches ?? (creatorCard as any)?.collaboration_niches ?? null}
-      deliverables={(creatorCard as any)?.deliverables ?? null}
-      pastCollaborations={(creatorCard as any)?.pastCollaborations ?? (creatorCard as any)?.past_collaborations ?? null}
+      contact={isRecord(creatorCard) && typeof creatorCard.contact === "string" ? creatorCard.contact : null}
+      collaborationNiches={(() => {
+        if (!isRecord(creatorCard)) return null
+        const val = creatorCard.collaborationNiches ?? creatorCard.collaboration_niches
+        return Array.isArray(val) ? val as string[] : null
+      })()}
+      deliverables={(() => {
+        if (!isRecord(creatorCard)) return null
+        const val = creatorCard.deliverables
+        return Array.isArray(val) ? val as string[] : null
+      })()}
+      pastCollaborations={(() => {
+        if (!isRecord(creatorCard)) return null
+        const val = creatorCard.pastCollaborations ?? creatorCard.past_collaborations
+        return Array.isArray(val) ? val as string[] : null
+      })()}
       followersText={typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : null}
       postsText={typeof mediaCount === "number" && Number.isFinite(mediaCount) ? formatCompact(mediaCount) : null}
       avgLikesLabel={uiCopy.avgLikesLabel}
@@ -4418,11 +4486,9 @@ export default function ResultsClient() {
                 <div className="flex items-start gap-4">
                   {(() => {
                     const avatarUrl =
-                      typeof (igMe as any)?.profile_picture_url === "string"
-                        ? String((igMe as any).profile_picture_url)
-                        : typeof (igMe as any)?.profilePictureUrl === "string"
-                          ? String((igMe as any).profilePictureUrl)
-                          : ""
+                      isRecord(igMe) && typeof igMe.profile_picture_url === "string"
+                        ? String(igMe.profile_picture_url)
+                        : ""
 
                     return avatarUrl ? (
                       <SafeIgThumb
@@ -4681,7 +4747,8 @@ export default function ResultsClient() {
                                 : accountTrend
                             const reachValues = reachSeriesForStats
                               .map((p) => {
-                                const v = (p as any)?.reach
+                                if (!isRecord(p)) return null
+                                const v = p.reach
                                 return typeof v === "number" && Number.isFinite(v) ? v : null
                               })
                               .filter((x): x is number => typeof x === "number")
@@ -4789,7 +4856,7 @@ export default function ResultsClient() {
                       const p0 = pts[0]
                       const ts0 = typeof p0?.ts === "number" && Number.isFinite(p0.ts) ? p0.ts : Date.now()
                       const p1: AccountTrendPoint = {
-                        ...(p0 as any),
+                        ...p0,
                         ts: ts0 + 24 * 60 * 60 * 1000,
                         t: p0.t,
                       }
@@ -4812,10 +4879,10 @@ export default function ResultsClient() {
                     if (!Array.isArray(dataForChartBase)) return [] as AccountTrendPoint[]
                     if (dataForChartBase.length !== 1) return dataForChartBase
 
-                    const p0 = dataForChartBase[0] as any
+                    const p0 = dataForChartBase[0]
                     const ts0 = typeof p0?.ts === "number" && Number.isFinite(p0.ts) ? (p0.ts as number) : Date.now()
                     const p1: AccountTrendPoint = {
-                      ...(p0 as any),
+                      ...p0,
                       ts: ts0 + 24 * 60 * 60 * 1000,
                       t: p0?.t,
                     }
@@ -4863,16 +4930,16 @@ export default function ResultsClient() {
                       .map((p) => {
                         const y =
                           k === "reach"
-                            ? (p as any).reach
+                            ? p.reach
                             : k === "followers"
                               ? null
                             : k === "interactions"
-                              ? (p as any).interactions
+                              ? p.interactions
                               : k === "impressions"
-                                ? (p as any).impressions
+                                ? p.impressions
                                 : k === "engaged"
-                                  ? (p as any).engaged
-                                  : (p as any).followerDelta
+                                  ? p.engaged
+                                  : p.followerDelta
                         return typeof y === "number" && Number.isFinite(y) ? y : null
                       })
                       .filter((x): x is number => typeof x === "number")
@@ -4978,7 +5045,7 @@ export default function ResultsClient() {
 
                   const reachRawByIndex = focusedIsReach
                     ? dataForChart.map((p) => {
-                        const v = (p as any)?.reach
+                        const v = p.reach
                         return typeof v === "number" && Number.isFinite(v) ? v : null
                       })
                     : []
@@ -5070,13 +5137,18 @@ export default function ResultsClient() {
                       })()
                     : []
 
-                  const followersCountFromProfileRaw = (igMe as any)?.profile?.followers_count
-                  const followersCountFromProfile =
-                    typeof followersCountFromProfileRaw === "number" && Number.isFinite(followersCountFromProfileRaw)
-                      ? followersCountFromProfileRaw
-                      : typeof followersCountFromProfileRaw === "string" && followersCountFromProfileRaw.trim() && Number.isFinite(Number(followersCountFromProfileRaw))
-                        ? Number(followersCountFromProfileRaw)
-                        : null
+                  const followersCountFromProfileRaw = isRecord(igMe) && isRecord(igMe.profile) ? igMe.profile.followers_count : null
+                  const followersCountFromProfile = (() => {
+                    if (typeof followersCountFromProfileRaw === "number" && Number.isFinite(followersCountFromProfileRaw)) {
+                      return followersCountFromProfileRaw
+                    }
+                    const strVal = String(followersCountFromProfileRaw ?? "")
+                    const trimmed = strVal.trim()
+                    if (trimmed !== "" && Number.isFinite(Number(trimmed))) {
+                      return Number(trimmed)
+                    }
+                    return null
+                  })()
 
                   const followersCountForFallback =
                     followersCountFromProfile !== null
@@ -5171,8 +5243,8 @@ export default function ResultsClient() {
                         <div className="w-full mt-2 relative min-w-0">
                           <FollowersTrendFallback
                             point={(() => {
-                              const first = dataForChart[0] as any
-                              const firstTs = typeof first?.ts === "number" && Number.isFinite(first.ts) ? (first.ts as number) : null
+                              const first = dataForChart[0]
+                              const firstTs = isRecord(first) && typeof first.ts === "number" && Number.isFinite(first.ts) ? (first.ts as number) : null
                               const fetchedTs = trendFetchedAt ? new Date(trendFetchedAt).getTime() : null
                               const ts = firstTs !== null ? firstTs : fetchedTs
                               const date = ts !== null ? new Date(ts).toISOString().slice(0, 10) : ""
@@ -5208,8 +5280,8 @@ export default function ResultsClient() {
                                 <div>Data collection started:</div>
                                 <div className="mt-1 text-white/60 tabular-nums">
                                   {(() => {
-                                    const first = dataForChart[0] as any
-                                    const firstTs = typeof first?.ts === "number" && Number.isFinite(first.ts) ? (first.ts as number) : null
+                                    const first = dataForChart[0]
+                                    const firstTs = isRecord(first) && typeof first.ts === "number" && Number.isFinite(first.ts) ? (first.ts as number) : null
                                     const ms = firstTs
                                     const d = ms !== null ? new Date(ms) : new Date()
                                     const ymd = (() => {
@@ -5517,11 +5589,11 @@ export default function ResultsClient() {
                                             key={`trend-xlab-${i}`}
                                             x={x}
                                             y={h - 4}
-                                            textAnchor={anchorFor(i) as any}
+                                            textAnchor={anchorFor(i)}
                                             fill="rgba(255,255,255,0.34)"
                                             fontSize={10}
                                             fontWeight={500}
-                                            style={{ fontVariantNumeric: "tabular-nums" as any }}
+                                            style={{ fontVariantNumeric: "tabular-nums" }}
                                           >
                                             {label}
                                           </text>
@@ -5635,14 +5707,15 @@ export default function ResultsClient() {
                     const placeholders = Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` }))
                     const mockPosts = mockAnalysis.topPosts
                     const renderCards = hasRealMedia
-                      ? (topPerformingPosts.length > 0 ? topPerformingPosts : (effectiveRecentMedia as any[]).slice(0, 3))
+                      ? (topPerformingPosts.length > 0 ? topPerformingPosts : effectiveRecentMedia.slice(0, 3))
                       : (isConnected ? placeholders : mockPosts.slice(0, 3))
 
-                    const shown = !isSmUpViewport ? (renderCards as any[]).slice(0, 3) : (renderCards as any[])
-                    return shown.map((p: any, index: number) => (
-                      <div key={String(p?.id ?? index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
+                    const shown = !isSmUpViewport ? renderCards.slice(0, 3) : renderCards
+                    return shown.map((p: unknown, index: number) => (
+                      <div key={String(isRecord(p) && typeof p.id === "string" ? p.id : index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
                         {(() => {
-                          const real = p as any
+                          if (!isRecord(p)) return null
+                          const real = p
 
                           const likeCountRaw =
                             typeof real?.like_count === "number"
@@ -5700,9 +5773,9 @@ export default function ResultsClient() {
                             : "")
 
                         const previewUrl = (() => {
-                          const mt = String((real as any)?.media_type ?? (real as any)?.mediaType ?? "")
-                          const tu = typeof (real as any)?.thumbnail_url === "string" ? String((real as any).thumbnail_url) : ""
-                          const mu = typeof (real as any)?.media_url === "string" ? String((real as any).media_url) : ""
+                          const mt = String(real.media_type ?? real.mediaType ?? "")
+                          const tu = typeof real.thumbnail_url === "string" ? String(real.thumbnail_url) : ""
+                          const mu = typeof real.media_url === "string" ? String(real.media_url) : ""
                           const isVideoType = mt === "VIDEO" || mt === "REELS"
                           const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
                           const pick = isVideoType ? (tu || mu) : (mu || tu)
