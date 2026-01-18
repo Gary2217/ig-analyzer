@@ -401,6 +401,8 @@ export default function CreatorCardPage() {
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
 
+  const [pastCollabInput, setPastCollabInput] = useState("")
+
   const [otherNicheEnabled, setOtherNicheEnabled] = useState(false)
   const [otherNicheInput, setOtherNicheInput] = useState("")
 
@@ -409,7 +411,6 @@ export default function CreatorCardPage() {
   const [themeTypeInput, setThemeTypeInput] = useState("")
   const [audienceProfileInput, setAudienceProfileInput] = useState("")
 
-  const [brandInput, setBrandInput] = useState("")
   const brandInputRef = useRef<HTMLInputElement | null>(null)
 
   const [highlight, setHighlight] = useState<"formats" | "niches" | "brands" | null>(null)
@@ -439,16 +440,6 @@ export default function CreatorCardPage() {
       }
     }
   }, [])
-
-  const addBrandTag = useCallback(
-    (raw: string) => {
-      const next = normalizeStringArray([raw], 1)
-      if (next.length === 0) return
-      setPastCollaborations((prev) => normalizeStringArray([...prev, next[0]], 20))
-      flashHighlight("brands")
-    },
-    [flashHighlight, setPastCollaborations]
-  )
 
   const addThemeTypeTag = useCallback(
     (raw: string) => {
@@ -764,15 +755,19 @@ export default function CreatorCardPage() {
   const addOtherFormat = useCallback(() => {
     const trimmed = otherFormatInput.trim()
     if (!trimmed) return
-    setPastCollaborations((prev) => {
-      const lower = trimmed.toLowerCase()
-      const hasDup = prev.some((x) => x.toLowerCase() === lower)
-      if (hasDup) return prev
-      return [...prev, trimmed]
-    })
+    setDeliverables((prev) => normalizeStringArray([...prev, trimmed], 50))
     setOtherFormatInput("")
     flashHighlight("formats")
-  }, [flashHighlight, otherFormatInput])
+    markDirty()
+  }, [flashHighlight, markDirty, otherFormatInput, setDeliverables])
+
+  const addPastCollab = useCallback(() => {
+    const next = normalizeStringArray([pastCollabInput], 1)
+    if (next.length === 0) return
+    setPastCollaborations((prev) => normalizeStringArray([...prev, next[0]], 20))
+    setPastCollabInput("")
+    markDirty()
+  }, [markDirty, pastCollabInput, setPastCollaborations])
 
   const addOtherNiche = useCallback(() => {
     const trimmed = otherNicheInput.trim()
@@ -1573,7 +1568,7 @@ export default function CreatorCardPage() {
                         })}
 
                         {(() => {
-                          const customs = pastCollaborations.filter((x) => !knownCollabTypeIds.has(x))
+                          const customs = deliverables.filter((x) => !knownCollabTypeIds.has(x))
                           if (customs.length === 0) return null
                           return customs.map((tag) => (
                             <Button
@@ -1582,8 +1577,9 @@ export default function CreatorCardPage() {
                               variant="pill"
                               active
                               onClick={() => {
-                                setPastCollaborations((prev) => prev.filter((x) => x !== tag))
+                                setDeliverables((prev) => prev.filter((x) => x !== tag))
                                 flashHighlight("formats")
+                                markDirty()
                               }}
                             >
                               {tag}
@@ -1755,19 +1751,22 @@ export default function CreatorCardPage() {
                             ref={(node) => {
                               brandInputRef.current = node
                             }}
-                            value={brandInput}
+                            value={pastCollabInput}
                             placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
-                            onChange={(e) => setBrandInput(e.target.value)}
+                            onChange={(e) => {
+                              setPastCollabInput(e.target.value)
+                              markDirty()
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault()
-                                addBrandTag(brandInput)
-                                setBrandInput("")
+                                addPastCollab()
                                 return
                               }
-                              if (e.key === "Backspace" && !brandInput.trim()) {
+                              if (e.key === "Backspace" && !pastCollabInput.trim()) {
                                 setPastCollaborations((prev) => prev.slice(0, Math.max(0, prev.length - 1)))
                                 flashHighlight("brands")
+                                markDirty()
                               }
                             }}
                           />
@@ -1777,10 +1776,9 @@ export default function CreatorCardPage() {
                             size="sm"
                             className="shrink-0"
                             onClick={() => {
-                              addBrandTag(brandInput)
-                              setBrandInput("")
+                              addPastCollab()
                             }}
-                            disabled={!brandInput.trim()}
+                            disabled={!pastCollabInput.trim()}
                           >
                             {t("creatorCardEditor.formats.otherAdd")}
                           </Button>
