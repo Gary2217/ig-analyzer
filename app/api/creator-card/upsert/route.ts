@@ -153,7 +153,6 @@ export async function POST(req: Request) {
       ig_user_id: igUserId,
       ig_username: igUsername,
       handle,
-      display_name: String(body?.displayName ?? "").trim() || null,
       niche: String(body?.niche ?? "").trim() || null,
       portfolio: Array.isArray(body?.portfolio) ? body.portfolio : [],
       is_public: Boolean(body?.isPublic),
