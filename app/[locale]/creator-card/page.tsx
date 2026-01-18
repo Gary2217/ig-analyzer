@@ -1179,7 +1179,14 @@ export default function CreatorCardPage() {
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">Email</div>
                         <div className="mt-2">
-                          <Input value={contactEmail} placeholder="例如：hello@email.com" onChange={(e) => setContactEmail(e.target.value)} />
+                          <Input
+                            value={contactEmail}
+                            placeholder="例如：hello@email.com"
+                            onChange={(e) => {
+                              setContactEmail(e.target.value)
+                              markDirty()
+                            }}
+                          />
                         </div>
                       </div>
 
@@ -1189,7 +1196,10 @@ export default function CreatorCardPage() {
                           <Input
                             value={contactInstagram}
                             placeholder="@username or https://instagram.com/..."
-                            onChange={(e) => setContactInstagram(e.target.value)}
+                            onChange={(e) => {
+                              setContactInstagram(e.target.value)
+                              markDirty()
+                            }}
                           />
                         </div>
                       </div>
@@ -1200,16 +1210,13 @@ export default function CreatorCardPage() {
                           <textarea
                             value={contactOther}
                             placeholder="例如：LINE / WhatsApp / 經紀窗口"
-                            onChange={(e) => setContactOther(e.target.value)}
+                            onChange={(e) => {
+                              setContactOther(e.target.value)
+                              markDirty()
+                            }}
                             className="w-full min-h-[72px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                           />
                         </div>
-                      </div>
-
-                      <div className="flex justify-end">
-                        <Button type="button" variant="primary" size="sm" className="shrink-0" onClick={handleSave}>
-                          {t("creatorCardEditor.formats.otherAdd")}
-                        </Button>
                       </div>
                     </>
                   ),
