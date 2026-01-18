@@ -1691,6 +1691,7 @@ export default function CreatorCardPage() {
                 }}
               />
               <div className="relative z-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                <div className="mb-2 text-sm font-semibold text-slate-900">合作形式</div>
                 <div className="mt-3">
                   <Input
                     value={editingFeaturedBrand}
@@ -1711,7 +1712,7 @@ export default function CreatorCardPage() {
                     }}
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                   >
-                    <option value="">請選擇</option>
+                    <option value="">合作形式</option>
                     {COLLAB_TYPE_OPTIONS.map((id) => {
                       const label = t(collabTypeLabelKey(id))
                       return (
