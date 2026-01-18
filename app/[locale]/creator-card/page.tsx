@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { Pencil, Plus, X } from "lucide-react"
+import { createPortal } from "react-dom"
 
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core"
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable"
@@ -342,6 +343,11 @@ export default function CreatorCardPage() {
   const [editingFeaturedBrand, setEditingFeaturedBrand] = useState("")
   const [editingFeaturedCollabTypeSelect, setEditingFeaturedCollabTypeSelect] = useState("")
   const [editingFeaturedCollabTypeCustom, setEditingFeaturedCollabTypeCustom] = useState("")
+
+  const [__overlayMounted, set__overlayMounted] = useState(false)
+  useEffect(() => {
+    set__overlayMounted(true)
+  }, [])
 
   const openAddFeatured = useCallback(() => {
     featuredAddInputRef.current?.click()
@@ -1674,6 +1680,93 @@ export default function CreatorCardPage() {
           </div>
         </div>
       )}
+
+      {__overlayMounted && editingFeaturedId
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={() => {
+                  setEditingFeaturedId(null)
+                }}
+              />
+              <div className="relative z-10 w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                <div className="mt-3">
+                  <Input
+                    value={editingFeaturedBrand}
+                    placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
+                    onChange={(e) => setEditingFeaturedBrand(e.target.value)}
+                  />
+                </div>
+
+                <div className="mt-3">
+                  <select
+                    value={editingFeaturedCollabTypeSelect}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setEditingFeaturedCollabTypeSelect(next)
+                      if (next !== COLLAB_TYPE_OTHER_VALUE) {
+                        setEditingFeaturedCollabTypeCustom("")
+                      }
+                    }}
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                  >
+                    <option value="">請選擇</option>
+                    {COLLAB_TYPE_OPTIONS.map((id) => {
+                      const label = t(collabTypeLabelKey(id))
+                      return (
+                        <option key={id} value={label}>
+                          {label}
+                        </option>
+                      )
+                    })}
+                    <option value={COLLAB_TYPE_OTHER_VALUE}>{t("creatorCardEditor.formats.options.other")}</option>
+                  </select>
+                </div>
+
+                {editingFeaturedCollabTypeSelect === COLLAB_TYPE_OTHER_VALUE ? (
+                  <div className="mt-2">
+                    <Input value={editingFeaturedCollabTypeCustom} onChange={(e) => setEditingFeaturedCollabTypeCustom(e.target.value)} />
+                  </div>
+                ) : null}
+
+                <div className="mt-5 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingFeaturedId(null)
+                    }}
+                  >
+                    {t("creatorCardEditor.actions.back")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      const id = editingFeaturedId
+                      if (!id) return
+                      const nextCollabType =
+                        editingFeaturedCollabTypeSelect === COLLAB_TYPE_OTHER_VALUE
+                          ? editingFeaturedCollabTypeCustom.trim()
+                          : editingFeaturedCollabTypeSelect
+                      setFeaturedItems((prev) =>
+                        prev.map((x) => (x.id === id ? { ...x, brand: editingFeaturedBrand, collabType: nextCollabType } : x))
+                      )
+                      markDirty()
+                      setEditingFeaturedId(null)
+                    }}
+                  >
+                    {t("creatorCardEditor.actions.save")}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </main>
   )
 }
