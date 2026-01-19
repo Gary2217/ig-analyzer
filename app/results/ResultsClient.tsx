@@ -2574,6 +2574,33 @@ export default function ResultsClient() {
       }
     }
 
+    const contactObj = isRecord(out.contact) ? out.contact : {}
+    const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
+    const readStrArr = (v: unknown) =>
+      Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
+
+    const email1 = readStr(contactObj.email) || readStr(contactObj.contactEmail)
+    const ig1 = readStr(contactObj.instagram) || readStr(contactObj.contactInstagram)
+    const other1 = readStr(contactObj.other) || readStr(contactObj.contactOther)
+
+    const emails = readStrArr(contactObj.emails)
+    const instagrams = readStrArr(contactObj.instagrams)
+    const others = readStrArr(contactObj.others)
+
+    const finalEmails = emails.length ? emails : email1 ? [email1] : ([] as string[])
+    const finalInstagrams = instagrams.length ? instagrams : ig1 ? [ig1] : ([] as string[])
+    const finalOthers = others.length ? others : other1 ? [other1] : ([] as string[])
+
+    out.emails = finalEmails
+    out.instagrams = finalInstagrams
+    out.others = finalOthers
+
+    out.contactEmail = finalEmails[0] ?? ""
+    out.contactInstagram = finalInstagrams[0] ?? ""
+    out.contactOther = finalOthers[0] ?? ""
+
+    out.contact = contactObj
+
     return out
   }, [])
 
