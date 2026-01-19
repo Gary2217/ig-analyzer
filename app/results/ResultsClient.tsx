@@ -3939,7 +3939,7 @@ export default function ResultsClient() {
           ? String(creatorCard.niche).trim()
           : null
       }
-      contact={isRecord(creatorCard) && typeof creatorCard.contact === "string" ? creatorCard.contact : null}
+      contact={isRecord(creatorCard) ? (creatorCard.contact ?? null) : null}
       collaborationNiches={(() => {
         if (!isRecord(creatorCard)) return null
         const val = creatorCard.collaborationNiches ?? creatorCard.collaboration_niches
