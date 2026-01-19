@@ -160,10 +160,17 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     const finalInstagrams = instagrams.length ? instagrams : ig1 ? [ig1] : ([] as string[])
     const finalOthers = others.length ? others : other1 ? [other1] : ([] as string[])
 
+    const emailText = finalEmails.join(", ")
+    const instagramText = finalInstagrams.join(", ")
+    const otherText = finalOthers.join(", ")
+
     return {
-      email: finalEmails[0] ?? "",
-      instagram: finalInstagrams[0] ?? "",
-      other: finalOthers[0] ?? "",
+      email: emailText,
+      instagram: instagramText,
+      other: otherText,
+      emails: finalEmails,
+      instagrams: finalInstagrams,
+      others: finalOthers,
     }
   }, [contact])
 
