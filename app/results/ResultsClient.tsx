@@ -2541,6 +2541,32 @@ export default function ResultsClient() {
   const creatorCardFetchedRef = useRef(false)
   const creatorStatsUpsertKeyRef = useRef<string>("")
 
+  const reloadCreatorCard = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/creator-card/me?ts=${Date.now()}`, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      })
+
+      const json: unknown = await res.json().catch(() => null)
+      if (!res.ok || !isRecord(json) || !json.ok) {
+        const shouldClear =
+          res.status === 403 ||
+          (isRecord(json) && typeof json.error === "string" && json.error === "not_connected")
+        if (shouldClear) setCreatorCard(null)
+        return
+      }
+
+      const nextCreatorId =
+        isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
+      setCreatorIdFromCardMe(nextCreatorId || null)
+      setCreatorCard(isRecord(json) && json.card ? json.card : null)
+    } catch {
+      return
+    }
+  }, [])
+
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
       if (!isRecord(dailySnapshotData)) return ""
@@ -2686,35 +2712,29 @@ export default function ResultsClient() {
     if (creatorCardFetchedRef.current && creatorCardReload === 0) return
     creatorCardFetchedRef.current = true
 
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch("/api/creator-card/me", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        })
-        const json = (await res.json().catch(() => null)) as CreatorCardMeResponse | null
-        if (cancelled) return
-        if (!res.ok || !json?.ok) {
-          setCreatorCard(null)
-          return
-        }
-        const nextCreatorId =
-          isRecord(json) && isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
-        setCreatorIdFromCardMe(nextCreatorId || null)
-        setCreatorCard(isRecord(json) && json.card ? json.card : null)
-      } catch (e) {
-        if (cancelled) return
-        if (isAbortError(e)) return
-        setCreatorCard(null)
-      }
-    })()
+    void reloadCreatorCard()
+  }, [creatorCardReload, isConnectedInstagram, reloadCreatorCard])
 
-    return () => {
-      cancelled = true
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const onFocus = () => {
+      void reloadCreatorCard()
     }
-  }, [creatorCardReload, isConnectedInstagram])
+
+    const onVis = () => {
+      if (!document.hidden) {
+        void reloadCreatorCard()
+      }
+    }
+
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVis)
+    return () => {
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVis)
+    }
+  }, [reloadCreatorCard])
 
   useEffect(() => {
     if (!isConnectedInstagram || !resolvedCreatorId) {
