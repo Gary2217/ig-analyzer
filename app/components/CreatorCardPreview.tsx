@@ -391,9 +391,10 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       </CardHeader>
 
       <CardContent className="p-4 lg:p-6">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
-          <div className="flex flex-col gap-4 min-w-0">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0 items-stretch">
+        <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
+            <div className="flex flex-col gap-4 min-w-0">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0 items-stretch">
               <div className={leftSpanClassName + " min-w-0 h-full flex"}>
                 <div className={"mx-auto w-full " + photoMaxWidthClassName + " h-full flex flex-col"}>
                   <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
@@ -507,9 +508,9 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
 
-            {showStatsRow ? (
+              {showStatsRow ? (
               <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
                 <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
                   <div className="flex-1 min-w-0">
@@ -536,7 +537,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               </div>
             ) : null}
 
-            {showKpiGrid ? (
+              {showKpiGrid ? (
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.kpis.title")}</div>
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
@@ -577,7 +578,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               </div>
             ) : null}
 
-            <div className="min-w-0">
+              <div className="min-w-0">
               <div className="flex items-end justify-between gap-3 min-w-0">
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold tracking-wide text-white/70">作品集展示</div>
@@ -664,7 +665,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-w-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 min-w-0">
               <div
                 className={
                   "rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0 transition-colors " +
@@ -716,6 +717,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   </div>
                 </div>
               ) : null}
+              </div>
             </div>
           </div>
         </div>
