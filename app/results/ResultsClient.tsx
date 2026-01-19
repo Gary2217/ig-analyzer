@@ -2621,6 +2621,10 @@ export default function ResultsClient() {
       })
 
       const json: unknown = await res.json().catch(() => null)
+      console.log("[creator-card/me] raw json:", json)
+      const rawCard = isRecord(json) && isRecord(json.card) ? json.card : null
+      const rawContact = rawCard ? rawCard.contact : undefined
+      console.log("[creator-card/me] raw json.card.contact:", rawContact)
       if (!res.ok || !isRecord(json) || !json.ok) {
         const shouldClear =
           res.status === 403 ||
@@ -2633,6 +2637,9 @@ export default function ResultsClient() {
         isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
       setCreatorIdFromCardMe(nextCreatorId || null)
       const normalized = normalizeCreatorCardForResults(isRecord(json) ? json.card : null)
+      console.log("[creator-card/me] normalized.contact:", normalized?.contact)
+      console.log("[creator-card/me] normalized.contactEmail:", normalized?.contactEmail)
+      console.log("[creator-card/me] normalized.emails:", normalized?.emails)
       setCreatorCard(normalized)
     } catch {
       return
