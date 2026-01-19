@@ -2544,6 +2544,8 @@ export default function ResultsClient() {
   const [creatorCardReload, setCreatorCardReload] = useState(0)
   const creatorCardFetchedRef = useRef(false)
   const creatorStatsUpsertKeyRef = useRef<string>("")
+  const reloadCardInFlightRef = useRef(false)
+  const reloadCardLastAtRef = useRef(0)
 
   const normalizeCreatorCardForResults = useCallback((row: unknown): Record<string, unknown> | null => {
     if (!isRecord(row)) return null
@@ -2635,14 +2637,33 @@ export default function ResultsClient() {
     }
   }, [normalizeCreatorCardForResults])
 
+  const safeReloadCreatorCard = useCallback(() => {
+    const now = Date.now()
+
+    // throttle: 800ms 內不重複觸發（避免 focus + visibilitychange 連發）
+    if (now - reloadCardLastAtRef.current < 800) return
+
+    // in-flight: 上一個請求尚未結束就不再發第二個（避免 request 被 canceled）
+    if (reloadCardInFlightRef.current) return
+
+    reloadCardLastAtRef.current = now
+    reloadCardInFlightRef.current = true
+
+    Promise.resolve(reloadCreatorCard())
+      .catch(() => {})
+      .finally(() => {
+        reloadCardInFlightRef.current = false
+      })
+  }, [reloadCreatorCard])
+
   useEffect(() => {
     const onFocus = () => {
-      void reloadCreatorCard()
+      void safeReloadCreatorCard()
     }
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        void reloadCreatorCard()
+        void safeReloadCreatorCard()
       }
     }
 
@@ -2653,7 +2674,7 @@ export default function ResultsClient() {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [reloadCreatorCard])
+  }, [safeReloadCreatorCard])
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
