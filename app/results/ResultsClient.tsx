@@ -2632,7 +2632,15 @@ export default function ResultsClient() {
       const nextCreatorId =
         isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
       setCreatorIdFromCardMe(nextCreatorId || null)
-      const normalized = normalizeCreatorCardForResults(isRecord(json) ? json.card : null)
+
+      const rawCard =
+        (isRecord(json) && isRecord(json.card) ? json.card : null) ??
+        (isRecord(json) && isRecord(json.creator_profile) ? json.creator_profile : null) ??
+        (isRecord(json) && isRecord(json.creatorProfile) ? json.creatorProfile : null) ??
+        (isRecord(json) && isRecord(json.profile) ? json.profile : null) ??
+        (isRecord(json) && isRecord(json.data) && isRecord(json.data.card) ? json.data.card : null)
+
+      const normalized = normalizeCreatorCardForResults(rawCard)
       setCreatorCard(normalized)
     } catch {
       return
