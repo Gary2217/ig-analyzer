@@ -2599,6 +2599,14 @@ export default function ResultsClient() {
     out.contactInstagram = finalInstagrams[0] ?? ""
     out.contactOther = finalOthers[0] ?? ""
 
+    contactObj.email = finalEmails[0] ?? ""
+    contactObj.instagram = finalInstagrams[0] ?? ""
+    contactObj.other = finalOthers[0] ?? ""
+
+    contactObj.emails = finalEmails
+    contactObj.instagrams = finalInstagrams
+    contactObj.others = finalOthers
+
     out.contact = contactObj
 
     return out
