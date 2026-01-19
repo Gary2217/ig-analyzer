@@ -78,6 +78,7 @@ type CreatorCardPortfolioItem = {
 type CreatorCardUpsertPayload = {
   handle?: string
   displayName?: string
+  profileImageUrl?: string
   niche?: string
   audience?: string
   themeTypes?: string[]
@@ -93,6 +94,7 @@ type CreatorCardUpsertPayload = {
 type CreatorCardPayload = {
   handle?: string | null
   displayName?: string | null
+  profileImageUrl?: string | null
   niche?: string | null
   audience?: string | null
   themeTypes?: string[] | null
@@ -340,6 +342,8 @@ export default function CreatorCardPage() {
   const [contactInstagramInput, setContactInstagramInput] = useState("")
   const [contactOtherInput, setContactOtherInput] = useState("")
 
+  const [profileImageDraft, setProfileImageDraft] = useState<string | null>(null)
+
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
   const featuredAddInputRef = useRef<HTMLInputElement | null>(null)
@@ -562,6 +566,10 @@ export default function CreatorCardPage() {
           ? {
               handle: readString(card?.handle) ?? null,
               displayName: readString(card?.display_name) ?? null,
+              profileImageUrl:
+                readString(card?.profileImageUrl) ??
+                readString(card?.profile_image_url) ??
+                null,
               niche: readString(card?.niche) ?? null,
               audience: readString(card?.audience) ?? null,
               themeTypes: Array.isArray(card?.themeTypes)
@@ -887,9 +895,18 @@ export default function CreatorCardPage() {
     setSaveError(null)
     setSaveOk(false)
     try {
+      const nextProfileImageUrl = (() => {
+        const raw1 = typeof profileImageDraft === "string" ? profileImageDraft : ""
+        const raw2 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
+        const raw3 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+        const s = (raw1 || raw2 || raw3).trim()
+        return s ? s : undefined
+      })()
+
       const payload: CreatorCardUpsertPayload = {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
+        profileImageUrl: nextProfileImageUrl,
         niche: baseCard?.niche ?? undefined,
         audience: baseCard?.audience ?? undefined,
         themeTypes: normalizeStringArray(themeTypes, 20),
@@ -1919,9 +1936,16 @@ export default function CreatorCardPage() {
                 headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
                 useWidePhotoLayout
                 photoUploadEnabled
+                onProfileImageChange={(dataUrl) => {
+                  setProfileImageDraft(typeof dataUrl === "string" && dataUrl.trim() ? dataUrl.trim() : null)
+                  markDirty()
+                }}
                 username={displayUsername || null}
                 profileImageUrl={(() => {
-                  const u = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                  const u0 = typeof profileImageDraft === "string" ? profileImageDraft : ""
+                  const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
+                  const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                  const u = (u0 || u1 || u2).trim()
                   return u ? u : null
                 })()}
                 displayName={displayName}

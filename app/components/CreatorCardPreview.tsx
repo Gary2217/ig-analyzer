@@ -26,6 +26,8 @@ export type CreatorCardPreviewProps = {
   useWidePhotoLayout?: boolean
   photoUploadEnabled?: boolean
 
+  onProfileImageChange?: (dataUrl: string | null) => void
+
   profileImageUrl?: string | null
   displayName?: string | null
   username?: string | null
@@ -84,6 +86,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     actions,
     useWidePhotoLayout,
     photoUploadEnabled,
+    onProfileImageChange,
     profileImageUrl,
     displayName,
     username,
@@ -419,12 +422,30 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0] ?? null
-                          if (!file) return
+                          if (!file) {
+                            if (typeof onProfileImageChange === "function") {
+                              onProfileImageChange(null)
+                            }
+                            return
+                          }
                           const nextUrl = URL.createObjectURL(file)
                           setPhotoOverrideUrl((prev) => {
                             if (prev) URL.revokeObjectURL(prev)
                             return nextUrl
                           })
+
+                          if (typeof onProfileImageChange === "function") {
+                            const reader = new FileReader()
+                            reader.onload = () => {
+                              const raw = typeof reader.result === "string" ? reader.result : ""
+                              const s = raw.trim()
+                              onProfileImageChange(s ? s : null)
+                            }
+                            reader.onerror = () => {
+                              onProfileImageChange(null)
+                            }
+                            reader.readAsDataURL(file)
+                          }
                         }}
                       />
                       <button
