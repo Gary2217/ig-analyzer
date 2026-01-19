@@ -2,54 +2,14 @@ import { NextResponse, type NextRequest } from "next/server"
 import { cookies, headers } from "next/headers"
 import { supabaseServer } from "@/lib/supabase/server"
 
+export const runtime = "nodejs"
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null
   return value as Record<string, unknown>
 }
 
-function debugLogCreatorCardShape(card: unknown) {
-  if (process.env.DEBUG_CREATOR_CARD !== "1") return
-  const c = asRecord(card)
-  if (!c) {
-    console.log("[creator-card/me][debug] card is not an object")
-    return
-  }
-
-  const keys = Object.keys(c).sort()
-  const contactVal = c.contact
-  const contactType = contactVal === null ? "null" : Array.isArray(contactVal) ? "array" : typeof contactVal
-  const contactLen = typeof contactVal === "string" ? contactVal.length : null
-
-  const readStrArrLen = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).length : 0)
-  const readStrLen = (v: unknown) => (typeof v === "string" ? v.trim().length : 0)
-
-  const nestedContactObj = asRecord(contactVal)
-  const nestedEmailsLen = nestedContactObj ? readStrArrLen(nestedContactObj.emails) : null
-  const nestedInstagramsLen = nestedContactObj ? readStrArrLen(nestedContactObj.instagrams) : null
-  const nestedOthersLen = nestedContactObj ? readStrArrLen(nestedContactObj.others) : null
-  const nestedEmailKeyType = nestedContactObj ? (Array.isArray(nestedContactObj.email) ? "array" : typeof nestedContactObj.email) : null
-  const nestedInstagramKeyType = nestedContactObj ? (Array.isArray(nestedContactObj.instagram) ? "array" : typeof nestedContactObj.instagram) : null
-  const nestedOtherKeyType = nestedContactObj ? (Array.isArray(nestedContactObj.other) ? "array" : typeof nestedContactObj.other) : null
-
-  console.log("[creator-card/me][debug] card keys:", keys)
-  console.log("[creator-card/me][debug] contact:", { type: contactType, stringLen: contactLen })
-  console.log("[creator-card/me][debug] top-level contact fields:", {
-    emailsLen: readStrArrLen(c.emails),
-    instagramsLen: readStrArrLen(c.instagrams),
-    othersLen: readStrArrLen(c.others),
-    contactEmailLen: readStrLen(c.contactEmail),
-    contactInstagramLen: readStrLen(c.contactInstagram),
-    contactOtherLen: readStrLen(c.contactOther),
-  })
-  console.log("[creator-card/me][debug] nested contact fields:", {
-    emailsLen: nestedEmailsLen,
-    instagramsLen: nestedInstagramsLen,
-    othersLen: nestedOthersLen,
-    emailType: nestedEmailKeyType,
-    instagramType: nestedInstagramKeyType,
-    otherType: nestedOtherKeyType,
-  })
-}
+const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" }
 
 function getIsHttps(req: NextRequest, h: Headers) {
   const xfProto = h.get("x-forwarded-proto")?.toLowerCase()
@@ -116,7 +76,7 @@ export async function GET(req: NextRequest) {
     const { igUserId, igUsername } = await resolveIgIdentity(req)
 
     if (!igUserId) {
-      return NextResponse.json({ ok: false, error: "not_connected" }, { status: 401 })
+      return NextResponse.json({ ok: false, error: "not_connected" }, { status: 401, headers: JSON_HEADERS })
     }
 
     const { data, error } = await supabaseServer
@@ -129,9 +89,9 @@ export async function GET(req: NextRequest) {
     if (error) {
       const errObj = asRecord(error as unknown)
       if (typeof errObj?.message === "string" && errObj.message.includes("Invalid API key")) {
-        return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+        return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500, headers: JSON_HEADERS })
       }
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500, headers: JSON_HEADERS })
     }
 
     const row = asRecord(data as unknown)
@@ -146,15 +106,13 @@ export async function GET(req: NextRequest) {
           }
         : null
 
-    debugLogCreatorCardShape(card)
-
-    return NextResponse.json({ ok: true, me: { igUserId, igUsername }, card })
+    return NextResponse.json({ ok: true, me: { igUserId, igUsername }, card }, { headers: JSON_HEADERS })
   } catch (e: unknown) {
     const errObj = asRecord(e)
     const msg = typeof errObj?.message === "string" ? errObj.message : "unknown"
     if (msg.includes("Invalid API key")) {
-      return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+      return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500, headers: JSON_HEADERS })
     }
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+    return NextResponse.json({ ok: false, error: msg }, { status: 500, headers: JSON_HEADERS })
   }
 }
