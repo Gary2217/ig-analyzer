@@ -134,6 +134,12 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
     const readStrArr = (v: unknown) =>
       Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
+    const readStrOrArr = (v: unknown) => {
+      const arr = readStrArr(v)
+      if (arr.length > 0) return arr
+      const s = readStr(v)
+      return s ? [s] : ([] as string[])
+    }
 
     let obj: unknown = contact
     if (typeof obj === "string") {
@@ -148,17 +154,27 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
     const contactObj: Record<string, unknown> = isPlainRecord(obj) ? obj : {}
 
-    const email1 = readStr(contactObj.email) || readStr(contactObj.contactEmail)
-    const ig1 = readStr(contactObj.instagram) || readStr(contactObj.contactInstagram)
-    const other1 = readStr(contactObj.other) || readStr(contactObj.contactOther)
-
     const emails = readStrArr(contactObj.emails)
     const instagrams = readStrArr(contactObj.instagrams)
     const others = readStrArr(contactObj.others)
 
-    const finalEmails = emails.length ? emails : email1 ? [email1] : ([] as string[])
-    const finalInstagrams = instagrams.length ? instagrams : ig1 ? [ig1] : ([] as string[])
-    const finalOthers = others.length ? others : other1 ? [other1] : ([] as string[])
+    const emailArrFromEmailKey = readStrOrArr(contactObj.email)
+    const instagramArrFromInstagramKey = readStrOrArr(contactObj.instagram)
+    const otherArrFromOtherKey = readStrOrArr(contactObj.other)
+
+    const emailArrFromLegacyKey = readStrOrArr(contactObj.contactEmail)
+    const instagramArrFromLegacyKey = readStrOrArr(contactObj.contactInstagram)
+    const otherArrFromLegacyKey = readStrOrArr(contactObj.contactOther)
+
+    const finalEmails =
+      emails.length ? emails : emailArrFromEmailKey.length ? emailArrFromEmailKey : emailArrFromLegacyKey
+    const finalInstagrams =
+      instagrams.length
+        ? instagrams
+        : instagramArrFromInstagramKey.length
+          ? instagramArrFromInstagramKey
+          : instagramArrFromLegacyKey
+    const finalOthers = others.length ? others : otherArrFromOtherKey.length ? otherArrFromOtherKey : otherArrFromLegacyKey
 
     const emailText = finalEmails.join(", ")
     const instagramText = finalInstagrams.join(", ")
