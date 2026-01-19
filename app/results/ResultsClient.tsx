@@ -2541,6 +2541,42 @@ export default function ResultsClient() {
   const creatorCardFetchedRef = useRef(false)
   const creatorStatsUpsertKeyRef = useRef<string>("")
 
+  const normalizeCreatorCardFromDb = useCallback((row: unknown): Record<string, unknown> | null => {
+    if (!isRecord(row)) return null
+    const out: Record<string, unknown> = { ...row }
+
+    const isPublicRaw = out.isPublic ?? out.is_public ?? false
+    out.isPublic = typeof isPublicRaw === "boolean" ? isPublicRaw : Boolean(isPublicRaw)
+
+    const themeTypesRaw = out.themeTypes ?? out.theme_types ?? []
+    out.themeTypes = Array.isArray(themeTypesRaw) ? themeTypesRaw : []
+
+    const audienceProfilesRaw = out.audienceProfiles ?? out.audience_profiles ?? []
+    out.audienceProfiles = Array.isArray(audienceProfilesRaw) ? audienceProfilesRaw : []
+
+    const collabNichesRaw = out.collaborationNiches ?? out.collaboration_niches ?? []
+    out.collaborationNiches = Array.isArray(collabNichesRaw) ? collabNichesRaw : []
+
+    const pastCollabsRaw = out.pastCollaborations ?? out.past_collaborations ?? []
+    out.pastCollaborations = Array.isArray(pastCollabsRaw) ? pastCollabsRaw : []
+
+    out.portfolio = Array.isArray(out.portfolio) ? out.portfolio : []
+
+    if (typeof out.contact === "string") {
+      const contactStr = out.contact
+      try {
+        const parsed: unknown = JSON.parse(contactStr)
+        if (isRecord(parsed)) {
+          out.contact = parsed
+        }
+      } catch {
+        // keep raw string
+      }
+    }
+
+    return out
+  }, [])
+
   const reloadCreatorCard = useCallback(async () => {
     try {
       const res = await fetch(`/api/creator-card/me?ts=${Date.now()}`, {
@@ -2561,11 +2597,12 @@ export default function ResultsClient() {
       const nextCreatorId =
         isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
       setCreatorIdFromCardMe(nextCreatorId || null)
-      setCreatorCard(isRecord(json) && json.card ? json.card : null)
+      const normalized = normalizeCreatorCardFromDb(isRecord(json) ? json.card : null)
+      setCreatorCard(normalized)
     } catch {
       return
     }
-  }, [])
+  }, [normalizeCreatorCardFromDb])
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
