@@ -2618,38 +2618,42 @@ export default function ResultsClient() {
 
   const reloadCreatorCard = useCallback(async () => {
     try {
-      const res = await fetch(`/api/creator-card/me?ts=${Date.now()}`, {
+      const res = await fetch(`/api/creator-card/me?t=${Date.now()}`, {
         method: "GET",
         cache: "no-store",
-        credentials: "include",
+        headers: {
+          "cache-control": "no-cache",
+          pragma: "no-cache",
+        },
       })
 
-      const json: unknown = await res.json().catch(() => null)
-      if (!res.ok || !isRecord(json) || !json.ok) {
-        const shouldClear =
-          res.status === 403 ||
-          (isRecord(json) && typeof json.error === "string" && json.error === "not_connected")
-        if (shouldClear) setCreatorCard(null)
-        return
-      }
-
-      const nextCreatorId =
-        isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
-      setCreatorIdFromCardMe(nextCreatorId || null)
-
-      const rawCard =
-        (isRecord(json) && isRecord(json.card) ? json.card : null) ??
-        (isRecord(json) && isRecord(json.creator_profile) ? json.creator_profile : null) ??
-        (isRecord(json) && isRecord(json.creatorProfile) ? json.creatorProfile : null) ??
-        (isRecord(json) && isRecord(json.profile) ? json.profile : null) ??
-        (isRecord(json) && isRecord(json.data) && isRecord(json.data.card) ? json.data.card : null)
-
-      const normalized = normalizeCreatorCardForResults(rawCard)
-      setCreatorCard(normalized)
+      if (!res.ok) throw new Error("failed to load creator card")
+      const json = await res.json()
+      setCreatorCard(normalizeCreatorCardForResults(json.card))
     } catch {
       return
     }
   }, [normalizeCreatorCardForResults])
+
+  useEffect(() => {
+    const onFocus = () => {
+      void reloadCreatorCard()
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void reloadCreatorCard()
+      }
+    }
+
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+
+    return () => {
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [reloadCreatorCard])
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
@@ -3931,13 +3935,15 @@ export default function ResultsClient() {
         )
       })()}
       profileImageUrl={(() => {
-        const u =
-          isRecord(igProfile) && typeof igProfile.profile_picture_url === "string"
-            ? String(igProfile.profile_picture_url)
-            : isRecord(igMe) && typeof igMe.profile_picture_url === "string"
-              ? String(igMe.profile_picture_url)
-              : ""
-        return u || null
+        const cardImageUrl = isRecord(creatorCard) && typeof creatorCard.profileImageUrl === "string" 
+          ? String(creatorCard.profileImageUrl).trim() 
+          : ""
+        if (cardImageUrl) return cardImageUrl
+        
+        const igImageUrl = isRecord(igProfile) && typeof igProfile.profile_picture_url === "string"
+          ? String(igProfile.profile_picture_url)
+          : ""
+        return igImageUrl || null
       })()}
       displayName={(() => {
         const fromCard =
