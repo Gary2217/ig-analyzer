@@ -342,7 +342,7 @@ export default function CreatorCardPage() {
   const [contactInstagramInput, setContactInstagramInput] = useState("")
   const [contactOtherInput, setContactOtherInput] = useState("")
 
-  const [profileImageDraft, setProfileImageDraft] = useState<string | null>(null)
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
 
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
@@ -895,11 +895,17 @@ export default function CreatorCardPage() {
     setSaveError(null)
     setSaveOk(false)
     try {
-      const nextProfileImageUrl = (() => {
-        const raw1 = typeof profileImageDraft === "string" ? profileImageDraft : ""
+      const nextProfileImageUrl = await (async () => {
+        if (profileImageFile) {
+          try {
+            return await fileToDataUrl(profileImageFile)
+          } catch {
+            return undefined
+          }
+        }
         const raw2 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
         const raw3 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-        const s = (raw1 || raw2 || raw3).trim()
+        const s = (raw2 || raw3).trim()
         return s ? s : undefined
       })()
 
@@ -976,6 +982,11 @@ export default function CreatorCardPage() {
         window.sessionStorage.setItem("creatorCard:updated", "1")
       }
 
+      setBaseCard((prev) => ({
+        ...(prev ?? {}),
+        profileImageUrl: nextProfileImageUrl ?? null,
+      }))
+
       clearDirty()
     } catch {
       setSaveError(t("creatorCardEditor.errors.saveFailed"))
@@ -983,7 +994,7 @@ export default function CreatorCardPage() {
       saveInFlightRef.current = false
       setSaving(false)
     }
-  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, featuredItems, pastCollaborations, saving, serializedContact, t, themeTypes])
+  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, featuredItems, fileToDataUrl, pastCollaborations, profileImageFile, saving, serializedContact, t, themeTypes])
 
   const handleBack = () => {
     if (returnTo) {
@@ -1936,16 +1947,15 @@ export default function CreatorCardPage() {
                 headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
                 useWidePhotoLayout
                 photoUploadEnabled
-                onProfileImageChange={(dataUrl) => {
-                  setProfileImageDraft(typeof dataUrl === "string" && dataUrl.trim() ? dataUrl.trim() : null)
+                onProfileImageFileChange={(file) => {
+                  setProfileImageFile(file)
                   markDirty()
                 }}
                 username={displayUsername || null}
                 profileImageUrl={(() => {
-                  const u0 = typeof profileImageDraft === "string" ? profileImageDraft : ""
                   const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
                   const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                  const u = (u0 || u1 || u2).trim()
+                  const u = (u1 || u2).trim()
                   return u ? u : null
                 })()}
                 displayName={displayName}

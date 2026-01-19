@@ -26,7 +26,7 @@ export type CreatorCardPreviewProps = {
   useWidePhotoLayout?: boolean
   photoUploadEnabled?: boolean
 
-  onProfileImageChange?: (dataUrl: string | null) => void
+  onProfileImageFileChange?: (file: File | null) => void
 
   profileImageUrl?: string | null
   displayName?: string | null
@@ -86,7 +86,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     actions,
     useWidePhotoLayout,
     photoUploadEnabled,
-    onProfileImageChange,
+    onProfileImageFileChange,
     profileImageUrl,
     displayName,
     username,
@@ -423,8 +423,8 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                         onChange={(e) => {
                           const file = e.target.files?.[0] ?? null
                           if (!file) {
-                            if (typeof onProfileImageChange === "function") {
-                              onProfileImageChange(null)
+                            if (typeof onProfileImageFileChange === "function") {
+                              onProfileImageFileChange(null)
                             }
                             return
                           }
@@ -434,17 +434,8 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                             return nextUrl
                           })
 
-                          if (typeof onProfileImageChange === "function") {
-                            const reader = new FileReader()
-                            reader.onload = () => {
-                              const raw = typeof reader.result === "string" ? reader.result : ""
-                              const s = raw.trim()
-                              onProfileImageChange(s ? s : null)
-                            }
-                            reader.onerror = () => {
-                              onProfileImageChange(null)
-                            }
-                            reader.readAsDataURL(file)
+                          if (typeof onProfileImageFileChange === "function") {
+                            onProfileImageFileChange(file)
                           }
                         }}
                       />
