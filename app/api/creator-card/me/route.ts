@@ -7,6 +7,50 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
+function debugLogCreatorCardShape(card: unknown) {
+  if (process.env.DEBUG_CREATOR_CARD !== "1") return
+  const c = asRecord(card)
+  if (!c) {
+    console.log("[creator-card/me][debug] card is not an object")
+    return
+  }
+
+  const keys = Object.keys(c).sort()
+  const contactVal = c.contact
+  const contactType = contactVal === null ? "null" : Array.isArray(contactVal) ? "array" : typeof contactVal
+  const contactLen = typeof contactVal === "string" ? contactVal.length : null
+
+  const readStrArrLen = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).length : 0)
+  const readStrLen = (v: unknown) => (typeof v === "string" ? v.trim().length : 0)
+
+  const nestedContactObj = asRecord(contactVal)
+  const nestedEmailsLen = nestedContactObj ? readStrArrLen(nestedContactObj.emails) : null
+  const nestedInstagramsLen = nestedContactObj ? readStrArrLen(nestedContactObj.instagrams) : null
+  const nestedOthersLen = nestedContactObj ? readStrArrLen(nestedContactObj.others) : null
+  const nestedEmailKeyType = nestedContactObj ? (Array.isArray(nestedContactObj.email) ? "array" : typeof nestedContactObj.email) : null
+  const nestedInstagramKeyType = nestedContactObj ? (Array.isArray(nestedContactObj.instagram) ? "array" : typeof nestedContactObj.instagram) : null
+  const nestedOtherKeyType = nestedContactObj ? (Array.isArray(nestedContactObj.other) ? "array" : typeof nestedContactObj.other) : null
+
+  console.log("[creator-card/me][debug] card keys:", keys)
+  console.log("[creator-card/me][debug] contact:", { type: contactType, stringLen: contactLen })
+  console.log("[creator-card/me][debug] top-level contact fields:", {
+    emailsLen: readStrArrLen(c.emails),
+    instagramsLen: readStrArrLen(c.instagrams),
+    othersLen: readStrArrLen(c.others),
+    contactEmailLen: readStrLen(c.contactEmail),
+    contactInstagramLen: readStrLen(c.contactInstagram),
+    contactOtherLen: readStrLen(c.contactOther),
+  })
+  console.log("[creator-card/me][debug] nested contact fields:", {
+    emailsLen: nestedEmailsLen,
+    instagramsLen: nestedInstagramsLen,
+    othersLen: nestedOthersLen,
+    emailType: nestedEmailKeyType,
+    instagramType: nestedInstagramKeyType,
+    otherType: nestedOtherKeyType,
+  })
+}
+
 function getIsHttps(req: NextRequest, h: Headers) {
   const xfProto = h.get("x-forwarded-proto")?.toLowerCase()
   return xfProto === "https" || req.nextUrl.protocol === "https:"
@@ -101,6 +145,8 @@ export async function GET(req: NextRequest) {
             audienceProfiles: Array.isArray(row.audience_profiles) ? row.audience_profiles : null,
           }
         : null
+
+    debugLogCreatorCardShape(card)
 
     return NextResponse.json({ ok: true, me: { igUserId, igUsername }, card })
   } catch (e: unknown) {
