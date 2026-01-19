@@ -700,6 +700,10 @@ export default function ResultsClient() {
     }
   }, [__DEV__, dlog])
 
+  useEffect(() => {
+    console.log("[DEPLOY]", "c4885e6")
+  }, [])
+
   const router = useRouter()
   const pathname = usePathname() || "/"
   const searchParams = useSearchParams()
