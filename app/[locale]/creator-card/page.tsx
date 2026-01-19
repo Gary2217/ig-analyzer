@@ -46,6 +46,10 @@ function readNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
 type CreatorCardMeResponse = {
   ok: boolean
   card?: unknown
@@ -397,6 +401,48 @@ export default function CreatorCardPage() {
     if (!email && !instagram && !other && emails.length === 0 && instagrams.length === 0 && others.length === 0) return null
     return JSON.stringify({ email, instagram, other, emails, instagrams, others })
   }, [contactEmails, contactInstagrams, contactOthers])
+
+  const previewContact = useMemo(() => {
+    const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
+    const readStrArr = (v: unknown) =>
+      Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
+
+    const normalizeContact = (raw: unknown) => {
+      let obj: unknown = raw
+      if (typeof obj === "string") {
+        try {
+          obj = JSON.parse(obj)
+        } catch {
+          obj = {}
+        }
+      }
+
+      const contactObj: Record<string, unknown> = isPlainRecord(obj) ? (obj as Record<string, unknown>) : {}
+
+      const email1 = readStr(contactObj.email) || readStr(contactObj.contactEmail)
+      const ig1 = readStr(contactObj.instagram) || readStr(contactObj.contactInstagram)
+      const other1 = readStr(contactObj.other) || readStr(contactObj.contactOther)
+
+      const emails = readStrArr(contactObj.emails)
+      const instagrams = readStrArr(contactObj.instagrams)
+      const others = readStrArr(contactObj.others)
+
+      const finalEmails = emails.length ? emails : email1 ? [email1] : ([] as string[])
+      const finalInstagrams = instagrams.length ? instagrams : ig1 ? [ig1] : ([] as string[])
+      const finalOthers = others.length ? others : other1 ? [other1] : ([] as string[])
+
+      contactObj.email = finalEmails[0] ?? ""
+      contactObj.instagram = finalInstagrams[0] ?? ""
+      contactObj.other = finalOthers[0] ?? ""
+      contactObj.emails = finalEmails
+      contactObj.instagrams = finalInstagrams
+      contactObj.others = finalOthers
+
+      return contactObj
+    }
+
+    return normalizeContact(serializedContact)
+  }, [serializedContact])
 
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
@@ -1881,7 +1927,7 @@ export default function CreatorCardPage() {
                 displayName={displayName}
                 aboutText={baseCard?.audience ?? null}
                 primaryNiche={baseCard?.niche ?? null}
-                contact={serializedContact}
+                contact={previewContact}
                 featuredItems={featuredItems}
                 featuredImageUrls={featuredItems.map((x) => x.url)}
                 themeTypes={themeTypes}

@@ -10,6 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
    return value as Record<string, unknown>
  }
 
+ function isPlainRecord(value: unknown): value is Record<string, unknown> {
+   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+ }
+
 export type CreatorCardPreviewHighlightTarget = "formats" | "niches" | "brands" | null
 
 export type CreatorCardPreviewProps = {
@@ -29,7 +33,7 @@ export type CreatorCardPreviewProps = {
   aboutText?: string | null
   primaryNiche?: string | null
 
-  contact?: string | null
+  contact?: unknown
 
   featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null }[]
 
@@ -127,17 +131,39 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   const resolvedUsername = typeof username === "string" && username.trim() ? username.trim() : "—"
 
   const parsedContact = useMemo(() => {
-    const raw = typeof contact === "string" ? contact.trim() : ""
-    if (!raw) return { email: "", instagram: "", other: "" }
-    try {
-      const obj = asRecord(JSON.parse(raw) as unknown)
-      return {
-        email: typeof obj?.email === "string" ? String(obj.email).trim() : "",
-        instagram: typeof obj?.instagram === "string" ? String(obj.instagram).trim() : "",
-        other: typeof obj?.other === "string" ? String(obj.other).trim() : "",
+    const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
+    const readStrArr = (v: unknown) =>
+      Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
+
+    let obj: unknown = contact
+    if (typeof obj === "string") {
+      const raw = obj.trim()
+      if (!raw) return { email: "", instagram: "", other: "" }
+      try {
+        obj = JSON.parse(raw)
+      } catch {
+        return { email: "", instagram: "", other: raw }
       }
-    } catch {
-      return { email: "", instagram: "", other: raw }
+    }
+
+    const contactObj: Record<string, unknown> = isPlainRecord(obj) ? obj : {}
+
+    const email1 = readStr(contactObj.email) || readStr(contactObj.contactEmail)
+    const ig1 = readStr(contactObj.instagram) || readStr(contactObj.contactInstagram)
+    const other1 = readStr(contactObj.other) || readStr(contactObj.contactOther)
+
+    const emails = readStrArr(contactObj.emails)
+    const instagrams = readStrArr(contactObj.instagrams)
+    const others = readStrArr(contactObj.others)
+
+    const finalEmails = emails.length ? emails : email1 ? [email1] : ([] as string[])
+    const finalInstagrams = instagrams.length ? instagrams : ig1 ? [ig1] : ([] as string[])
+    const finalOthers = others.length ? others : other1 ? [other1] : ([] as string[])
+
+    return {
+      email: finalEmails[0] ?? "",
+      instagram: finalInstagrams[0] ?? "",
+      other: finalOthers[0] ?? "",
     }
   }, [contact])
 
