@@ -37,6 +37,21 @@ function normalizeStringArray(value: unknown, maxLen: number) {
   return out
 }
 
+function normalizeContactToText(v: unknown): string | null {
+  if (v == null) return null
+  if (typeof v === "string") {
+    const s = v.trim()
+    return s ? s : null
+  }
+  const obj = asRecord(v)
+  if (!obj) return null
+  try {
+    return JSON.stringify(obj)
+  } catch {
+    return null
+  }
+}
+
 function slugify(input: string) {
   return input
     .toLowerCase()
@@ -159,20 +174,34 @@ export async function POST(req: Request) {
 
     const audience = String(body.audience ?? "").trim()
 
+    const profileImageUrl = (() => {
+      const raw = typeof body.profileImageUrl === "string" ? String(body.profileImageUrl) : ""
+      const s = raw.trim()
+      return s ? s : null
+    })()
+
+    // TEMP DEBUG: Log incoming profileImageUrl (safe, no full base64)
+    console.log("[upsert] incoming profileImageUrl", {
+      typeof: typeof body.profileImageUrl,
+      prefix: typeof body.profileImageUrl === "string" ? body.profileImageUrl.slice(0, 30) : null,
+      length: typeof body.profileImageUrl === "string" ? body.profileImageUrl.length : null,
+      supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50) ?? "not_set",
+    })
+
     const collaborationNiches = normalizeStringArray(body.collaborationNiches, 50)
     const deliverables = normalizeStringArray(body.deliverables, 50)
     const pastCollaborations = normalizeStringArray(body.pastCollaborations, 50)
 
-    const contactRaw = typeof body.contact === "string" ? body.contact.trim() : ""
-    const contact = contactRaw ? contactRaw : null
+    const contactText = normalizeContactToText(body.contact)
 
     const dbWrite: Record<string, unknown> = {
       ig_user_id: igUserId,
       ig_username: igUsername,
       handle,
+      profile_image_url: profileImageUrl,
       niche: String(body.niche ?? "").trim() || null,
       audience: audience || null,
-      contact,
+      contact: contactText,
       collaboration_niches: collaborationNiches,
       deliverables,
       past_collaborations: pastCollaborations,
@@ -195,6 +224,16 @@ export async function POST(req: Request) {
     if (error) {
       return toSupabaseErrorResponse(error, "upsert")
     }
+
+    // TEMP DEBUG: Log returned row's profile_image_url (safe, no full base64)
+    const dataObj = data && typeof data === "object" ? data as Record<string, unknown> : null
+    const returnedPiu = dataObj?.profile_image_url
+    console.log("[upsert] returned row profile_image_url", {
+      typeof: typeof returnedPiu,
+      prefix: typeof returnedPiu === "string" ? returnedPiu.slice(0, 30) : null,
+      length: typeof returnedPiu === "string" ? returnedPiu.length : null,
+      supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50) ?? "not_set",
+    })
 
     return NextResponse.json({
       ok: true,

@@ -95,10 +95,21 @@ export async function GET(req: NextRequest) {
     }
 
     const row = asRecord(data as unknown)
+    
+    // TEMP DEBUG: Log row.profile_image_url from DB (safe, no full base64)
+    const rowPiu = row?.profile_image_url
+    console.log("[me] row.profile_image_url from DB", {
+      typeof: typeof rowPiu,
+      prefix: typeof rowPiu === "string" ? rowPiu.slice(0, 30) : null,
+      length: typeof rowPiu === "string" ? rowPiu.length : null,
+      supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50) ?? "not_set",
+    })
+    
     const card =
       row
         ? {
             ...row,
+            profileImageUrl: typeof row.profile_image_url === "string" ? row.profile_image_url : null,
             collaborationNiches: Array.isArray(row.collaboration_niches) ? row.collaboration_niches : null,
             pastCollaborations: Array.isArray(row.past_collaborations) ? row.past_collaborations : null,
             themeTypes: Array.isArray(row.theme_types) ? row.theme_types : null,
