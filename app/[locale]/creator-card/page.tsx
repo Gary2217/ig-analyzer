@@ -598,21 +598,42 @@ export default function CreatorCardPage() {
         setContactOtherInput("")
 
         const nextFeaturedItems = (() => {
-          const raw = Array.isArray(card?.portfolio) ? (card?.portfolio as unknown[]) : []
-          const out: FeaturedItem[] = []
-          for (let i = 0; i < raw.length; i++) {
-            const it = raw[i]
-            if (!it || typeof it !== "object") continue
-            const itObj = asRecord(it)
-            const idRaw = itObj ? (readString(itObj.id) ?? "").trim() : ""
-            out.push({
-              id: idRaw || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-              url: "",
-              brand: itObj ? (readString(itObj.brand) ?? "") : "",
-              collabType: itObj ? (readString(itObj.collabType) ?? "") : "",
+          const raw = Array.isArray(card?.portfolio) ? (card.portfolio as unknown[]) : []
+          const items: Array<{ id: string; brand: string; collabType: string; order: number }> = []
+
+          for (const row of raw) {
+            if (!row || typeof row !== "object") continue
+            const obj = row as Record<string, unknown>
+
+            const id = typeof obj.id === "string" ? obj.id.trim() : ""
+            if (!id) continue
+
+            const brand = typeof obj.brand === "string" ? obj.brand : ""
+
+            const collabType =
+              typeof obj.collabType === "string"
+                ? obj.collabType
+                : typeof obj.collabtype === "string"
+                  ? obj.collabtype
+                  : ""
+
+            const order =
+              typeof obj.order === "number"
+                ? obj.order
+                : typeof obj.order === "string"
+                  ? Number(obj.order)
+                  : 0
+
+            items.push({
+              id,
+              brand,
+              collabType,
+              order: Number.isFinite(order) ? order : 0,
             })
           }
-          return out
+
+          items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          return items.slice(0, 20).map((x) => ({ id: x.id, url: "", brand: x.brand, collabType: x.collabType }))
         })()
 
         setFeaturedItems((prev) => {
