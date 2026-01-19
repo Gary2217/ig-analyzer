@@ -148,7 +148,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       try {
         obj = JSON.parse(raw)
       } catch {
-        return { email: "", instagram: "", other: raw }
+        obj = {}
       }
     }
 
