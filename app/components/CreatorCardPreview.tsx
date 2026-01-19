@@ -58,6 +58,7 @@ export type CreatorCardPreviewProps = {
   reachText?: string | null
 
   highlightTarget?: CreatorCardPreviewHighlightTarget
+  highlightSection?: "about" | "primaryNiche" | "audienceSummary" | "collaborationNiches" | "contact" | "formats" | null
 }
 
 function normalizeStringArray(value: unknown, maxLen: number) {
@@ -77,11 +78,30 @@ function normalizeStringArray(value: unknown, maxLen: number) {
   return out
 }
 
-const Pill = ({ children }: { children: React.ReactNode }) => (
-  <span className="inline-flex max-w-full items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-sm text-white/85">
-    <span className="truncate">{children}</span>
-  </span>
-)
+type PillProps = {
+  children: React.ReactNode
+  clampLines?: 1 | 2 | 3
+  title?: string
+}
+
+const Pill = ({ children, clampLines = 1, title }: PillProps) => {
+  const clamp =
+    clampLines === 3 ? "line-clamp-3" : clampLines === 2 ? "line-clamp-2" : "truncate"
+  return (
+    <span
+      title={title}
+      className={[
+        "inline-flex max-w-full items-center rounded-full border border-white/8 bg-white/[0.03]",
+        "px-3 py-1 text-sm text-white/85",
+        "transition-colors",
+        "hover:bg-white/[0.05] hover:border-white/12",
+        "focus-within:ring-1 focus-within:ring-white/10",
+      ].join(" ")}
+    >
+      <span className={["min-w-0", clamp].join(" ")}>{children}</span>
+    </span>
+  )
+}
 
 export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   const {
@@ -115,6 +135,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     engagementRateText,
     reachText,
     highlightTarget,
+    highlightSection,
   } = props
 
   const bioText = typeof aboutText === "string" && aboutText.trim() ? aboutText.trim() : ""
@@ -384,6 +405,9 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   const hasReach = typeof reachText === "string" && reachText.trim().length > 0
   const showKpiGrid = hasReach
 
+  const sectionRing = (key: NonNullable<CreatorCardPreviewProps["highlightSection"]>) =>
+    highlightSection === key ? "ring-1 ring-white/12" : ""
+
   return (
     <Card id={id} className={"min-w-0 " + (className ?? "")}>
       <CardHeader className={headerClassName}>
@@ -470,34 +494,36 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
               <div className={rightSpanClassName + " min-w-0"}>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
-                  <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
-                  <div className="mt-1 min-w-0">
-                    <Pill>{resolvedAboutText}</Pill>
+                  <div className={"rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 min-w-0 transition-colors " + sectionRing("about")}>
+                    <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
+                    <div className="mt-1 min-w-0">
+                      <Pill clampLines={3} title={String(resolvedAboutText ?? "")}>{resolvedAboutText}</Pill>
+                    </div>
                   </div>
 
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                    <div className="min-w-0">
+                    <div className={"min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + sectionRing("primaryNiche")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
                       <div className="mt-0.5 min-w-0">
-                        <Pill>{resolvedPrimaryNiche}</Pill>
+                        <Pill clampLines={1} title={String(resolvedPrimaryNiche ?? "")}>{resolvedPrimaryNiche}</Pill>
                       </div>
                     </div>
-                    <div className="min-w-0">
+                    <div className={"min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + sectionRing("audienceSummary")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
                       <div className="mt-0.5 min-w-0">
-                        <Pill>{audienceSummaryText}</Pill>
+                        <Pill clampLines={1} title={String(audienceSummaryText ?? "")}>{audienceSummaryText}</Pill>
                       </div>
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 rounded-xl px-2 py-1.5 " + nichesHighlight}>
+                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + nichesHighlight + " " + sectionRing("collaborationNiches")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationNiches.label")}</div>
                     <div className="mt-0.5 min-w-0">
-                      <Pill>{nicheText}</Pill>
+                      <Pill clampLines={2} title={String(nicheText ?? "")}>{nicheText}</Pill>
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 rounded-xl px-2 py-1.5 " + formatsHighlight}>
+                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + formatsHighlight + " " + sectionRing("formats")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationFormats.title")}</div>
                     <div className="mt-2 flex flex-wrap gap-2 min-w-0">
                       {formats.length === 0 ? (
@@ -507,7 +533,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                           {formats.map((id) => (
                             <span
                               key={id}
-                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 min-w-0 max-w-[220px] truncate whitespace-nowrap"
+                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-white/75 min-w-0 max-w-[220px] truncate whitespace-nowrap transition-colors hover:bg-white/[0.05] hover:border-white/12"
                             >
                               {formatLabelMap[id] || id}
                             </span>
@@ -703,27 +729,18 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               </div>
 
               {hasContact ? (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-                  <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.contact.title")}</div>
-                  <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
-                      <div className="mt-0.5 min-w-0">
-                        <Pill>{parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}</Pill>
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
-                      <div className="mt-0.5 min-w-0">
-                        <Pill>{parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}</Pill>
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.other")}</div>
-                      <div className="mt-0.5 min-w-0">
-                        <Pill>{parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}</Pill>
-                      </div>
-                    </div>
+                <div className={"rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 min-w-0 transition-colors " + sectionRing("contact")}>
+                  <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.contact.title")}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Pill title={String(parsedContact.email || "")}>
+                      {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
+                    </Pill>
+                    <Pill title={String(parsedContact.instagram || "")}>
+                      {parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}
+                    </Pill>
+                    <Pill title={String(parsedContact.other || "")}>
+                      {parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}
+                    </Pill>
                   </div>
                 </div>
               ) : null}

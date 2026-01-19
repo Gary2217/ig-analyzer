@@ -466,6 +466,10 @@ export default function CreatorCardPage() {
   const [highlight, setHighlight] = useState<"formats" | "niches" | "brands" | null>(null)
   const highlightTimerRef = useRef<number | null>(null)
 
+  const [activePreviewSection, setActivePreviewSection] = useState<
+    "about" | "primaryNiche" | "audienceSummary" | "collaborationNiches" | "contact" | "formats" | null
+  >(null)
+
   const flashHighlight = useCallback((key: "formats" | "niches" | "brands") => {
     setHighlight(key)
     if (highlightTimerRef.current != null) {
@@ -1165,6 +1169,7 @@ export default function CreatorCardPage() {
                             value={introDraft}
                             placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
                             onChange={(e) => setIntroDraft(e.target.value)}
+                            onFocus={() => setActivePreviewSection("about")}
                             className="w-full min-h-[96px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 pr-24 pb-12 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                           />
                           <Button
@@ -1256,20 +1261,17 @@ export default function CreatorCardPage() {
                         {audienceProfiles.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {audienceProfiles.map((tag) => (
-                              <span
+                              <button
                                 key={tag}
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                                type="button"
+                                onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
+                                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-100"
                               >
                                 <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                                <button
-                                  type="button"
-                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
-                                  onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
-                                  aria-label={t("creatorCardEditor.pastCollaborations.remove")}
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </span>
+                                <span className="ml-1.5 text-slate-400" aria-hidden="true">
+                                  ×
+                                </span>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -1279,6 +1281,7 @@ export default function CreatorCardPage() {
                               value={audienceProfileInput}
                               placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
                               onChange={(e) => setAudienceProfileInput(e.target.value)}
+                              onFocus={() => setActivePreviewSection("audienceSummary")}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault()
@@ -1346,6 +1349,7 @@ export default function CreatorCardPage() {
                                 setContactEmailInput(e.target.value)
                                 markDirty()
                               }}
+                              onFocus={() => setActivePreviewSection("contact")}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault()
@@ -1411,6 +1415,7 @@ export default function CreatorCardPage() {
                                 setContactInstagramInput(e.target.value)
                                 markDirty()
                               }}
+                              onFocus={() => setActivePreviewSection("contact")}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault()
@@ -1475,6 +1480,7 @@ export default function CreatorCardPage() {
                               setContactOtherInput(e.target.value)
                               markDirty()
                             }}
+                            onFocus={() => setActivePreviewSection("contact")}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                                 e.preventDefault()
@@ -1705,6 +1711,7 @@ export default function CreatorCardPage() {
                               placeholder={t("creatorCardEditor.formats.otherPlaceholder")}
                               disabled={!otherFormatEnabled}
                               onChange={(e) => setOtherFormatInput(e.target.value)}
+                              onFocus={() => setActivePreviewSection("formats")}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault()
@@ -1775,6 +1782,7 @@ export default function CreatorCardPage() {
                               placeholder={activeLocale === "zh-TW" ? "請輸入其他合作品類" : "Enter other niche"}
                               disabled={!otherNicheEnabled}
                               onChange={(e) => setOtherNicheInput(e.target.value)}
+                              onFocus={() => setActivePreviewSection("collaborationNiches")}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault()
@@ -1973,6 +1981,7 @@ export default function CreatorCardPage() {
                 postsText={postsText}
                 engagementRateText={engagementRateText}
                 highlightTarget={highlight}
+                highlightSection={activePreviewSection}
               />
             </div>
           </div>

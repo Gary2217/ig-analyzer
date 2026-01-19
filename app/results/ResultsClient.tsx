@@ -4115,6 +4115,7 @@ export default function ResultsClient() {
           ? formatNum(dailySnapshotTotals.reach)
           : null
       }
+      highlightSection={null}
     />
   )
 
