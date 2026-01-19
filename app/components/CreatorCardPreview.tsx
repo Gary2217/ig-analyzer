@@ -190,6 +190,11 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
     }
   }, [contact])
 
+  const hasContact =
+    (typeof parsedContact.email === "string" && parsedContact.email.trim().length > 0) ||
+    (typeof parsedContact.instagram === "string" && parsedContact.instagram.trim().length > 0) ||
+    (typeof parsedContact.other === "string" && parsedContact.other.trim().length > 0)
+
   const featuredTiles = useMemo(() => {
     const rawItems = Array.isArray(featuredItems) ? featuredItems : []
     const out: Array<{ id: string; url: string; brand: string; collabType: string }> = []
@@ -674,29 +679,31 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
-                <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.contact.title")}</div>
-                <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
-                    <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                      {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
+              {hasContact ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4 min-w-0">
+                  <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.contact.title")}</div>
+                  <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
+                      <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
+                      </div>
                     </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
-                    <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                      {parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
+                      <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}
+                      </div>
                     </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.other")}</div>
-                    <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
-                      {parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.other")}</div>
+                      <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
+                        {parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           </div>
         </div>
