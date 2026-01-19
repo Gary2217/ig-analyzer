@@ -599,7 +599,7 @@ export default function CreatorCardPage() {
 
         const nextFeaturedItems = (() => {
           const raw = Array.isArray(card?.portfolio) ? (card.portfolio as unknown[]) : []
-          const items: Array<{ id: string; brand: string; collabType: string; order: number }> = []
+          const items: Array<{ id: string; url: string; brand: string; collabType: string; order: number }> = []
 
           for (const row of raw) {
             if (!row || typeof row !== "object") continue
@@ -617,6 +617,15 @@ export default function CreatorCardPage() {
                   ? obj.collabtype
                   : ""
 
+            const url =
+              typeof obj.url === "string"
+                ? obj.url
+                : typeof obj.imageUrl === "string"
+                  ? obj.imageUrl
+                  : typeof obj.image_url === "string"
+                    ? obj.image_url
+                    : ""
+
             const order =
               typeof obj.order === "number"
                 ? obj.order
@@ -626,6 +635,7 @@ export default function CreatorCardPage() {
 
             items.push({
               id,
+              url,
               brand,
               collabType,
               order: Number.isFinite(order) ? order : 0,
@@ -633,7 +643,7 @@ export default function CreatorCardPage() {
           }
 
           items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          return items.slice(0, 20).map((x) => ({ id: x.id, url: "", brand: x.brand, collabType: x.collabType }))
+          return items.slice(0, 20).map((x) => ({ id: x.id, url: x.url, brand: x.brand, collabType: x.collabType }))
         })()
 
         setFeaturedItems((prev) => {
@@ -790,6 +800,17 @@ export default function CreatorCardPage() {
     markDirty()
   }, [markDirty, pastCollabInput, setPastCollaborations])
 
+  const fileToDataUrl = useCallback((file: File) => {
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        resolve(typeof reader.result === "string" ? reader.result : "")
+      }
+      reader.onerror = () => resolve("")
+      reader.readAsDataURL(file)
+    })
+  }, [])
+
   const addOtherNiche = useCallback(() => {
     const trimmed = otherNicheInput.trim()
     if (!trimmed) return
@@ -830,6 +851,7 @@ export default function CreatorCardPage() {
         contact: serializedContact,
         portfolio: featuredItems.map((x, idx) => ({
           id: x.id,
+          url: typeof x.url === "string" ? x.url : "",
           brand: typeof x.brand === "string" ? x.brand : "",
           collabType: typeof x.collabType === "string" ? x.collabType : "",
           order: idx,
@@ -1429,18 +1451,20 @@ export default function CreatorCardPage() {
                         onChange={(e) => {
                           const files = Array.from(e.currentTarget.files ?? [])
                           if (!files.length) return
-
-                          setFeaturedItems((prev) => [
-                            ...prev,
-                            ...files.map((file) => ({
-                              id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                              url: URL.createObjectURL(file),
-                              brand: "",
-                              collabType: "",
-                            })),
-                          ])
-
                           e.currentTarget.value = ""
+
+                          Promise.all(files.map((file) => fileToDataUrl(file))).then((urls) => {
+                            setFeaturedItems((prev) => [
+                              ...prev,
+                              ...urls.map((url) => ({
+                                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                                url,
+                                brand: "",
+                                collabType: "",
+                              })),
+                            ])
+                            markDirty()
+                          })
                         }}
                       />
 
@@ -1455,18 +1479,15 @@ export default function CreatorCardPage() {
                           e.currentTarget.value = ""
                           if (!id || !file) return
 
-                          const nextUrl = URL.createObjectURL(file)
-                          setFeaturedItems((prev) => {
-                            const idx = prev.findIndex((x) => x.id === id)
-                            if (idx < 0) {
-                              URL.revokeObjectURL(nextUrl)
-                              return prev
-                            }
-                            const out = prev.slice()
-                            const prevUrl = out[idx]?.url
-                            if (typeof prevUrl === "string" && prevUrl.startsWith("blob:")) URL.revokeObjectURL(prevUrl)
-                            out[idx] = { ...out[idx], url: nextUrl }
-                            return out
+                          fileToDataUrl(file).then((nextUrl) => {
+                            setFeaturedItems((prev) => {
+                              const idx = prev.findIndex((x) => x.id === id)
+                              if (idx < 0) return prev
+                              const out = prev.slice()
+                              out[idx] = { ...out[idx], url: nextUrl }
+                              return out
+                            })
+                            markDirty()
                           })
                         }}
                       />
