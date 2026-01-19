@@ -3935,18 +3935,70 @@ export default function ResultsClient() {
               : ""
         return u || null
       })()}
-      displayName={
-        isRecord(igProfile) && typeof igProfile.name === "string" && String(igProfile.name).trim()
-          ? String(igProfile.name).trim()
-          : displayUsername
-      }
+      displayName={(() => {
+        const fromCard =
+          isRecord(creatorCard) && typeof creatorCard.displayName === "string" && String(creatorCard.displayName).trim()
+            ? String(creatorCard.displayName).trim()
+            : null
+        if (fromCard) return fromCard
+
+        const fromIg =
+          isRecord(igProfile) && typeof igProfile.name === "string" && String(igProfile.name).trim()
+            ? String(igProfile.name).trim()
+            : null
+        if (fromIg) return fromIg
+
+        return displayUsername
+      })()}
       username={displayUsername}
-      aboutText={t("results.mediaKit.about.placeholder")}
+      aboutText={(() => {
+        const raw = isRecord(creatorCard) && typeof creatorCard.audience === "string" ? String(creatorCard.audience) : ""
+        const s = raw.trim()
+        return s ? s : null
+      })()}
       primaryNiche={
         isRecord(creatorCard) && typeof creatorCard.niche === "string" && String(creatorCard.niche).trim()
           ? String(creatorCard.niche).trim()
           : null
       }
+      featuredItems={(() => {
+        if (!isRecord(creatorCard)) return undefined
+        const raw = creatorCard.portfolio
+        if (!Array.isArray(raw)) return undefined
+
+        const out: Array<{ id: string; url: string; brand?: string | null; collabType?: string | null }> = []
+        for (let i = 0; i < raw.length; i++) {
+          const row = raw[i]
+          if (!row || typeof row !== "object") continue
+          const obj = row as Record<string, unknown>
+
+          const id = typeof obj.id === "string" && obj.id.trim() ? obj.id.trim() : String(i)
+
+          const urlRaw =
+            typeof obj.url === "string"
+              ? obj.url
+              : typeof obj.imageUrl === "string"
+                ? obj.imageUrl
+                : typeof obj.image_url === "string"
+                  ? obj.image_url
+                  : ""
+          const url = typeof urlRaw === "string" ? urlRaw.trim() : ""
+
+          const brand = typeof obj.brand === "string" ? obj.brand.trim() : ""
+          const collabTypeRaw =
+            typeof obj.collabType === "string" ? obj.collabType : typeof obj.collabtype === "string" ? obj.collabtype : ""
+          const collabType = typeof collabTypeRaw === "string" ? collabTypeRaw.trim() : ""
+
+          out.push({
+            id,
+            url,
+            brand: brand || null,
+            collabType: collabType || null,
+          })
+        }
+
+        return out
+      })()}
       contact={(() => {
         const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
         const readStrArr = (v: unknown) => (Array.isArray(v) ? v.map(readStr).filter(Boolean) : ([] as string[]))
@@ -3994,6 +4046,16 @@ export default function ResultsClient() {
           instagram: finalInstagrams.join(", "),
           other: finalOthers.join(", "),
         }
+      })()}
+      themeTypes={(() => {
+        if (!isRecord(creatorCard)) return null
+        const val = creatorCard.themeTypes ?? creatorCard.theme_types
+        return Array.isArray(val) ? (val as string[]) : null
+      })()}
+      audienceProfiles={(() => {
+        if (!isRecord(creatorCard)) return null
+        const val = creatorCard.audienceProfiles ?? creatorCard.audience_profiles
+        return Array.isArray(val) ? (val as string[]) : null
       })()}
       collaborationNiches={(() => {
         if (!isRecord(creatorCard)) return null
