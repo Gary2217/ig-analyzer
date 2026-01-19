@@ -2621,10 +2621,6 @@ export default function ResultsClient() {
       })
 
       const json: unknown = await res.json().catch(() => null)
-      console.log("[creator-card/me] raw json:", json)
-      const rawCard = isRecord(json) && isRecord(json.card) ? json.card : null
-      const rawContact = rawCard ? rawCard.contact : undefined
-      console.log("[creator-card/me] raw json.card.contact:", rawContact)
       if (!res.ok || !isRecord(json) || !json.ok) {
         const shouldClear =
           res.status === 403 ||
@@ -2637,9 +2633,6 @@ export default function ResultsClient() {
         isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
       setCreatorIdFromCardMe(nextCreatorId || null)
       const normalized = normalizeCreatorCardForResults(isRecord(json) ? json.card : null)
-      console.log("[creator-card/me] normalized.contact:", normalized?.contact)
-      console.log("[creator-card/me] normalized.contactEmail:", normalized?.contactEmail)
-      console.log("[creator-card/me] normalized.emails:", normalized?.emails)
       setCreatorCard(normalized)
     } catch {
       return
@@ -3946,7 +3939,54 @@ export default function ResultsClient() {
           ? String(creatorCard.niche).trim()
           : null
       }
-      contact={isRecord(creatorCard) ? (creatorCard.contact ?? null) : null}
+      contact={(() => {
+        const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
+        const readStrArr = (v: unknown) => (Array.isArray(v) ? v.map(readStr).filter(Boolean) : ([] as string[]))
+        const readStrOrArr = (v: unknown) => {
+          const arr = readStrArr(v)
+          if (arr.length > 0) return arr
+          const s = readStr(v)
+          return s ? [s] : ([] as string[])
+        }
+
+        const cc = isRecord(creatorCard) ? creatorCard : null
+        if (!cc) return null
+
+        const parseContact = (raw: unknown): Record<string, unknown> | null => {
+          if (isRecord(raw)) return raw
+          if (typeof raw !== "string") return null
+          const s = raw.trim()
+          if (!s) return null
+          try {
+            const parsed: unknown = JSON.parse(s)
+            return isRecord(parsed) ? parsed : null
+          } catch {
+            return null
+          }
+        }
+
+        const c = parseContact(cc.contact)
+
+        const pick = (topArr: unknown, topStr: unknown, nestedArr: unknown, nestedStrOrArr: unknown) => {
+          const a = readStrArr(topArr)
+          if (a.length) return a
+          const b = readStr(topStr)
+          if (b) return [b]
+          const d = readStrArr(nestedArr)
+          if (d.length) return d
+          return readStrOrArr(nestedStrOrArr)
+        }
+
+        const finalEmails = pick(cc.emails, cc.contactEmail, c?.emails, c?.email)
+        const finalInstagrams = pick(cc.instagrams, cc.contactInstagram, c?.instagrams, c?.instagram)
+        const finalOthers = pick(cc.others, cc.contactOther, c?.others, c?.other)
+
+        return {
+          email: finalEmails.join(", "),
+          instagram: finalInstagrams.join(", "),
+          other: finalOthers.join(", "),
+        }
+      })()}
       collaborationNiches={(() => {
         if (!isRecord(creatorCard)) return null
         const val = creatorCard.collaborationNiches ?? creatorCard.collaboration_niches
