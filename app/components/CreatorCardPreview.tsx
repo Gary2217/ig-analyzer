@@ -78,7 +78,7 @@ function normalizeStringArray(value: unknown, maxLen: number) {
 }
 
 const Pill = ({ children }: { children: React.ReactNode }) => (
-  <span className="inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/90">
+  <span className="inline-flex max-w-full items-center rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-sm text-white/85">
     <span className="truncate">{children}</span>
   </span>
 )
@@ -397,8 +397,8 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
       </CardHeader>
 
       <CardContent className="p-4 lg:p-6">
-        <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4 lg:p-6 min-w-0">
+        <div className="rounded-xl border border-white/8 bg-[#0b1220]/40 backdrop-blur-sm">
+          <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 sm:p-4 lg:p-6 min-w-0">
             <div className="flex flex-col gap-4 min-w-0">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0 items-stretch">
               <div className={leftSpanClassName + " min-w-0 h-full flex"}>
