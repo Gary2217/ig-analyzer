@@ -2541,7 +2541,7 @@ export default function ResultsClient() {
   const creatorCardFetchedRef = useRef(false)
   const creatorStatsUpsertKeyRef = useRef<string>("")
 
-  const normalizeCreatorCardFromDb = useCallback((row: unknown): Record<string, unknown> | null => {
+  const normalizeCreatorCardForResults = useCallback((row: unknown): Record<string, unknown> | null => {
     if (!isRecord(row)) return null
     const out: Record<string, unknown> = { ...row }
 
@@ -2570,7 +2570,7 @@ export default function ResultsClient() {
           out.contact = parsed
         }
       } catch {
-        // keep raw string
+        out.contact = {}
       }
     }
 
@@ -2597,12 +2597,12 @@ export default function ResultsClient() {
       const nextCreatorId =
         isRecord(json.me) && typeof json.me.igUserId === "string" ? String(json.me.igUserId).trim() : ""
       setCreatorIdFromCardMe(nextCreatorId || null)
-      const normalized = normalizeCreatorCardFromDb(isRecord(json) ? json.card : null)
+      const normalized = normalizeCreatorCardForResults(isRecord(json) ? json.card : null)
       setCreatorCard(normalized)
     } catch {
       return
     }
-  }, [normalizeCreatorCardFromDb])
+  }, [normalizeCreatorCardForResults])
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
