@@ -77,6 +77,12 @@ function normalizeStringArray(value: unknown, maxLen: number) {
   return out
 }
 
+const Pill = ({ children }: { children: React.ReactNode }) => (
+  <span className="inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white/90">
+    <span className="truncate">{children}</span>
+  </span>
+)
+
 export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   const {
     t,
@@ -465,25 +471,29 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               <div className={rightSpanClassName + " min-w-0"}>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
                   <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
-                  <div className="mt-1 text-xs sm:text-sm leading-snug text-white/45 min-w-0 break-words line-clamp-4 [overflow-wrap:anywhere]">
-                    {resolvedAboutText}
+                  <div className="mt-1 min-w-0">
+                    <Pill>{resolvedAboutText}</Pill>
                   </div>
 
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
-                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{resolvedPrimaryNiche}</div>
+                      <div className="mt-0.5 min-w-0">
+                        <Pill>{resolvedPrimaryNiche}</Pill>
+                      </div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
-                      <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 truncate">{audienceSummaryText}</div>
+                      <div className="mt-0.5 min-w-0">
+                        <Pill>{audienceSummaryText}</Pill>
+                      </div>
                     </div>
                   </div>
 
                   <div className={"mt-2 min-w-0 rounded-xl px-2 py-1.5 " + nichesHighlight}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationNiches.label")}</div>
-                    <div className="mt-0.5 text-[12px] font-semibold text-white/45 min-w-0 break-words line-clamp-2 [overflow-wrap:anywhere]">
-                      {nicheText}
+                    <div className="mt-0.5 min-w-0">
+                      <Pill>{nicheText}</Pill>
                     </div>
                   </div>
 
@@ -698,20 +708,20 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   <div className="mt-2 space-y-2 text-[12px] leading-snug min-w-0">
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.email")}</div>
-                      <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
+                      <div className="mt-0.5 min-w-0">
+                        <Pill>{parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}</Pill>
                       </div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.instagram")}</div>
-                      <div className="mt-0.5 min-w-0 overflow-x-auto whitespace-nowrap break-normal font-semibold text-white/45 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}
+                      <div className="mt-0.5 min-w-0">
+                        <Pill>{parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}</Pill>
                       </div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.contact.other")}</div>
-                      <div className="mt-0.5 font-semibold text-white/45 break-words [overflow-wrap:anywhere]">
-                        {parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}
+                      <div className="mt-0.5 min-w-0">
+                        <Pill>{parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}</Pill>
                       </div>
                     </div>
                   </div>
