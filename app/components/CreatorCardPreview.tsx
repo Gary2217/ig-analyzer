@@ -543,7 +543,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                         <Pill
                           clampLines={2}
                           title={String(audienceSummaryText ?? "")}
-                          className="text-white/85"
+                          className="break-words whitespace-normal [overflow-wrap:anywhere] text-white/85"
                           unstyled
                         >
                           {audienceSummaryText}
