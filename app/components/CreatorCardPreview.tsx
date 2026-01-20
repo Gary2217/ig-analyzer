@@ -83,21 +83,25 @@ type PillProps = {
   clampLines?: 1 | 2 | 3
   title?: string
   className?: string
+  unstyled?: boolean
 }
 
-const Pill = ({ children, clampLines = 1, title, className }: PillProps) => {
+const Pill = ({ children, clampLines = 1, title, className, unstyled }: PillProps) => {
   const clamp =
     clampLines === 3 ? "line-clamp-3" : clampLines === 2 ? "line-clamp-2" : "truncate"
+
+  const wrapperClassName = unstyled
+    ? "min-w-0"
+    : [
+        "inline-flex min-w-0 max-w-full items-center rounded-full border border-white/10 bg-white/[0.05]",
+        "px-2.5 py-1 text-[12px] text-white/85",
+        "focus-within:ring-1 focus-within:ring-white/10",
+      ].join(" ")
+
   return (
     <span
       title={title}
-      className={[
-        "inline-flex max-w-full items-center rounded-full border border-white/8 bg-white/[0.03]",
-        "px-3 py-1 text-sm text-white/85",
-        "transition-colors",
-        "hover:bg-white/[0.05] hover:border-white/12",
-        "focus-within:ring-1 focus-within:ring-white/10",
-      ].join(" ")}
+      className={wrapperClassName}
     >
       <span className={["min-w-0", clamp, className].filter(Boolean).join(" ")}>{children}</span>
     </span>
@@ -503,13 +507,14 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
               <div className={rightSpanClassName + " min-w-0"}>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
-                  <div className={"px-1.5 py-1 min-w-0 transition-colors " + sectionRing("about")}>
+                  <div className={"rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 min-w-0 transition-colors " + sectionRing("about")}>
                     <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                     <div className="mt-1 min-w-0">
                       <Pill
                         clampLines={3}
                         title={String(resolvedAboutText ?? "")}
-                        className="break-words whitespace-normal [overflow-wrap:anywhere]"
+                        className="break-words whitespace-normal [overflow-wrap:anywhere] text-white/85"
+                        unstyled
                       >
                         {resolvedAboutText}
                       </Pill>
@@ -517,34 +522,44 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   </div>
 
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                    <div className={"min-w-0 px-1.5 py-1 transition-colors " + sectionRing("primaryNiche")}>
+                    <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("primaryNiche")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
                       <div className="mt-0.5 min-w-0">
                         <Pill
                           clampLines={2}
                           title={String(resolvedPrimaryNiche ?? "")}
-                          className="break-words whitespace-normal [overflow-wrap:anywhere]"
+                          className="break-words whitespace-normal [overflow-wrap:anywhere] text-white/85"
+                          unstyled
                         >
                           {resolvedPrimaryNiche}
                         </Pill>
                       </div>
                     </div>
-                    <div className={"min-w-0 px-1.5 py-1 transition-colors " + sectionRing("audienceSummary")}>
+                    <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("audienceSummary")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
                       <div className="mt-0.5 min-w-0">
-                        <Pill clampLines={1} title={String(audienceSummaryText ?? "")}>{audienceSummaryText}</Pill>
+                        <Pill
+                          clampLines={1}
+                          title={String(audienceSummaryText ?? "")}
+                          className="text-white/85"
+                          unstyled
+                        >
+                          {audienceSummaryText}
+                        </Pill>
                       </div>
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 px-1.5 py-1 transition-colors " + nichesHighlight + " " + sectionRing("collaborationNiches")}>
+                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + nichesHighlight + " " + sectionRing("collaborationNiches")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationNiches.label")}</div>
                     <div className="mt-0.5 min-w-0">
-                      <Pill clampLines={2} title={String(nicheText ?? "")}>{nicheText}</Pill>
+                      <Pill clampLines={2} title={String(nicheText ?? "")} className="text-white/85" unstyled>
+                        {nicheText}
+                      </Pill>
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 px-1.5 py-1 transition-colors " + formatsHighlight + " " + sectionRing("formats")}>
+                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + formatsHighlight + " " + sectionRing("formats")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationFormats.title")}</div>
                     <div className="mt-2 flex flex-wrap gap-2 min-w-0">
                       {formats.length === 0 ? (
