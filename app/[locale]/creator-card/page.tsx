@@ -19,6 +19,29 @@ import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 
+function useIsMobileMax640() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const mq = window.matchMedia("(max-width: 640px)")
+
+    const apply = () => setIsMobile(Boolean(mq.matches))
+    apply()
+
+    const onChange = () => apply()
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", onChange)
+      return () => mq.removeEventListener("change", onChange)
+    }
+
+    mq.addListener(onChange)
+    return () => mq.removeListener(onChange)
+  }, [])
+
+  return isMobile
+}
+
 type CreatorStats = {
   engagementRatePct?: number
 }
@@ -271,11 +294,74 @@ function selectedSummary(labels: string[], locale: string, t: (k: string) => str
   return { text: `${safe[0]} +${safe.length - 1}`, title }
 }
 
+function useTwoRowChipOverflow(items: string[]) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const chipRefs = useRef<Record<string, HTMLElement | null>>({})
+  const [expanded, setExpanded] = useState(false)
+  const [hiddenCount, setHiddenCount] = useState(0)
+
+  const recompute = useCallback(() => {
+    const container = containerRef.current
+    if (!container) {
+      setHiddenCount(0)
+      return
+    }
+
+    const els = items.map((k) => chipRefs.current[k]).filter((x): x is HTMLElement => Boolean(x))
+    if (els.length === 0) {
+      setHiddenCount(0)
+      return
+    }
+
+    const tops = Array.from(new Set(els.map((el) => Math.round(el.offsetTop)))).sort((a, b) => a - b)
+    if (tops.length <= 2) {
+      setHiddenCount(0)
+      return
+    }
+
+    const allowedTop = tops[1]
+    const count = els.reduce((acc, el) => (Math.round(el.offsetTop) > allowedTop ? acc + 1 : acc), 0)
+    setHiddenCount(count)
+  }, [items])
+
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => recompute())
+    return () => window.cancelAnimationFrame(raf)
+  }, [recompute, expanded])
+
+  useEffect(() => {
+    if (expanded) return
+    const onResize = () => recompute()
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [expanded, recompute])
+
+  return {
+    containerRef,
+    setChipRef: (key: string) => (node: HTMLElement | null) => {
+      chipRefs.current[key] = node
+    },
+    expanded,
+    setExpanded,
+    hiddenCount,
+  }
+}
+
 export default function CreatorCardPage() {
   const { t } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
   const returnTo = searchParams.get("returnTo")
+
+  const isMobile = useIsMobileMax640()
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
+  const mobilePreviewTriggerRef = useRef<HTMLElement | null>(null)
+  const mobilePreviewModalRef = useRef<HTMLDivElement | null>(null)
+  const [mobileStep, setMobileStep] = useState(0)
+  const [mobileShowThemeAdd, setMobileShowThemeAdd] = useState(false)
+  const [mobileShowAudienceAdd, setMobileShowAudienceAdd] = useState(false)
+  const mobileThemeInputRef = useRef<HTMLInputElement | null>(null)
+  const mobileAudienceInputRef = useRef<HTMLInputElement | null>(null)
 
   const knownFormatIds = useMemo(
     () =>
@@ -370,6 +456,9 @@ export default function CreatorCardPage() {
   const [themeTypes, setThemeTypes] = useState<string[]>([])
   const [audienceProfiles, setAudienceProfiles] = useState<string[]>([])
 
+  const themeChipOverflow = useTwoRowChipOverflow(themeTypes)
+  const audienceChipOverflow = useTwoRowChipOverflow(audienceProfiles)
+
   const [primaryTypeTags, setPrimaryTypeTags] = useState<string[]>([])
 
   const [contactEmails, setContactEmails] = useState<string[]>([])
@@ -396,6 +485,102 @@ export default function CreatorCardPage() {
   useEffect(() => {
     set__overlayMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobilePreviewOpen(false)
+      setMobileStep(0)
+      setMobileShowThemeAdd(false)
+      setMobileShowAudienceAdd(false)
+    }
+  }, [isMobile])
+
+  const closeMobilePreview = useCallback(() => {
+    setMobilePreviewOpen(false)
+    window.setTimeout(() => {
+      const el = mobilePreviewTriggerRef.current
+      if (el && typeof el.focus === "function") {
+        el.focus()
+      }
+    }, 0)
+  }, [])
+
+  useEffect(() => {
+    if (!isMobile) return
+    if (!mobilePreviewOpen) return
+
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        closeMobilePreview()
+        return
+      }
+
+      if (e.key !== "Tab") return
+      const root = mobilePreviewModalRef.current
+      if (!root) return
+
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => {
+        const style = window.getComputedStyle(el)
+        return style.display !== "none" && style.visibility !== "hidden"
+      })
+
+      if (focusables.length === 0) {
+        e.preventDefault()
+        root.focus()
+        return
+      }
+
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+
+      if (e.shiftKey) {
+        if (!active || active === first || !root.contains(active)) {
+          e.preventDefault()
+          last.focus()
+        }
+        return
+      }
+
+      if (!active || active === last || !root.contains(active)) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    const raf = window.requestAnimationFrame(() => {
+      mobilePreviewModalRef.current?.focus()
+    })
+
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener("keydown", onKeyDown)
+      window.cancelAnimationFrame(raf)
+    }
+  }, [closeMobilePreview, isMobile, mobilePreviewOpen])
+
+  useEffect(() => {
+    if (!isMobile) return
+    if (mobileShowThemeAdd) {
+      window.setTimeout(() => mobileThemeInputRef.current?.focus(), 0)
+    }
+  }, [isMobile, mobileShowThemeAdd])
+
+  useEffect(() => {
+    if (!isMobile) return
+    if (mobileShowAudienceAdd) {
+      window.setTimeout(() => mobileAudienceInputRef.current?.focus(), 0)
+    }
+  }, [isMobile, mobileShowAudienceAdd])
 
   const openAddFeatured = useCallback(() => {
     featuredAddInputRef.current?.click()
@@ -1202,7 +1387,7 @@ export default function CreatorCardPage() {
       {loading ? (
         loadingSkeleton
       ) : (
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0">
+        <div className={"mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0" + (isMobile ? " pb-28" : "")}>
           <div className="lg:col-span-5 min-w-0" onChangeCapture={markDirty} onInputCapture={markDirty}>
             {(() => {
               type LocalMobileSectionKey =
@@ -2048,38 +2233,427 @@ export default function CreatorCardPage() {
               return (
                 <>
                   <div className="lg:hidden">
-                    <Accordion type="single" collapsible defaultValue="profile" className="w-full">
-                      {sections.map((s) => (
-                        <AccordionItem key={s.key} value={s.key}>
-                          <AccordionTrigger className="text-left">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span className="min-w-0 truncate">
-                                {s.titleZh} / {s.titleEn}
-                              </span>
-                              {s.key === "formats" ? (
-                                <span
-                                  title={formatsSummary.title}
-                                  className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
-                                >
-                                  {formatsSummary.text}
-                                </span>
+                    {isMobile ? (
+                      (() => {
+                        const steps = [
+                          { key: "profile" },
+                          { key: "audience" },
+                          { key: "contact" },
+                          { key: "formats" },
+                        ]
+                        const safeStep = Math.max(0, Math.min(steps.length - 1, mobileStep))
+                        const step = steps[safeStep]
+                        const isLast = safeStep === steps.length - 1
+
+                        const formatsSection = sections.find((s) => s.key === "formats")
+                        const nichesSection = sections.find((s) => s.key === "niches")
+                        const brandsSection = sections.find((s) => s.key === "brands")
+
+                        return (
+                          <>
+                            <div className="rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="min-w-0">
+                                  <div className="text-[12px] font-semibold text-white/80 min-w-0 break-words [overflow-wrap:anywhere]">
+                                    {t(`creatorCardEditor.mobile.steps.${step.key}`)}
+                                  </div>
+                                  <div className="mt-0.5 text-[11px] text-white/40">
+                                    {safeStep + 1}/{steps.length}
+                                  </div>
+                                </div>
+                                <div className="ml-auto shrink-0">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={(e) => {
+                                      mobilePreviewTriggerRef.current = e.currentTarget
+                                      setMobilePreviewOpen(true)
+                                    }}
+                                  >
+                                    {t("creatorCardEditor.mobile.actions.preview")}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 rounded-xl border border-white/10 bg-slate-900/40 p-3">
+                              {safeStep === 0 ? (
+                                <div className="space-y-4">
+                                  <div className="min-w-0">
+                                    <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
+                                    <div className="mt-2">
+                                      <textarea
+                                        value={introDraft}
+                                        placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
+                                        onChange={(e) => setIntroDraft(e.target.value)}
+                                        onFocus={() => setActivePreviewSection("about")}
+                                        className="w-full min-h-[120px] resize-y rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.themeTitle")}</div>
+                                      <div className="ml-auto shrink-0">
+                                        {!mobileShowThemeAdd ? (
+                                          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setMobileShowThemeAdd(true)}>
+                                            {t("creatorCardEditor.formats.otherAdd")}
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    {mobileShowThemeAdd ? (
+                                      <div className="mt-2 flex gap-2">
+                                        <Input
+                                          ref={mobileThemeInputRef}
+                                          value={themeTypeInput}
+                                          placeholder={t("creatorCardEditor.profile.themePlaceholder")}
+                                          className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                          onChange={(e) => setThemeTypeInput(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.preventDefault()
+                                              addThemeTypeTag(themeTypeInput)
+                                              setThemeTypeInput("")
+                                              setMobileShowThemeAdd(false)
+                                              markDirty()
+                                            }
+                                          }}
+                                        />
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="shrink-0"
+                                          onClick={() => {
+                                            addThemeTypeTag(themeTypeInput)
+                                            setThemeTypeInput("")
+                                            setMobileShowThemeAdd(false)
+                                            markDirty()
+                                          }}
+                                          disabled={!themeTypeInput.trim()}
+                                        >
+                                          {t("creatorCardEditor.mobile.actions.ok")}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="shrink-0"
+                                          onClick={() => {
+                                            setMobileShowThemeAdd(false)
+                                            setThemeTypeInput("")
+                                          }}
+                                        >
+                                          {t("creatorCardEditor.mobile.actions.cancel")}
+                                        </Button>
+                                      </div>
+                                    ) : null}
+
+                                    {themeTypes.length > 0 ? (
+                                      <div className="mt-2">
+                                        <div
+                                          ref={themeChipOverflow.containerRef}
+                                          className={
+                                            "flex flex-wrap gap-2 " +
+                                            (themeChipOverflow.expanded ? "" : "max-h-[64px] overflow-hidden")
+                                          }
+                                        >
+                                          {themeTypes.map((tag) => (
+                                            <button
+                                              key={tag}
+                                              ref={themeChipOverflow.setChipRef(tag)}
+                                              type="button"
+                                              onClick={() => {
+                                                setThemeTypes((prev) => prev.filter((x) => x !== tag))
+                                                markDirty()
+                                              }}
+                                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-white/10"
+                                            >
+                                              <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                              <span className="ml-1.5 text-slate-400" aria-hidden="true">×</span>
+                                            </button>
+                                          ))}
+                                        </div>
+
+                                        {themeChipOverflow.hiddenCount > 0 ? (
+                                          <button
+                                            type="button"
+                                            className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
+                                            onClick={() => themeChipOverflow.setExpanded((prev) => !prev)}
+                                          >
+                                            {themeChipOverflow.expanded
+                                              ? t("creatorCardEditor.mobile.chips.less")
+                                              : t("creatorCardEditor.mobile.chips.more").replace(
+                                                  "{count}",
+                                                  String(themeChipOverflow.hiddenCount)
+                                                )}
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
                               ) : null}
-                              {s.key === "niches" ? (
-                                <span
-                                  title={nichesSummary.title}
-                                  className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
-                                >
-                                  {nichesSummary.text}
-                                </span>
+
+                              {safeStep === 1 ? (
+                                <div className="space-y-4">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.audienceTitle")}</div>
+                                      <div className="ml-auto shrink-0">
+                                        {!mobileShowAudienceAdd ? (
+                                          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setMobileShowAudienceAdd(true)}>
+                                            {t("creatorCardEditor.formats.otherAdd")}
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+
+                                    {mobileShowAudienceAdd ? (
+                                      <div className="mt-2 flex gap-2">
+                                        <Input
+                                          ref={mobileAudienceInputRef}
+                                          value={audienceProfileInput}
+                                          placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
+                                          className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                          onChange={(e) => setAudienceProfileInput(e.target.value)}
+                                          onFocus={() => setActivePreviewSection("audienceSummary")}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.preventDefault()
+                                              addAudienceProfileTag(audienceProfileInput)
+                                              setAudienceProfileInput("")
+                                              setMobileShowAudienceAdd(false)
+                                              markDirty()
+                                            }
+                                          }}
+                                        />
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="shrink-0"
+                                          onClick={() => {
+                                            addAudienceProfileTag(audienceProfileInput)
+                                            setAudienceProfileInput("")
+                                            setMobileShowAudienceAdd(false)
+                                            markDirty()
+                                          }}
+                                          disabled={!audienceProfileInput.trim()}
+                                        >
+                                          {t("creatorCardEditor.mobile.actions.ok")}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="shrink-0"
+                                          onClick={() => {
+                                            setMobileShowAudienceAdd(false)
+                                            setAudienceProfileInput("")
+                                          }}
+                                        >
+                                          {t("creatorCardEditor.mobile.actions.cancel")}
+                                        </Button>
+                                      </div>
+                                    ) : null}
+
+                                    {audienceProfiles.length > 0 ? (
+                                      <div className="mt-2">
+                                        <div
+                                          ref={audienceChipOverflow.containerRef}
+                                          className={
+                                            "flex flex-wrap gap-2 " +
+                                            (audienceChipOverflow.expanded ? "" : "max-h-[64px] overflow-hidden")
+                                          }
+                                        >
+                                          {audienceProfiles.map((tag) => (
+                                            <button
+                                              key={tag}
+                                              ref={audienceChipOverflow.setChipRef(tag)}
+                                              type="button"
+                                              onClick={() => {
+                                                setAudienceProfiles((prev) => prev.filter((x) => x !== tag))
+                                                markDirty()
+                                              }}
+                                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-white/10"
+                                            >
+                                              <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                              <span className="ml-1.5 text-slate-400" aria-hidden="true">×</span>
+                                            </button>
+                                          ))}
+                                        </div>
+
+                                        {audienceChipOverflow.hiddenCount > 0 ? (
+                                          <button
+                                            type="button"
+                                            className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
+                                            onClick={() => audienceChipOverflow.setExpanded((prev) => !prev)}
+                                          >
+                                            {audienceChipOverflow.expanded
+                                              ? t("creatorCardEditor.mobile.chips.less")
+                                              : t("creatorCardEditor.mobile.chips.more").replace(
+                                                  "{count}",
+                                                  String(audienceChipOverflow.hiddenCount)
+                                                )}
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {safeStep === 2 ? (
+                                <div className="space-y-4">
+                                  <div className="min-w-0">
+                                    <div className="text-[11px] font-semibold text-white/55">Email</div>
+                                    <div className="mt-2">
+                                      <Input
+                                        value={contactEmails[0] ?? ""}
+                                        placeholder="例如：hello@email.com"
+                                        className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                        onChange={(e) => {
+                                          const v = e.target.value
+                                          setContactEmails((prev) => {
+                                            const rest = prev.slice(1)
+                                            return v.trim() ? [v.trim(), ...rest] : rest
+                                          })
+                                          markDirty()
+                                        }}
+                                        onFocus={() => setActivePreviewSection("contact")}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[11px] font-semibold text-white/55">Instagram</div>
+                                    <div className="mt-2">
+                                      <Input
+                                        value={contactInstagrams[0] ?? ""}
+                                        placeholder="@username or https://instagram.com/..."
+                                        className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                        onChange={(e) => {
+                                          const v = e.target.value
+                                          setContactInstagrams((prev) => {
+                                            const rest = prev.slice(1)
+                                            return v.trim() ? [v.trim(), ...rest] : rest
+                                          })
+                                          markDirty()
+                                        }}
+                                        onFocus={() => setActivePreviewSection("contact")}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[11px] font-semibold text-white/55">Other</div>
+                                    <div className="mt-2">
+                                      <textarea
+                                        value={contactOthers[0] ?? ""}
+                                        placeholder="例如：LINE / WhatsApp / 經紀窗口"
+                                        onChange={(e) => {
+                                          const v = e.target.value
+                                          setContactOthers((prev) => {
+                                            const rest = prev.slice(1)
+                                            return v.trim() ? [v.trim(), ...rest] : rest
+                                          })
+                                          markDirty()
+                                        }}
+                                        onFocus={() => setActivePreviewSection("contact")}
+                                        className="w-full min-h-[92px] resize-y rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {safeStep === 3 ? (
+                                <div className="space-y-4">
+                                  {formatsSection ? <div className="space-y-2">{formatsSection.render()}</div> : null}
+                                  {nichesSection ? <div className="space-y-2">{nichesSection.render()}</div> : null}
+                                  {brandsSection ? <div className="space-y-2">{brandsSection.render()}</div> : null}
+                                </div>
                               ) : null}
                             </div>
-                          </AccordionTrigger>
-                          <AccordionContent forceMount>
-                            <div className="space-y-2">{s.render()}</div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      ))}
-                    </Accordion>
+
+                            <div
+                              className="fixed left-0 right-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/85 backdrop-blur"
+                              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+                            >
+                              <div className="mx-auto w-full max-w-6xl px-4 pt-3">
+                                <div className="flex items-center gap-3">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={() => {
+                                      if (safeStep > 0) {
+                                        setMobileStep((s) => Math.max(0, s - 1))
+                                        return
+                                      }
+                                      handleBack()
+                                    }}
+                                  >
+                                    {t("creatorCardEditor.actions.back")}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="primary"
+                                    className="flex-1"
+                                    onClick={() => {
+                                      if (isLast) {
+                                        handleSave()
+                                        return
+                                      }
+                                      setMobileStep((s) => Math.min(steps.length - 1, s + 1))
+                                    }}
+                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+                                  >
+                                    {isLast ? t("creatorCardEditor.actions.save") : t("creatorCardEditor.actions.next")}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )
+                      })()
+                    ) : (
+                      <Accordion type="single" collapsible defaultValue="profile" className="w-full">
+                        {sections.map((s) => (
+                          <AccordionItem key={s.key} value={s.key}>
+                            <AccordionTrigger className="text-left">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="min-w-0 truncate">
+                                  {s.titleZh} / {s.titleEn}
+                                </span>
+                                {s.key === "formats" ? (
+                                  <span
+                                    title={formatsSummary.title}
+                                    className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
+                                  >
+                                    {formatsSummary.text}
+                                  </span>
+                                ) : null}
+                                {s.key === "niches" ? (
+                                  <span
+                                    title={nichesSummary.title}
+                                    className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
+                                  >
+                                    {nichesSummary.text}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent forceMount>
+                              <div className="space-y-2">{s.render()}</div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    )}
                   </div>
 
                   <div className="hidden lg:block">
@@ -2122,45 +2696,132 @@ export default function CreatorCardPage() {
           </div>
 
           <div className="lg:col-span-7 min-w-0">
-            <div className="lg:sticky lg:top-24">
-              <CreatorCardPreview
-                t={t}
-                className="border-white/10 bg-transparent"
-                headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
-                useWidePhotoLayout
-                photoUploadEnabled
-                onProfileImageFileChange={(file) => {
-                  setProfileImageFile(file)
-                  markDirty()
-                }}
-                username={displayUsername || null}
-                profileImageUrl={(() => {
-                  const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
-                  const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                  const u = (u1 || u2).trim()
-                  return u ? u : null
-                })()}
-                displayName={displayName}
-                aboutText={baseCard?.audience ?? null}
-                primaryNiche={baseCard?.niche ?? null}
-                contact={previewContact}
-                featuredItems={featuredItems}
-                featuredImageUrls={featuredItems.map((x) => x.url)}
-                themeTypes={themeTypes}
-                audienceProfiles={audienceProfiles}
-                collaborationNiches={collaborationNiches}
-                deliverables={deliverables}
-                pastCollaborations={pastCollaborations}
-                followersText={followersText}
-                postsText={postsText}
-                engagementRateText={engagementRateText}
-                highlightTarget={highlight}
-                highlightSection={activePreviewSection}
-              />
-            </div>
+            {isMobile ? (
+              <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={(e) => {
+                    mobilePreviewTriggerRef.current = e.currentTarget
+                    setMobilePreviewOpen(true)
+                  }}
+                >
+                  {t("creatorCardEditor.mobile.actions.previewCard")}
+                </Button>
+              </div>
+            ) : (
+              <div className="lg:sticky lg:top-24">
+                <CreatorCardPreview
+                  t={t}
+                  className="border-white/10 bg-transparent"
+                  headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+                  useWidePhotoLayout
+                  photoUploadEnabled
+                  onProfileImageFileChange={(file) => {
+                    setProfileImageFile(file)
+                    markDirty()
+                  }}
+                  username={displayUsername || null}
+                  profileImageUrl={(() => {
+                    const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
+                    const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                    const u = (u1 || u2).trim()
+                    return u ? u : null
+                  })()}
+                  displayName={displayName}
+                  aboutText={baseCard?.audience ?? null}
+                  primaryNiche={baseCard?.niche ?? null}
+                  contact={previewContact}
+                  featuredItems={featuredItems}
+                  featuredImageUrls={featuredItems.map((x) => x.url)}
+                  themeTypes={themeTypes}
+                  audienceProfiles={audienceProfiles}
+                  collaborationNiches={collaborationNiches}
+                  deliverables={deliverables}
+                  pastCollaborations={pastCollaborations}
+                  followersText={followersText}
+                  postsText={postsText}
+                  engagementRateText={engagementRateText}
+                  highlightTarget={highlight}
+                  highlightSection={activePreviewSection}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {__overlayMounted && mobilePreviewOpen
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-50"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("creatorCardEditor.mobile.preview.ariaLabel")}
+            >
+              <div
+                className="absolute inset-0 bg-black/60"
+                onClick={closeMobilePreview}
+              />
+              <div
+                ref={mobilePreviewModalRef}
+                tabIndex={-1}
+                className="absolute inset-0 flex flex-col focus:outline-none"
+              >
+                <div className="shrink-0 px-4 pt-4">
+                  <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 backdrop-blur">
+                    <div className="min-w-0 text-sm font-semibold text-white/85 break-words [overflow-wrap:anywhere]">
+                      {t("creatorCardEditor.mobile.preview.title")}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeMobilePreview}
+                      className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80"
+                    >
+                      {t("creatorCardEditor.mobile.actions.close")}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 pb-6 pt-3">
+                  <CreatorCardPreview
+                    t={t}
+                    className="border-white/10 bg-transparent"
+                    headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+                    useWidePhotoLayout={false}
+                    photoUploadEnabled={false}
+                    onProfileImageFileChange={undefined}
+                    username={displayUsername || null}
+                    profileImageUrl={(() => {
+                      const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
+                      const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                      const u = (u1 || u2).trim()
+                      return u ? u : null
+                    })()}
+                    displayName={displayName}
+                    aboutText={baseCard?.audience ?? null}
+                    primaryNiche={baseCard?.niche ?? null}
+                    contact={previewContact}
+                    featuredItems={featuredItems}
+                    featuredImageUrls={featuredItems.map((x) => x.url)}
+                    themeTypes={themeTypes}
+                    audienceProfiles={audienceProfiles}
+                    collaborationNiches={collaborationNiches}
+                    deliverables={deliverables}
+                    pastCollaborations={pastCollaborations}
+                    followersText={followersText}
+                    postsText={postsText}
+                    engagementRateText={engagementRateText}
+                    highlightTarget={null}
+                    highlightSection={null}
+                  />
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {__overlayMounted && editingFeaturedId
         ? createPortal(
