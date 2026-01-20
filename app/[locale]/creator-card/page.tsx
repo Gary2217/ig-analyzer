@@ -123,7 +123,7 @@ function SortableFeaturedTile(props: {
   suppressClick: boolean
 }) {
   const { item, t, onReplace, onRemove, onEdit, suppressClick } = props
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
 
   const featuredChipText = (() => {
     const s = typeof item.collabType === "string" ? item.collabType.trim() : ""
@@ -141,7 +141,8 @@ function SortableFeaturedTile(props: {
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={
         "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors " +
-        (isDragging ? "scale-[1.03] shadow-lg ring-2 ring-white/20" : "hover:border-white/20 hover:bg-white/10") +
+        (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
+        (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
         (isDragging ? " cursor-grabbing" : " cursor-grab")
       }
       {...attributes}
@@ -1119,6 +1120,7 @@ export default function CreatorCardPage() {
           </Button>
           <Button
             variant="primary"
+            className="ring-1 ring-white/15 hover:ring-white/25"
             onClick={handleSave}
             disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
           >
@@ -1390,7 +1392,7 @@ export default function CreatorCardPage() {
                   render: () => (
                     <>
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-100">Email</div>
+                        <div className="text-xs font-semibold text-slate-300">Email</div>
                         {contactEmails.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactEmails.map((tag) => (
@@ -1457,7 +1459,7 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-100">Instagram</div>
+                        <div className="text-xs font-semibold text-slate-300">Instagram</div>
                         {contactInstagrams.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactInstagrams.map((tag) => (
@@ -1524,7 +1526,7 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-100">Other</div>
+                        <div className="text-xs font-semibold text-slate-300">Other</div>
                         {contactOthers.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactOthers.map((tag) => (
@@ -2036,7 +2038,7 @@ export default function CreatorCardPage() {
                             </div>
                           </AccordionTrigger>
                           <AccordionContent forceMount>
-                            <div className="space-y-3">{s.render()}</div>
+                            <div className="space-y-2">{s.render()}</div>
                           </AccordionContent>
                         </AccordionItem>
                       ))}
@@ -2044,10 +2046,10 @@ export default function CreatorCardPage() {
                   </div>
 
                   <div className="hidden lg:block">
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {sections.map((s) => (
                         <Card key={s.key} className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/40">
-                          <CardHeader className="px-4 pt-4 lg:px-6 lg:pt-5 pb-3">
+                          <CardHeader className="px-4 pt-3 lg:px-6 lg:pt-4 pb-2">
                             <div className="flex items-start gap-3 min-w-0">
                               <CardTitle className="text-[15px] font-semibold text-slate-100 min-w-0 truncate">
                                 {s.titleZh} / {s.titleEn}
@@ -2070,8 +2072,8 @@ export default function CreatorCardPage() {
                               ) : null}
                             </div>
                           </CardHeader>
-                          <CardContent className="px-4 pb-4 lg:px-6 lg:pb-6">
-                            <div className="space-y-3">{s.render()}</div>
+                          <CardContent className="px-4 pb-4 lg:px-6 lg:pb-5">
+                            <div className="space-y-2.5">{s.render()}</div>
                           </CardContent>
                         </Card>
                       ))}
