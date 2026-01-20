@@ -406,7 +406,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   const showKpiGrid = hasReach
 
   const sectionRing = (key: NonNullable<CreatorCardPreviewProps["highlightSection"]>) =>
-    highlightSection === key ? "ring-1 ring-white/12" : ""
+    highlightSection === key ? "ring-2 ring-white/18" : ""
 
   return (
     <Card id={id} className={"min-w-0 " + (className ?? "")}>

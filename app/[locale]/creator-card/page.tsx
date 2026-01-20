@@ -179,6 +179,15 @@ function SortableFeaturedTile(props: {
       )}
 
       {item.url ? (
+        <div
+          className={
+            "pointer-events-none absolute inset-0 bg-black/35 transition-opacity " +
+            (isDragging ? "opacity-0" : "opacity-35 group-hover:opacity-0")
+          }
+        />
+      ) : null}
+
+      {item.url ? (
         <button
           type="button"
           className="absolute left-1 top-1 z-10 rounded-md bg-white/90 px-2 py-1 shadow-sm hover:bg-white"
@@ -326,6 +335,8 @@ export default function CreatorCardPage() {
   >(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
+  const [saveFlash, setSaveFlash] = useState(false)
+  const saveFlashTimerRef = useRef<number | null>(null)
 
   const [showNewCardHint, setShowNewCardHint] = useState(false)
 
@@ -1106,6 +1117,25 @@ export default function CreatorCardPage() {
     </div>
   )
 
+  useEffect(() => {
+    if (!saveOk) return
+    setSaveFlash(true)
+    if (saveFlashTimerRef.current != null) window.clearTimeout(saveFlashTimerRef.current)
+    saveFlashTimerRef.current = window.setTimeout(() => {
+      setSaveFlash(false)
+      saveFlashTimerRef.current = null
+    }, 1000)
+  }, [saveOk])
+
+  useEffect(() => {
+    return () => {
+      if (saveFlashTimerRef.current != null) {
+        window.clearTimeout(saveFlashTimerRef.current)
+        saveFlashTimerRef.current = null
+      }
+    }
+  }, [])
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <div className="flex items-center justify-between gap-3">
@@ -1118,14 +1148,21 @@ export default function CreatorCardPage() {
           <Button type="button" variant="outline" onClick={handleBack}>
             返回
           </Button>
-          <Button
-            variant="primary"
-            className="ring-1 ring-white/15 hover:ring-white/25"
-            onClick={handleSave}
-            disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
-          >
-            {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
-          </Button>
+          <div className="relative">
+            <Button
+              variant="primary"
+              className="ring-1 ring-white/15 hover:ring-white/25"
+              onClick={handleSave}
+              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+            >
+              {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
+            </Button>
+            {saveFlash && !saving && !loading ? (
+              <div className="pointer-events-none absolute -bottom-8 right-0 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
+                {t("creatorCardEditor.success.saved")}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -1237,7 +1274,7 @@ export default function CreatorCardPage() {
                   render: () => (
                     <>
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-100">{t("creatorCardEditor.profile.bioTitle")}</div>
+                        <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
                         <div className="mt-2 relative">
                           <textarea
                             value={introDraft}
@@ -1278,7 +1315,7 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-100">{t("creatorCardEditor.profile.themeTitle")}</div>
+                        <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.themeTitle")}</div>
                         <div className="mt-2">
                           <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                             <Input
@@ -1332,7 +1369,7 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-100">{t("creatorCardEditor.profile.audienceTitle")}</div>
+                        <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.audienceTitle")}</div>
                         {audienceProfiles.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {audienceProfiles.map((tag) => (
@@ -1392,7 +1429,7 @@ export default function CreatorCardPage() {
                   render: () => (
                     <>
                       <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-300">Email</div>
+                        <div className="text-[11px] font-semibold text-white/55">Email</div>
                         {contactEmails.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactEmails.map((tag) => (
@@ -1459,7 +1496,7 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-300">Instagram</div>
+                        <div className="text-[11px] font-semibold text-white/55">Instagram</div>
                         {contactInstagrams.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactInstagrams.map((tag) => (
@@ -1526,7 +1563,7 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-300">Other</div>
+                        <div className="text-[11px] font-semibold text-white/55">Other</div>
                         {contactOthers.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactOthers.map((tag) => (
@@ -2046,12 +2083,12 @@ export default function CreatorCardPage() {
                   </div>
 
                   <div className="hidden lg:block">
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {sections.map((s) => (
                         <Card key={s.key} className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/40">
                           <CardHeader className="px-4 pt-3 lg:px-6 lg:pt-4 pb-2">
                             <div className="flex items-start gap-3 min-w-0">
-                              <CardTitle className="text-[15px] font-semibold text-slate-100 min-w-0 truncate">
+                              <CardTitle className="text-[14px] font-semibold text-white/70 min-w-0 truncate">
                                 {s.titleZh} / {s.titleEn}
                               </CardTitle>
                               {s.key === "formats" ? (
