@@ -69,6 +69,7 @@
       },
       "sections": {
         "profile": "Basic Info",
+        "audience": "Audience",
         "contact": "Contact",
         "formats": "Formats",
         "featured": "Featured",

@@ -353,11 +353,16 @@ export default function CreatorCardPage() {
   const searchParams = useSearchParams()
   const returnTo = searchParams.get("returnTo")
 
+  const ccBuildLoggedRef = useRef(false)
+  if (!ccBuildLoggedRef.current) {
+    console.info("CC_BUILD: creator-card-mobile-v2")
+    ccBuildLoggedRef.current = true
+  }
+
   const isMobile = useIsMobileMax640()
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
   const mobilePreviewTriggerRef = useRef<HTMLElement | null>(null)
   const mobilePreviewModalRef = useRef<HTMLDivElement | null>(null)
-  const [mobileStep, setMobileStep] = useState(0)
   const [mobileShowThemeAdd, setMobileShowThemeAdd] = useState(false)
   const [mobileShowAudienceAdd, setMobileShowAudienceAdd] = useState(false)
   const mobileThemeInputRef = useRef<HTMLInputElement | null>(null)
@@ -438,10 +443,8 @@ export default function CreatorCardPage() {
 
   const confirmLeaveIfDirty = useCallback(() => {
     if (!isDirtyRef.current) return true
-    const zh = "你有尚未儲存的變更，確定要離開嗎？"
-    const en = "You have unsaved changes. Leave without saving?"
-    return window.confirm(`${zh}\n${en}`)
-  }, [])
+    return window.confirm(t("creatorCardEditor.common.unsavedConfirm"))
+  }, [t])
 
   const [introDraft, setIntroDraft] = useState("")
   const [introAppliedHint, setIntroAppliedHint] = useState(false)
@@ -489,7 +492,6 @@ export default function CreatorCardPage() {
   useEffect(() => {
     if (!isMobile) {
       setMobilePreviewOpen(false)
-      setMobileStep(0)
       setMobileShowThemeAdd(false)
       setMobileShowAudienceAdd(false)
     }
@@ -1325,8 +1327,8 @@ export default function CreatorCardPage() {
     <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold min-w-0 truncate">{t("creatorCardEditor.title")}</h1>
-          <p className="mt-1 text-sm text-slate-500 min-w-0">{t("creatorCardEditor.subtitle")}</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t("creatorCardEditor.title")}</h1>
+          <div className="mt-1 text-sm text-slate-600 min-w-0 break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.subtitle")}</div>
         </div>
 
         <div className="shrink-0 flex items-center gap-2">
@@ -2232,353 +2234,344 @@ export default function CreatorCardPage() {
 
               return (
                 <>
-                  <div className="lg:hidden">
-                    {isMobile ? (
-                      (() => {
-                        const steps = [
-                          { key: "profile" },
-                          { key: "audience" },
-                          { key: "contact" },
-                          { key: "formats" },
-                        ]
-                        const safeStep = Math.max(0, Math.min(steps.length - 1, mobileStep))
-                        const step = steps[safeStep]
-                        const isLast = safeStep === steps.length - 1
+                  <div className="lg:hidden" data-cc-build="creator-card-mobile-v2">
+                    {(() => {
+                      const formatsSection = sections.find((s) => s.key === "formats")
+                      const nichesSection = sections.find((s) => s.key === "niches")
+                      const featuredSection = sections.find((s) => s.key === "featured")
+                      const contactSection = sections.find((s) => s.key === "contact")
+                      const brandsSection = sections.find((s) => s.key === "brands")
 
-                        const formatsSection = sections.find((s) => s.key === "formats")
-                        const nichesSection = sections.find((s) => s.key === "niches")
-                        const brandsSection = sections.find((s) => s.key === "brands")
-
-                        return (
-                          <>
-                            <div className="rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div className="min-w-0">
-                                  <div className="text-[12px] font-semibold text-white/80 min-w-0 break-words [overflow-wrap:anywhere]">
-                                    {t(`creatorCardEditor.mobile.steps.${step.key}`)}
-                                  </div>
-                                  <div className="mt-0.5 text-[11px] text-white/40">
-                                    {safeStep + 1}/{steps.length}
-                                  </div>
-                                </div>
-                                <div className="ml-auto shrink-0">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8"
-                                    onClick={(e) => {
-                                      mobilePreviewTriggerRef.current = e.currentTarget
-                                      setMobilePreviewOpen(true)
-                                    }}
-                                  >
-                                    {t("creatorCardEditor.mobile.actions.preview")}
-                                  </Button>
+                      const mobileSections: Array<{
+                        key: string
+                        titleKey: string
+                        render: () => ReactNode
+                      }> = [
+                        {
+                          key: "profile",
+                          titleKey: "creatorCardEditor.mobile.sections.profile",
+                          render: () => (
+                            <div className="space-y-4">
+                              <div className="min-w-0">
+                                <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
+                                <div className="mt-2">
+                                  <textarea
+                                    value={introDraft}
+                                    placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
+                                    onChange={(e) => setIntroDraft(e.target.value)}
+                                    onFocus={() => setActivePreviewSection("about")}
+                                    className="w-full min-h-[120px] resize-y rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                                  />
                                 </div>
                               </div>
-                            </div>
 
-                            <div className="mt-3 rounded-xl border border-white/10 bg-slate-900/40 p-3">
-                              {safeStep === 0 ? (
-                                <div className="space-y-4">
-                                  <div className="min-w-0">
-                                    <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
-                                    <div className="mt-2">
-                                      <textarea
-                                        value={introDraft}
-                                        placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
-                                        onChange={(e) => setIntroDraft(e.target.value)}
-                                        onFocus={() => setActivePreviewSection("about")}
-                                        className="w-full min-h-[120px] resize-y rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                                      />
-                                    </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="text-[12px] font-semibold text-white/55 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.profile.themeTitle")}</div>
+                                  <div className="ml-auto shrink-0">
+                                    {!mobileShowThemeAdd ? (
+                                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setMobileShowThemeAdd(true)}>
+                                        {t("creatorCardEditor.formats.otherAdd")}
+                                      </Button>
+                                    ) : null}
                                   </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.themeTitle")}</div>
-                                      <div className="ml-auto shrink-0">
-                                        {!mobileShowThemeAdd ? (
-                                          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setMobileShowThemeAdd(true)}>
-                                            {t("creatorCardEditor.formats.otherAdd")}
-                                          </Button>
-                                        ) : null}
-                                      </div>
-                                    </div>
+                                </div>
 
-                                    {mobileShowThemeAdd ? (
-                                      <div className="mt-2 flex gap-2">
-                                        <Input
-                                          ref={mobileThemeInputRef}
-                                          value={themeTypeInput}
-                                          placeholder={t("creatorCardEditor.profile.themePlaceholder")}
-                                          className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
-                                          onChange={(e) => setThemeTypeInput(e.target.value)}
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                              e.preventDefault()
-                                              addThemeTypeTag(themeTypeInput)
-                                              setThemeTypeInput("")
-                                              setMobileShowThemeAdd(false)
-                                              markDirty()
-                                            }
-                                          }}
-                                        />
-                                        <Button
+                                {mobileShowThemeAdd ? (
+                                  <div className="mt-2 flex gap-2 min-w-0">
+                                    <Input
+                                      ref={mobileThemeInputRef}
+                                      value={themeTypeInput}
+                                      placeholder={t("creatorCardEditor.profile.themePlaceholder")}
+                                      className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                      onChange={(e) => setThemeTypeInput(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault()
+                                          addThemeTypeTag(themeTypeInput)
+                                          setThemeTypeInput("")
+                                          setMobileShowThemeAdd(false)
+                                          markDirty()
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="shrink-0"
+                                      onClick={() => {
+                                        addThemeTypeTag(themeTypeInput)
+                                        setThemeTypeInput("")
+                                        setMobileShowThemeAdd(false)
+                                        markDirty()
+                                      }}
+                                      disabled={!themeTypeInput.trim()}
+                                    >
+                                      {t("creatorCardEditor.mobile.actions.ok")}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="shrink-0"
+                                      onClick={() => {
+                                        setMobileShowThemeAdd(false)
+                                        setThemeTypeInput("")
+                                      }}
+                                    >
+                                      {t("creatorCardEditor.mobile.actions.cancel")}
+                                    </Button>
+                                  </div>
+                                ) : null}
+
+                                {themeTypes.length > 0 ? (
+                                  <div className="mt-2">
+                                    <div
+                                      ref={themeChipOverflow.containerRef}
+                                      className={
+                                        "flex flex-wrap gap-2 " + (themeChipOverflow.expanded ? "" : "max-h-[64px] overflow-hidden")
+                                      }
+                                    >
+                                      {themeTypes.map((tag) => (
+                                        <button
+                                          key={tag}
+                                          ref={themeChipOverflow.setChipRef(tag)}
                                           type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          className="shrink-0"
                                           onClick={() => {
-                                            addThemeTypeTag(themeTypeInput)
-                                            setThemeTypeInput("")
-                                            setMobileShowThemeAdd(false)
+                                            setThemeTypes((prev) => prev.filter((x) => x !== tag))
                                             markDirty()
                                           }}
-                                          disabled={!themeTypeInput.trim()}
+                                          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-white/10"
                                         >
-                                          {t("creatorCardEditor.mobile.actions.ok")}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          className="shrink-0"
-                                          onClick={() => {
-                                            setMobileShowThemeAdd(false)
-                                            setThemeTypeInput("")
-                                          }}
-                                        >
-                                          {t("creatorCardEditor.mobile.actions.cancel")}
-                                        </Button>
-                                      </div>
+                                          <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                          <span className="ml-1.5 text-slate-400" aria-hidden="true">×</span>
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    {themeChipOverflow.hiddenCount > 0 ? (
+                                      <button
+                                        type="button"
+                                        className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
+                                        onClick={() => themeChipOverflow.setExpanded((prev) => !prev)}
+                                      >
+                                        {themeChipOverflow.expanded
+                                          ? t("creatorCardEditor.mobile.chips.less")
+                                          : t("creatorCardEditor.mobile.chips.more").replace(
+                                              "{count}",
+                                              String(themeChipOverflow.hiddenCount)
+                                            )}
+                                      </button>
                                     ) : null}
-
-                                    {themeTypes.length > 0 ? (
-                                      <div className="mt-2">
-                                        <div
-                                          ref={themeChipOverflow.containerRef}
-                                          className={
-                                            "flex flex-wrap gap-2 " +
-                                            (themeChipOverflow.expanded ? "" : "max-h-[64px] overflow-hidden")
-                                          }
-                                        >
-                                          {themeTypes.map((tag) => (
-                                            <button
-                                              key={tag}
-                                              ref={themeChipOverflow.setChipRef(tag)}
-                                              type="button"
-                                              onClick={() => {
-                                                setThemeTypes((prev) => prev.filter((x) => x !== tag))
-                                                markDirty()
-                                              }}
-                                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-white/10"
-                                            >
-                                              <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                                              <span className="ml-1.5 text-slate-400" aria-hidden="true">×</span>
-                                            </button>
-                                          ))}
-                                        </div>
-
-                                        {themeChipOverflow.hiddenCount > 0 ? (
-                                          <button
-                                            type="button"
-                                            className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
-                                            onClick={() => themeChipOverflow.setExpanded((prev) => !prev)}
-                                          >
-                                            {themeChipOverflow.expanded
-                                              ? t("creatorCardEditor.mobile.chips.less")
-                                              : t("creatorCardEditor.mobile.chips.more").replace(
-                                                  "{count}",
-                                                  String(themeChipOverflow.hiddenCount)
-                                                )}
-                                          </button>
-                                        ) : null}
-                                      </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          ),
+                        },
+                        {
+                          key: "audience",
+                          titleKey: "creatorCardEditor.mobile.sections.audience",
+                          render: () => (
+                            <div className="space-y-4">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="text-[12px] font-semibold text-white/55 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.profile.audienceTitle")}</div>
+                                  <div className="ml-auto shrink-0">
+                                    {!mobileShowAudienceAdd ? (
+                                      <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setMobileShowAudienceAdd(true)}>
+                                        {t("creatorCardEditor.formats.otherAdd")}
+                                      </Button>
                                     ) : null}
                                   </div>
                                 </div>
-                              ) : null}
 
-                              {safeStep === 1 ? (
-                                <div className="space-y-4">
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.audienceTitle")}</div>
-                                      <div className="ml-auto shrink-0">
-                                        {!mobileShowAudienceAdd ? (
-                                          <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => setMobileShowAudienceAdd(true)}>
-                                            {t("creatorCardEditor.formats.otherAdd")}
-                                          </Button>
-                                        ) : null}
-                                      </div>
-                                    </div>
+                                {mobileShowAudienceAdd ? (
+                                  <div className="mt-2 flex gap-2 min-w-0">
+                                    <Input
+                                      ref={mobileAudienceInputRef}
+                                      value={audienceProfileInput}
+                                      placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
+                                      className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                      onChange={(e) => setAudienceProfileInput(e.target.value)}
+                                      onFocus={() => setActivePreviewSection("audienceSummary")}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault()
+                                          addAudienceProfileTag(audienceProfileInput)
+                                          setAudienceProfileInput("")
+                                          setMobileShowAudienceAdd(false)
+                                          markDirty()
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="shrink-0"
+                                      onClick={() => {
+                                        addAudienceProfileTag(audienceProfileInput)
+                                        setAudienceProfileInput("")
+                                        setMobileShowAudienceAdd(false)
+                                        markDirty()
+                                      }}
+                                      disabled={!audienceProfileInput.trim()}
+                                    >
+                                      {t("creatorCardEditor.mobile.actions.ok")}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="shrink-0"
+                                      onClick={() => {
+                                        setMobileShowAudienceAdd(false)
+                                        setAudienceProfileInput("")
+                                      }}
+                                    >
+                                      {t("creatorCardEditor.mobile.actions.cancel")}
+                                    </Button>
+                                  </div>
+                                ) : null}
 
-                                    {mobileShowAudienceAdd ? (
-                                      <div className="mt-2 flex gap-2">
-                                        <Input
-                                          ref={mobileAudienceInputRef}
-                                          value={audienceProfileInput}
-                                          placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
-                                          className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
-                                          onChange={(e) => setAudienceProfileInput(e.target.value)}
-                                          onFocus={() => setActivePreviewSection("audienceSummary")}
-                                          onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                              e.preventDefault()
-                                              addAudienceProfileTag(audienceProfileInput)
-                                              setAudienceProfileInput("")
-                                              setMobileShowAudienceAdd(false)
-                                              markDirty()
-                                            }
-                                          }}
-                                        />
-                                        <Button
+                                {audienceProfiles.length > 0 ? (
+                                  <div className="mt-2">
+                                    <div
+                                      ref={audienceChipOverflow.containerRef}
+                                      className={
+                                        "flex flex-wrap gap-2 " + (audienceChipOverflow.expanded ? "" : "max-h-[64px] overflow-hidden")
+                                      }
+                                    >
+                                      {audienceProfiles.map((tag) => (
+                                        <button
+                                          key={tag}
+                                          ref={audienceChipOverflow.setChipRef(tag)}
                                           type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          className="shrink-0"
                                           onClick={() => {
-                                            addAudienceProfileTag(audienceProfileInput)
-                                            setAudienceProfileInput("")
-                                            setMobileShowAudienceAdd(false)
+                                            setAudienceProfiles((prev) => prev.filter((x) => x !== tag))
                                             markDirty()
                                           }}
-                                          disabled={!audienceProfileInput.trim()}
+                                          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-white/10"
                                         >
-                                          {t("creatorCardEditor.mobile.actions.ok")}
-                                        </Button>
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          className="shrink-0"
-                                          onClick={() => {
-                                            setMobileShowAudienceAdd(false)
-                                            setAudienceProfileInput("")
-                                          }}
-                                        >
-                                          {t("creatorCardEditor.mobile.actions.cancel")}
-                                        </Button>
-                                      </div>
-                                    ) : null}
+                                          <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                          <span className="ml-1.5 text-slate-400" aria-hidden="true">×</span>
+                                        </button>
+                                      ))}
+                                    </div>
 
-                                    {audienceProfiles.length > 0 ? (
-                                      <div className="mt-2">
-                                        <div
-                                          ref={audienceChipOverflow.containerRef}
-                                          className={
-                                            "flex flex-wrap gap-2 " +
-                                            (audienceChipOverflow.expanded ? "" : "max-h-[64px] overflow-hidden")
-                                          }
-                                        >
-                                          {audienceProfiles.map((tag) => (
-                                            <button
-                                              key={tag}
-                                              ref={audienceChipOverflow.setChipRef(tag)}
-                                              type="button"
-                                              onClick={() => {
-                                                setAudienceProfiles((prev) => prev.filter((x) => x !== tag))
-                                                markDirty()
-                                              }}
-                                              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-white/10"
-                                            >
-                                              <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
-                                              <span className="ml-1.5 text-slate-400" aria-hidden="true">×</span>
-                                            </button>
-                                          ))}
-                                        </div>
-
-                                        {audienceChipOverflow.hiddenCount > 0 ? (
-                                          <button
-                                            type="button"
-                                            className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
-                                            onClick={() => audienceChipOverflow.setExpanded((prev) => !prev)}
-                                          >
-                                            {audienceChipOverflow.expanded
-                                              ? t("creatorCardEditor.mobile.chips.less")
-                                              : t("creatorCardEditor.mobile.chips.more").replace(
-                                                  "{count}",
-                                                  String(audienceChipOverflow.hiddenCount)
-                                                )}
-                                          </button>
-                                        ) : null}
-                                      </div>
+                                    {audienceChipOverflow.hiddenCount > 0 ? (
+                                      <button
+                                        type="button"
+                                        className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
+                                        onClick={() => audienceChipOverflow.setExpanded((prev) => !prev)}
+                                      >
+                                        {audienceChipOverflow.expanded
+                                          ? t("creatorCardEditor.mobile.chips.less")
+                                          : t("creatorCardEditor.mobile.chips.more").replace(
+                                              "{count}",
+                                              String(audienceChipOverflow.hiddenCount)
+                                            )}
+                                      </button>
                                     ) : null}
                                   </div>
-                                </div>
-                              ) : null}
-
-                              {safeStep === 2 ? (
-                                <div className="space-y-4">
-                                  <div className="min-w-0">
-                                    <div className="text-[11px] font-semibold text-white/55">Email</div>
-                                    <div className="mt-2">
-                                      <Input
-                                        value={contactEmails[0] ?? ""}
-                                        placeholder="例如：hello@email.com"
-                                        className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
-                                        onChange={(e) => {
-                                          const v = e.target.value
-                                          setContactEmails((prev) => {
-                                            const rest = prev.slice(1)
-                                            return v.trim() ? [v.trim(), ...rest] : rest
-                                          })
-                                          markDirty()
-                                        }}
-                                        onFocus={() => setActivePreviewSection("contact")}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="text-[11px] font-semibold text-white/55">Instagram</div>
-                                    <div className="mt-2">
-                                      <Input
-                                        value={contactInstagrams[0] ?? ""}
-                                        placeholder="@username or https://instagram.com/..."
-                                        className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
-                                        onChange={(e) => {
-                                          const v = e.target.value
-                                          setContactInstagrams((prev) => {
-                                            const rest = prev.slice(1)
-                                            return v.trim() ? [v.trim(), ...rest] : rest
-                                          })
-                                          markDirty()
-                                        }}
-                                        onFocus={() => setActivePreviewSection("contact")}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="text-[11px] font-semibold text-white/55">Other</div>
-                                    <div className="mt-2">
-                                      <textarea
-                                        value={contactOthers[0] ?? ""}
-                                        placeholder="例如：LINE / WhatsApp / 經紀窗口"
-                                        onChange={(e) => {
-                                          const v = e.target.value
-                                          setContactOthers((prev) => {
-                                            const rest = prev.slice(1)
-                                            return v.trim() ? [v.trim(), ...rest] : rest
-                                          })
-                                          markDirty()
-                                        }}
-                                        onFocus={() => setActivePreviewSection("contact")}
-                                        className="w-full min-h-[92px] resize-y rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {safeStep === 3 ? (
-                                <div className="space-y-4">
-                                  {formatsSection ? <div className="space-y-2">{formatsSection.render()}</div> : null}
-                                  {nichesSection ? <div className="space-y-2">{nichesSection.render()}</div> : null}
-                                  {brandsSection ? <div className="space-y-2">{brandsSection.render()}</div> : null}
-                                </div>
-                              ) : null}
+                                ) : null}
+                              </div>
                             </div>
+                          ),
+                        },
+                        {
+                          key: "contact",
+                          titleKey: "creatorCardEditor.mobile.sections.contact",
+                          render: () =>
+                            contactSection ? (
+                              <div className="space-y-2">{contactSection.render()}</div>
+                            ) : (
+                              <div className="text-sm text-white/60">{t("creatorCardEditor.common.select")}</div>
+                            ),
+                        },
+                        {
+                          key: "featured",
+                          titleKey: "creatorCardEditor.mobile.sections.featured",
+                          render: () =>
+                            featuredSection ? (
+                              <div className="space-y-2">{featuredSection.render()}</div>
+                            ) : (
+                              <div className="text-sm text-white/60">{t("creatorCardEditor.common.select")}</div>
+                            ),
+                        },
+                        {
+                          key: "formats",
+                          titleKey: "creatorCardEditor.mobile.sections.formats",
+                          render: () =>
+                            formatsSection ? (
+                              <div className="space-y-2">{formatsSection.render()}</div>
+                            ) : (
+                              <div className="text-sm text-white/60">{t("creatorCardEditor.common.select")}</div>
+                            ),
+                        },
+                        {
+                          key: "niches",
+                          titleKey: "creatorCardEditor.mobile.sections.niches",
+                          render: () =>
+                            nichesSection ? (
+                              <div className="space-y-2">{nichesSection.render()}</div>
+                            ) : (
+                              <div className="text-sm text-white/60">{t("creatorCardEditor.common.select")}</div>
+                            ),
+                        },
+                        {
+                          key: "brands",
+                          titleKey: "creatorCardEditor.mobile.sections.pastCollaborations",
+                          render: () =>
+                            brandsSection ? (
+                              <div className="space-y-2">{brandsSection.render()}</div>
+                            ) : (
+                              <div className="text-sm text-white/60">{t("creatorCardEditor.common.select")}</div>
+                            ),
+                        },
+                      ]
 
+                      return (
+                        <>
+                          {isMobile ? (
+                            <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                                aria-label={t("creatorCardEditor.mobile.preview.ariaLabel")}
+                                onClick={(e) => {
+                                  mobilePreviewTriggerRef.current = e.currentTarget
+                                  setMobilePreviewOpen(true)
+                                }}
+                              >
+                                {t("creatorCardEditor.mobile.actions.previewCard")}
+                              </Button>
+                            </div>
+                          ) : null}
+
+                          <div className={(isMobile ? "mt-3" : "") + " w-full"}>
+                            <Accordion type="multiple" defaultValue={["profile"]} className="w-full">
+                              {mobileSections.map((s) => (
+                                <AccordionItem key={s.key} value={s.key}>
+                                  <AccordionTrigger className="text-left">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                                        {t(s.titleKey)}
+                                      </span>
+                                    </div>
+                                  </AccordionTrigger>
+                                  <AccordionContent forceMount>
+                                    <div className="space-y-2">{s.render()}</div>
+                                  </AccordionContent>
+                                </AccordionItem>
+                              ))}
+                            </Accordion>
+                          </div>
+
+                          {isMobile ? (
                             <div
                               className="fixed left-0 right-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/85 backdrop-blur"
                               style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
@@ -2588,72 +2581,27 @@ export default function CreatorCardPage() {
                                   <Button
                                     type="button"
                                     variant="outline"
-                                    className="flex-1"
-                                    onClick={() => {
-                                      if (safeStep > 0) {
-                                        setMobileStep((s) => Math.max(0, s - 1))
-                                        return
-                                      }
-                                      handleBack()
-                                    }}
+                                    className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                                    onClick={handleBack}
                                   >
                                     {t("creatorCardEditor.actions.back")}
                                   </Button>
                                   <Button
                                     type="button"
                                     variant="primary"
-                                    className="flex-1"
-                                    onClick={() => {
-                                      if (isLast) {
-                                        handleSave()
-                                        return
-                                      }
-                                      setMobileStep((s) => Math.min(steps.length - 1, s + 1))
-                                    }}
+                                    className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                                    onClick={handleSave}
                                     disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                                   >
-                                    {isLast ? t("creatorCardEditor.actions.save") : t("creatorCardEditor.actions.next")}
+                                    {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
                                   </Button>
                                 </div>
                               </div>
                             </div>
-                          </>
-                        )
-                      })()
-                    ) : (
-                      <Accordion type="single" collapsible defaultValue="profile" className="w-full">
-                        {sections.map((s) => (
-                          <AccordionItem key={s.key} value={s.key}>
-                            <AccordionTrigger className="text-left">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="min-w-0 truncate">
-                                  {s.titleZh} / {s.titleEn}
-                                </span>
-                                {s.key === "formats" ? (
-                                  <span
-                                    title={formatsSummary.title}
-                                    className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
-                                  >
-                                    {formatsSummary.text}
-                                  </span>
-                                ) : null}
-                                {s.key === "niches" ? (
-                                  <span
-                                    title={nichesSummary.title}
-                                    className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
-                                  >
-                                    {nichesSummary.text}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent forceMount>
-                              <div className="space-y-2">{s.render()}</div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                    )}
+                          ) : null}
+                        </>
+                      )
+                    })()}
                   </div>
 
                   <div className="hidden lg:block">
@@ -2696,21 +2644,7 @@ export default function CreatorCardPage() {
           </div>
 
           <div className="lg:col-span-7 min-w-0">
-            {isMobile ? (
-              <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={(e) => {
-                    mobilePreviewTriggerRef.current = e.currentTarget
-                    setMobilePreviewOpen(true)
-                  }}
-                >
-                  {t("creatorCardEditor.mobile.actions.previewCard")}
-                </Button>
-              </div>
-            ) : (
+            {isMobile ? null : (
               <div className="lg:sticky lg:top-24">
                 <CreatorCardPreview
                   t={t}

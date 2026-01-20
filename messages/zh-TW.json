@@ -69,6 +69,7 @@
       },
       "sections": {
         "profile": "基本資料",
+        "audience": "受眾",
         "contact": "聯絡方式",
         "formats": "合作形式",
         "featured": "精選貼文",
