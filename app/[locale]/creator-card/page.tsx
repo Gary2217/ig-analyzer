@@ -2128,7 +2128,7 @@ export default function CreatorCardPage() {
                     }}
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                   >
-                    <option value="">合作形式</option>
+                    <option value="" disabled hidden />
                     {COLLAB_TYPE_OPTIONS.map((id) => {
                       const label = t(collabTypeLabelKey(id))
                       return (
