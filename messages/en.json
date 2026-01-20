@@ -61,8 +61,32 @@
     "common": {
       "select": "Select"
     },
+    "mobile": {
+      "chips": {
+        "more": "+{count} more",
+        "less": "Show less"
+      },
+      "steps": {
+        "profile": "Basic Info",
+        "audience": "Audience",
+        "contact": "Contact",
+        "formats": "Formats"
+      },
+      "actions": {
+        "preview": "Preview",
+        "previewCard": "Preview Card",
+        "ok": "OK",
+        "cancel": "Cancel",
+        "close": "Close"
+      },
+      "preview": {
+        "title": "Preview Card",
+        "ariaLabel": "Creator card preview"
+      }
+    },
     "actions": {
       "back": "Back",
+      "next": "Next",
       "retry": "Retry",
       "save": "Save",
       "saving": "Saving…"
