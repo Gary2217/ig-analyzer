@@ -116,13 +116,24 @@ type FeaturedItem = {
 
 function SortableFeaturedTile(props: {
   item: FeaturedItem
+  t: (key: string) => string
   onReplace: (id: string) => void
   onRemove: (id: string) => void
   onEdit: (id: string) => void
   suppressClick: boolean
 }) {
-  const { item, onReplace, onRemove, onEdit, suppressClick } = props
+  const { item, t, onReplace, onRemove, onEdit, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+
+  const featuredChipText = (() => {
+    const s = typeof item.collabType === "string" ? item.collabType.trim() : ""
+    return s ? s : t("creatorCardEditor.common.select")
+  })()
+
+  const featuredChipTitle = (() => {
+    const s = typeof item.collabType === "string" ? item.collabType.trim() : ""
+    return s ? s : ""
+  })()
 
   return (
     <div
@@ -170,7 +181,8 @@ function SortableFeaturedTile(props: {
         <button
           type="button"
           className="absolute left-1 top-1 z-10 rounded-md bg-white/90 px-2 py-1 shadow-sm hover:bg-white"
-          aria-label="請選擇"
+          aria-label={featuredChipText}
+          title={featuredChipTitle}
           onPointerDownCapture={(e) => {
             e.preventDefault()
             e.stopPropagation()
@@ -185,7 +197,9 @@ function SortableFeaturedTile(props: {
             onEdit(item.id)
           }}
         >
-          <span className="text-[11px] font-semibold text-slate-700">請選擇</span>
+          <span className="block min-w-0 max-w-full truncate text-[11px] font-semibold text-slate-700">
+            {featuredChipText}
+          </span>
         </button>
       ) : null}
 
@@ -1657,6 +1671,7 @@ export default function CreatorCardPage() {
                               <SortableFeaturedTile
                                 key={item.id}
                                 item={item}
+                                t={t}
                                 suppressClick={suppressFeaturedTileClick}
                                 onReplace={(id) => {
                                   pendingFeaturedReplaceIdRef.current = id
