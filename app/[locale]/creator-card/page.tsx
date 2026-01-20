@@ -1246,7 +1246,7 @@ export default function CreatorCardPage() {
                           />
                           <Button
                             type="button"
-                            variant="primary"
+                            variant="outline"
                             size="sm"
                             className="absolute bottom-3 right-3"
                             onClick={(e) => {
@@ -1293,7 +1293,7 @@ export default function CreatorCardPage() {
                             />
                             <Button
                               type="button"
-                              variant="primary"
+                              variant="outline"
                               size="sm"
                               className="shrink-0"
                               onClick={() => {
@@ -1364,7 +1364,7 @@ export default function CreatorCardPage() {
                             />
                             <Button
                               type="button"
-                              variant="primary"
+                              variant="outline"
                               size="sm"
                               className="shrink-0"
                               onClick={() => {
@@ -1435,7 +1435,7 @@ export default function CreatorCardPage() {
                             />
                             <Button
                               type="button"
-                              variant="primary"
+                              variant="outline"
                               size="sm"
                               className="shrink-0"
                               onClick={() => {
@@ -1501,7 +1501,7 @@ export default function CreatorCardPage() {
                             />
                             <Button
                               type="button"
-                              variant="primary"
+                              variant="outline"
                               size="sm"
                               className="shrink-0"
                               onClick={() => {
@@ -1568,7 +1568,7 @@ export default function CreatorCardPage() {
                           <div className="mt-2 flex justify-end">
                             <Button
                               type="button"
-                              variant="primary"
+                              variant="outline"
                               size="sm"
                               className="shrink-0"
                               onClick={() => {
@@ -1694,11 +1694,11 @@ export default function CreatorCardPage() {
 
                         <button
                           type="button"
-                          className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                          className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                           onClick={openAddFeatured}
                           aria-label="新增作品"
                         >
-                          <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                             <Plus className="h-7 w-7 text-slate-300 group-hover:text-slate-400" />
                           </div>
                         </button>
@@ -1962,7 +1962,7 @@ export default function CreatorCardPage() {
                           />
                           <Button
                             type="button"
-                            variant="primary"
+                            variant="outline"
                             size="sm"
                             className="shrink-0"
                             onClick={() => {
@@ -2020,10 +2020,10 @@ export default function CreatorCardPage() {
                   <div className="hidden lg:block">
                     <div className="space-y-4">
                       {sections.map((s) => (
-                        <Card key={s.key} className="overflow-hidden">
-                          <CardHeader className="px-4 pt-4 lg:px-6 lg:pt-6">
+                        <Card key={s.key} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                          <CardHeader className="px-4 pt-4 lg:px-6 lg:pt-5 pb-3">
                             <div className="flex items-start gap-3 min-w-0">
-                              <CardTitle className="text-base min-w-0 truncate">
+                              <CardTitle className="text-[15px] font-semibold text-slate-900 min-w-0 truncate">
                                 {s.titleZh} / {s.titleEn}
                               </CardTitle>
                               {s.key === "formats" ? (
