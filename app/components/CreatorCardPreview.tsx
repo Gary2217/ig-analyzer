@@ -483,17 +483,17 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   <div className="mt-auto pt-3 min-w-0">
                     <div
                       title={resolvedDisplayName}
-                      className="min-w-0 truncate text-[clamp(18px,4.8vw,28px)] font-semibold text-white leading-tight"
+                      className="min-w-0 text-[clamp(18px,4.6vw,26px)] font-semibold text-white/90 leading-snug break-words line-clamp-2 [overflow-wrap:anywhere]"
                     >
                       {resolvedDisplayName}
                     </div>
                     <div
                       title={`@${resolvedUsername}`}
-                      className="mt-0.5 min-w-0 truncate text-xs sm:text-sm text-white/60"
+                      className="mt-0.5 min-w-0 truncate text-xs sm:text-sm text-white/55 font-medium tracking-tight"
                     >
                       @{resolvedUsername}
                     </div>
-                    <div className="mt-2 inline-flex items-center rounded-full border border-white/10 bg-white/10 px-2 py-0.5 text-[11px] text-white/80 whitespace-nowrap">
+                    <div className="mt-1.5 inline-flex items-center rounded-full border border-white/12 bg-white/8 px-2 py-0.5 text-[11px] leading-none text-white/75 whitespace-nowrap backdrop-blur-sm">
                       {t("results.mediaKit.rolePill")}
                     </div>
                   </div>
