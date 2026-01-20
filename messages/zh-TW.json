@@ -58,6 +58,9 @@
   "creatorCardEditor": {
     "title": "完善名片資料",
     "subtitle": "設定你的合作偏好，讓品牌商更快理解你適合哪些合作。",
+    "common": {
+      "select": "請選擇"
+    },
     "actions": {
       "back": "返回",
       "retry": "重試",

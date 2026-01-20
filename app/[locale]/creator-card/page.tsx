@@ -17,7 +17,7 @@ import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname, localePathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
-import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey } from "../../lib/creatorCardOptions"
+import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 
 type CreatorStats = {
   engagementRatePct?: number
@@ -234,6 +234,17 @@ function toggleInArray(values: string[], value: string) {
   const idx = values.indexOf(value)
   if (idx >= 0) return [...values.slice(0, idx), ...values.slice(idx + 1)]
   return [...values, value]
+}
+
+function selectedSummary(labels: string[], locale: string, t: (k: string) => string): { text: string; title: string } {
+  const joiner = locale === "zh-TW" ? "、" : ", "
+  const safe = labels.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean)
+  if (safe.length === 0) {
+    return { text: t("creatorCardEditor.common.select"), title: "" }
+  }
+  const title = safe.join(joiner)
+  if (safe.length === 1) return { text: safe[0], title: safe[0] }
+  return { text: `${safe[0]} +${safe.length - 1}`, title }
 }
 
 export default function CreatorCardPage() {
@@ -1150,6 +1161,53 @@ export default function CreatorCardPage() {
                 | "brands"
                 | "past"
 
+              const formatLabels = (() => {
+                const out: string[] = []
+                const seen = new Set<string>()
+
+                const hasFb = deliverables.includes("fb_post") || deliverables.includes("fb") || deliverables.includes("facebook")
+                const normalized = deliverables.filter((x) => x !== "fb_post" && x !== "fb" && x !== "facebook")
+                if (hasFb) normalized.push("fb_post")
+
+                for (const id of normalized) {
+                  if (id === "other") continue
+                  const label = knownCollabTypeIds.has(id) ? t(collabTypeLabelKey(id as CollabTypeOptionId)) : id
+                  const s = typeof label === "string" ? label.trim() : ""
+                  if (!s) continue
+                  const key = s.toLowerCase()
+                  if (seen.has(key)) continue
+                  seen.add(key)
+                  out.push(s)
+                }
+
+                if (otherFormatEnabled) {
+                  const otherLabel = t("creatorCardEditor.formats.options.other")
+                  const s = typeof otherLabel === "string" ? otherLabel.trim() : ""
+                  if (s) out.push(s)
+                }
+
+                return out
+              })()
+
+              const nicheLabels = (() => {
+                const out: string[] = []
+                const seen = new Set<string>()
+                for (const id of collaborationNiches) {
+                  const opt = nicheOptions.find((x) => x.id === id)
+                  const label = opt ? t(opt.labelKey) : id
+                  const s = typeof label === "string" ? label.trim() : ""
+                  if (!s) continue
+                  const key = s.toLowerCase()
+                  if (seen.has(key)) continue
+                  seen.add(key)
+                  out.push(s)
+                }
+                return out
+              })()
+
+              const formatsSummary = selectedSummary(formatLabels, activeLocale, t)
+              const nichesSummary = selectedSummary(nicheLabels, activeLocale, t)
+
               const sections: Array<{
                 key: LocalMobileSectionKey
                 titleZh: string
@@ -1914,9 +1972,27 @@ export default function CreatorCardPage() {
                       {sections.map((s) => (
                         <AccordionItem key={s.key} value={s.key}>
                           <AccordionTrigger className="text-left">
-                            <span className="min-w-0 truncate">
-                              {s.titleZh} / {s.titleEn}
-                            </span>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 truncate">
+                                {s.titleZh} / {s.titleEn}
+                              </span>
+                              {s.key === "formats" ? (
+                                <span
+                                  title={formatsSummary.title}
+                                  className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
+                                >
+                                  {formatsSummary.text}
+                                </span>
+                              ) : null}
+                              {s.key === "niches" ? (
+                                <span
+                                  title={nichesSummary.title}
+                                  className="ml-auto min-w-0 max-w-[140px] truncate text-[12px] font-medium text-slate-500"
+                                >
+                                  {nichesSummary.text}
+                                </span>
+                              ) : null}
+                            </div>
                           </AccordionTrigger>
                           <AccordionContent forceMount>
                             <div className="space-y-3">{s.render()}</div>
@@ -1931,9 +2007,27 @@ export default function CreatorCardPage() {
                       {sections.map((s) => (
                         <Card key={s.key} className="overflow-hidden">
                           <CardHeader className="px-4 pt-4 lg:px-6 lg:pt-6">
-                            <CardTitle className="text-base">
-                              {s.titleZh} / {s.titleEn}
-                            </CardTitle>
+                            <div className="flex items-start gap-3 min-w-0">
+                              <CardTitle className="text-base min-w-0 truncate">
+                                {s.titleZh} / {s.titleEn}
+                              </CardTitle>
+                              {s.key === "formats" ? (
+                                <span
+                                  title={formatsSummary.title}
+                                  className="ml-auto min-w-0 max-w-[220px] truncate text-[12px] font-medium text-slate-500"
+                                >
+                                  {formatsSummary.text}
+                                </span>
+                              ) : null}
+                              {s.key === "niches" ? (
+                                <span
+                                  title={nichesSummary.title}
+                                  className="ml-auto min-w-0 max-w-[220px] truncate text-[12px] font-medium text-slate-500"
+                                >
+                                  {nichesSummary.text}
+                                </span>
+                              ) : null}
+                            </div>
                           </CardHeader>
                           <CardContent className="px-4 pb-4 lg:px-6 lg:pb-6">
                             <div className="space-y-3">{s.render()}</div>

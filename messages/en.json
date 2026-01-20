@@ -58,6 +58,9 @@
   "creatorCardEditor": {
     "title": "Complete Card Info",
     "subtitle": "Set your collaboration preferences so brands can quickly understand what you offer.",
+    "common": {
+      "select": "Select"
+    },
     "actions": {
       "back": "Back",
       "retry": "Retry",
