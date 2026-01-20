@@ -541,7 +541,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
                       <div className="mt-0.5 min-w-0">
                         <Pill
-                          clampLines={1}
+                          clampLines={2}
                           title={String(audienceSummaryText ?? "")}
                           className="text-white/85"
                           unstyled
