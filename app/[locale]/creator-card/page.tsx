@@ -1770,7 +1770,7 @@ export default function CreatorCardPage() {
                           const pillClassName =
                             "h-7 px-2.5 text-xs rounded-full border " +
                             (isActive
-                              ? "bg-white/10 border-white/20 text-white hover:bg-white/15"
+                              ? "bg-white/[0.06] border-emerald-400/50 text-white hover:bg-white/[0.09] hover:border-emerald-400/70"
                               : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10")
                           return (
                             <Button
@@ -1813,7 +1813,7 @@ export default function CreatorCardPage() {
                               type="button"
                               variant="pill"
                               active
-                              className="h-7 px-2.5 text-xs rounded-full border bg-white/10 border-white/20 text-white hover:bg-white/15"
+                              className="h-7 px-2.5 text-xs rounded-full border bg-white/[0.06] border-emerald-400/50 text-white hover:bg-white/[0.09] hover:border-emerald-400/70"
                               onClick={() => {
                                 setDeliverables((prev) => prev.filter((x) => x !== tag))
                                 flashHighlight("formats")
@@ -1873,7 +1873,7 @@ export default function CreatorCardPage() {
                           const pillClassName =
                             "h-7 px-2.5 text-xs rounded-full border " +
                             (isActive
-                              ? "bg-white/10 border-white/20 text-white hover:bg-white/15"
+                              ? "bg-white/[0.06] border-emerald-400/50 text-white hover:bg-white/[0.09] hover:border-emerald-400/70"
                               : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10")
                           return (
                             <Button
@@ -1898,7 +1898,7 @@ export default function CreatorCardPage() {
                           className={
                             "h-7 px-2.5 text-xs rounded-full border " +
                             (otherNicheEnabled
-                              ? "bg-white/10 border-white/20 text-white hover:bg-white/15"
+                              ? "bg-white/[0.06] border-emerald-400/50 text-white hover:bg-white/[0.09] hover:border-emerald-400/70"
                               : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10")
                           }
                           onClick={() => {
@@ -1947,7 +1947,7 @@ export default function CreatorCardPage() {
                                 {customs.map((tag) => (
                                   <span
                                     key={tag}
-                                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100"
+                                    className="inline-flex items-center gap-1 rounded-full border border-emerald-400/50 bg-white/[0.06] px-3 py-1 text-sm text-white"
                                   >
                                     <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                                     <button
