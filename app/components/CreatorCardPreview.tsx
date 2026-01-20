@@ -503,7 +503,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
               <div className={rightSpanClassName + " min-w-0"}>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
-                  <div className={"rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 min-w-0 transition-colors " + sectionRing("about")}>
+                  <div className={"px-1.5 py-1 min-w-0 transition-colors " + sectionRing("about")}>
                     <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                     <div className="mt-1 min-w-0">
                       <Pill
@@ -517,7 +517,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   </div>
 
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                    <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("primaryNiche")}>
+                    <div className={"min-w-0 px-1.5 py-1 transition-colors " + sectionRing("primaryNiche")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
                       <div className="mt-0.5 min-w-0">
                         <Pill
@@ -529,7 +529,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                         </Pill>
                       </div>
                     </div>
-                    <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("audienceSummary")}>
+                    <div className={"min-w-0 px-1.5 py-1 transition-colors " + sectionRing("audienceSummary")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
                       <div className="mt-0.5 min-w-0">
                         <Pill clampLines={1} title={String(audienceSummaryText ?? "")}>{audienceSummaryText}</Pill>
@@ -537,14 +537,14 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + nichesHighlight + " " + sectionRing("collaborationNiches")}>
+                  <div className={"mt-2 min-w-0 px-1.5 py-1 transition-colors " + nichesHighlight + " " + sectionRing("collaborationNiches")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationNiches.label")}</div>
                     <div className="mt-0.5 min-w-0">
                       <Pill clampLines={2} title={String(nicheText ?? "")}>{nicheText}</Pill>
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + formatsHighlight + " " + sectionRing("formats")}>
+                  <div className={"mt-2 min-w-0 px-1.5 py-1 transition-colors " + formatsHighlight + " " + sectionRing("formats")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationFormats.title")}</div>
                     <div className="mt-2 flex flex-wrap gap-2 min-w-0">
                       {formats.length === 0 ? (
