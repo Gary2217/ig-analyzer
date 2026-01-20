@@ -140,8 +140,8 @@ function SortableFeaturedTile(props: {
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={
-        "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-shadow " +
-        (isDragging ? "scale-[1.03] shadow-lg ring-2 ring-slate-950/10" : "hover:border-slate-300") +
+        "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors " +
+        (isDragging ? "scale-[1.03] shadow-lg ring-2 ring-white/20" : "hover:border-white/20 hover:bg-white/10") +
         (isDragging ? " cursor-grabbing" : " cursor-grab")
       }
       {...attributes}
@@ -172,8 +172,8 @@ function SortableFeaturedTile(props: {
       {item.url ? (
         <img src={item.url} alt="" className="h-full w-full object-cover" />
       ) : (
-        <div className="h-full w-full flex items-center justify-center bg-slate-50">
-          <Plus className="h-7 w-7 text-slate-300" />
+        <div className="h-full w-full flex items-center justify-center bg-white/5">
+          <Plus className="h-7 w-7 text-white/25" />
         </div>
       )}
 
@@ -1235,14 +1235,14 @@ export default function CreatorCardPage() {
                   render: () => (
                     <>
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.bioTitle")}</div>
+                        <div className="text-sm font-semibold text-slate-100">{t("creatorCardEditor.profile.bioTitle")}</div>
                         <div className="mt-2 relative">
                           <textarea
                             value={introDraft}
                             placeholder={t("creatorCardEditor.profile.bioPlaceholder")}
                             onChange={(e) => setIntroDraft(e.target.value)}
                             onFocus={() => setActivePreviewSection("about")}
-                            className="w-full min-h-[96px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 pr-24 pb-12 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                            className="w-full min-h-[96px] resize-y rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 pr-24 pb-12 text-sm text-slate-100 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                           />
                           <Button
                             type="button"
@@ -1276,12 +1276,13 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.themeTitle")}</div>
+                        <div className="text-sm font-semibold text-slate-100">{t("creatorCardEditor.profile.themeTitle")}</div>
                         <div className="mt-2">
                           <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                             <Input
                               value={themeTypeInput}
                               placeholder={t("creatorCardEditor.profile.themePlaceholder")}
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               onChange={(e) => setThemeTypeInput(e.target.value)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
@@ -1311,12 +1312,12 @@ export default function CreatorCardPage() {
                             {themeTypes.map((tag) => (
                               <span
                                 key={tag}
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100"
                               >
                                 <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                                 <button
                                   type="button"
-                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  className="shrink-0 rounded-full p-1 hover:bg-white/10"
                                   onClick={() => setThemeTypes((prev) => prev.filter((x) => x !== tag))}
                                   aria-label={t("creatorCardEditor.pastCollaborations.remove")}
                                 >
@@ -1329,7 +1330,7 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900">{t("creatorCardEditor.profile.audienceTitle")}</div>
+                        <div className="text-sm font-semibold text-slate-100">{t("creatorCardEditor.profile.audienceTitle")}</div>
                         {audienceProfiles.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {audienceProfiles.map((tag) => (
@@ -1337,7 +1338,7 @@ export default function CreatorCardPage() {
                                 key={tag}
                                 type="button"
                                 onClick={() => setAudienceProfiles((prev) => prev.filter((x) => x !== tag))}
-                                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+                                className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:bg-white/10"
                               >
                                 <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                                 <span className="ml-1.5 text-slate-400" aria-hidden="true">
@@ -1352,6 +1353,7 @@ export default function CreatorCardPage() {
                             <Input
                               value={audienceProfileInput}
                               placeholder={t("creatorCardEditor.profile.audiencePlaceholder")}
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               onChange={(e) => setAudienceProfileInput(e.target.value)}
                               onFocus={() => setActivePreviewSection("audienceSummary")}
                               onKeyDown={(e) => {
@@ -1388,18 +1390,18 @@ export default function CreatorCardPage() {
                   render: () => (
                     <>
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900">Email</div>
+                        <div className="text-sm font-semibold text-slate-100">Email</div>
                         {contactEmails.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactEmails.map((tag) => (
                               <span
                                 key={tag}
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100"
                               >
                                 <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                                 <button
                                   type="button"
-                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  className="shrink-0 rounded-full p-1 hover:bg-white/10"
                                   onClick={() => {
                                     setContactEmails((prev) => prev.filter((x) => x !== tag))
                                     markDirty()
@@ -1417,6 +1419,7 @@ export default function CreatorCardPage() {
                             <Input
                               value={contactEmailInput}
                               placeholder="例如：hello@email.com"
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               onChange={(e) => {
                                 setContactEmailInput(e.target.value)
                                 markDirty()
@@ -1454,18 +1457,18 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900">Instagram</div>
+                        <div className="text-sm font-semibold text-slate-100">Instagram</div>
                         {contactInstagrams.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactInstagrams.map((tag) => (
                               <span
                                 key={tag}
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100"
                               >
                                 <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                                 <button
                                   type="button"
-                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  className="shrink-0 rounded-full p-1 hover:bg-white/10"
                                   onClick={() => {
                                     setContactInstagrams((prev) => prev.filter((x) => x !== tag))
                                     markDirty()
@@ -1483,6 +1486,7 @@ export default function CreatorCardPage() {
                             <Input
                               value={contactInstagramInput}
                               placeholder="@username or https://instagram.com/..."
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               onChange={(e) => {
                                 setContactInstagramInput(e.target.value)
                                 markDirty()
@@ -1520,18 +1524,18 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900">Other</div>
+                        <div className="text-sm font-semibold text-slate-100">Other</div>
                         {contactOthers.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {contactOthers.map((tag) => (
                               <span
                                 key={tag}
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100"
                               >
                                 <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                                 <button
                                   type="button"
-                                  className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                  className="shrink-0 rounded-full p-1 hover:bg-white/10"
                                   onClick={() => {
                                     setContactOthers((prev) => prev.filter((x) => x !== tag))
                                     markDirty()
@@ -1563,7 +1567,7 @@ export default function CreatorCardPage() {
                                 markDirty()
                               }
                             }}
-                            className="w-full min-h-[72px] resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                            className="w-full min-h-[72px] resize-y rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                           />
                           <div className="mt-2 flex justify-end">
                             <Button
@@ -1694,12 +1698,12 @@ export default function CreatorCardPage() {
 
                         <button
                           type="button"
-                          className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
+                          className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-white/10 bg-white/5 shadow-sm transition-colors hover:border-white/20 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                           onClick={openAddFeatured}
                           aria-label="新增作品"
                         >
                           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-                            <Plus className="h-7 w-7 text-slate-300 group-hover:text-slate-400" />
+                            <Plus className="h-7 w-7 text-white/25 group-hover:text-white/35" />
                           </div>
                         </button>
                       </div>
@@ -1724,12 +1728,18 @@ export default function CreatorCardPage() {
                               : opt.id === "fb_post"
                                 ? deliverables.includes("fb_post") || deliverables.includes("fb") || deliverables.includes("facebook")
                                 : deliverables.includes(opt.id)
+                          const pillClassName =
+                            "h-7 px-2.5 text-xs rounded-full border " +
+                            (isActive
+                              ? "bg-white/10 border-white/20 text-white hover:bg-white/15"
+                              : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10")
                           return (
                             <Button
                               key={opt.id}
                               type="button"
                               variant="pill"
                               active={isActive}
+                              className={pillClassName}
                               onClick={() => {
                                 if (opt.id === "other") {
                                   setOtherFormatEnabled((prev) => !prev)
@@ -1764,6 +1774,7 @@ export default function CreatorCardPage() {
                               type="button"
                               variant="pill"
                               active
+                              className="h-7 px-2.5 text-xs rounded-full border bg-white/10 border-white/20 text-white hover:bg-white/15"
                               onClick={() => {
                                 setDeliverables((prev) => prev.filter((x) => x !== tag))
                                 flashHighlight("formats")
@@ -1782,6 +1793,7 @@ export default function CreatorCardPage() {
                             <Input
                               value={otherFormatInput}
                               placeholder={t("creatorCardEditor.formats.otherPlaceholder")}
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               disabled={!otherFormatEnabled}
                               onChange={(e) => setOtherFormatInput(e.target.value)}
                               onFocus={() => setActivePreviewSection("formats")}
@@ -1819,12 +1831,18 @@ export default function CreatorCardPage() {
                       <div className="flex flex-wrap gap-2">
                         {nicheOptions.map((opt) => {
                           const isActive = collaborationNiches.includes(opt.id)
+                          const pillClassName =
+                            "h-7 px-2.5 text-xs rounded-full border " +
+                            (isActive
+                              ? "bg-white/10 border-white/20 text-white hover:bg-white/15"
+                              : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10")
                           return (
                             <Button
                               key={opt.id}
                               type="button"
                               variant="pill"
                               active={isActive}
+                              className={pillClassName}
                               onClick={() => {
                                 setCollaborationNiches((prev) => toggleInArray(prev, opt.id))
                                 flashHighlight("niches")
@@ -1838,6 +1856,12 @@ export default function CreatorCardPage() {
                           type="button"
                           variant="pill"
                           active={otherNicheEnabled}
+                          className={
+                            "h-7 px-2.5 text-xs rounded-full border " +
+                            (otherNicheEnabled
+                              ? "bg-white/10 border-white/20 text-white hover:bg-white/15"
+                              : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10")
+                          }
                           onClick={() => {
                             setOtherNicheEnabled((prev) => !prev)
                             flashHighlight("niches")
@@ -1852,7 +1876,8 @@ export default function CreatorCardPage() {
                           <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                             <Input
                               value={otherNicheInput}
-                              placeholder={activeLocale === "zh-TW" ? "請輸入其他合作品類" : "Enter other niche"}
+                              placeholder="Enter other niche"
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               disabled={!otherNicheEnabled}
                               onChange={(e) => setOtherNicheInput(e.target.value)}
                               onFocus={() => setActivePreviewSection("collaborationNiches")}
@@ -1883,12 +1908,12 @@ export default function CreatorCardPage() {
                                 {customs.map((tag) => (
                                   <span
                                     key={tag}
-                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100"
                                   >
                                     <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                                     <button
                                       type="button"
-                                      className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                                      className="shrink-0 rounded-full p-1 hover:bg-white/10"
                                       onClick={() => {
                                         setCollaborationNiches((prev) => prev.filter((x) => x !== tag))
                                         flashHighlight("niches")
@@ -1917,12 +1942,12 @@ export default function CreatorCardPage() {
                         {pastCollaborations.map((tag) => (
                           <span
                             key={tag}
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-900"
+                            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100"
                           >
                             <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
                             <button
                               type="button"
-                              className="shrink-0 rounded-full p-1 hover:bg-slate-100"
+                              className="shrink-0 rounded-full p-1 hover:bg-white/10"
                               onClick={() => {
                                 setPastCollaborations((prev) => prev.filter((x) => x !== tag))
                                 flashHighlight("brands")
@@ -1943,6 +1968,7 @@ export default function CreatorCardPage() {
                             }}
                             value={pastCollabInput}
                             placeholder={t("creatorCardEditor.pastCollaborations.placeholder")}
+                            className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                             onChange={(e) => {
                               setPastCollabInput(e.target.value)
                               markDirty()
