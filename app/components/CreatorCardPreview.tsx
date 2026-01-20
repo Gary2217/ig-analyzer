@@ -90,10 +90,12 @@ const Pill = ({ children, clampLines = 1, title, className, unstyled }: PillProp
   const clamp =
     clampLines === 3 ? "line-clamp-3" : clampLines === 2 ? "line-clamp-2" : "truncate"
 
+  const baseWrapper = "inline-flex min-w-0 max-w-full"
   const wrapperClassName = unstyled
-    ? "min-w-0"
+    ? baseWrapper
     : [
-        "inline-flex min-w-0 max-w-full items-center rounded-full border border-white/10 bg-white/[0.05]",
+        baseWrapper,
+        "items-center rounded-full border border-white/10 bg-white/[0.05]",
         "px-2.5 py-1 text-[12px] text-white/85",
         "focus-within:ring-1 focus-within:ring-white/10",
       ].join(" ")
@@ -103,7 +105,7 @@ const Pill = ({ children, clampLines = 1, title, className, unstyled }: PillProp
       title={title}
       className={wrapperClassName}
     >
-      <span className={["min-w-0", clamp, className].filter(Boolean).join(" ")}>{children}</span>
+      <span className={["min-w-0 block", clamp, className].filter(Boolean).join(" ")}>{children}</span>
     </span>
   )
 }
