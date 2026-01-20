@@ -67,6 +67,7 @@
         "more": "+{count} 更多",
         "less": "收合"
       },
+      "previewHint": "可先預覽，確認後再儲存",
       "sections": {
         "profile": "基本資料",
         "audience": "受眾",

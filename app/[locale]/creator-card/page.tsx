@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Pencil, Plus, X } from "lucide-react"
+import { ChevronDown, Eye, Pencil, Plus, X } from "lucide-react"
 import { createPortal } from "react-dom"
 
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core"
@@ -352,12 +352,6 @@ export default function CreatorCardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const returnTo = searchParams.get("returnTo")
-
-  const ccBuildLoggedRef = useRef(false)
-  if (!ccBuildLoggedRef.current) {
-    console.info("CC_BUILD: creator-card-mobile-v2")
-    ccBuildLoggedRef.current = true
-  }
 
   const isMobile = useIsMobileMax640()
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
@@ -1389,7 +1383,7 @@ export default function CreatorCardPage() {
       {loading ? (
         loadingSkeleton
       ) : (
-        <div className={"mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0" + (isMobile ? " pb-28" : "")}>
+        <div className={"mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0" + (isMobile ? " pb-32" : "")}>
           <div className="lg:col-span-5 min-w-0" onChangeCapture={markDirty} onInputCapture={markDirty}>
             {(() => {
               type LocalMobileSectionKey =
@@ -2234,7 +2228,7 @@ export default function CreatorCardPage() {
 
               return (
                 <>
-                  <div className="lg:hidden" data-cc-build="creator-card-mobile-v2">
+                  <div className="lg:hidden">
                     {(() => {
                       const formatsSection = sections.find((s) => s.key === "formats")
                       const nichesSection = sections.find((s) => s.key === "niches")
@@ -2547,8 +2541,14 @@ export default function CreatorCardPage() {
                                   setMobilePreviewOpen(true)
                                 }}
                               >
-                                {t("creatorCardEditor.mobile.actions.previewCard")}
+                                <Eye className="mr-2 h-4 w-4 shrink-0" />
+                                <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                                  {t("creatorCardEditor.mobile.actions.previewCard")}
+                                </span>
                               </Button>
+                              <div className="mt-2 text-xs text-white/60 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                                {t("creatorCardEditor.mobile.previewHint")}
+                              </div>
                             </div>
                           ) : null}
 
@@ -2556,11 +2556,12 @@ export default function CreatorCardPage() {
                             <Accordion type="multiple" defaultValue={["profile"]} className="w-full">
                               {mobileSections.map((s) => (
                                 <AccordionItem key={s.key} value={s.key}>
-                                  <AccordionTrigger className="text-left">
-                                    <div className="flex min-w-0 items-center gap-2">
+                                  <AccordionTrigger className="group rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:bg-white/5 hover:border-white/15 data-[state=open]:bg-white/[0.06]">
+                                    <div className="flex w-full min-w-0 items-center gap-2">
                                       <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
                                         {t(s.titleKey)}
                                       </span>
+                                      <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-white/60 transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=open]:text-white/80" />
                                     </div>
                                   </AccordionTrigger>
                                   <AccordionContent forceMount>
@@ -2573,7 +2574,7 @@ export default function CreatorCardPage() {
 
                           {isMobile ? (
                             <div
-                              className="fixed left-0 right-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/85 backdrop-blur"
+                              className="fixed left-0 right-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/80 backdrop-blur"
                               style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
                             >
                               <div className="mx-auto w-full max-w-6xl px-4 pt-3">

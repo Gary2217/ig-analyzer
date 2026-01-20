@@ -67,6 +67,7 @@
         "more": "+{count} more",
         "less": "Show less"
       },
+      "previewHint": "Preview first, then save when ready.",
       "sections": {
         "profile": "Basic Info",
         "audience": "Audience",
