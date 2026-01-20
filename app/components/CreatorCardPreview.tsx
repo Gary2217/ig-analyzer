@@ -82,9 +82,10 @@ type PillProps = {
   children: React.ReactNode
   clampLines?: 1 | 2 | 3
   title?: string
+  className?: string
 }
 
-const Pill = ({ children, clampLines = 1, title }: PillProps) => {
+const Pill = ({ children, clampLines = 1, title, className }: PillProps) => {
   const clamp =
     clampLines === 3 ? "line-clamp-3" : clampLines === 2 ? "line-clamp-2" : "truncate"
   return (
@@ -98,7 +99,7 @@ const Pill = ({ children, clampLines = 1, title }: PillProps) => {
         "focus-within:ring-1 focus-within:ring-white/10",
       ].join(" ")}
     >
-      <span className={["min-w-0", clamp].join(" ")}>{children}</span>
+      <span className={["min-w-0", clamp, className].filter(Boolean).join(" ")}>{children}</span>
     </span>
   )
 }
@@ -505,7 +506,13 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   <div className={"rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 min-w-0 transition-colors " + sectionRing("about")}>
                     <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                     <div className="mt-1 min-w-0">
-                      <Pill clampLines={3} title={String(resolvedAboutText ?? "")}>{resolvedAboutText}</Pill>
+                      <Pill
+                        clampLines={3}
+                        title={String(resolvedAboutText ?? "")}
+                        className="break-words whitespace-normal [overflow-wrap:anywhere]"
+                      >
+                        {resolvedAboutText}
+                      </Pill>
                     </div>
                   </div>
 
@@ -513,7 +520,13 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                     <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("primaryNiche")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
                       <div className="mt-0.5 min-w-0">
-                        <Pill clampLines={1} title={String(resolvedPrimaryNiche ?? "")}>{resolvedPrimaryNiche}</Pill>
+                        <Pill
+                          clampLines={2}
+                          title={String(resolvedPrimaryNiche ?? "")}
+                          className="break-words whitespace-normal [overflow-wrap:anywhere]"
+                        >
+                          {resolvedPrimaryNiche}
+                        </Pill>
                       </div>
                     </div>
                     <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("audienceSummary")}>
