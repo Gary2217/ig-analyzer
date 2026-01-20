@@ -2020,10 +2020,10 @@ export default function CreatorCardPage() {
                   <div className="hidden lg:block">
                     <div className="space-y-4">
                       {sections.map((s) => (
-                        <Card key={s.key} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <Card key={s.key} className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/40">
                           <CardHeader className="px-4 pt-4 lg:px-6 lg:pt-5 pb-3">
                             <div className="flex items-start gap-3 min-w-0">
-                              <CardTitle className="text-[15px] font-semibold text-slate-900 min-w-0 truncate">
+                              <CardTitle className="text-[15px] font-semibold text-slate-100 min-w-0 truncate">
                                 {s.titleZh} / {s.titleEn}
                               </CardTitle>
                               {s.key === "formats" ? (
