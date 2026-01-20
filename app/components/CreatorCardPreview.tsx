@@ -472,7 +472,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                       />
                       <button
                         type="button"
-                        className="w-full rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
+                        className="w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold text-white/75 transition-colors hover:bg-white/[0.05] hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/15"
                         onClick={() => fileInputRef.current?.click()}
                       >
                         上傳照片
@@ -480,7 +480,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                     </div>
                   ) : null}
 
-                  <div className="mt-auto pt-3 min-w-0">
+                  <div className="mt-auto border-t border-white/5 pt-4 min-w-0">
                     <div
                       title={resolvedDisplayName}
                       className="min-w-0 text-[clamp(18px,4.6vw,26px)] font-semibold text-white/90 leading-snug break-words line-clamp-2 [overflow-wrap:anywhere]"
@@ -502,7 +502,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
 
               <div className={rightSpanClassName + " min-w-0"}>
                 <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
-                  <div className={"rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 min-w-0 transition-colors " + sectionRing("about")}>
+                  <div className={"rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 min-w-0 transition-colors " + sectionRing("about")}>
                     <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
                     <div className="mt-1 min-w-0">
                       <Pill clampLines={3} title={String(resolvedAboutText ?? "")}>{resolvedAboutText}</Pill>
@@ -510,13 +510,13 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                   </div>
 
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                    <div className={"min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + sectionRing("primaryNiche")}>
+                    <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("primaryNiche")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
                       <div className="mt-0.5 min-w-0">
                         <Pill clampLines={1} title={String(resolvedPrimaryNiche ?? "")}>{resolvedPrimaryNiche}</Pill>
                       </div>
                     </div>
-                    <div className={"min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + sectionRing("audienceSummary")}>
+                    <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("audienceSummary")}>
                       <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.audienceSummary")}</div>
                       <div className="mt-0.5 min-w-0">
                         <Pill clampLines={1} title={String(audienceSummaryText ?? "")}>{audienceSummaryText}</Pill>
@@ -524,14 +524,14 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + nichesHighlight + " " + sectionRing("collaborationNiches")}>
+                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + nichesHighlight + " " + sectionRing("collaborationNiches")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationNiches.label")}</div>
                     <div className="mt-0.5 min-w-0">
                       <Pill clampLines={2} title={String(nicheText ?? "")}>{nicheText}</Pill>
                     </div>
                   </div>
 
-                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 transition-colors " + formatsHighlight + " " + sectionRing("formats")}>
+                  <div className={"mt-2 min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + formatsHighlight + " " + sectionRing("formats")}>
                     <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.collaborationFormats.title")}</div>
                     <div className="mt-2 flex flex-wrap gap-2 min-w-0">
                       {formats.length === 0 ? (
@@ -558,22 +558,22 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
               <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
                 <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
-                    <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
+                    <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
+                    <div className="mt-0.5 text-[clamp(15px,4.4vw,19px)] font-bold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
                       {hasFollowers ? followersText : "—"}
                     </div>
                   </div>
 
                   <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.stats.posts")}</div>
-                    <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
+                    <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.posts")}</div>
+                    <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
                       {hasPosts ? postsText : "—"}
                     </div>
                   </div>
 
                   <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
-                    <div className="text-[10px] font-semibold text-white/55 whitespace-nowrap">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
-                    <div className="mt-0.5 text-[clamp(14px,4.2vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
+                    <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
+                    <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
                       {hasEngagementRate ? engagementRateText : "—"}
                     </div>
                   </div>
