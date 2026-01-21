@@ -2184,11 +2184,12 @@ export default function ResultsClient() {
     const posts = effectiveRecentMedia
       .slice(0, 25)
       .map((p) => {
-        if (!isRecord(p)) return { likes: 0, comments: 0, timestamp: null }
+        if (!isRecord(p)) return { likes: 0, comments: 0, timestamp: null, media_type: null }
         const likes = finiteNumOrNull(p.like_count) ?? 0
         const comments = finiteNumOrNull(p.comments_count) ?? 0
         const timestamp = typeof p.timestamp === "string" ? String(p.timestamp) : null
-        return { likes, comments, timestamp }
+        const media_type = typeof p.media_type === "string" ? String(p.media_type).toUpperCase() : null
+        return { likes, comments, timestamp, media_type }
       })
 
     if (posts.length === 0) {
@@ -2212,12 +2213,17 @@ export default function ResultsClient() {
     const days7 = 7 * 24 * 60 * 60 * 1000
     let postsPerWeek: number | null = 0
     let hasValidTs = false
+    // Count posts within last 7 days with valid media types (estimate based on last 25 items)
+    const validMediaTypes = ["IMAGE", "CAROUSEL_ALBUM", "VIDEO", "REELS"]
     for (const p of posts) {
       if (!p.timestamp) continue
       const tms = new Date(p.timestamp).getTime()
       if (Number.isNaN(tms)) continue
       hasValidTs = true
-      if (now - tms <= days7) postsPerWeek += 1
+      // Count only if within 7 days AND has a valid media type
+      if (now - tms <= days7 && p.media_type && validMediaTypes.includes(p.media_type)) {
+        postsPerWeek += 1
+      }
     }
     if (!hasValidTs) postsPerWeek = null
 
