@@ -1394,6 +1394,8 @@ export default function PostAnalysisClient() {
     }
 
     const ar = analysisResult as any
+    const op = officialPost as any
+
     if (!ar || typeof ar !== "object") {
       return { hasAny: false, metrics: { likes: null, comments: null, engagement: null, engagementRate: null }, followers: null }
     }
@@ -1402,7 +1404,7 @@ export default function PostAnalysisClient() {
     const comments = toNum(ar?.comments_count ?? ar?.comments ?? ar?.counts?.comments_count ?? ar?.counts?.comments)
     const engagement = typeof likes === "number" && typeof comments === "number" ? likes + comments : null
 
-    const followers = toNum(
+    const followersFromAnalysis = toNum(
       ar?.followers_count ??
         ar?.followers ??
         ar?.profile?.followers_count ??
@@ -1413,6 +1415,19 @@ export default function PostAnalysisClient() {
         ar?.accountStats?.followers
     )
 
+    const followersFromOfficial = toNum(
+      op?.profile?.followers_count ??
+        op?.profile?.followers ??
+        op?.account?.followers_count ??
+        op?.account?.followers ??
+        op?.user?.followers_count ??
+        op?.user?.followers ??
+        op?.followers_count ??
+        op?.followers
+    )
+
+    const followers = followersFromAnalysis ?? followersFromOfficial ?? null
+
     const engagementRate =
       typeof engagement === "number" && typeof followers === "number" && followers > 0
         ? (engagement / followers) * 100
@@ -1422,7 +1437,7 @@ export default function PostAnalysisClient() {
     const hasAny = Object.values(metrics).some((v) => typeof v === "number" && Number.isFinite(v))
 
     return { hasAny, metrics, followers }
-  }, [analysisResult])
+  }, [analysisResult, officialPost])
 
   const baseline = useMemo(() => {
     const toNum = (v: any) => {
