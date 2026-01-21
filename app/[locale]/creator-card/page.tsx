@@ -509,6 +509,7 @@ export default function CreatorCardPage() {
   const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
   const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
   const [suppressFeaturedTileClick, setSuppressFeaturedTileClick] = useState(false)
+  const [featuredUploadingIds, setFeaturedUploadingIds] = useState<Set<string>>(new Set())
   const [editingFeaturedId, setEditingFeaturedId] = useState<string | null>(null)
   const [editingFeaturedBrand, setEditingFeaturedBrand] = useState("")
   const [editingFeaturedCollabTypeSelect, setEditingFeaturedCollabTypeSelect] = useState("")
@@ -1412,11 +1413,16 @@ export default function CreatorCardPage() {
               variant="primary"
               className="ring-1 ring-white/15 hover:ring-white/25"
               onClick={handleSave}
-              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
               {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
             </Button>
+            {featuredUploadingIds.size > 0 && !saving ? (
+              <div className="absolute -bottom-6 right-0 text-xs text-amber-400/80">
+                Uploading images… please wait
+              </div>
+            ) : null}
             {saveFlash && !saving && !loading ? (
               <div className="pointer-events-none absolute -bottom-8 right-0 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
                 {t("creatorCardEditor.success.saved")}
@@ -1938,6 +1944,8 @@ export default function CreatorCardPage() {
                           e.currentTarget.value = ""
                           if (!id || !file) return
 
+                          setFeaturedUploadingIds((prev) => new Set(prev).add(id))
+
                           try {
                             const formData = new FormData()
                             formData.append("file", file)
@@ -1948,32 +1956,32 @@ export default function CreatorCardPage() {
                               credentials: "include",
                             })
 
-                            let nextUrl: string
                             if (res.ok) {
                               const json = await res.json()
-                              nextUrl = typeof json?.url === "string" ? json.url : await fileToDataUrl(file)
+                              const nextUrl = typeof json?.url === "string" ? json.url : ""
+                              if (nextUrl) {
+                                setFeaturedItems((prev) => {
+                                  const idx = prev.findIndex((x) => x.id === id)
+                                  if (idx < 0) return prev
+                                  const out = prev.slice()
+                                  out[idx] = { ...out[idx], url: nextUrl }
+                                  return out
+                                })
+                                markDirty()
+                              } else {
+                                showToast(t("creatorCard.form.featured.uploadFailed"))
+                              }
                             } else {
-                              nextUrl = await fileToDataUrl(file)
+                              showToast(t("creatorCard.form.featured.uploadFailed"))
                             }
-
-                            setFeaturedItems((prev) => {
-                              const idx = prev.findIndex((x) => x.id === id)
-                              if (idx < 0) return prev
-                              const out = prev.slice()
-                              out[idx] = { ...out[idx], url: nextUrl }
-                              return out
-                            })
-                            markDirty()
                           } catch {
-                            const nextUrl = await fileToDataUrl(file)
-                            setFeaturedItems((prev) => {
-                              const idx = prev.findIndex((x) => x.id === id)
-                              if (idx < 0) return prev
-                              const out = prev.slice()
-                              out[idx] = { ...out[idx], url: nextUrl }
-                              return out
+                            showToast(t("creatorCard.form.featured.uploadFailed"))
+                          } finally {
+                            setFeaturedUploadingIds((prev) => {
+                              const next = new Set(prev)
+                              next.delete(id)
+                              return next
                             })
-                            markDirty()
                           }
                         }}
                       />
@@ -2706,7 +2714,7 @@ export default function CreatorCardPage() {
                                     variant="primary"
                                     className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
                                     onClick={handleSave}
-                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
                                   >
                                     {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
