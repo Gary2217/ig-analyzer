@@ -2608,6 +2608,11 @@
         "note": "Tip: Hit 70%+ to look more trustworthy and collaboration-ready."
       }
     },
+    "featured": {
+      "actions": {
+        "add": "Add featured"
+      }
+    },
     "options": {
       "niche": {
         "edu": "Education • Practical",

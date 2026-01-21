@@ -1946,29 +1946,29 @@ export default function CreatorCardPage() {
                         }}
                       />
 
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={(event) => {
-                            const { active, over } = event
-                            if (!over) return
-                            if (active.id === over.id) return
-                            setFeaturedItems((prev) => {
-                              const oldIndex = prev.findIndex((x) => x.id === active.id)
-                              const newIndex = prev.findIndex((x) => x.id === over.id)
-                              if (oldIndex < 0 || newIndex < 0) return prev
-                              return arrayMove(prev, oldIndex, newIndex)
-                            })
-                            setSuppressFeaturedTileClick(true)
-                            window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
-                          }}
-                          onDragCancel={() => {
-                            setSuppressFeaturedTileClick(true)
-                            window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
-                          }}
-                        >
-                          <SortableContext items={featuredItems.map((x) => x.id)}>
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={(event) => {
+                          const { active, over } = event
+                          if (!over) return
+                          if (active.id === over.id) return
+                          setFeaturedItems((prev) => {
+                            const oldIndex = prev.findIndex((x) => x.id === active.id)
+                            const newIndex = prev.findIndex((x) => x.id === over.id)
+                            if (oldIndex < 0 || newIndex < 0) return prev
+                            return arrayMove(prev, oldIndex, newIndex)
+                          })
+                          setSuppressFeaturedTileClick(true)
+                          window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
+                        }}
+                        onDragCancel={() => {
+                          setSuppressFeaturedTileClick(true)
+                          window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
+                        }}
+                      >
+                        <SortableContext items={featuredItems.map((x) => x.id)}>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                             {featuredItems.map((item) => (
                               <SortableFeaturedTile
                                 key={item.id}
@@ -1991,24 +1991,24 @@ export default function CreatorCardPage() {
                                 }}
                               />
                             ))}
-                          </SortableContext>
-                        </DndContext>
 
-                        <button
-                          type="button"
-                          onClick={openAddFeatured}
-                          className="group relative shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                          aria-label={t("creatorCard.featured.actions.add")}
-                          title={t("creatorCard.featured.actions.add")}
-                        >
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                            <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
-                            <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
-                              {t("creatorCard.featured.actions.add")}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={openAddFeatured}
+                              className="group relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                              aria-label={t("creatorCard.featured.actions.add")}
+                              title={t("creatorCard.featured.actions.add")}
+                            >
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
+                                <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
+                                  {t("creatorCard.featured.actions.add")}
+                                </div>
+                              </div>
+                            </button>
                           </div>
-                        </button>
-                      </div>
+                        </SortableContext>
+                      </DndContext>
 
                       {featuredItems.length === 0 ? (
                         <div className="mt-2 text-sm text-slate-500">尚未新增作品</div>
