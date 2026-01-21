@@ -1993,6 +1993,21 @@ export default function CreatorCardPage() {
                             ))}
                           </SortableContext>
                         </DndContext>
+
+                        <button
+                          type="button"
+                          onClick={openAddFeatured}
+                          className="group relative shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                          aria-label={t("creatorCard.featured.actions.add")}
+                          title={t("creatorCard.featured.actions.add")}
+                        >
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                            <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
+                            <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
+                              {t("creatorCard.featured.actions.add")}
+                            </div>
+                          </div>
+                        </button>
                       </div>
 
                       {featuredItems.length === 0 ? (
