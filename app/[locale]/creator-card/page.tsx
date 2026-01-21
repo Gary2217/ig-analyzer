@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { ChevronDown, Eye, Plus, X } from "lucide-react"
+import { ChevronDown, Eye, Loader2, Plus, X } from "lucide-react"
 import { createPortal } from "react-dom"
 
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core"
@@ -381,6 +381,19 @@ export default function CreatorCardPage() {
   const [creatorId, setCreatorId] = useState<string | null>(null)
   const [creatorStats, setCreatorStats] = useState<CreatorStats | null>(null)
 
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<number | null>(null)
+  const showToast = useCallback((message: string) => {
+    setToast(message)
+    if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, 1800)
+  }, [])
+
+  const hasLoadedRef = useRef(false)
+
   const activeLocale = useMemo(() => {
     if (typeof window === "undefined") return "en"
     return extractLocaleFromPathname(window.location.pathname).locale ?? "en"
@@ -730,6 +743,11 @@ export default function CreatorCardPage() {
         window.clearTimeout(introAppliedHintTimerRef.current)
         introAppliedHintTimerRef.current = null
       }
+
+      if (toastTimerRef.current != null) {
+        window.clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = null
+      }
     }
   }, [])
 
@@ -754,11 +772,16 @@ export default function CreatorCardPage() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      setLoading(true)
-      setLoadError(null)
-      setLoadErrorKind(null)
-      setSaveOk(false)
-      setShowNewCardHint(false)
+      const isBackgroundRefresh = hasLoadedRef.current
+      if (isBackgroundRefresh) {
+        // background refresh: do not block the page with global loading UI
+      } else {
+        setLoading(true)
+        setLoadError(null)
+        setLoadErrorKind(null)
+        setSaveOk(false)
+        setShowNewCardHint(false)
+      }
       try {
         const res = await fetch("/api/creator-card/me", {
           method: "GET",
@@ -972,10 +995,12 @@ export default function CreatorCardPage() {
         })()
 
         setShowNewCardHint(isLikelyEmpty)
+        hasLoadedRef.current = true
       } catch {
-        if (cancelled) return
-        setLoadErrorKind("load_failed")
-        setLoadError(t("creatorCardEditor.errors.loadFailed"))
+        if (!isBackgroundRefresh) {
+          setLoadErrorKind("load_failed")
+          setLoadError(t("creatorCardEditor.errors.loadFailed"))
+        }
       } finally {
         if (cancelled) return
         setLoading(false)
@@ -1181,11 +1206,13 @@ export default function CreatorCardPage() {
       if (!res.ok || !json?.ok) {
         if (res.status === 401) {
           setSaveError("未登入或登入已過期 / Not authenticated (session expired)")
+          showToast(t("creatorCardEditor.errors.saveFailed"))
           return
         }
 
         if (res.status === 403 && json?.error === "not_connected") {
           setSaveError("尚未連結 IG 或連結已失效，請重新連結 / IG not connected or expired, please reconnect")
+          showToast(t("creatorCardEditor.errors.saveFailed"))
           return
         }
 
@@ -1199,10 +1226,12 @@ export default function CreatorCardPage() {
                 : null
 
         setSaveError(serverMsg ? `${t("creatorCardEditor.errors.saveFailed")}: ${serverMsg}` : t("creatorCardEditor.errors.saveFailed"))
+        showToast(t("creatorCardEditor.errors.saveFailed"))
         return
       }
 
       setSaveOk(true)
+      showToast(t("creatorCardEditor.success.saved"))
 
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem("creatorCard:updated", "1")
@@ -1215,14 +1244,15 @@ export default function CreatorCardPage() {
 
       clearDirty()
 
-      setRefetchTick((x) => x + 1)
+      window.setTimeout(() => setRefetchTick((x) => x + 1), 0)
     } catch {
       setSaveError(t("creatorCardEditor.errors.saveFailed"))
+      showToast(t("creatorCardEditor.errors.saveFailed"))
     } finally {
       saveInFlightRef.current = false
       setSaving(false)
     }
-  }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, introDraft, pastCollaborations, profileImageFile, saving, serializedContact, t, themeTypes])
+  }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, introDraft, pastCollaborations, profileImageFile, saving, serializedContact, showToast, t, themeTypes])
 
   const handleBack = () => {
     if (returnTo) {
@@ -1310,6 +1340,19 @@ export default function CreatorCardPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10">
+      <div aria-live="polite" className="sr-only">
+        {toast ?? ""}
+      </div>
+      {toast ? (
+        <div className="fixed top-4 inset-x-0 z-[80] flex justify-center px-4">
+          <div className="max-w-[560px] w-full">
+            <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-4 py-3 text-sm text-slate-200 shadow-xl break-words [overflow-wrap:anywhere]">
+              {toast}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-900">{t("creatorCardEditor.title")}</h1>
@@ -1327,6 +1370,7 @@ export default function CreatorCardPage() {
               onClick={handleSave}
               disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
             >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : null}
               {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
             </Button>
             {saveFlash && !saving && !loading ? (
@@ -2594,6 +2638,7 @@ export default function CreatorCardPage() {
                                     onClick={handleSave}
                                     disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                                   >
+                                    {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
                                   </Button>
                                 </div>
