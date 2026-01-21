@@ -65,7 +65,9 @@
     "mobile": {
       "chips": {
         "more": "+{count} more",
-        "less": "Show less"
+        "less": "Show less",
+        "showAll": "Show all",
+        "showLess": "Show less"
       },
       "previewHint": "Preview first, then save when ready.",
       "sections": {

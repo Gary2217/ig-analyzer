@@ -300,29 +300,34 @@ function useTwoRowChipOverflow(items: string[]) {
   const chipRefs = useRef<Record<string, HTMLElement | null>>({})
   const [expanded, setExpanded] = useState(false)
   const [hiddenCount, setHiddenCount] = useState(0)
+  const [canToggle, setCanToggle] = useState(false)
 
   const recompute = useCallback(() => {
     const container = containerRef.current
     if (!container) {
       setHiddenCount(0)
+      setCanToggle(false)
       return
     }
 
     const els = items.map((k) => chipRefs.current[k]).filter((x): x is HTMLElement => Boolean(x))
     if (els.length === 0) {
       setHiddenCount(0)
+      setCanToggle(false)
       return
     }
 
     const tops = Array.from(new Set(els.map((el) => Math.round(el.offsetTop)))).sort((a, b) => a - b)
     if (tops.length <= 2) {
       setHiddenCount(0)
+      setCanToggle(container.scrollHeight > 64 + 1)
       return
     }
 
     const allowedTop = tops[1]
     const count = els.reduce((acc, el) => (Math.round(el.offsetTop) > allowedTop ? acc + 1 : acc), 0)
     setHiddenCount(count)
+    setCanToggle(count > 0 || container.scrollHeight > 64 + 1)
   }, [items])
 
   useEffect(() => {
@@ -345,6 +350,7 @@ function useTwoRowChipOverflow(items: string[]) {
     expanded,
     setExpanded,
     hiddenCount,
+    canToggle,
   }
 }
 
@@ -2343,18 +2349,15 @@ export default function CreatorCardPage() {
                                       ))}
                                     </div>
 
-                                    {themeChipOverflow.hiddenCount > 0 ? (
+                                    {themeChipOverflow.canToggle ? (
                                       <button
                                         type="button"
                                         className="mt-2 -mx-2 inline-flex min-w-0 items-center rounded-md px-2 py-2 text-left text-xs font-semibold text-white/70 hover:bg-white/5 whitespace-normal break-words [overflow-wrap:anywhere]"
                                         onClick={() => themeChipOverflow.setExpanded((prev) => !prev)}
                                       >
                                         {themeChipOverflow.expanded
-                                          ? t("creatorCardEditor.mobile.chips.less")
-                                          : t("creatorCardEditor.mobile.chips.more").replace(
-                                              "{count}",
-                                              String(themeChipOverflow.hiddenCount)
-                                            )}
+                                          ? t("creatorCardEditor.mobile.chips.showLess")
+                                          : t("creatorCardEditor.mobile.chips.showAll")}
                                       </button>
                                     ) : null}
                                   </div>
@@ -2454,18 +2457,15 @@ export default function CreatorCardPage() {
                                       ))}
                                     </div>
 
-                                    {audienceChipOverflow.hiddenCount > 0 ? (
+                                    {audienceChipOverflow.canToggle ? (
                                       <button
                                         type="button"
                                         className="mt-2 -mx-2 inline-flex min-w-0 items-center rounded-md px-2 py-2 text-left text-xs font-semibold text-white/70 hover:bg-white/5 whitespace-normal break-words [overflow-wrap:anywhere]"
                                         onClick={() => audienceChipOverflow.setExpanded((prev) => !prev)}
                                       >
                                         {audienceChipOverflow.expanded
-                                          ? t("creatorCardEditor.mobile.chips.less")
-                                          : t("creatorCardEditor.mobile.chips.more").replace(
-                                              "{count}",
-                                              String(audienceChipOverflow.hiddenCount)
-                                            )}
+                                          ? t("creatorCardEditor.mobile.chips.showLess")
+                                          : t("creatorCardEditor.mobile.chips.showAll")}
                                       </button>
                                     ) : null}
                                   </div>
