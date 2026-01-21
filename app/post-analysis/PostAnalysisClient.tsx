@@ -387,7 +387,6 @@ export default function PostAnalysisClient() {
     a2: false,
     a3: false,
   })
-  const [showEngagementRateHelp, setShowEngagementRateHelp] = useState(false)
 
   const [quickTop3, setQuickTop3] = useState<any[]>([])
   const [quickTop3Ts, setQuickTop3Ts] = useState<number | null>(null)
@@ -1397,46 +1396,17 @@ export default function PostAnalysisClient() {
     const op = officialPost as any
 
     if (!ar || typeof ar !== "object") {
-      return { hasAny: false, metrics: { likes: null, comments: null, engagement: null, engagementRate: null }, followers: null }
+      return { hasAny: false, metrics: { likes: null, comments: null, engagement: null } }
     }
 
     const likes = toNum(ar?.like_count ?? ar?.likes ?? ar?.counts?.like_count ?? ar?.counts?.likes)
     const comments = toNum(ar?.comments_count ?? ar?.comments ?? ar?.counts?.comments_count ?? ar?.counts?.comments)
     const engagement = typeof likes === "number" && typeof comments === "number" ? likes + comments : null
 
-    const followersFromAnalysis = toNum(
-      ar?.followers_count ??
-        ar?.followers ??
-        ar?.profile?.followers_count ??
-        ar?.profile?.followers ??
-        ar?.account?.followers_count ??
-        ar?.account?.followers ??
-        ar?.profileStats?.followers ??
-        ar?.accountStats?.followers
-    )
-
-    const followersFromOfficial = toNum(
-      op?.profile?.followers_count ??
-        op?.profile?.followers ??
-        op?.account?.followers_count ??
-        op?.account?.followers ??
-        op?.user?.followers_count ??
-        op?.user?.followers ??
-        op?.followers_count ??
-        op?.followers
-    )
-
-    const followers = followersFromAnalysis ?? followersFromOfficial ?? null
-
-    const engagementRate =
-      typeof engagement === "number" && typeof followers === "number" && followers > 0
-        ? (engagement / followers) * 100
-        : null
-
-    const metrics = { likes, comments, engagement, engagementRate }
+    const metrics = { likes, comments, engagement }
     const hasAny = Object.values(metrics).some((v) => typeof v === "number" && Number.isFinite(v))
 
-    return { hasAny, metrics, followers }
+    return { hasAny, metrics }
   }, [analysisResult, officialPost])
 
   const baseline = useMemo(() => {
@@ -2516,60 +2486,32 @@ export default function PostAnalysisClient() {
                   <div className={subtleDivider} />
 
                   {publicEngagement.hasAny ? (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
                       {[
                         {
                           key: "likes",
                           label: t("post.publicEngagement.metrics.likes"),
                           value: publicEngagement.metrics.likes,
-                          showHelp: false,
                         },
                         {
                           key: "comments",
                           label: t("post.publicEngagement.metrics.comments"),
                           value: publicEngagement.metrics.comments,
-                          showHelp: false,
                         },
                         {
                           key: "engagement",
                           label: t("post.publicEngagement.metrics.engagement"),
                           value: publicEngagement.metrics.engagement,
-                          showHelp: false,
-                        },
-                        {
-                          key: "engagementRate",
-                          label: t("post.publicEngagement.metrics.engagementRate"),
-                          value: publicEngagement.metrics.engagementRate,
-                          showHelp: true,
                         },
                       ].map((m) => (
                         <Card key={m.key} className="rounded-xl border border-white/10 bg-white/5 min-w-0">
                           <CardContent className="p-3 sm:p-5 min-w-0">
-                            <div className="flex items-center gap-1 min-w-0">
-                              <div className="text-[12px] sm:text-sm text-slate-400/70 truncate min-w-0">{m.label}</div>
-                              {m.showHelp ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowEngagementRateHelp(!showEngagementRateHelp)}
-                                  className="shrink-0 p-1 rounded hover:bg-white/10 transition-colors"
-                                  aria-label={t("post.publicEngagement.engagementRateHelp.title")}
-                                >
-                                  <HelpCircle className="h-3.5 w-3.5 text-white/40" />
-                                </button>
-                              ) : null}
-                            </div>
+                            <div className="text-[12px] sm:text-sm text-slate-400/70 truncate min-w-0">{m.label}</div>
                             <div className="mt-2 text-[clamp(18px,5.6vw,26px)] font-bold tabular-nums overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
                               <span className={m.value === null ? "text-white/50" : "text-white"}>
-                                {m.key === "engagementRate" && m.value !== null
-                                  ? `${m.value.toFixed(1)}%`
-                                  : formatNumber(m.value)}
+                                {formatNumber(m.value)}
                               </span>
                             </div>
-                            {m.showHelp && m.value === null && publicEngagement.followers === null ? (
-                              <div className="mt-1 text-[10px] text-white/40 leading-tight">
-                                {t("post.publicEngagement.engagementRateHelp.missingFollowers")}
-                              </div>
-                            ) : null}
                           </CardContent>
                         </Card>
                       ))}
