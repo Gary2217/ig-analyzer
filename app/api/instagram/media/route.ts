@@ -1,9 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { cookies } from "next/headers";
+import { NextResponse, type NextRequest } from "next/server"
+import { cookies } from "next/headers"
 
-const GRAPH_VERSION = "v24.0";
-const PAGE_ID = "851912424681350";
-const IG_BUSINESS_ID = "17841404364250644";
+const GRAPH_VERSION = "v24.0"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -23,8 +21,8 @@ type MediaCacheEntry = {
   kind: "success" | "rate_limited"
 }
 
-const SUCCESS_TTL_MS = 600 * 1000      // 10 minutes
-const RATE_LIMIT_TTL_MS = 120 * 1000   // 2 minutes cooldown
+const SUCCESS_TTL_MS = 600 * 1000 // 10 minutes
+const RATE_LIMIT_TTL_MS = 120 * 1000 // 2 minutes cooldown
 
 const __mediaCache = new Map<string, MediaCacheEntry>()
 
@@ -53,52 +51,44 @@ function jsonRes(body: any, status: number, meta: HeaderMeta) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Rate-limit detection
+// Rate-limit detection (TYPE-SAFE)
 // ─────────────────────────────────────────────────────────────────────────────
-function isRateLimited(body: any, detail: string): boolean {
-  // Use Number() to handle both string "4" and number 4
-  const code = Number(body?.error?.code ?? body?.code)
-  const subcode = Number(body?.error?.error_subcode ?? body?.error_subcode)
+function isRateLimited(body: unknown, detail: string): boolean {
+  const isRec = (v: unknown): v is Record<string, unknown> =>
+    Boolean(v && typeof v === "object")
 
-  // Build combined message from all possible fields
+  const b = isRec(body) ? body : {}
+  const err = isRec((b as any).error) ? (b as any).error : {}
+
+  const code = Number((err as any).code ?? (b as any).code)
+  const subcode = Number(
+    (err as any).error_subcode ?? (b as any).error_subcode
+  )
+
   const combinedMsg = [
-    body?.error?.message,
-    body?.message,
-    body?.error?.error_user_msg,
-    body?.error?.error_user_title,
+    (err as any).message,
+    (b as any).message,
+    (err as any).error_user_msg,
+    (err as any).error_user_title,
     detail,
   ]
-    .filter((s) => typeof s === "string" && s)
+    .filter((s): s is string => typeof s === "string" && s.length > 0)
     .join(" ")
     .toLowerCase()
 
-  // Detect rate limit via:
-  // - error code 4 (FB/IG standard rate limit code)
-  // - error subcode 4
-  // - message containing "(#4)" pattern
-  // - message containing "application request limit reached"
   return (
     code === 4 ||
-    subcode === 4 ||
-    combinedMsg.includes("(#4)") ||
-    combinedMsg.includes("application request limit reached")
+    code === 17 ||
+    subcode === 2446079 ||
+    combinedMsg.includes("rate limit") ||
+    combinedMsg.includes("too many") ||
+    combinedMsg.includes("reduce")
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-function getCookieValue(cookie: string, key: string) {
-  const re = new RegExp(`${key}=([^;]+)`)
-  const m = cookie.match(re)
-  if (!m?.[1]) return ""
-  try {
-    return decodeURIComponent(m[1])
-  } catch {
-    return m[1]
-  }
-}
-
 async function safeJson(res: Response) {
   try {
     return await res.json()
@@ -111,15 +101,19 @@ function toShortDetail(v: unknown) {
   const s = typeof v === "string" ? v : v == null ? "" : String(v)
   const trimmed = s.trim()
   if (!trimmed) return ""
-  const redacted = trimmed.replace(/access_token=([^&\s]+)/gi, "access_token=REDACTED")
-  // Avoid long payload-like messages.
+  const redacted = trimmed.replace(
+    /access_token=([^&\s]+)/gi,
+    "access_token=REDACTED"
+  )
   return redacted.length > 180 ? `${redacted.slice(0, 180)}…` : redacted
 }
 
 function stripAccessTokenFromUrl(urlStr: string): string | null {
   try {
     const u = new URL(urlStr)
-    if (u.searchParams.has("access_token")) u.searchParams.delete("access_token")
+    if (u.searchParams.has("access_token")) {
+      u.searchParams.delete("access_token")
+    }
     return u.toString()
   } catch {
     return null
@@ -129,17 +123,17 @@ function stripAccessTokenFromUrl(urlStr: string): string | null {
 function sanitizeGraphPayload<T>(payload: T): T {
   let safe: any
   try {
-    safe = typeof (globalThis as any).structuredClone === "function"
-      ? (globalThis as any).structuredClone(payload)
-      : JSON.parse(JSON.stringify(payload))
+    safe =
+      typeof (globalThis as any).structuredClone === "function"
+        ? (globalThis as any).structuredClone(payload)
+        : JSON.parse(JSON.stringify(payload))
   } catch {
     safe = JSON.parse(JSON.stringify(payload))
   }
 
   if (safe?.paging?.next && typeof safe.paging.next === "string") {
     const stripped = stripAccessTokenFromUrl(safe.paging.next)
-    if (stripped) safe.paging.next = stripped
-    else safe.paging.next = null
+    safe.paging.next = stripped ?? null
   }
 
   return safe
@@ -149,25 +143,23 @@ function jsonError(message: string, extra?: any, status = 400) {
   return jsonRes(
     { ...extra, error: message },
     status,
-    { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" },
+    { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" }
   )
-}
-
-function shouldDebug() {
-  return process.env.IG_GRAPH_DEBUG === "1"
 }
 
 function safeLen(v: unknown): number {
   return Array.isArray(v) ? v.length : 0
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET
+// ─────────────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const after = url.searchParams.get("after") || "";
-    const limit = url.searchParams.get("limit") || "25";
+    const url = new URL(req.url)
+    const after = url.searchParams.get("after") || ""
+    const limit = url.searchParams.get("limit") || "25"
 
-    // 1) From cookies (source of truth)
     const c = await cookies()
     const isHttps = getIsHttps(req)
     const baseCookieOptions = {
@@ -181,48 +173,50 @@ export async function GET(req: NextRequest) {
     let igIdFromCookie = (c.get("ig_ig_id")?.value ?? "").trim()
     let pageIdFromCookie = (c.get("ig_page_id")?.value ?? "").trim()
 
-     const hasAccessToken = Boolean(userAccessToken)
-     const hasIgId = Boolean(igIdFromCookie)
-     const hasPageId = Boolean(pageIdFromCookie)
-
     if (!userAccessToken) {
-      console.warn("[media-route] fail", {
-        status: 403,
-        error: "missing_cookie:ig_access_token",
-        detail: null,
-        hasAccessToken,
-        hasIgId,
-        hasPageId,
-      })
       return jsonRes(
         { ok: false, error: "missing_cookie:ig_access_token", detail: null },
         403,
-        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" },
+        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" }
       )
     }
 
-    // 2) If IDs are missing, hydrate them from Graph using the user token.
-    // This matches /api/auth/instagram/me behavior and prevents false 403s after a successful OAuth.
     if (userAccessToken && (!igIdFromCookie || !pageIdFromCookie)) {
       try {
-        const graphUrl = new URL(`https://graph.facebook.com/v21.0/me/accounts`)
-        graphUrl.searchParams.set("fields", "name,instagram_business_account")
+        const graphUrl = new URL(
+          `https://graph.facebook.com/v21.0/me/accounts`
+        )
+        graphUrl.searchParams.set(
+          "fields",
+          "name,instagram_business_account"
+        )
         graphUrl.searchParams.set("access_token", userAccessToken)
 
-        const r = await fetch(graphUrl.toString(), { method: "GET", cache: "no-store" })
+        const r = await fetch(graphUrl.toString(), {
+          method: "GET",
+          cache: "no-store",
+        })
         if (r.ok) {
           const data = (await r.json()) as any
           const list: any[] = Array.isArray(data?.data) ? data.data : []
-          const picked = list.find((p) => p?.instagram_business_account?.id)
-          const nextPageId = typeof picked?.id === "string" ? picked.id : ""
-          const nextIgId = typeof picked?.instagram_business_account?.id === "string" ? picked.instagram_business_account.id : ""
+          const picked = list.find(
+            (p) => p?.instagram_business_account?.id
+          )
+          const nextPageId =
+            typeof picked?.id === "string" ? picked.id : ""
+          const nextIgId =
+            typeof picked?.instagram_business_account?.id === "string"
+              ? picked.instagram_business_account.id
+              : ""
 
-          if (!pageIdFromCookie && nextPageId) pageIdFromCookie = nextPageId
+          if (!pageIdFromCookie && nextPageId)
+            pageIdFromCookie = nextPageId
           if (!igIdFromCookie && nextIgId) igIdFromCookie = nextIgId
 
-          // Best-effort: persist for subsequent calls.
-          if (pageIdFromCookie) c.set("ig_page_id", pageIdFromCookie, baseCookieOptions)
-          if (igIdFromCookie) c.set("ig_ig_id", igIdFromCookie, baseCookieOptions)
+          if (pageIdFromCookie)
+            c.set("ig_page_id", pageIdFromCookie, baseCookieOptions)
+          if (igIdFromCookie)
+            c.set("ig_ig_id", igIdFromCookie, baseCookieOptions)
         }
       } catch {
         // swallow
@@ -230,139 +224,108 @@ export async function GET(req: NextRequest) {
     }
 
     if (!igIdFromCookie) {
-      console.warn("[media-route] fail", {
-        status: 403,
-        error: "missing_cookie:ig_ig_id",
-        detail: null,
-        hasAccessToken,
-        hasIgId,
-        hasPageId,
-      })
       return jsonRes(
         { ok: false, error: "missing_cookie:ig_ig_id", detail: null },
         403,
-        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" },
+        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" }
       )
     }
+
     if (!pageIdFromCookie) {
-      console.warn("[media-route] fail", {
-        status: 403,
-        error: "missing_cookie:ig_page_id",
-        detail: null,
-        hasAccessToken,
-        hasIgId,
-        hasPageId,
-      })
       return jsonRes(
         { ok: false, error: "missing_cookie:ig_page_id", detail: null },
         403,
-        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" },
+        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "skipped" }
       )
     }
 
-    // Use cookie IDs as the source of truth.
     const igBusinessId = igIdFromCookie
     const pageId = pageIdFromCookie
 
-    if (shouldDebug()) {
-      console.log("[IG_GRAPH_DEBUG][media-route] request", {
-        hasAccessToken,
-        hasIgId,
-        hasPageId,
-        igBusinessId,
-        pageId,
-        after: Boolean(after),
-        limit,
-      })
-    }
-
-    // ───────────────────────────────────────────────────────────────────────
-    // Cache-first: check before calling upstream
-    // ───────────────────────────────────────────────────────────────────────
     const cacheKey = `${igBusinessId}:${pageId}`
     const cached = __mediaCache.get(cacheKey)
     if (cached) {
-      const ttl = cached.kind === "success" ? SUCCESS_TTL_MS : RATE_LIMIT_TTL_MS
+      const ttl =
+        cached.kind === "success" ? SUCCESS_TTL_MS : RATE_LIMIT_TTL_MS
       const ageMs = Date.now() - cached.at
       if (ageMs < ttl) {
         if (cached.kind === "rate_limited") {
-          const remaining = Math.max(0, Math.ceil((ttl - ageMs) / 1000))
+          const remaining = Math.max(
+            0,
+            Math.ceil((ttl - ageMs) / 1000)
+          )
           return jsonRes(
             { ...cached.data, retry_after: remaining },
             429,
-            { cache: "hit", kind: "rate_limited", ageSeconds: Math.floor(ageMs / 1000), upstream: "skipped" },
+            {
+              cache: "hit",
+              kind: "rate_limited",
+              ageSeconds: Math.floor(ageMs / 1000),
+              upstream: "skipped",
+            }
           )
         }
+
         const safeCached = sanitizeGraphPayload(cached.data)
         cached.data = safeCached
-        if (shouldDebug()) {
-          console.log("[IG_GRAPH_DEBUG][media-route] cache hit", {
-            cacheKey,
-            ageSeconds: Math.floor(ageMs / 1000),
-            dataLen: safeLen((safeCached as any)?.data),
-          })
-        }
-        return jsonRes(
-          safeCached,
-          cached.status,
-          { cache: "hit", kind: "success", ageSeconds: Math.floor(ageMs / 1000), upstream: "skipped" },
-        )
+        return jsonRes(safeCached, cached.status, {
+          cache: "hit",
+          kind: "success",
+          ageSeconds: Math.floor(ageMs / 1000),
+          upstream: "skipped",
+        })
       }
       __mediaCache.delete(cacheKey)
     }
 
-    // 2) 使用 User token 換 Page Access Token
     const pageTokenRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(pageId)}?fields=access_token&access_token=${encodeURIComponent(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(
+        pageId
+      )}?fields=access_token&access_token=${encodeURIComponent(
         userAccessToken
       )}`,
       { cache: "no-store" }
-    );
+    )
 
-    const pageTokenJson = await safeJson(pageTokenRes);
+    const pageTokenJson = await safeJson(pageTokenRes)
 
     if (!pageTokenRes.ok || !pageTokenJson?.access_token) {
       const msg = toShortDetail(
-        typeof pageTokenJson?.error?.message === "string"
-          ? pageTokenJson.error.message
-          : typeof pageTokenJson?.message === "string"
-            ? pageTokenJson.message
-            : "failed_to_get_page_access_token",
+        pageTokenJson?.error?.message ??
+          pageTokenJson?.message ??
+          "failed_to_get_page_access_token"
       )
 
-      // Check for rate limit
       if (isRateLimited(pageTokenJson, msg)) {
-        const payload = { ok: false, error: "rate_limited", detail: msg, retry_after: 120 }
-        __mediaCache.set(cacheKey, { at: Date.now(), status: 429, data: payload, kind: "rate_limited" })
-        console.warn("[media-route] fail", {
-          status: 429,
+        const payload = {
+          ok: false,
           error: "rate_limited",
           detail: msg,
-          hasAccessToken,
-          hasIgId,
-          hasPageId,
+          retry_after: 120,
+        }
+        __mediaCache.set(cacheKey, {
+          at: Date.now(),
+          status: 429,
+          data: payload,
+          kind: "rate_limited",
         })
-        return jsonRes(payload, 429, { cache: "miss", kind: "rate_limited", ageSeconds: 0, upstream: "called" })
+        return jsonRes(payload, 429, {
+          cache: "miss",
+          kind: "rate_limited",
+          ageSeconds: 0,
+          upstream: "called",
+        })
       }
 
-      console.warn("[media-route] fail", {
-        status: 403,
-        error: "graph_api_failed",
-        detail: msg,
-        hasAccessToken,
-        hasIgId,
-        hasPageId,
-      })
       return jsonRes(
         { ok: false, error: "graph_api_failed", detail: msg },
         403,
-        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "called" },
+        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "called" }
       )
     }
 
-    const pageAccessToken = pageTokenJson.access_token as string;
+    const pageAccessToken = pageTokenJson.access_token as string
 
-    // 3) 使用 Page token 取得 IG media（支援 paging）
     const fields = [
       "id",
       "caption",
@@ -373,102 +336,80 @@ export async function GET(req: NextRequest) {
       "timestamp",
       "like_count",
       "comments_count",
-    ].join(",");
+    ].join(",")
 
     const mediaUrl =
-      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(igBusinessId)}/media` +
+      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(
+        igBusinessId
+      )}/media` +
       `?fields=${encodeURIComponent(fields)}` +
       `&limit=${encodeURIComponent(limit)}` +
       (after ? `&after=${encodeURIComponent(after)}` : "") +
-      `&access_token=${encodeURIComponent(pageAccessToken)}`;
+      `&access_token=${encodeURIComponent(pageAccessToken)}`
 
-    const mediaRes = await fetch(mediaUrl, { cache: "no-store" });
-    const mediaJson = await safeJson(mediaRes);
-
-    if (shouldDebug()) {
-      const bodyErrMsg =
-        typeof (mediaJson as any)?.error?.message === "string"
-          ? (mediaJson as any).error.message
-          : typeof (mediaJson as any)?.message === "string"
-            ? (mediaJson as any).message
-            : null
-
-      console.log("[IG_GRAPH_DEBUG][media-route] upstream media", {
-        status: mediaRes.status,
-        ok: mediaRes.ok,
-        dataLen: safeLen((mediaJson as any)?.data),
-        hasPaging: Boolean((mediaJson as any)?.paging),
-        error: bodyErrMsg ? toShortDetail(bodyErrMsg) : null,
-      })
-    }
+    const mediaRes = await fetch(mediaUrl, { cache: "no-store" })
+    const mediaJson = await safeJson(mediaRes)
 
     if (!mediaRes.ok) {
       const msg = toShortDetail(
-        typeof mediaJson?.error?.message === "string"
-          ? mediaJson.error.message
-          : typeof mediaJson?.message === "string"
-            ? mediaJson.message
-            : "failed_to_fetch_media",
+        mediaJson?.error?.message ??
+          mediaJson?.message ??
+          "failed_to_fetch_media"
       )
 
-      // Check for rate limit
       if (isRateLimited(mediaJson, msg)) {
-        const payload = { ok: false, error: "rate_limited", detail: msg, retry_after: 120 }
-        __mediaCache.set(cacheKey, { at: Date.now(), status: 429, data: payload, kind: "rate_limited" })
-        console.warn("[media-route] fail", {
-          status: 429,
+        const payload = {
+          ok: false,
           error: "rate_limited",
           detail: msg,
-          hasAccessToken,
-          hasIgId,
-          hasPageId,
+          retry_after: 120,
+        }
+        __mediaCache.set(cacheKey, {
+          at: Date.now(),
+          status: 429,
+          data: payload,
+          kind: "rate_limited",
         })
-        return jsonRes(payload, 429, { cache: "miss", kind: "rate_limited", ageSeconds: 0, upstream: "called" })
+        return jsonRes(payload, 429, {
+          cache: "miss",
+          kind: "rate_limited",
+          ageSeconds: 0,
+          upstream: "called",
+        })
       }
 
-      const status = mediaRes.status === 401 || mediaRes.status === 403 ? 403 : 500
-      console.warn("[media-route] fail", {
-        status,
-        error: "graph_api_failed",
-        detail: msg,
-        hasAccessToken,
-        hasIgId,
-        hasPageId,
-      })
+      const status =
+        mediaRes.status === 401 || mediaRes.status === 403 ? 403 : 500
+
       return jsonRes(
         { ok: false, error: "graph_api_failed", detail: msg },
         status,
-        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "called" },
+        { cache: "miss", kind: "none", ageSeconds: 0, upstream: "called" }
       )
     }
 
-    // Success: cache and return
-    // IMPORTANT: do not cache empty-but-200 payloads. Meta can temporarily return
-    // { data: [] } during Page/IG linkage propagation; caching would make the UI
-    // appear "stuck" for SUCCESS_TTL_MS.
     const safeMediaJson = sanitizeGraphPayload(mediaJson)
     const dataLen = safeLen((safeMediaJson as any)?.data)
-    const shouldCache = dataLen > 0
-    if (shouldCache) {
-      __mediaCache.set(cacheKey, { at: Date.now(), status: 200, data: safeMediaJson, kind: "success" })
-    }
-    if (shouldDebug()) {
-      console.log("[IG_GRAPH_DEBUG][media-route] success", {
-        cacheKey,
-        cached: shouldCache,
-        dataLen,
+    if (dataLen > 0) {
+      __mediaCache.set(cacheKey, {
+        at: Date.now(),
+        status: 200,
+        data: safeMediaJson,
+        kind: "success",
       })
     }
-    return jsonRes(
-      safeMediaJson,
-      200,
-      { cache: "miss", kind: "success", ageSeconds: 0, upstream: "called" },
-    );
+
+    return jsonRes(safeMediaJson, 200, {
+      cache: "miss",
+      kind: "success",
+      ageSeconds: 0,
+      upstream: "called",
+    })
   } catch (err: any) {
     return jsonError(
       "server_error",
       { message: err?.message ?? String(err) },
       500
-    );
+    )
   }
 }

@@ -1,4 +1,6 @@
 {
+  "results.metrics.views": "觀看數",
+  "results.metrics.avgViews": "平均觀看",
   "results.nextGrowth.title": "下一步成長建議",
   "results.nextGrowth.subtitle": "根據你目前的帳號狀態，這是最有效的行動順序。",
   "results.nextGrowth.cards.primary.title": "先把這一件事做好",

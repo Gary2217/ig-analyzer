@@ -1,4 +1,6 @@
 {
+  "results.metrics.views": "Views",
+  "results.metrics.avgViews": "Avg views",
   "results.nextGrowth.title": "Next Growth Actions",
   "results.nextGrowth.subtitle": "Based on your current account state, this is the most effective action order.",
   "results.nextGrowth.cards.primary.title": "Focus on One Action First",

@@ -572,6 +572,7 @@ function normalizeMedia(raw: unknown):
     media_url?: string
     thumbnail_url?: string
     caption?: string
+    views?: number
   }> {
   const src = Array.isArray(raw) ? raw : (isRecord(raw) && Array.isArray(raw.data)) ? raw.data : []
 
@@ -583,6 +584,8 @@ function normalizeMedia(raw: unknown):
 
       const like_count = Number(m?.like_count ?? m?.likeCount ?? m?.likes_count ?? m?.likesCount ?? m?.likes)
       const comments_count = Number(m?.comments_count ?? m?.commentsCount ?? m?.comment_count ?? m?.commentCount ?? m?.comments)
+      // Read views from server-side API response only (no client-side guessing)
+      const views = typeof m?.views === "number" ? m.views : undefined
 
       return {
         id,
@@ -594,6 +597,7 @@ function normalizeMedia(raw: unknown):
         media_url: typeof (m?.media_url ?? m?.mediaUrl) === "string" ? String(m?.media_url ?? m?.mediaUrl) : undefined,
         thumbnail_url: typeof (m?.thumbnail_url ?? m?.thumbnailUrl) === "string" ? String(m?.thumbnail_url ?? m?.thumbnailUrl) : undefined,
         caption: typeof m?.caption === "string" ? m.caption : undefined,
+        views: Number.isFinite(views) ? views : undefined,
       }
     })
     .filter((x): x is NonNullable<typeof x> => x !== null) as Array<{
@@ -606,6 +610,7 @@ function normalizeMedia(raw: unknown):
       media_url?: string
       thumbnail_url?: string
       caption?: string
+      views?: number
     }>
 }
 
@@ -2209,19 +2214,38 @@ export default function ResultsClient() {
 
     const engagementVolume = posts.reduce((a, b) => a + b.likes + b.comments, 0)
 
-    const now = Date.now()
-    const days7 = 7 * 24 * 60 * 60 * 1000
+    // Calculate current calendar week (Mon-Sun) in Asia/Taipei timezone
+    const now = new Date()
+    const taipeiOffset = 8 * 60 // UTC+8 in minutes
+    const localOffset = now.getTimezoneOffset()
+    const offsetDiff = (taipeiOffset + localOffset) * 60 * 1000
+    const taipeiNow = new Date(now.getTime() + offsetDiff)
+    
+    // Get Monday 00:00 of current week in Asia/Taipei
+    const dayOfWeek = taipeiNow.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Sunday counts as 6 days from Monday
+    const weekStart = new Date(taipeiNow)
+    weekStart.setHours(0, 0, 0, 0)
+    weekStart.setDate(weekStart.getDate() - daysFromMonday)
+    const weekStartMs = weekStart.getTime() - offsetDiff // Convert back to UTC
+    
+    // Next Monday 00:00 in Asia/Taipei
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekEnd.getDate() + 7)
+    const weekEndMs = weekEnd.getTime() - offsetDiff // Convert back to UTC
+    
     let postsPerWeek: number | null = 0
     let hasValidTs = false
-    // Count posts within last 7 days with valid media types (estimate based on last 25 items)
+    // Count posts within current calendar week (Mon-Sun Asia/Taipei) with valid media types
+    // Note: estimate based on fetched recent media list (may be limited by API)
     const validMediaTypes = ["IMAGE", "CAROUSEL_ALBUM", "VIDEO", "REELS"]
     for (const p of posts) {
       if (!p.timestamp) continue
       const tms = new Date(p.timestamp).getTime()
       if (Number.isNaN(tms)) continue
       hasValidTs = true
-      // Count only if within 7 days AND has a valid media type
-      if (now - tms <= days7 && p.media_type && validMediaTypes.includes(p.media_type)) {
+      // Count if within current week AND has valid media type
+      if (tms >= weekStartMs && tms < weekEndMs && p.media_type && validMediaTypes.includes(p.media_type)) {
         postsPerWeek += 1
       }
     }
@@ -5993,9 +6017,9 @@ export default function ResultsClient() {
                                   ? real.comments
                                   : toNum(real?.comments_count ?? real?.commentsCount ?? real?.comment_count ?? real?.commentCount ?? real?.comments)
 
+                          const views = typeof real?.views === "number" ? real.views : null
                           const likes = (toNum(likeCountRaw) ?? 0)
                           const comments = (toNum(commentsCountRaw) ?? 0)
-
                           const engagement =
                             typeof real?.engagement === "number" && Number.isFinite(real.engagement)
                               ? real.engagement
@@ -6007,6 +6031,9 @@ export default function ResultsClient() {
                             typeof (real?.media_type ?? real?.mediaType) === "string" && String(real?.media_type ?? real?.mediaType)
                               ? String(real?.media_type ?? real?.mediaType)
                               : ""
+
+                          const isVideoOrReel = mediaType === "VIDEO" || mediaType === "REELS"
+                          const showViews = isVideoOrReel && views !== null && views > 0
 
                         const ymd = (() => {
                           const ts = typeof real?.timestamp === "string" ? real.timestamp : ""
@@ -6102,6 +6129,17 @@ export default function ResultsClient() {
                               ) : null}
 
                               <div className="mt-2 sm:hidden text-[11px] leading-tight text-white/60 min-w-0 truncate">
+                                {showViews ? (
+                                  <>
+                                    <span className="whitespace-nowrap">{t("results.metrics.views")}</span>
+                                    <span className="ml-1 mr-2 inline-flex items-center">
+                                      <span className={numMono}>
+                                        {Math.round(views!).toLocaleString()}
+                                      </span>
+                                    </span>
+                                    <span className="opacity-50">·</span>
+                                  </>
+                                ) : null}
                                 <span className="whitespace-nowrap">{t("results.topPosts.card.likesLabel")}</span>
                                 <span className="ml-1 mr-2 inline-flex items-center">
                                   <span className={numMono}>
@@ -6125,6 +6163,17 @@ export default function ResultsClient() {
                               </div>
 
                               <div className="mt-2.5 hidden sm:flex items-center justify-center gap-x-8 sm:gap-x-10 pr-4 sm:pr-6 min-w-0 overflow-hidden">
+                                {showViews ? (
+                                  <div className="min-w-0 text-center">
+                                    <div className="text-xs text-slate-400 truncate">{t("results.metrics.views")}</div>
+                                    <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
+                                      <span className={numMono}>
+                                        {Math.round(views!).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : null}
+
                                 <div className="min-w-0 text-center">
                                   <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.likesLabel")}</div>
                                   <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
