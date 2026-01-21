@@ -134,7 +134,8 @@
       "body": "We created your Creator Card. Add your collaboration formats, niches, and past brand collaborations."
     },
     "success": {
-      "saved": "Saved"
+      "saved": "Saved",
+      "syncDelayed": "Saved (sync delayed)"
     },
     "errors": {
       "notConnected": "Please connect Instagram first.",

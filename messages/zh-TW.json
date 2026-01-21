@@ -134,7 +134,8 @@
       "body": "我們已為你建立名片。你可以先填寫合作形式、合作品類與曾合作品牌。"
     },
     "success": {
-      "saved": "已儲存"
+      "saved": "已儲存",
+      "syncDelayed": "已儲存（同步稍後完成）"
     },
     "errors": {
       "notConnected": "請先連結 Instagram。",

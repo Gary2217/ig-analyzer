@@ -383,16 +383,17 @@ export default function CreatorCardPage() {
 
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<number | null>(null)
-  const showToast = useCallback((message: string) => {
+  const showToast = useCallback((message: string, durationMs?: number) => {
     setToast(message)
     if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current)
     toastTimerRef.current = window.setTimeout(() => {
       setToast(null)
       toastTimerRef.current = null
-    }, 1800)
+    }, typeof durationMs === "number" && Number.isFinite(durationMs) ? durationMs : 1800)
   }, [])
 
   const hasLoadedRef = useRef(false)
+  const postSaveSyncRef = useRef(false)
 
   const activeLocale = useMemo(() => {
     if (typeof window === "undefined") return "en"
@@ -783,11 +784,22 @@ export default function CreatorCardPage() {
         setShowNewCardHint(false)
       }
       try {
+        const controller = new AbortController()
+        const shouldTimeout = isBackgroundRefresh && postSaveSyncRef.current
+        const timeoutId = shouldTimeout
+          ? window.setTimeout(() => {
+              controller.abort()
+            }, 8000)
+          : null
+
         const res = await fetch("/api/creator-card/me", {
           method: "GET",
           cache: "no-store",
           credentials: "include",
+          signal: controller.signal,
         })
+
+        if (timeoutId != null) window.clearTimeout(timeoutId)
 
         const jsonRaw: unknown = await res.json().catch(() => null)
         const json = (asRecord(jsonRaw) as unknown as CreatorCardMeResponse) ?? null
@@ -858,13 +870,17 @@ export default function CreatorCardPage() {
           : null
 
         setBaseCard(nextBase)
-        setIntroDraft(typeof nextBase?.audience === "string" ? nextBase.audience : "")
-        const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
-        setDeliverables(nextDeliverables)
-        setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
-        setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
-        setThemeTypes(normalizeStringArray(nextBase?.themeTypes ?? [], 20))
-        setAudienceProfiles(normalizeStringArray(nextBase?.audienceProfiles ?? [], 20))
+
+        const shouldHydrateDrafts = !isBackgroundRefresh || !isDirtyRef.current || postSaveSyncRef.current
+        if (shouldHydrateDrafts) {
+          setIntroDraft(typeof nextBase?.audience === "string" ? nextBase.audience : "")
+          const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
+          setDeliverables(nextDeliverables)
+          setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
+          setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
+          setThemeTypes(normalizeStringArray(nextBase?.themeTypes ?? [], 20))
+          setAudienceProfiles(normalizeStringArray(nextBase?.audienceProfiles ?? [], 20))
+        }
 
         const parsedContact = (() => {
           const raw = typeof nextBase?.contact === "string" ? nextBase.contact.trim() : ""
@@ -973,13 +989,18 @@ export default function CreatorCardPage() {
         })()
         setPrimaryTypeTags(normalizeStringArray(primaryParts, 6))
 
-        const customs = nextDeliverables.filter((x) => !knownFormatIds.has(x))
-        setOtherFormatEnabled(customs.length > 0)
-        setOtherFormatInput("")
+        if (shouldHydrateDrafts) {
+          const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
+          const customs = nextDeliverables.filter((x) => !knownFormatIds.has(x))
+          setOtherFormatEnabled(customs.length > 0)
+          setOtherFormatInput("")
+        }
 
-        const nicheCustoms = normalizeStringArray(nextBase?.collaborationNiches ?? [], 20).filter((x) => !knownNicheIds.has(x))
-        setOtherNicheEnabled(nicheCustoms.length > 0)
-        setOtherNicheInput("")
+        if (shouldHydrateDrafts) {
+          const nicheCustoms = normalizeStringArray(nextBase?.collaborationNiches ?? [], 20).filter((x) => !knownNicheIds.has(x))
+          setOtherNicheEnabled(nicheCustoms.length > 0)
+          setOtherNicheInput("")
+        }
 
         const isLikelyEmpty = (() => {
           const hasAnyText =
@@ -996,10 +1017,14 @@ export default function CreatorCardPage() {
 
         setShowNewCardHint(isLikelyEmpty)
         hasLoadedRef.current = true
+        if (postSaveSyncRef.current) postSaveSyncRef.current = false
       } catch {
         if (!isBackgroundRefresh) {
           setLoadErrorKind("load_failed")
           setLoadError(t("creatorCardEditor.errors.loadFailed"))
+        } else if (postSaveSyncRef.current) {
+          postSaveSyncRef.current = false
+          showToast(t("creatorCardEditor.success.syncDelayed"))
         }
       } finally {
         if (cancelled) return
@@ -1010,7 +1035,7 @@ export default function CreatorCardPage() {
     return () => {
       cancelled = true
     }
-  }, [knownFormatIds, knownNicheIds, refetchTick, t])
+  }, [knownFormatIds, knownNicheIds, refetchTick, showToast, t])
 
   useEffect(() => {
     setBaseCard((prev) => {
@@ -1152,6 +1177,7 @@ export default function CreatorCardPage() {
     setSaving(true)
     setSaveError(null)
     setSaveOk(false)
+    showToast(t("creatorCardEditor.actions.saving"), 6000)
     try {
       const nextProfileImageUrl = await (async () => {
         if (profileImageFile) {
@@ -1240,10 +1266,25 @@ export default function CreatorCardPage() {
       setBaseCard((prev) => ({
         ...(prev ?? {}),
         profileImageUrl: nextProfileImageUrl ?? null,
+        audience: nextAudience || null,
+        themeTypes: normalizeStringArray(themeTypes, 20),
+        audienceProfiles: normalizeStringArray(audienceProfiles, 20),
+        deliverables: normalizeStringArray(deliverables, 50),
+        collaborationNiches: normalizeStringArray(collaborationNiches, 20),
+        pastCollaborations: normalizeStringArray(pastCollaborations, 20),
+        contact: serializedContact,
+        portfolio: featuredItems.map((x, idx) => ({
+          id: x.id,
+          url: typeof x.url === "string" ? x.url : "",
+          brand: typeof x.brand === "string" ? x.brand : "",
+          collabType: typeof x.collabType === "string" ? x.collabType : "",
+          order: idx,
+        })),
       }))
 
       clearDirty()
 
+      postSaveSyncRef.current = true
       window.setTimeout(() => setRefetchTick((x) => x + 1), 0)
     } catch {
       setSaveError(t("creatorCardEditor.errors.saveFailed"))
@@ -1344,7 +1385,7 @@ export default function CreatorCardPage() {
         {toast ?? ""}
       </div>
       {toast ? (
-        <div className="fixed top-4 inset-x-0 z-[80] flex justify-center px-4">
+        <div className="fixed top-[calc(env(safe-area-inset-top)+12px)] inset-x-0 z-[80] flex justify-center px-4">
           <div className="max-w-[560px] w-full">
             <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-4 py-3 text-sm text-slate-200 shadow-xl break-words [overflow-wrap:anywhere]">
               {toast}
@@ -1394,7 +1435,7 @@ export default function CreatorCardPage() {
           <div className="min-w-0 break-words [overflow-wrap:anywhere]">{loadError}</div>
           {loadErrorKind === "load_failed" ? (
             <div className="mt-3">
-              <Button type="button" variant="outline" onClick={handleRetryLoad} disabled={loading || saving}>
+              <Button type="button" variant="outline" onClick={handleRetryLoad} disabled={loading}>
                 {t("creatorCardEditor.actions.retry")}
               </Button>
             </div>
@@ -1524,12 +1565,7 @@ export default function CreatorCardPage() {
                                 introAppliedHintTimerRef.current = null
                               }, 1600)
                             }}
-                            disabled={
-                              saving ||
-                              loading ||
-                              loadErrorKind === "not_connected" ||
-                              loadErrorKind === "supabase_invalid_key"
-                            }
+                            disabled={loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                           >
                             {t("creatorCardEditor.formats.otherAdd")}
                           </Button>
