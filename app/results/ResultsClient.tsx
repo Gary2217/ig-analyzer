@@ -6123,7 +6123,7 @@ export default function ResultsClient() {
 
             <Card
               id="latest-posts-section"
-              className="mt-6 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden"
+              className={"mt-3 scroll-mt-40 " + CARD_SHELL}
             >
               <CardHeader className={CARD_HEADER_ROW}>
                 <div className="min-w-0">
@@ -6133,7 +6133,7 @@ export default function ResultsClient() {
                   </p>
                 </div>
               </CardHeader>
-              <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+              <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {(() => {
                     const renderCards = hasRealMedia && latestPosts.length > 0 ? latestPosts : []
@@ -6150,88 +6150,133 @@ export default function ResultsClient() {
                       const real = isRecord(item) ? item : null
                       if (!real) return null
 
-                      const previewUrl = (() => {
-                        const mediaType = typeof real?.media_type === "string" ? String(real.media_type).toUpperCase() : ""
-                        if (mediaType === "VIDEO" || mediaType === "REELS") {
-                          return real?.thumbnail_url || real?.media_url || ""
-                        }
-                        return real?.media_url || real?.thumbnail_url || ""
+                      const likes = typeof real?.like_count === "number" ? real.like_count : 0
+                      const comments = typeof real?.comments_count === "number" ? real.comments_count : 0
+                      const engagement = likes + comments
+
+                      const mediaType = typeof real?.media_type === "string" ? String(real.media_type) : ""
+
+                      const ymd = (() => {
+                        const ts = typeof real?.timestamp === "string" ? real.timestamp : ""
+                        if (!ts) return "—"
+                        const d = new Date(ts)
+                        const tms = d.getTime()
+                        if (Number.isNaN(tms)) return "—"
+                        const y = d.getFullYear()
+                        const m = String(d.getMonth() + 1).padStart(2, "0")
+                        const day = String(d.getDate()).padStart(2, "0")
+                        return `${y}/${m}/${day}`
                       })()
 
-                      const permalink = typeof real?.permalink === "string" ? real.permalink : ""
-                      const hasPermalink = permalink.length > 0
+                      const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
+                      const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
+                      const igHref = permalink
 
-                      const timestamp = typeof real?.timestamp === "string" ? real.timestamp : ""
-                      const formattedDate = timestamp ? (() => {
-                        try {
-                          return new Intl.DateTimeFormat(activeLocale, { month: "short", day: "numeric" }).format(new Date(timestamp))
-                        } catch {
-                          return timestamp.slice(0, 10)
-                        }
-                      })() : ""
+                      const previewUrl = (() => {
+                        const mt = String(real.media_type ?? "")
+                        const tu = typeof real.thumbnail_url === "string" ? String(real.thumbnail_url) : ""
+                        const mu = typeof real.media_url === "string" ? String(real.media_url) : ""
+                        const isVideoType = mt === "VIDEO" || mt === "REELS"
+                        const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
+                        const pick = isVideoType ? (tu || mu) : (mu || tu)
+                        if (pick && isLikelyVideoUrl(pick)) return tu || ""
+                        return pick || ""
+                      })()
 
-                      const mediaType = typeof real?.media_type === "string" ? String(real.media_type).toUpperCase() : ""
-                      const mediaTypeLabel = mediaType === "VIDEO" || mediaType === "REELS" ? "VIDEO" : mediaType === "CAROUSEL_ALBUM" ? "CAROUSEL" : "IMAGE"
-
-                      const likes = typeof real?.like_count === "number" ? real.like_count : null
-                      const comments = typeof real?.comments_count === "number" ? real.comments_count : null
-
-                      const cardContent = (
-                        <div className="rounded-lg border border-white/10 bg-white/5 overflow-hidden min-w-0">
-                          <div className="relative aspect-square w-full bg-white/5">
-                            {previewUrl ? (
-                              <img
-                                src={previewUrl}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : null}
-                            <div className="absolute top-2 left-2">
-                              <span className="inline-flex items-center rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white/90 backdrop-blur-sm">
-                                {mediaTypeLabel}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="p-3 min-w-0">
-                            <div className="text-[11px] text-white/60 mb-2 truncate">{formattedDate}</div>
-                            {likes !== null || comments !== null ? (
-                              <div className="flex items-center gap-3 text-[11px] text-white/70 min-w-0">
-                                {likes !== null ? (
-                                  <span className="whitespace-nowrap">
-                                    {t("results.topPosts.card.likesLabel")} <span className="font-semibold text-white tabular-nums">{Math.round(likes).toLocaleString()}</span>
-                                  </span>
-                                ) : null}
-                                {comments !== null ? (
-                                  <span className="whitespace-nowrap">
-                                    {t("results.topPosts.card.commentsLabel")} <span className="font-semibold text-white tabular-nums">{Math.round(comments).toLocaleString()}</span>
-                                  </span>
-                                ) : null}
-                              </div>
-                            ) : (
-                              <div className="text-[11px] text-white/40">—</div>
-                            )}
-                          </div>
-                        </div>
-                      )
-
-                      if (hasPermalink) {
-                        return (
-                          <a
-                            key={real?.id || `latest-${idx}`}
-                            href={permalink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block hover:opacity-80 transition-opacity min-w-0"
-                          >
-                            {cardContent}
-                          </a>
-                        )
-                      }
+                      const analyzeHref = permalink
+                        ? `/${activeLocale}/post-analysis?url=${encodeURIComponent(permalink)}`
+                        : `/${activeLocale}/post-analysis`
 
                       return (
-                        <div key={real?.id || `latest-${idx}`} className="min-w-0">
-                          {cardContent}
+                        <div key={real?.id || `latest-${idx}`} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
+                          <div className="flex gap-2 min-w-0">
+                            <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
+                              <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
+                                <TopPostThumb src={previewUrl || undefined} alt="post preview" />
+                              </a>
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2 min-w-0">
+                                <div className="min-w-0">
+                                  <div className="text-xs text-muted-foreground leading-tight truncate min-w-0">
+                                    <span className="whitespace-nowrap">{mediaType}</span>
+                                    <span className="mx-1">·</span>
+                                    <span className={numMono}>{ymd}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <a
+                                    href={analyzeHref}
+                                    className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 whitespace-nowrap"
+                                    title={t("results.topPosts.card.analyzeTitle")}
+                                  >
+                                    {t("results.topPosts.card.analyzeLabel")}
+                                  </a>
+                                </div>
+                              </div>
+
+                              {caption ? (
+                                <div className="mt-1 hidden sm:block text-xs text-slate-200/85 leading-tight line-clamp-2 min-w-0">
+                                  {caption}
+                                </div>
+                              ) : null}
+
+                              <div className="mt-2 sm:hidden text-[11px] leading-tight text-white/60 min-w-0 truncate">
+                                <span className="whitespace-nowrap">{t("results.topPosts.card.likesLabel")}</span>
+                                <span className="ml-1 mr-2 inline-flex items-center">
+                                  <span className={numMono}>
+                                    {Math.round(likes).toLocaleString()}
+                                  </span>
+                                </span>
+                                <span className="opacity-50">·</span>
+                                <span className="ml-2 whitespace-nowrap">{t("results.topPosts.card.commentsLabel")}</span>
+                                <span className="ml-1 mr-2 inline-flex items-center">
+                                  <span className={numMono}>
+                                    {Math.round(comments).toLocaleString()}
+                                  </span>
+                                </span>
+                                <span className="opacity-50">·</span>
+                                <span className="ml-2 whitespace-nowrap">{t("results.topPosts.card.engagementLabel")}</span>
+                                <span className="ml-1 inline-flex items-center">
+                                  <span className={numMono}>
+                                    {Math.round(engagement).toLocaleString()}
+                                  </span>
+                                </span>
+                              </div>
+
+                              <div className="mt-2.5 hidden sm:flex items-center justify-center gap-x-8 sm:gap-x-10 pr-4 sm:pr-6 min-w-0 overflow-hidden">
+                                <div className="min-w-0 text-center">
+                                  <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.likesLabel")}</div>
+                                  <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
+                                    <span className={numMono}>
+                                      {Math.round(likes).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="min-w-0 text-center">
+                                  <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.commentsLabel")}</div>
+                                  <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
+                                    <span className={numMono}>
+                                      {Math.round(comments).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="min-w-0 text-center">
+                                  <div className="text-xs text-slate-400 truncate">{t("results.topPosts.card.engagementLabel")}</div>
+                                  <div className="mt-1 text-[clamp(16px,4.5vw,18px)] font-semibold text-white min-w-0">
+                                    <span className={numMono}>
+                                      {Math.round(engagement).toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                            </div>
+                          </div>
                         </div>
                       )
                     })
