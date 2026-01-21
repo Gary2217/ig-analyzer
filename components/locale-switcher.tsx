@@ -65,13 +65,13 @@ export default function LocaleSwitcher() {
   }, [])
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative overflow-visible">
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center justify-center h-11 w-11 rounded-lg border border-white/10 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+        className="relative overflow-visible inline-flex items-center justify-center h-11 w-11 rounded-lg border border-white/10 text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
       >
         <Globe size={30} />
       </button>
@@ -79,7 +79,7 @@ export default function LocaleSwitcher() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-40 rounded-xl border border-white/10 bg-[#0b1220]/90 backdrop-blur-md shadow-xl overflow-hidden z-[999]"
+          className="absolute right-0 mt-2 w-40 rounded-xl border border-white/10 bg-[#0b1220]/90 backdrop-blur-md shadow-xl overflow-hidden z-[100]"
         >
           {LOCALES.map((l) => (
             <button

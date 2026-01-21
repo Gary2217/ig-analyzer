@@ -461,6 +461,7 @@ export default function PostAnalysisClient() {
   const analysisGuardRef = useRef<{ url: string; ts: number } | null>(null)
   const sameUrlConfirmRef = useRef<{ url: string; ts: number } | null>(null)
   const quickPickGuardRef = useRef<{ url: string; ts: number } | null>(null)
+  const didOauthRefetchRef = useRef(false)
 
   const scrollToPostUrl = () => {
     const getStickyOffset = () => {
@@ -1535,6 +1536,7 @@ export default function PostAnalysisClient() {
     try {
       const res = await fetch(`/api/instagram/post?url=${encodeURIComponent(clean)}`, {
         method: "GET",
+        credentials: "include",
         cache: "no-store",
         signal: controller.signal,
       })
@@ -1597,6 +1599,23 @@ export default function PostAnalysisClient() {
       window.clearTimeout(timeoutId)
     }
   }, [pathname, refetchTick, manualRefreshTick])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (didOauthRefetchRef.current) return
+    if (!postUrl) return
+
+    const u = new URL(window.location.href)
+    const connected = u.searchParams.get("connected") || u.searchParams.get("instagram")
+    if (!connected) return
+
+    didOauthRefetchRef.current = true
+    void fetchOfficial(postUrl)
+
+    u.searchParams.delete("connected")
+    u.searchParams.delete("instagram")
+    window.history.replaceState({}, "", u.toString())
+  }, [postUrl])
 
   useEffect(() => {
     if (typeof window === "undefined") return
