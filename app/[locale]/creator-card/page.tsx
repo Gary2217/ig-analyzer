@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronDown, Eye, Pencil, Plus, X } from "lucide-react"
+import Image from "next/image"
+import { ChevronDown, Eye, Plus, X } from "lucide-react"
 import { createPortal } from "react-dom"
 
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core"
@@ -14,7 +15,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Button } from "../../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Input } from "../../../components/ui/input"
-import { extractLocaleFromPathname, localePathname } from "../../lib/locale-path"
+import { extractLocaleFromPathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
@@ -194,7 +195,7 @@ function SortableFeaturedTile(props: {
       </button>
 
       {item.url ? (
-        <img src={item.url} alt="" className="h-full w-full object-cover" />
+        <Image src={item.url} alt="" fill sizes="100vw" unoptimized className="object-cover" />
       ) : (
         <div className="h-full w-full flex items-center justify-center bg-white/5">
           <Plus className="h-7 w-7 text-white/25" />
@@ -446,6 +447,21 @@ export default function CreatorCardPage() {
 
   const meQuery = useInstagramMe({ enabled: true })
 
+  const igMe = meQuery.data as unknown
+  const igMeObj = asRecord(igMe)
+  const igProfile = (asRecord(igMeObj?.profile) ?? igMeObj) as unknown as InstagramProfileLite
+
+  const displayUsername = useMemo(() => {
+    const raw = typeof igProfile?.username === "string" ? String(igProfile.username).trim() : ""
+    return raw
+  }, [igProfile?.username])
+
+  const displayName = useMemo(() => {
+    const raw = (igProfile?.name ?? igProfile?.display_name ?? igProfile?.displayName) as unknown
+    if (typeof raw === "string" && raw.trim()) return raw.trim()
+    return displayUsername ? displayUsername : "—"
+  }, [displayUsername, igProfile?.displayName, igProfile?.display_name, igProfile?.name])
+
   const [baseCard, setBaseCard] = useState<CreatorCardPayload | null>(null)
   const [deliverables, setDeliverables] = useState<string[]>([])
   const [collaborationNiches, setCollaborationNiches] = useState<string[]>([])
@@ -674,8 +690,6 @@ export default function CreatorCardPage() {
   const [otherNicheEnabled, setOtherNicheEnabled] = useState(false)
   const [otherNicheInput, setOtherNicheInput] = useState("")
 
-  const [primaryTypeInput, setPrimaryTypeInput] = useState("")
-
   const [themeTypeInput, setThemeTypeInput] = useState("")
   const [audienceProfileInput, setAudienceProfileInput] = useState("")
 
@@ -729,15 +743,6 @@ export default function CreatorCardPage() {
       setAudienceProfiles((prev) => normalizeStringArray([...prev, next[0]], 20))
     },
     [setAudienceProfiles]
-  )
-
-  const addPrimaryTypeTag = useCallback(
-    (raw: string) => {
-      const next = normalizeStringArray([raw], 1)
-      if (next.length === 0) return
-      setPrimaryTypeTags((prev) => normalizeStringArray([...prev, next[0]], 6))
-    },
-    [setPrimaryTypeTags]
   )
 
   useEffect(() => {
@@ -974,7 +979,7 @@ export default function CreatorCardPage() {
     return () => {
       cancelled = true
     }
-  }, [refetchTick, t])
+  }, [knownFormatIds, knownNicheIds, refetchTick, t])
 
   useEffect(() => {
     setBaseCard((prev) => {
@@ -1216,7 +1221,7 @@ export default function CreatorCardPage() {
       saveInFlightRef.current = false
       setSaving(false)
     }
-  }, [audienceProfiles, baseCard, collaborationNiches, deliverables, featuredItems, fileToDataUrl, pastCollaborations, profileImageFile, saving, serializedContact, t, themeTypes])
+  }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, pastCollaborations, profileImageFile, saving, serializedContact, t, themeTypes])
 
   const handleBack = () => {
     if (returnTo) {
@@ -1230,21 +1235,6 @@ export default function CreatorCardPage() {
     const max = 20
     return t("creatorCardEditor.pastCollaborations.helper").replace("{count}", String(pastCollaborations.length)).replace("{max}", String(max))
   }, [pastCollaborations.length, t])
-
-  const igMe = meQuery.data as unknown
-  const igMeObj = asRecord(igMe)
-  const igProfile = (asRecord(igMeObj?.profile) ?? igMeObj) as unknown as InstagramProfileLite
-
-  const displayUsername = useMemo(() => {
-    const raw = typeof igProfile?.username === "string" ? String(igProfile.username).trim() : ""
-    return raw
-  }, [igProfile?.username])
-
-  const displayName = useMemo(() => {
-    const raw = (igProfile?.name ?? igProfile?.display_name ?? igProfile?.displayName) as unknown
-    if (typeof raw === "string" && raw.trim()) return raw.trim()
-    return displayUsername ? displayUsername : "—"
-  }, [displayUsername, igProfile?.displayName, igProfile?.display_name, igProfile?.name])
 
   const finiteNumOrNull = useCallback((v: unknown): number | null => {
     const n = typeof v === "number" ? v : Number(v)
@@ -1383,7 +1373,16 @@ export default function CreatorCardPage() {
       {loading ? (
         loadingSkeleton
       ) : (
-        <div className={"mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0" + (isMobile ? " pb-32" : "")}>
+        <div
+          className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0"
+          style={
+            isMobile
+              ? {
+                  paddingBottom: "calc(env(safe-area-inset-bottom) + 96px)",
+                }
+              : undefined
+          }
+        >
           <div className="lg:col-span-5 min-w-0" onChangeCapture={markDirty} onInputCapture={markDirty}>
             {(() => {
               type LocalMobileSectionKey =
@@ -2347,7 +2346,7 @@ export default function CreatorCardPage() {
                                     {themeChipOverflow.hiddenCount > 0 ? (
                                       <button
                                         type="button"
-                                        className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
+                                        className="mt-2 -mx-2 inline-flex min-w-0 items-center rounded-md px-2 py-2 text-left text-xs font-semibold text-white/70 hover:bg-white/5 whitespace-normal break-words [overflow-wrap:anywhere]"
                                         onClick={() => themeChipOverflow.setExpanded((prev) => !prev)}
                                       >
                                         {themeChipOverflow.expanded
@@ -2458,7 +2457,7 @@ export default function CreatorCardPage() {
                                     {audienceChipOverflow.hiddenCount > 0 ? (
                                       <button
                                         type="button"
-                                        className="mt-2 text-xs font-semibold text-white/60 whitespace-normal break-words [overflow-wrap:anywhere] text-left"
+                                        className="mt-2 -mx-2 inline-flex min-w-0 items-center rounded-md px-2 py-2 text-left text-xs font-semibold text-white/70 hover:bg-white/5 whitespace-normal break-words [overflow-wrap:anywhere]"
                                         onClick={() => audienceChipOverflow.setExpanded((prev) => !prev)}
                                       >
                                         {audienceChipOverflow.expanded
@@ -2552,11 +2551,15 @@ export default function CreatorCardPage() {
                             </div>
                           ) : null}
 
-                          <div className={(isMobile ? "mt-3" : "") + " w-full"}>
+                          <div className={(isMobile ? "mt-4" : "") + " w-full"}>
                             <Accordion type="multiple" defaultValue={["profile"]} className="w-full">
                               {mobileSections.map((s) => (
-                                <AccordionItem key={s.key} value={s.key}>
-                                  <AccordionTrigger className="group rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:bg-white/5 hover:border-white/15 data-[state=open]:bg-white/[0.06]">
+                                <AccordionItem
+                                  key={s.key}
+                                  value={s.key}
+                                  className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-slate-900/40"
+                                >
+                                  <AccordionTrigger className="group min-h-12 px-3 py-3 text-left transition-colors hover:bg-white/5 data-[state=open]:bg-white/[0.06]">
                                     <div className="flex w-full min-w-0 items-center gap-2">
                                       <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
                                         {t(s.titleKey)}
@@ -2565,7 +2568,9 @@ export default function CreatorCardPage() {
                                     </div>
                                   </AccordionTrigger>
                                   <AccordionContent forceMount>
-                                    <div className="space-y-2">{s.render()}</div>
+                                    <div className="px-3 pb-4">
+                                      <div className="space-y-3">{s.render()}</div>
+                                    </div>
                                   </AccordionContent>
                                 </AccordionItem>
                               ))}
@@ -2705,7 +2710,7 @@ export default function CreatorCardPage() {
                 className="absolute inset-0 flex flex-col focus:outline-none"
               >
                 <div className="shrink-0 px-4 pt-4">
-                  <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 backdrop-blur">
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 backdrop-blur">
                     <div className="min-w-0 text-sm font-semibold text-white/85 break-words [overflow-wrap:anywhere]">
                       {t("creatorCardEditor.mobile.preview.title")}
                     </div>
