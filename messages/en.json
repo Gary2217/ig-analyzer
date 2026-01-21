@@ -1792,7 +1792,7 @@
     },
     "topPosts": {
       "title": "Top Performing Posts",
-      "description": "These are your strongest posts by engagement. Pro unlocks the “why” behind performance—timing signals, caption patterns, and repeatable hooks.",
+      "description": "These are your strongest posts by engagement. Pro unlocks the why behind performance—timing signals, caption patterns, and repeatable hooks.",
       "proLocked": "Pro locked",
       "chips": {
         "preview": "Preview",
@@ -1808,6 +1808,12 @@
         "proHint": "🔒 Pro feature: View post captions, publish time, and why this post performed well.",
         "metadataFallback": "Post ID · Publish Time · Caption Analysis (Pro)"
       }
+    },
+    "latestPosts": {
+      "title": "Latest Posts",
+      "description": "Your 3 most recent posts",
+      "emptyState": "No recent posts",
+      "noData": "No data"
     },
     "postAnalysis": {
       "cta": "Analyze Posts",

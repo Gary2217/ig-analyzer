@@ -1809,6 +1809,12 @@
         "metadataFallback": "貼文編號 · 發佈時間 · 內文分析（專業版）"
       }
     },
+    "latestPosts": {
+      "title": "最新貼文",
+      "description": "顯示你最近發佈的 3 篇貼文",
+      "emptyState": "尚無近期貼文",
+      "noData": "尚無資料"
+    },
     "postAnalysis": {
       "cta": "前往貼文分析",
       "freeLeft": "免費剩餘"
