@@ -969,7 +969,10 @@ export default function CreatorCardPage() {
           }
 
           items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          return items.slice(0, 20).map((x) => ({ id: x.id, url: x.url, brand: x.brand, collabType: x.collabType }))
+          return items
+            .filter((x) => typeof x.url === "string" && x.url.trim().length > 0)
+            .slice(0, 20)
+            .map((x) => ({ id: x.id, url: x.url, brand: x.brand, collabType: x.collabType }))
         })()
 
         setFeaturedItems((prev) => {
@@ -1137,6 +1140,11 @@ export default function CreatorCardPage() {
     markDirty()
   }, [markDirty, pastCollabInput, setPastCollaborations])
 
+  const isPersistedUrl = (raw: string) =>
+    !!raw && (raw.startsWith("https://") || raw.startsWith("http://") || raw.startsWith("/"))
+
+  const isPreviewUrl = (raw: string) => !!raw && raw.startsWith("blob:")
+
   const fileToDataUrl = useCallback((file: File) => {
     return new Promise<string>((resolve) => {
       const reader = new FileReader()
@@ -1204,17 +1212,15 @@ export default function CreatorCardPage() {
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         contact: serializedContact,
-        portfolio: featuredItems.map((x, idx) => {
-          const rawUrl = typeof x.url === "string" ? x.url : ""
-          const isPersistedUrl = rawUrl && (rawUrl.startsWith("https://") || rawUrl.startsWith("http://") || rawUrl.startsWith("/"))
-          return {
+        portfolio: featuredItems
+          .filter((x) => isPersistedUrl(typeof x.url === "string" ? x.url : ""))
+          .map((x, idx) => ({
             id: x.id,
-            url: isPersistedUrl ? rawUrl : undefined,
+            url: typeof x.url === "string" ? x.url : "",
             brand: typeof x.brand === "string" ? x.brand : "",
             collabType: typeof x.collabType === "string" ? x.collabType : "",
             order: idx,
-          }
-        }),
+          })),
         isPublic: baseCard?.isPublic ?? undefined,
         deliverables: normalizeStringArray(deliverables, 50),
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
@@ -1277,13 +1283,15 @@ export default function CreatorCardPage() {
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
         contact: serializedContact,
-        portfolio: featuredItems.map((x, idx) => ({
-          id: x.id,
-          url: typeof x.url === "string" ? x.url : "",
-          brand: typeof x.brand === "string" ? x.brand : "",
-          collabType: typeof x.collabType === "string" ? x.collabType : "",
-          order: idx,
-        })),
+        portfolio: featuredItems
+          .filter((x) => isPersistedUrl(typeof x.url === "string" ? x.url : ""))
+          .map((x, idx) => ({
+            id: x.id,
+            url: typeof x.url === "string" ? x.url : "",
+            brand: typeof x.brand === "string" ? x.brand : "",
+            collabType: typeof x.collabType === "string" ? x.collabType : "",
+            order: idx,
+          })),
       }))
 
       clearDirty()
@@ -1913,23 +1921,73 @@ export default function CreatorCardPage() {
                         accept="image/*"
                         multiple
                         className="hidden"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const files = Array.from(e.currentTarget.files ?? [])
                           if (!files.length) return
                           e.currentTarget.value = ""
 
-                          Promise.all(files.map((file) => fileToDataUrl(file))).then((urls) => {
+                          for (const file of files) {
+                            const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+                            // show preview instantly
+                            const previewUrl = URL.createObjectURL(file)
                             setFeaturedItems((prev) => [
                               ...prev,
-                              ...urls.map((url) => ({
-                                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                                url,
-                                brand: "",
-                                collabType: "",
-                              })),
+                              { id, url: previewUrl, brand: "", collabType: "" },
                             ])
                             markDirty()
-                          })
+
+                            setFeaturedUploadingIds((prev) => {
+                              const next = new Set(prev)
+                              next.add(id)
+                              return next
+                            })
+
+                            try {
+                              const formData = new FormData()
+                              formData.append("file", file)
+
+                              const res = await fetch("/api/upload/creator-card-portfolio", {
+                                method: "POST",
+                                body: formData,
+                                credentials: "include",
+                              })
+
+                              if (!res.ok) {
+                                // remove failed item
+                                setFeaturedItems((prev) => prev.filter((x) => x.id !== id))
+                                URL.revokeObjectURL(previewUrl)
+                                showToast(t("creatorCard.form.featured.uploadFailed"))
+                                continue
+                              }
+
+                              const json = await res.json()
+                              const uploadedUrl = typeof json?.url === "string" ? json.url : ""
+
+                              if (!uploadedUrl || !isPersistedUrl(uploadedUrl)) {
+                                setFeaturedItems((prev) => prev.filter((x) => x.id !== id))
+                                URL.revokeObjectURL(previewUrl)
+                                showToast(t("creatorCard.form.featured.uploadFailed"))
+                                continue
+                              }
+
+                              // replace preview with persisted url
+                              setFeaturedItems((prev) =>
+                                prev.map((x) => (x.id === id ? { ...x, url: uploadedUrl } : x))
+                              )
+                              URL.revokeObjectURL(previewUrl)
+                            } catch {
+                              setFeaturedItems((prev) => prev.filter((x) => x.id !== id))
+                              URL.revokeObjectURL(previewUrl)
+                              showToast(t("creatorCard.form.featured.uploadFailed"))
+                            } finally {
+                              setFeaturedUploadingIds((prev) => {
+                                const next = new Set(prev)
+                                next.delete(id)
+                                return next
+                              })
+                            }
+                          }
                         }}
                       />
 
@@ -1940,11 +1998,27 @@ export default function CreatorCardPage() {
                         className="hidden"
                         onChange={async (e) => {
                           const id = pendingFeaturedReplaceIdRef.current
-                          const file = e.target.files?.[0]
+                          const file = e.currentTarget.files?.[0]
                           e.currentTarget.value = ""
                           if (!id || !file) return
 
-                          setFeaturedUploadingIds((prev) => new Set(prev).add(id))
+                          const previewUrl = URL.createObjectURL(file)
+                          const prevUrl =
+                            typeof featuredItems.find((x) => x.id === id)?.url === "string"
+                              ? (featuredItems.find((x) => x.id === id)!.url as string)
+                              : ""
+
+                          // instant preview
+                          setFeaturedItems((prev) =>
+                            prev.map((x) => (x.id === id ? { ...x, url: previewUrl } : x))
+                          )
+                          markDirty()
+
+                          setFeaturedUploadingIds((prev) => {
+                            const next = new Set(prev)
+                            next.add(id)
+                            return next
+                          })
 
                           try {
                             const formData = new FormData()
@@ -1956,25 +2030,37 @@ export default function CreatorCardPage() {
                               credentials: "include",
                             })
 
-                            if (res.ok) {
-                              const json = await res.json()
-                              const nextUrl = typeof json?.url === "string" ? json.url : ""
-                              if (nextUrl) {
-                                setFeaturedItems((prev) => {
-                                  const idx = prev.findIndex((x) => x.id === id)
-                                  if (idx < 0) return prev
-                                  const out = prev.slice()
-                                  out[idx] = { ...out[idx], url: nextUrl }
-                                  return out
-                                })
-                                markDirty()
-                              } else {
-                                showToast(t("creatorCard.form.featured.uploadFailed"))
-                              }
-                            } else {
+                            if (!res.ok) {
+                              // revert
+                              setFeaturedItems((prev) =>
+                                prev.map((x) => (x.id === id ? { ...x, url: prevUrl } : x))
+                              )
+                              URL.revokeObjectURL(previewUrl)
                               showToast(t("creatorCard.form.featured.uploadFailed"))
+                              return
                             }
+
+                            const json = await res.json()
+                            const uploadedUrl = typeof json?.url === "string" ? json.url : ""
+
+                            if (!uploadedUrl || !isPersistedUrl(uploadedUrl)) {
+                              setFeaturedItems((prev) =>
+                                prev.map((x) => (x.id === id ? { ...x, url: prevUrl } : x))
+                              )
+                              URL.revokeObjectURL(previewUrl)
+                              showToast(t("creatorCard.form.featured.uploadFailed"))
+                              return
+                            }
+
+                            setFeaturedItems((prev) =>
+                              prev.map((x) => (x.id === id ? { ...x, url: uploadedUrl } : x))
+                            )
+                            URL.revokeObjectURL(previewUrl)
                           } catch {
+                            setFeaturedItems((prev) =>
+                              prev.map((x) => (x.id === id ? { ...x, url: prevUrl } : x))
+                            )
+                            URL.revokeObjectURL(previewUrl)
                             showToast(t("creatorCard.form.featured.uploadFailed"))
                           } finally {
                             setFeaturedUploadingIds((prev) => {
