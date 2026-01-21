@@ -36,7 +36,7 @@ export function useFollowersMetrics(input: {
     const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
     const baseValues = list
       .map((r) => {
-        const n = typeof r?.followers_count === "number" ? r.followers_count : Number((r as any)?.followers_count)
+        const n = typeof r.followers_count === "number" ? r.followers_count : Number(r.followers_count)
         return Number.isFinite(n) ? Math.floor(n) : null
       })
       .filter((x): x is number => typeof x === "number")

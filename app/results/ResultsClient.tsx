@@ -6374,52 +6374,6 @@ export default function ResultsClient() {
               </div>
             </div>
 
-            <Card
-              id="goals-section"
-              className="text-slate-100 flex flex-col gap-3 transition-all duration-200 motion-safe:hover:-translate-y-0.5 hover:border-white/30 hover:shadow-xl mt-4 sm:mt-6 rounded-2xl border border-white/24 bg-gradient-to-b from-white/9 via-white/4 to-white/2 ring-1 ring-white/10 shadow-lg shadow-black/35 backdrop-blur-sm px-3 py-3 sm:px-3 sm:py-3.5 scroll-mt-40 min-w-0 overflow-hidden"
-            >
-              <CardHeader className="pt-3 pb-0 min-w-0">
-                <CardTitle className="text-sm sm:text-base font-semibold tracking-tight text-white leading-tight">
-                  {t("results.goals.title")}
-                </CardTitle>
-                <p className={"mt-0.5 text-white/65 max-w-2xl line-clamp-1 " + clampBodyMobile + " sm:text-xs sm:text-white/65 sm:line-clamp-none"}>{t("results.goals.subtitle")}</p>
-                <div className="mt-2 h-px w-full bg-white/10" />
-              </CardHeader>
-              <CardContent className="pt-0 px-0">
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 min-w-0">
-                  {goalOptions.map((opt) => {
-                    const isSelected = selectedGoal === opt.id
-                    return (
-                      <div
-                        key={opt.id}
-                        role="button"
-                        tabIndex={0}
-                        className={
-                          "select-none cursor-pointer w-full min-w-0 truncate rounded-full px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 hover:bg-white/12 hover:border-white/30 hover:shadow-lg hover:shadow-black/30 active:scale-[0.99] max-w-full border " +
-                          (isSelected
-                            ? "border-white/30 bg-white/6 text-white"
-                            : "border-white/15 bg-white/6 text-slate-200")
-                        }
-                        onClick={() => {
-                          setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
-                          window.setTimeout(() => scrollToKpiSection(), 0)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault()
-                            setSelectedGoal((prev) => (prev === opt.id ? null : opt.id))
-                            window.setTimeout(() => scrollToKpiSection(), 0)
-                          }
-                        }}
-                      >
-                        {t(opt.labelKey)}
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
             {creatorCardPreviewCard}
 
             {selectedGoal === "brandCollaborationProfile" ? (
