@@ -1203,12 +1203,17 @@ export default function CreatorCardPage() {
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         contact: serializedContact,
-        portfolio: featuredItems.map((x, idx) => ({
-          id: x.id,
-          brand: typeof x.brand === "string" ? x.brand : "",
-          collabType: typeof x.collabType === "string" ? x.collabType : "",
-          order: idx,
-        })),
+        portfolio: featuredItems.map((x, idx) => {
+          const rawUrl = typeof x.url === "string" ? x.url : ""
+          const isPersistedUrl = rawUrl && (rawUrl.startsWith("https://") || rawUrl.startsWith("http://") || rawUrl.startsWith("/"))
+          return {
+            id: x.id,
+            url: isPersistedUrl ? rawUrl : undefined,
+            brand: typeof x.brand === "string" ? x.brand : "",
+            collabType: typeof x.collabType === "string" ? x.collabType : "",
+            order: idx,
+          }
+        }),
         isPublic: baseCard?.isPublic ?? undefined,
         deliverables: normalizeStringArray(deliverables, 50),
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
@@ -1927,13 +1932,30 @@ export default function CreatorCardPage() {
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const id = pendingFeaturedReplaceIdRef.current
                           const file = e.target.files?.[0]
                           e.currentTarget.value = ""
                           if (!id || !file) return
 
-                          fileToDataUrl(file).then((nextUrl) => {
+                          try {
+                            const formData = new FormData()
+                            formData.append("file", file)
+
+                            const res = await fetch("/api/upload/creator-card-portfolio", {
+                              method: "POST",
+                              body: formData,
+                              credentials: "include",
+                            })
+
+                            let nextUrl: string
+                            if (res.ok) {
+                              const json = await res.json()
+                              nextUrl = typeof json?.url === "string" ? json.url : await fileToDataUrl(file)
+                            } else {
+                              nextUrl = await fileToDataUrl(file)
+                            }
+
                             setFeaturedItems((prev) => {
                               const idx = prev.findIndex((x) => x.id === id)
                               if (idx < 0) return prev
@@ -1942,7 +1964,17 @@ export default function CreatorCardPage() {
                               return out
                             })
                             markDirty()
-                          })
+                          } catch {
+                            const nextUrl = await fileToDataUrl(file)
+                            setFeaturedItems((prev) => {
+                              const idx = prev.findIndex((x) => x.id === id)
+                              if (idx < 0) return prev
+                              const out = prev.slice()
+                              out[idx] = { ...out[idx], url: nextUrl }
+                              return out
+                            })
+                            markDirty()
+                          }
                         }}
                       />
 
