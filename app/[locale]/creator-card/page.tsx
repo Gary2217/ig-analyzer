@@ -1718,7 +1718,7 @@ export default function CreatorCardPage() {
                           <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                             <Input
                               value={contactEmailInput}
-                              placeholder="例如：hello@email.com"
+                              placeholder={t("creatorCardEditor.contact.placeholders.email")}
                               className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               onChange={(e) => {
                                 setContactEmailInput(e.target.value)
@@ -1785,7 +1785,7 @@ export default function CreatorCardPage() {
                           <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                             <Input
                               value={contactInstagramInput}
-                              placeholder="@username or https://instagram.com/..."
+                              placeholder={t("creatorCardEditor.contact.placeholders.instagram")}
                               className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               onChange={(e) => {
                                 setContactInstagramInput(e.target.value)
@@ -1851,7 +1851,7 @@ export default function CreatorCardPage() {
                         <div className="mt-2">
                           <textarea
                             value={contactOtherInput}
-                            placeholder="例如：LINE / WhatsApp / 經紀窗口"
+                            placeholder={t("creatorCardEditor.contact.placeholders.other")}
                             onChange={(e) => {
                               setContactOtherInput(e.target.value)
                               markDirty()

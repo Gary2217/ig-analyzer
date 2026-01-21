@@ -127,7 +127,7 @@
       },
       "placeholders": {
         "email": "例如：hello@email.com",
-        "instagram": "@username 或 https://instagram.com/...",
+        "instagram": "例如：@帳號 或 https://instagram.com/帳號",
         "other": "例如：LINE／WhatsApp／經紀窗口"
       }
     },

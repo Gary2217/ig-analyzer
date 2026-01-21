@@ -127,8 +127,8 @@
       },
       "placeholders": {
         "email": "e.g. hello@email.com",
-        "instagram": "@username or https://instagram.com/...",
-        "other": "e.g. LINE / WhatsApp / manager"
+        "instagram": "e.g. @username or https://instagram.com/username",
+        "other": "e.g. LINE / WhatsApp / Agent contact"
       }
     },
     "empty": {
