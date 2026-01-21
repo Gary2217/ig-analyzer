@@ -1422,18 +1422,18 @@ export default function ResultsClient() {
         return now - (list.length - 1 - idx) * dayMs
       })()
 
-      const reach = toNum(it.reach) ?? 0
-      const impressions = toNum(it.impressions) ?? 0
-      const interactions = toNum(it.interactions) ?? toNum(it.total_interactions) ?? 0
-      const engaged = toNum(it.engaged_accounts) ?? toNum(it.accounts_engaged) ?? 0
+      const reach = toNum(it.reach)
+      const impressions = toNum(it.impressions)
+      const interactions = toNum(it.interactions) ?? toNum(it.total_interactions)
+      const engaged = toNum(it.engaged_accounts) ?? toNum(it.accounts_engaged)
 
       const p: AccountTrendPoint = {
         t: fmtLabel(ts),
         ts,
-        reach,
-        impressions,
-        interactions,
-        engaged,
+        reach: typeof reach === "number" ? reach : undefined,
+        impressions: typeof impressions === "number" ? impressions : undefined,
+        interactions: typeof interactions === "number" ? interactions : undefined,
+        engaged: typeof engaged === "number" ? engaged : undefined,
       }
       out.push(p)
     }
@@ -4918,10 +4918,13 @@ export default function ResultsClient() {
                                 return typeof v === "number" && Number.isFinite(v) ? v : null
                               })
                               .filter((x): x is number => typeof x === "number")
-                            const reachTotal = reachValues.length >= 1 ? reachValues[reachValues.length - 1] : null
-                            const reachDeltaYesterday =
-                              reachValues.length >= 2 ? reachValues[reachValues.length - 1] - reachValues[reachValues.length - 2] : null
+                            
+                            const hasAnyValidReach = reachValues.length > 0
+                            
+                            const reachTotal = hasAnyValidReach && reachValues.length >= 1 ? reachValues[reachValues.length - 1] : null
+                            const reachDeltaYesterday = hasAnyValidReach && reachValues.length >= 2 ? reachValues[reachValues.length - 1] - reachValues[reachValues.length - 2] : null
                             const reachGrowth7d = (() => {
+                              if (!hasAnyValidReach) return null
                               const n = reachValues.length
                               if (n < 8) return null
                               return reachValues[n - 1] - reachValues[Math.max(0, n - 1 - 7)]
