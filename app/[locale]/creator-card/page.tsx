@@ -630,21 +630,20 @@ export default function CreatorCardPage() {
         setEditingFeaturedId(id)
         setEditingFeaturedBrand(typeof picked?.brand === "string" ? picked.brand : "")
         const current = typeof picked?.collabType === "string" ? picked.collabType : ""
-        const presetLabels = COLLAB_TYPE_OPTIONS.map((optId) => t(collabTypeLabelKey(optId)))
-        if (current && presetLabels.includes(current)) {
+        if (current && COLLAB_TYPE_OPTIONS.includes(current as CollabTypeOptionId)) {
           setEditingFeaturedCollabTypeSelect(current)
           setEditingFeaturedCollabTypeCustom("")
         } else if (current) {
           setEditingFeaturedCollabTypeSelect(COLLAB_TYPE_OTHER_VALUE)
           setEditingFeaturedCollabTypeCustom(current)
         } else {
-          setEditingFeaturedCollabTypeSelect("")
+          setEditingFeaturedCollabTypeSelect(COLLAB_TYPE_OPTIONS[0])
           setEditingFeaturedCollabTypeCustom("")
         }
         return prev
       })
     },
-    [setFeaturedItems, t]
+    [setFeaturedItems]
   )
 
   const serializedContact = useMemo(() => {
@@ -1206,7 +1205,6 @@ export default function CreatorCardPage() {
         contact: serializedContact,
         portfolio: featuredItems.map((x, idx) => ({
           id: x.id,
-          url: typeof x.url === "string" ? x.url : "",
           brand: typeof x.brand === "string" ? x.brand : "",
           collabType: typeof x.collabType === "string" ? x.collabType : "",
           order: idx,
@@ -1995,17 +1993,6 @@ export default function CreatorCardPage() {
                             ))}
                           </SortableContext>
                         </DndContext>
-
-                        <button
-                          type="button"
-                          className="group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-white/10 bg-white/5 shadow-sm transition-colors hover:border-white/20 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                          onClick={openAddFeatured}
-                          aria-label="新增作品"
-                        >
-                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-                            <Plus className="h-7 w-7 text-white/25 group-hover:text-white/35" />
-                          </div>
-                        </button>
                       </div>
 
                       {featuredItems.length === 0 ? (
@@ -2870,11 +2857,10 @@ export default function CreatorCardPage() {
                     }}
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950/20"
                   >
-                    <option value="" disabled hidden />
                     {COLLAB_TYPE_OPTIONS.map((id) => {
                       const label = t(collabTypeLabelKey(id))
                       return (
-                        <option key={id} value={label}>
+                        <option key={id} value={id}>
                           {label}
                         </option>
                       )
