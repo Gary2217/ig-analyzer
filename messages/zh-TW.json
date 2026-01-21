@@ -2557,7 +2557,9 @@
       "toPreview": "查看預覽",
       "comingSoon": "即將推出",
       "featured": {
-        "uploadFailed": "上傳失敗，請再試一次。"
+        "uploadFailed": "上傳失敗，請再試一次。",
+        "pendingUpload": "圖片尚未上傳完成，請稍等或重新上傳。",
+        "uploadingWait": "圖片上傳中…請稍等。"
       }
     },
     "preview": {

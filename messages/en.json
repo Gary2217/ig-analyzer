@@ -2576,7 +2576,12 @@
       "saveHint": "Save/publish (DB comes next)",
       "save": "Save card",
       "toPreview": "Jump to preview",
-      "comingSoon": "Coming soon"
+      "comingSoon": "Coming soon",
+      "featured": {
+        "uploadFailed": "Upload failed. Please try again.",
+        "pendingUpload": "Images are not uploaded yet. Please wait or re-upload.",
+        "uploadingWait": "Uploading images… please wait."
+      }
     },
     "preview": {
       "title": "Brand-view creator card preview",
