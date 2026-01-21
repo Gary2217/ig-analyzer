@@ -48,9 +48,10 @@ export function mergeToContinuousTrendPoints(params: {
     return `${y}-${m}-${dd}`
   }
 
-  const toSafeInt = (v: unknown) => {
+  const toFiniteNonNegIntOrUndef = (v: unknown): number | undefined => {
+    if (v === null || v === undefined || v === "") return undefined
     const n = typeof v === "number" ? v : Number(v)
-    if (!Number.isFinite(n)) return 0
+    if (!Number.isFinite(n)) return undefined
     return Math.max(0, Math.floor(n))
   }
 
@@ -58,7 +59,7 @@ export function mergeToContinuousTrendPoints(params: {
     const arr = Array.isArray(raw) ? raw : []
     const map = new Map<
       string,
-      { reach: number; impressions: number; total_interactions: number; accounts_engaged: number }
+      { reach?: number; impressions?: number; total_interactions?: number; accounts_engaged?: number }
     >()
 
     for (const it of Array.isArray(arr) ? arr : []) {
@@ -67,10 +68,10 @@ export function mergeToContinuousTrendPoints(params: {
       if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue
 
       map.set(ymd, {
-        reach: toSafeInt(it.reach),
-        impressions: toSafeInt(it.impressions),
-        total_interactions: toSafeInt(it.total_interactions),
-        accounts_engaged: toSafeInt(it.accounts_engaged),
+        reach: toFiniteNonNegIntOrUndef(it.reach),
+        impressions: toFiniteNonNegIntOrUndef(it.impressions),
+        total_interactions: toFiniteNonNegIntOrUndef(it.total_interactions),
+        accounts_engaged: toFiniteNonNegIntOrUndef(it.accounts_engaged),
       })
     }
 
@@ -81,7 +82,7 @@ export function mergeToContinuousTrendPoints(params: {
     const arr = coerceDailySnapshotPointsToArray(raw)
     const map = new Map<
       string,
-      { reach: number; impressions: number; total_interactions: number; accounts_engaged: number }
+      { reach?: number; impressions?: number; total_interactions?: number; accounts_engaged?: number }
     >()
 
     for (const it of Array.isArray(arr) ? arr : []) {
@@ -92,10 +93,10 @@ export function mergeToContinuousTrendPoints(params: {
       if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue
 
       map.set(ymd, {
-        reach: toSafeInt(it.reach),
-        impressions: toSafeInt(it.impressions),
-        total_interactions: toSafeInt(it.interactions ?? it.total_interactions),
-        accounts_engaged: toSafeInt(it.engaged_accounts ?? it.accounts_engaged ?? it.engaged),
+        reach: toFiniteNonNegIntOrUndef(it.reach),
+        impressions: toFiniteNonNegIntOrUndef(it.impressions),
+        total_interactions: toFiniteNonNegIntOrUndef(it.interactions ?? it.total_interactions),
+        accounts_engaged: toFiniteNonNegIntOrUndef(it.engaged_accounts ?? it.accounts_engaged ?? it.engaged),
       })
     }
 
