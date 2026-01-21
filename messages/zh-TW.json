@@ -2315,9 +2315,40 @@
         }
       }
     },
+    "publicEngagement": {
+      "title": "公開互動表現",
+      "subtitle": "基於公開可見的互動數據",
+      "metrics": {
+        "likes": "喜歡",
+        "comments": "留言",
+        "engagement": "總互動",
+        "engagementRate": "互動率"
+      },
+      "engagementRateHelp": {
+        "title": "互動率說明",
+        "body": "互動率 = (喜歡 + 留言) / 追蹤者數 × 100。此指標需要追蹤者數才能計算。",
+        "missingFollowers": "需要追蹤者數才能計算互動率"
+      },
+      "noData": "尚無公開互動數據"
+    },
     "official": {
-      "title": "官方貼文表現（C）",
-      "subtitle": "平台提供的官方指標",
+      "title": "官方 Insights（需授權）",
+      "subtitle": "Instagram 官方提供的完整指標",
+      "emptyState": {
+        "title": "尚未授權 Instagram Insights",
+        "message": "尚未授權 Instagram Insights，無法顯示官方數據。公開互動表現仍可在上方查看。"
+      },
+      "connect": {
+        "cta": "連結 Instagram",
+        "title": "連結你的 Instagram 帳號",
+        "body": "授權後即可查看官方觸及、曝光、收藏、分享等完整指標。"
+      },
+      "errors": {
+        "mappingFailedTitle": "無法識別貼文",
+        "mappingFailedBody": "無法從連結取得貼文 ID，請確認連結正確。",
+        "fetchFailedTitle": "無法載入官方數據",
+        "fetchFailedBody": "目前無法取得此貼文的官方指標，請稍後再試。"
+      },
       "loading": "官方指標載入中…",
       "metrics": {
         "reach": "觸及",

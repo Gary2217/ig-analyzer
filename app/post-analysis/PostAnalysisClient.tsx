@@ -6,7 +6,7 @@ import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Input } from "../../components/ui/input"
-import { Info, Lock } from "lucide-react"
+import { Info, Lock, HelpCircle } from "lucide-react"
 import { useRefetchTick } from "../lib/useRefetchTick"
 
 const isValidPostUrl = (s: string) => /instagram\.com|threads\.net/i.test((s || "").trim())
@@ -387,6 +387,7 @@ export default function PostAnalysisClient() {
     a2: false,
     a3: false,
   })
+  const [showEngagementRateHelp, setShowEngagementRateHelp] = useState(false)
 
   const [quickTop3, setQuickTop3] = useState<any[]>([])
   const [quickTop3Ts, setQuickTop3Ts] = useState<number | null>(null)
@@ -1384,6 +1385,43 @@ export default function PostAnalysisClient() {
   }
 
   const officialUnified = useMemo(() => extractOfficialMetrics(analysisResult, officialPost), [analysisResult, officialPost])
+
+  const publicEngagement = useMemo(() => {
+    const toNum = (v: any) => {
+      const n = typeof v === "number" ? v : Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+
+    const ar = analysisResult as any
+    if (!ar || typeof ar !== "object") {
+      return { hasAny: false, metrics: { likes: null, comments: null, engagement: null, engagementRate: null }, followers: null }
+    }
+
+    const likes = toNum(ar?.like_count ?? ar?.likes ?? ar?.counts?.like_count ?? ar?.counts?.likes)
+    const comments = toNum(ar?.comments_count ?? ar?.comments ?? ar?.counts?.comments_count ?? ar?.counts?.comments)
+    const engagement = typeof likes === "number" && typeof comments === "number" ? likes + comments : null
+
+    const followers = toNum(
+      ar?.followers_count ??
+        ar?.followers ??
+        ar?.profile?.followers_count ??
+        ar?.profile?.followers ??
+        ar?.account?.followers_count ??
+        ar?.account?.followers ??
+        ar?.profileStats?.followers ??
+        ar?.accountStats?.followers
+    )
+
+    const engagementRate =
+      typeof engagement === "number" && typeof followers === "number" && followers > 0
+        ? (engagement / followers) * 100
+        : null
+
+    const metrics = { likes, comments, engagement, engagementRate }
+    const hasAny = Object.values(metrics).some((v) => typeof v === "number" && Number.isFinite(v))
+
+    return { hasAny, metrics, followers }
+  }, [analysisResult])
 
   const baseline = useMemo(() => {
     const toNum = (v: any) => {
@@ -2433,6 +2471,88 @@ export default function PostAnalysisClient() {
                   <div className="flex flex-wrap items-start justify-between gap-2 min-w-0">
                     <div className="min-w-0">
                       <h2 className="text-base sm:text-lg font-semibold text-white leading-tight min-w-0 truncate">
+                        {t("post.publicEngagement.title")}
+                      </h2>
+                      <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
+                        {t("post.publicEngagement.subtitle")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={subtleDivider} />
+
+                  {publicEngagement.hasAny ? (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                      {[
+                        {
+                          key: "likes",
+                          label: t("post.publicEngagement.metrics.likes"),
+                          value: publicEngagement.metrics.likes,
+                          showHelp: false,
+                        },
+                        {
+                          key: "comments",
+                          label: t("post.publicEngagement.metrics.comments"),
+                          value: publicEngagement.metrics.comments,
+                          showHelp: false,
+                        },
+                        {
+                          key: "engagement",
+                          label: t("post.publicEngagement.metrics.engagement"),
+                          value: publicEngagement.metrics.engagement,
+                          showHelp: false,
+                        },
+                        {
+                          key: "engagementRate",
+                          label: t("post.publicEngagement.metrics.engagementRate"),
+                          value: publicEngagement.metrics.engagementRate,
+                          showHelp: true,
+                        },
+                      ].map((m) => (
+                        <Card key={m.key} className="rounded-xl border border-white/10 bg-white/5 min-w-0">
+                          <CardContent className="p-3 sm:p-5 min-w-0">
+                            <div className="flex items-center gap-1 min-w-0">
+                              <div className="text-[12px] sm:text-sm text-slate-400/70 truncate min-w-0">{m.label}</div>
+                              {m.showHelp ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEngagementRateHelp(!showEngagementRateHelp)}
+                                  className="shrink-0 p-1 rounded hover:bg-white/10 transition-colors"
+                                  aria-label={t("post.publicEngagement.engagementRateHelp.title")}
+                                >
+                                  <HelpCircle className="h-3.5 w-3.5 text-white/40" />
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 text-[clamp(18px,5.6vw,26px)] font-bold tabular-nums overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+                              <span className={m.value === null ? "text-white/50" : "text-white"}>
+                                {m.key === "engagementRate" && m.value !== null
+                                  ? `${m.value.toFixed(1)}%`
+                                  : formatNumber(m.value)}
+                              </span>
+                            </div>
+                            {m.showHelp && m.value === null && publicEngagement.followers === null ? (
+                              <div className="mt-1 text-[10px] text-white/40 leading-tight">
+                                {t("post.publicEngagement.engagementRateHelp.missingFollowers")}
+                              </div>
+                            ) : null}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+                      <div className="text-sm text-white/60">{t("post.publicEngagement.noData")}</div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className={sectionCard}>
+                <CardContent className={`${sectionInnerCompact} ${sectionSpaceCompact}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-2 min-w-0">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-semibold text-white leading-tight min-w-0 truncate">
                         {t("post.official.title")}
                       </h2>
                       <p className="mt-1 text-[13px] sm:text-sm text-white/60 max-w-[72ch] leading-relaxed">
@@ -2698,27 +2818,21 @@ export default function PostAnalysisClient() {
                         </div>
                       </div>
                     ) : !officialLoading && !officialUnified.hasAny ? (
-                      <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-                        <div className="text-sm font-semibold text-white">{copy.officialUnavailableTitle}</div>
-                        <div className="text-sm text-white/75 leading-relaxed break-words">{copy.officialUnavailable}</div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <Button
-                            size="sm"
-                            className="w-full sm:w-auto whitespace-nowrap"
-                            onClick={() => void handleAnalyze(lastAnalyzedUrl || postUrl)}
-                            disabled={!lastAnalyzedUrl && !postUrl}
-                          >
-                            {copy.retry}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full sm:w-auto border-white/15 text-slate-200 hover:bg-white/5 whitespace-nowrap"
-                            onClick={() => setManualRefreshTick((x) => x + 1)}
-                          >
-                            {copy.refresh}
-                          </Button>
+                      <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 sm:p-6 space-y-4">
+                        <div className="space-y-2">
+                          <div className="text-sm font-semibold text-white">{t("post.official.emptyState.title")}</div>
+                          <div className="text-sm text-white/75 leading-relaxed break-words">{t("post.official.emptyState.message")}</div>
                         </div>
+                        <Button
+                          size="lg"
+                          className="w-full sm:w-auto"
+                          onClick={() => {
+                            const returnUrl = encodeURIComponent(window.location.href)
+                            window.location.href = `/api/auth/instagram?returnUrl=${returnUrl}`
+                          }}
+                        >
+                          {t("post.official.connect.cta")}
+                        </Button>
                       </div>
                     ) : null}
 

@@ -2324,9 +2324,40 @@
         "3": "Use one primary focal point per frame; avoid competing callouts."
       }
     },
+    "publicEngagement": {
+      "title": "Public Engagement",
+      "subtitle": "Based on publicly visible interaction data",
+      "metrics": {
+        "likes": "Likes",
+        "comments": "Comments",
+        "engagement": "Total Engagement",
+        "engagementRate": "Engagement Rate"
+      },
+      "engagementRateHelp": {
+        "title": "Engagement Rate Explained",
+        "body": "Engagement rate = (likes + comments) / followers × 100. This metric requires follower count to calculate.",
+        "missingFollowers": "Follower count required to calculate engagement rate"
+      },
+      "noData": "No public engagement data available"
+    },
     "official": {
-      "title": "Official Post Performance (C)",
-      "subtitle": "Official platform-provided metrics",
+      "title": "Official Insights (Authorization Required)",
+      "subtitle": "Complete metrics provided by Instagram",
+      "emptyState": {
+        "title": "Instagram Insights Not Authorized",
+        "message": "Instagram Insights not authorized. Official metrics unavailable. Public engagement metrics are still visible above."
+      },
+      "connect": {
+        "cta": "Connect Instagram",
+        "title": "Connect Your Instagram Account",
+        "body": "Authorize to view official reach, impressions, saves, shares, and more."
+      },
+      "errors": {
+        "mappingFailedTitle": "Unable to Identify Post",
+        "mappingFailedBody": "Could not retrieve post ID from the URL. Please verify the link is correct.",
+        "fetchFailedTitle": "Unable to Load Official Data",
+        "fetchFailedBody": "Could not fetch official insights for this post. Please try again later."
+      },
       "loading": "Official metrics loading…",
       "metrics": {
         "reach": "Reach",
