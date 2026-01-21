@@ -1142,12 +1142,14 @@ export default function CreatorCardPage() {
         return s ? s : undefined
       })()
 
+      const nextAudience = introDraft.trim() ? introDraft : (baseCard?.audience ?? "")
+
       const payload: CreatorCardUpsertPayload = {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
         profileImageUrl: nextProfileImageUrl,
         niche: baseCard?.niche ?? undefined,
-        audience: baseCard?.audience ?? undefined,
+        audience: nextAudience || undefined,
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         contact: serializedContact,
@@ -1175,15 +1177,6 @@ export default function CreatorCardPage() {
       const jsonRaw: unknown = await res.clone().json().catch(() => null)
       const json = (asRecord(jsonRaw) as unknown as CreatorCardUpsertResponse) ?? null
       const text = json ? null : await res.text().catch(() => null)
-
-      console.debug("[creator-card] save", {
-        url,
-        status: res.status,
-        ok: res.ok,
-        error: typeof json?.error === "string" ? json.error : null,
-        message: typeof json?.message === "string" ? json.message : null,
-        text: typeof text === "string" ? text.slice(0, 400) : null,
-      })
 
       if (!res.ok || !json?.ok) {
         if (res.status === 401) {
@@ -1221,13 +1214,15 @@ export default function CreatorCardPage() {
       }))
 
       clearDirty()
+
+      setRefetchTick((x) => x + 1)
     } catch {
       setSaveError(t("creatorCardEditor.errors.saveFailed"))
     } finally {
       saveInFlightRef.current = false
       setSaving(false)
     }
-  }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, pastCollaborations, profileImageFile, saving, serializedContact, t, themeTypes])
+  }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, introDraft, pastCollaborations, profileImageFile, saving, serializedContact, t, themeTypes])
 
   const handleBack = () => {
     if (returnTo) {
