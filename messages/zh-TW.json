@@ -2555,7 +2555,10 @@
       "saveHint": "儲存/公開名片（下一階段接 DB）",
       "save": "儲存名片",
       "toPreview": "查看預覽",
-      "comingSoon": "即將推出"
+      "comingSoon": "即將推出",
+      "featured": {
+        "uploadFailed": "上傳失敗，請再試一次。"
+      }
     },
     "preview": {
       "title": "廠商看到的名片預覽（Brand view）",

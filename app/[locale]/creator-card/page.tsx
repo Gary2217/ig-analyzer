@@ -1954,10 +1954,10 @@ export default function CreatorCardPage() {
                               })
 
                               if (!res.ok) {
-                                // remove failed item
-                                setFeaturedItems((prev) => prev.filter((x) => x.id !== id))
-                                URL.revokeObjectURL(previewUrl)
+                                // Keep the preview so the user sees what they picked (no more instant disappear)
+                                // We still block saving persisted URLs until upload succeeds.
                                 showToast(t("creatorCard.form.featured.uploadFailed"))
+                                // Keep previewUrl alive (don't revoke) so it stays visible.
                                 continue
                               }
 
@@ -1965,9 +1965,10 @@ export default function CreatorCardPage() {
                               const uploadedUrl = typeof json?.url === "string" ? json.url : ""
 
                               if (!uploadedUrl || !isPersistedUrl(uploadedUrl)) {
-                                setFeaturedItems((prev) => prev.filter((x) => x.id !== id))
-                                URL.revokeObjectURL(previewUrl)
+                                // Keep the preview so the user sees what they picked (no more instant disappear)
+                                // We still block saving persisted URLs until upload succeeds.
                                 showToast(t("creatorCard.form.featured.uploadFailed"))
+                                // Keep previewUrl alive (don't revoke) so it stays visible.
                                 continue
                               }
 
@@ -1977,9 +1978,10 @@ export default function CreatorCardPage() {
                               )
                               URL.revokeObjectURL(previewUrl)
                             } catch {
-                              setFeaturedItems((prev) => prev.filter((x) => x.id !== id))
-                              URL.revokeObjectURL(previewUrl)
+                              // Keep the preview so the user sees what they picked (no more instant disappear)
+                              // We still block saving persisted URLs until upload succeeds.
                               showToast(t("creatorCard.form.featured.uploadFailed"))
+                              // Keep previewUrl alive (don't revoke) so it stays visible.
                             } finally {
                               setFeaturedUploadingIds((prev) => {
                                 const next = new Set(prev)
