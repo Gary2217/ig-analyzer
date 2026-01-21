@@ -1,6 +1,6 @@
 "use client"
 
-// NOTE: patch: unblock Save; fix dark header text; upload route now no-auth
+// NOTE: patch: re-enable auth upload + block save when blob previews exist
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -1147,6 +1147,10 @@ export default function CreatorCardPage() {
 
   const isPreviewUrl = (raw: string) => !!raw && raw.startsWith("blob:")
 
+  const hasFeaturedPreview = useMemo(() => {
+    return featuredItems.some((x) => isPreviewUrl(typeof x.url === "string" ? x.url : ""))
+  }, [featuredItems])
+
   const fileToDataUrl = useCallback((file: File) => {
     return new Promise<string>((resolve) => {
       const reader = new FileReader()
@@ -1171,8 +1175,6 @@ export default function CreatorCardPage() {
     flashHighlight("niches")
   }, [flashHighlight, otherNicheInput])
 
-  // Do NOT hard-block saving due to blob previews; only block while uploads are in-flight.
-
   useEffect(() => {
     setBaseCard((prev) => {
       if (!prev) return prev
@@ -1186,6 +1188,10 @@ export default function CreatorCardPage() {
     if (saving) return
     if (saveInFlightRef.current) return
 
+    if (hasFeaturedPreview) {
+      showToast(t("creatorCard.form.featured.pendingUpload"))
+      return
+    }
     if (featuredUploadingIds.size > 0) {
       showToast(t("creatorCard.form.featured.uploadingWait"))
       return
@@ -1431,7 +1437,7 @@ export default function CreatorCardPage() {
               variant="primary"
               className="ring-1 ring-white/15 hover:ring-white/25"
               onClick={handleSave}
-              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
+              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0 || hasFeaturedPreview}
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
               {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
@@ -1439,6 +1445,10 @@ export default function CreatorCardPage() {
             {featuredUploadingIds.size > 0 && !saving ? (
               <div className="absolute -bottom-6 right-0 text-xs text-amber-400/80">
                 {t("creatorCard.form.featured.uploadingWait")}
+              </div>
+            ) : hasFeaturedPreview && !saving ? (
+              <div className="absolute -bottom-6 right-0 text-xs text-amber-400/80">
+                {t("creatorCard.form.featured.pendingUpload")}
               </div>
             ) : null}
             {saveFlash && !saving && !loading ? (
@@ -2812,7 +2822,7 @@ export default function CreatorCardPage() {
                                     variant="primary"
                                     className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
                                     onClick={handleSave}
-                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
+                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0 || hasFeaturedPreview}
                                   >
                                     {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
