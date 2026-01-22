@@ -5,9 +5,23 @@ import Image from "next/image"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => string): string {
+  const raw = collabType.trim()
+  if (!raw) return ""
+  
+  const normalized = raw.toLowerCase()
+  
+  if (COLLAB_TYPE_OPTIONS.includes(normalized as CollabTypeOptionId)) {
+    return t(collabTypeLabelKey(normalized as CollabTypeOptionId))
+  }
+  
+  return raw
 }
 
 export type CreatorCardPreviewHighlightTarget = "formats" | "niches" | "brands" | null
@@ -684,7 +698,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                         ) : null}
                         {item.collabType ? (
                           <span className="inline-flex items-center rounded-full bg-black/35 px-2 py-1 text-[11px] font-semibold text-white/85 backdrop-blur">
-                            {item.collabType}
+                            {getCollabTypeDisplayLabel(item.collabType, t)}
                           </span>
                         ) : null}
                       </div>

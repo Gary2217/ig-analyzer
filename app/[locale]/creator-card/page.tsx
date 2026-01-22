@@ -154,33 +154,14 @@ function SortableFeaturedTile(props: {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
 
   const featuredChipText = (() => {
-    const rawType = typeof item.collabType === "string" ? item.collabType.trim() : ""
-    if (!rawType) return t("creatorCardEditor.common.select")
-    
-    const normalizedType = rawType.toLowerCase()
-    
-    // Check if it's a known collab type option (case-insensitive)
-    if (COLLAB_TYPE_OPTIONS.includes(normalizedType as CollabTypeOptionId)) {
-      return t(collabTypeLabelKey(normalizedType as CollabTypeOptionId))
-    }
-    
-    // Custom value - return as-is
-    return rawType
+    const rawType = typeof item.collabType === "string" ? item.collabType : ""
+    if (!rawType.trim()) return t("creatorCardEditor.common.select")
+    return getCollabTypeDisplayLabel(rawType, t)
   })()
 
   const featuredChipTitle = (() => {
-    const rawType = typeof item.collabType === "string" ? item.collabType.trim() : ""
-    if (!rawType) return ""
-    
-    const normalizedType = rawType.toLowerCase()
-    
-    // Check if it's a known collab type option (case-insensitive)
-    if (COLLAB_TYPE_OPTIONS.includes(normalizedType as CollabTypeOptionId)) {
-      return t(collabTypeLabelKey(normalizedType as CollabTypeOptionId))
-    }
-    
-    // Custom value - return as-is
-    return rawType
+    const rawType = typeof item.collabType === "string" ? item.collabType : ""
+    return getCollabTypeDisplayLabel(rawType, t)
   })()
 
   return (
@@ -308,6 +289,21 @@ function normalizeStringArray(value: unknown, maxLen: number) {
     if (out.length >= maxLen) break
   }
   return out
+}
+
+function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => string): string {
+  const raw = collabType.trim()
+  if (!raw) return ""
+  
+  const normalized = raw.toLowerCase()
+  
+  // Check if it's a known collab type option (case-insensitive)
+  if (COLLAB_TYPE_OPTIONS.includes(normalized as CollabTypeOptionId)) {
+    return t(collabTypeLabelKey(normalized as CollabTypeOptionId))
+  }
+  
+  // Custom value - return as-is
+  return raw
 }
 
 function toggleInArray(values: string[], value: string) {
