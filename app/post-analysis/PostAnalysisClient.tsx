@@ -243,11 +243,8 @@ export default function PostAnalysisClient() {
             timelineMetricEngagementRate: "互動率",
             timelineFast: "互動集中在發佈初期",
             timelineSteady: "互動隨時間穩定累積",
-            nextActionsTitle: "行動建議（Next actions）",
-            nextActionComments: "在文案加入明確提問，邀請留言回覆（例如：你最想知道哪一點？）",
-            nextActionSaves: "把內容整理成可收藏的清單/步驟，提升「保存」動機",
-            nextActionShares: "加入更容易分享的角度：一句話總結、對比、或可轉發的觀點",
-            nextActionLikes: "沿用這次有效的切角，做同主題延伸或系列內容",
+            insightsNoticeTitle: "說明",
+            insightsNoticeBody: "Instagram 並非每一則貼文都會提供官方洞察數據。\n若貼文未被納入官方洞察計算（例如未進入推薦流程），將無法顯示觸及、曝光與互動率等指標。",
             comparedToAvg: "相較帳號近期平均",
             comparedToAvgInferred: "相較帳號近期平均（推論）",
             comparedToRecentShort: "相較近期平均",
@@ -306,11 +303,8 @@ export default function PostAnalysisClient() {
             timelineMetricEngagementRate: "Engagement rate",
             timelineFast: "Most interactions happen soon after posting",
             timelineSteady: "Interactions accumulate steadily over time",
-            nextActionsTitle: "Next actions",
-            nextActionComments: "Add a clear question in the caption to invite replies.",
-            nextActionSaves: "Package the idea into a saveable checklist/steps to boost saves.",
-            nextActionShares: "Make it easier to share: a one-line takeaway, contrast, or a quotable point.",
-            nextActionLikes: "Double down on this angle and turn it into a short series.",
+            insightsNoticeTitle: "Note",
+            insightsNoticeBody: "Instagram does not provide official insights for every post.\nIf a post is not included in official insights calculation (for example, not entering the recommendation flow), reach, impressions, and engagement rate will not be available.",
             comparedToAvg: "Compared to your recent account average",
             comparedToAvgInferred: "Compared to your recent account average (inferred)",
             comparedToRecentShort: "Compared to recent average",
@@ -2814,58 +2808,12 @@ export default function PostAnalysisClient() {
                       </div>
                     ) : null}
 
-                    {(() => {
-                      if (officialLoading) return null
-                      if (officialError) return null
-                      if (!officialUnified.hasAny) return null
-
-                      const toNum = (v: any) => {
-                        const n = typeof v === "number" ? v : Number(v)
-                        return Number.isFinite(n) ? n : null
-                      }
-
-                      const likeN = toNum(officialUnified.metrics.likes)
-                      const commentN = toNum(officialUnified.metrics.comments)
-                      const saveN = toNum(officialUnified.metrics.saves)
-                      const shareN = toNum(officialUnified.metrics.shares)
-
-                      const actions: string[] = []
-                      if (commentN === 0) actions.push(copy.nextActionComments)
-                      if (shareN !== null) actions.push(copy.nextActionShares)
-                      if (saveN !== null) actions.push(copy.nextActionSaves)
-                      if (likeN !== null) actions.push(copy.nextActionLikes)
-
-                      const top = actions.filter(Boolean).slice(0, 3)
-                      if (!top.length) return null
-
-                      return (
-                        <div className="mt-4 rounded-xl border border-white/10 bg-[#0b1220]/35 p-4">
-                          <div className="text-sm font-semibold text-white">{copy.nextActionsTitle}</div>
-                          <div className="mt-2 space-y-2">
-                            {top.map((a, i) => (
-                              <div key={i} className="flex items-start gap-2 text-sm text-white/75 leading-relaxed min-w-0">
-                                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-white/35 shrink-0" />
-                                <div className="min-w-0 break-words">{a}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })()}
-
-                    {!officialLoading && !officialError && officialUnified.hasAny && officialInterpretation ? (
-                      <div className="mt-3 flex items-start gap-2 text-xs text-white/55 leading-relaxed min-w-0">
-                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-white/35" />
-                        <div className="min-w-0 line-clamp-2">{officialInterpretation}</div>
+                    <div className="mt-4 rounded-xl border border-white/10 bg-[#0b1220]/35 p-4">
+                      <div className="text-sm font-semibold text-white">{copy.insightsNoticeTitle}</div>
+                      <div className="mt-2 text-sm text-white/70 leading-relaxed min-w-0 whitespace-pre-line break-words">
+                        {copy.insightsNoticeBody}
                       </div>
-                    ) : null}
-
-                    {baseline?.hasAny && !officialLoading ? (
-                      <div className="mt-3 flex items-start gap-2 text-[11px] text-white/40 leading-relaxed min-w-0">
-                        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-white/25" />
-                        <div className="min-w-0 break-words">{copy.baselineDisclaimer}</div>
-                      </div>
-                    ) : null}
+                    </div>
                   </>
                 </CardContent>
               </Card>
