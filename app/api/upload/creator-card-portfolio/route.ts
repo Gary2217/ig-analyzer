@@ -3,16 +3,20 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { supabaseServer } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
+
+// Service Role client (REQUIRED for Storage write)
+const supabaseService = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+)
 
 export async function POST(req: Request) {
   const c = await cookies()
   const token = (c.get("ig_access_token")?.value ?? "").trim()
   if (!token) {
-    return NextResponse.json(
-      { ok: false, error: "missing_access_token", cookieKeys: c.getAll().map((x) => x.name) },
-      { status: 401 }
-    )
+    return NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401 })
   }
 
   const formData = await req.formData()
@@ -46,43 +50,26 @@ export async function POST(req: Request) {
     (c.get("ig_id")?.value ?? "").trim() ||
     (c.get("ig_user_id")?.value ?? "").trim() ||
     (c.get("igUserId")?.value ?? "").trim() ||
-    ""
-  if (!igUserId) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "missing_user_id_cookie",
-        keysTried: ["ig_ig_id", "ig_id", "ig_user_id", "igUserId"],
-        cookieKeys: c.getAll().map((x) => x.name),
-      },
-      { status: 401 }
-    )
-  }
+    "unknown"
   const storagePath = `creator-card/portfolio/${igUserId}/${filename}` 
 
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  const { error } = await supabaseServer.storage
+  const { error } = await supabaseService.storage
     .from("public")
-    .upload(storagePath, buffer, {
-      contentType: file.type,
-      upsert: false,
-    })
+    .upload(storagePath, buffer, { contentType: file.type, upsert: false })
 
   if (error) {
+    console.error("[upload_failed]", error)
     return NextResponse.json(
-      { ok: false, error: "upload_failed" },
+      { ok: false, error: "upload_failed", detail: error.message },
       { status: 500 }
     )
   }
 
-  const { data } = supabaseServer.storage
+  const { data } = supabaseService.storage
     .from("public")
     .getPublicUrl(storagePath)
 
-  return NextResponse.json({
-    ok: true,
-    url: data.publicUrl,
-    path: storagePath,
-  })
+  return NextResponse.json({ ok: true, url: data.publicUrl, path: storagePath })
 }
