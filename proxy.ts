@@ -54,8 +54,17 @@ export default function proxy(req: NextRequest) {
   // 已經有 locale prefix → 直接放行（避免 /zh-TW/zh-TW/...）
   const firstSeg = pathname.split("/").filter(Boolean)[0] || ""
   if (firstSeg === "en" || firstSeg === "zh-TW") {
-    const res = NextResponse.next()
-    // Set locale cookie based on pathname for html lang attribute
+    // Set x-locale header for immediate locale detection in layout
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set('x-locale', firstSeg)
+    
+    const res = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+    
+    // Set locale cookie for persistence
     const currentLocale = req.cookies.get('locale')?.value
     if (currentLocale !== firstSeg) {
       res.cookies.set('locale', firstSeg, { path: '/', maxAge: 60 * 60 * 24 * 365 })
