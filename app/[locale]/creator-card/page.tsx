@@ -148,18 +148,39 @@ function SortableFeaturedTile(props: {
   onRemove: (id: string) => void
   onEdit: (id: string) => void
   suppressClick: boolean
+  activeLocale: string
 }) {
-  const { item, t, onReplace, onRemove, onEdit, suppressClick } = props
+  const { item, t, onReplace, onRemove, onEdit, suppressClick, activeLocale } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
 
   const featuredChipText = (() => {
-    const s = typeof item.collabType === "string" ? item.collabType.trim() : ""
-    return s ? s : t("creatorCardEditor.common.select")
+    const rawType = typeof item.collabType === "string" ? item.collabType.trim() : ""
+    if (!rawType) return t("creatorCardEditor.common.select")
+    
+    const normalizedType = rawType.toLowerCase()
+    
+    // Check if it's a known collab type option (case-insensitive)
+    if (COLLAB_TYPE_OPTIONS.includes(normalizedType as CollabTypeOptionId)) {
+      return t(collabTypeLabelKey(normalizedType as CollabTypeOptionId))
+    }
+    
+    // Custom value - return as-is
+    return rawType
   })()
 
   const featuredChipTitle = (() => {
-    const s = typeof item.collabType === "string" ? item.collabType.trim() : ""
-    return s ? s : ""
+    const rawType = typeof item.collabType === "string" ? item.collabType.trim() : ""
+    if (!rawType) return ""
+    
+    const normalizedType = rawType.toLowerCase()
+    
+    // Check if it's a known collab type option (case-insensitive)
+    if (COLLAB_TYPE_OPTIONS.includes(normalizedType as CollabTypeOptionId)) {
+      return t(collabTypeLabelKey(normalizedType as CollabTypeOptionId))
+    }
+    
+    // Custom value - return as-is
+    return rawType
   })()
 
   return (
@@ -2126,6 +2147,7 @@ export default function CreatorCardPage() {
                                 key={item.id}
                                 item={item}
                                 t={t}
+                                activeLocale={activeLocale}
                                 suppressClick={suppressFeaturedTileClick}
                                 onReplace={(id) => {
                                   pendingFeaturedReplaceIdRef.current = id
