@@ -8,7 +8,12 @@ import { supabaseServer } from "@/lib/supabase/server"
 export async function POST(req: Request) {
   const c = await cookies()
   const token = (c.get("ig_access_token")?.value ?? "").trim()
-  if (!token) return NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401 })
+  if (!token) {
+    return NextResponse.json(
+      { ok: false, error: "missing_access_token", cookieKeys: c.getAll().map((x) => x.name) },
+      { status: 401 }
+    )
+  }
 
   const formData = await req.formData()
   const file = formData.get("file")
@@ -41,7 +46,18 @@ export async function POST(req: Request) {
     (c.get("ig_id")?.value ?? "").trim() ||
     (c.get("ig_user_id")?.value ?? "").trim() ||
     (c.get("igUserId")?.value ?? "").trim() ||
-    "unknown"
+    ""
+  if (!igUserId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "missing_user_id_cookie",
+        keysTried: ["ig_ig_id", "ig_id", "ig_user_id", "igUserId"],
+        cookieKeys: c.getAll().map((x) => x.name),
+      },
+      { status: 401 }
+    )
+  }
   const storagePath = `creator-card/portfolio/${igUserId}/${filename}` 
 
   const buffer = Buffer.from(await file.arrayBuffer())

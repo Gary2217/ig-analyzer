@@ -1976,7 +1976,12 @@ export default function CreatorCardPage() {
                               if (!res.ok) {
                                 // Keep the preview so the user sees what they picked (no more instant disappear)
                                 // We still block saving persisted URLs until upload succeeds.
-                                showToast(t("creatorCard.form.featured.uploadFailed"))
+                                let detail = ""
+                                try {
+                                  const j = await res.json()
+                                  detail = typeof j?.error === "string" ? j.error : ""
+                                } catch {}
+                                showToast(detail ? `${t("creatorCard.form.featured.uploadFailed")} (${detail})` : t("creatorCard.form.featured.uploadFailed"))
                                 // Keep previewUrl alive (don't revoke) so it stays visible.
                                 continue
                               }
