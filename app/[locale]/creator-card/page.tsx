@@ -1968,13 +1968,10 @@ export default function CreatorCardPage() {
                                 credentials: "include",
                               })
 
-                              let detail = ""
-                              try {
-                                const j = await res.json()
-                                detail = typeof j?.error === "string" ? j.error : ""
-                              } catch {}
+                              const data = await res.json()
 
-                              if (!res.ok) {
+                              if (!res.ok || !data.ok) {
+                                const detail = typeof data?.error === "string" ? data.error : ""
                                 setFeaturedItems((prev) =>
                                   prev.map((x) => (x.id === id ? { ...x, uploadStatus: "failed" } : x))
                                 )
@@ -1982,8 +1979,7 @@ export default function CreatorCardPage() {
                                 continue
                               }
 
-                              const json = await res.json()
-                              const uploadedUrl = typeof json?.url === "string" ? json.url : ""
+                              const uploadedUrl = typeof data?.url === "string" ? data.url : ""
 
                               if (!uploadedUrl || !isPersistedUrl(uploadedUrl)) {
                                 setFeaturedItems((prev) =>
@@ -2053,13 +2049,10 @@ export default function CreatorCardPage() {
                               credentials: "include",
                             })
 
-                            let detail = ""
-                            try {
-                              const j = await res.json()
-                              detail = typeof j?.error === "string" ? j.error : ""
-                            } catch {}
+                            const data = await res.json()
 
-                            if (!res.ok) {
+                            if (!res.ok || !data.ok) {
+                              const detail = typeof data?.error === "string" ? data.error : ""
                               setFeaturedItems((prev) =>
                                 prev.map((x) => (x.id === id ? { ...x, url: prevUrl, uploadStatus: "failed" } : x))
                               )
@@ -2068,8 +2061,7 @@ export default function CreatorCardPage() {
                               return
                             }
 
-                            const json = await res.json()
-                            const uploadedUrl = typeof json?.url === "string" ? json.url : ""
+                            const uploadedUrl = typeof data?.url === "string" ? data.url : ""
 
                             if (!uploadedUrl || !isPersistedUrl(uploadedUrl)) {
                               setFeaturedItems((prev) =>
