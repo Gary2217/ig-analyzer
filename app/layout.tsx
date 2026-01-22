@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,13 +18,16 @@ export const metadata: Metadata = {
   description: "Social Analytics",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const locale = cookieStore.get('locale')?.value || 'en';
+  
   return (
-    <html lang="en" className="dark" style={{ colorScheme: "dark" }}>
+    <html lang={locale} className="dark" style={{ colorScheme: "dark" }}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0b1220] text-foreground`}
       >
