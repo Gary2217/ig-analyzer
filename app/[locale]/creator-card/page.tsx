@@ -1,6 +1,6 @@
 "use client"
 
-// NOTE: patch: re-enable auth upload + block save when blob previews exist
+// NOTE: Save blocked only during uploads (featuredUploadingIds > 0); failed uploads marked but don't block save
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -138,6 +138,7 @@ type FeaturedItem = {
   url: string
   brand: string
   collabType: string
+  uploadStatus?: "idle" | "uploading" | "failed"
 }
 
 function SortableFeaturedTile(props: {
@@ -237,6 +238,14 @@ function SortableFeaturedTile(props: {
             {featuredChipText}
           </span>
         </button>
+      ) : null}
+
+      {item.uploadStatus === "failed" ? (
+        <div className="absolute bottom-1 left-1 right-1 z-10 rounded-md bg-red-500/90 px-2 py-1 text-center shadow-sm">
+          <span className="block text-[11px] font-semibold text-white">
+            {t("creatorCard.form.featured.uploadFailed")}
+          </span>
+        </div>
       ) : null}
 
       <button
@@ -1145,12 +1154,6 @@ export default function CreatorCardPage() {
   const isPersistedUrl = (raw: string) =>
     !!raw && (raw.startsWith("https://") || raw.startsWith("http://") || raw.startsWith("/"))
 
-  const isPreviewUrl = (raw: string) => !!raw && raw.startsWith("blob:")
-
-  const hasFeaturedPreview = useMemo(() => {
-    return featuredItems.some((x) => isPreviewUrl(typeof x.url === "string" ? x.url : ""))
-  }, [featuredItems])
-
   const fileToDataUrl = useCallback((file: File) => {
     return new Promise<string>((resolve) => {
       const reader = new FileReader()
@@ -1188,10 +1191,6 @@ export default function CreatorCardPage() {
     if (saving) return
     if (saveInFlightRef.current) return
 
-    if (hasFeaturedPreview) {
-      showToast(t("creatorCard.form.featured.pendingUpload"))
-      return
-    }
     if (featuredUploadingIds.size > 0) {
       showToast(t("creatorCard.form.featured.uploadingWait"))
       return
@@ -1437,7 +1436,7 @@ export default function CreatorCardPage() {
               variant="primary"
               className="ring-1 ring-white/15 hover:ring-white/25"
               onClick={handleSave}
-              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0 || hasFeaturedPreview}
+              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
               {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
@@ -1445,10 +1444,6 @@ export default function CreatorCardPage() {
             {featuredUploadingIds.size > 0 && !saving ? (
               <div className="absolute -bottom-6 right-0 text-xs text-amber-400/80">
                 {t("creatorCard.form.featured.uploadingWait")}
-              </div>
-            ) : hasFeaturedPreview && !saving ? (
-              <div className="absolute -bottom-6 right-0 text-xs text-amber-400/80">
-                {t("creatorCard.form.featured.pendingUpload")}
               </div>
             ) : null}
             {saveFlash && !saving && !loading ? (
@@ -1953,7 +1948,7 @@ export default function CreatorCardPage() {
                             const previewUrl = URL.createObjectURL(file)
                             setFeaturedItems((prev) => [
                               ...prev,
-                              { id, url: previewUrl, brand: "", collabType: "" },
+                              { id, url: previewUrl, brand: "", collabType: "", uploadStatus: "uploading" },
                             ])
                             markDirty()
 
@@ -1973,16 +1968,17 @@ export default function CreatorCardPage() {
                                 credentials: "include",
                               })
 
+                              let detail = ""
+                              try {
+                                const j = await res.json()
+                                detail = typeof j?.error === "string" ? j.error : ""
+                              } catch {}
+
                               if (!res.ok) {
-                                // Keep the preview so the user sees what they picked (no more instant disappear)
-                                // We still block saving persisted URLs until upload succeeds.
-                                let detail = ""
-                                try {
-                                  const j = await res.json()
-                                  detail = typeof j?.error === "string" ? j.error : ""
-                                } catch {}
+                                setFeaturedItems((prev) =>
+                                  prev.map((x) => (x.id === id ? { ...x, uploadStatus: "failed" } : x))
+                                )
                                 showToast(detail ? `${t("creatorCard.form.featured.uploadFailed")} (${detail})` : t("creatorCard.form.featured.uploadFailed"))
-                                // Keep previewUrl alive (don't revoke) so it stays visible.
                                 continue
                               }
 
@@ -1990,23 +1986,23 @@ export default function CreatorCardPage() {
                               const uploadedUrl = typeof json?.url === "string" ? json.url : ""
 
                               if (!uploadedUrl || !isPersistedUrl(uploadedUrl)) {
-                                // Keep the preview so the user sees what they picked (no more instant disappear)
-                                // We still block saving persisted URLs until upload succeeds.
+                                setFeaturedItems((prev) =>
+                                  prev.map((x) => (x.id === id ? { ...x, uploadStatus: "failed" } : x))
+                                )
                                 showToast(t("creatorCard.form.featured.uploadFailed"))
-                                // Keep previewUrl alive (don't revoke) so it stays visible.
                                 continue
                               }
 
                               // replace preview with persisted url
                               setFeaturedItems((prev) =>
-                                prev.map((x) => (x.id === id ? { ...x, url: uploadedUrl } : x))
+                                prev.map((x) => (x.id === id ? { ...x, url: uploadedUrl, uploadStatus: "idle" } : x))
                               )
                               URL.revokeObjectURL(previewUrl)
                             } catch {
-                              // Keep the preview so the user sees what they picked (no more instant disappear)
-                              // We still block saving persisted URLs until upload succeeds.
+                              setFeaturedItems((prev) =>
+                                prev.map((x) => (x.id === id ? { ...x, uploadStatus: "failed" } : x))
+                              )
                               showToast(t("creatorCard.form.featured.uploadFailed"))
-                              // Keep previewUrl alive (don't revoke) so it stays visible.
                             } finally {
                               setFeaturedUploadingIds((prev) => {
                                 const next = new Set(prev)
@@ -2037,7 +2033,7 @@ export default function CreatorCardPage() {
 
                           // instant preview
                           setFeaturedItems((prev) =>
-                            prev.map((x) => (x.id === id ? { ...x, url: previewUrl } : x))
+                            prev.map((x) => (x.id === id ? { ...x, url: previewUrl, uploadStatus: "uploading" } : x))
                           )
                           markDirty()
 
@@ -2057,13 +2053,18 @@ export default function CreatorCardPage() {
                               credentials: "include",
                             })
 
+                            let detail = ""
+                            try {
+                              const j = await res.json()
+                              detail = typeof j?.error === "string" ? j.error : ""
+                            } catch {}
+
                             if (!res.ok) {
-                              // revert
                               setFeaturedItems((prev) =>
-                                prev.map((x) => (x.id === id ? { ...x, url: prevUrl } : x))
+                                prev.map((x) => (x.id === id ? { ...x, url: prevUrl, uploadStatus: "failed" } : x))
                               )
                               URL.revokeObjectURL(previewUrl)
-                              showToast(t("creatorCard.form.featured.uploadFailed"))
+                              showToast(detail ? `${t("creatorCard.form.featured.uploadFailed")} (${detail})` : t("creatorCard.form.featured.uploadFailed"))
                               return
                             }
 
@@ -2072,7 +2073,7 @@ export default function CreatorCardPage() {
 
                             if (!uploadedUrl || !isPersistedUrl(uploadedUrl)) {
                               setFeaturedItems((prev) =>
-                                prev.map((x) => (x.id === id ? { ...x, url: prevUrl } : x))
+                                prev.map((x) => (x.id === id ? { ...x, url: prevUrl, uploadStatus: "failed" } : x))
                               )
                               URL.revokeObjectURL(previewUrl)
                               showToast(t("creatorCard.form.featured.uploadFailed"))
@@ -2080,12 +2081,12 @@ export default function CreatorCardPage() {
                             }
 
                             setFeaturedItems((prev) =>
-                              prev.map((x) => (x.id === id ? { ...x, url: uploadedUrl } : x))
+                              prev.map((x) => (x.id === id ? { ...x, url: uploadedUrl, uploadStatus: "idle" } : x))
                             )
                             URL.revokeObjectURL(previewUrl)
                           } catch {
                             setFeaturedItems((prev) =>
-                              prev.map((x) => (x.id === id ? { ...x, url: prevUrl } : x))
+                              prev.map((x) => (x.id === id ? { ...x, url: prevUrl, uploadStatus: "failed" } : x))
                             )
                             URL.revokeObjectURL(previewUrl)
                             showToast(t("creatorCard.form.featured.uploadFailed"))
@@ -2827,7 +2828,7 @@ export default function CreatorCardPage() {
                                     variant="primary"
                                     className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
                                     onClick={handleSave}
-                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0 || hasFeaturedPreview}
+                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
                                   >
                                     {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
