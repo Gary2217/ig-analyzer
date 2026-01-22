@@ -501,13 +501,37 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 >
                   @{resolvedUsername}
                 </div>
-                <div className="mt-1.5 inline-flex items-center rounded-full border border-white/12 bg-white/8 px-2 py-0.5 text-[11px] leading-none text-white/75 whitespace-nowrap backdrop-blur-sm">
-                  {t("results.mediaKit.rolePill")}
-                </div>
               </div>
             </div>
           </div>
           </div>
+
+          {showStatsRow ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
+            <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
+              <div className="flex-1 min-w-0">
+                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
+                <div className="mt-0.5 text-[clamp(15px,4.4vw,19px)] font-bold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
+                  {hasFollowers ? followersText : "—"}
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
+                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.posts")}</div>
+                <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
+                  {hasPosts ? postsText : "—"}
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
+                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
+                <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
+                  {hasEngagementRate ? engagementRateText : "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
           <div className="min-w-0">
           <div className="flex items-end justify-between gap-3 min-w-0">
@@ -714,33 +738,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               </div>
             </div>
           </div>
-
-          {showStatsRow ? (
-          <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
-            <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
-              <div className="flex-1 min-w-0">
-                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
-                <div className="mt-0.5 text-[clamp(15px,4.4vw,19px)] font-bold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
-                  {hasFollowers ? followersText : "—"}
-                </div>
-              </div>
-
-              <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
-                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.posts")}</div>
-                <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
-                  {hasPosts ? postsText : "—"}
-                </div>
-              </div>
-
-              <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
-                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
-                <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
-                  {hasEngagementRate ? engagementRateText : "—"}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
           {showKpiGrid ? (
           <div className="min-w-0">
