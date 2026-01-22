@@ -18,6 +18,7 @@ import { useRefetchTick } from "../lib/useRefetchTick"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 import { useInstagramMe } from "../lib/useInstagramMe"
 import { extractIgUserIdFromInsightsId } from "../lib/instagram"
+import { getPostMetrics } from "../lib/postMetrics"
 import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
 import { FollowersStatChips } from "./components/FollowersStatChips"
 import { CreatorCardPreviewCard } from "../components/CreatorCardPreview"
@@ -5907,33 +5908,11 @@ export default function ResultsClient() {
                           if (!isRecord(p)) return null
                           const real = p
 
-                          const likeCountRaw =
-                            typeof real?.like_count === "number"
-                              ? real.like_count
-                              : typeof real?.likeCount === "number"
-                                ? real.likeCount
-                                : typeof real?.likes === "number"
-                                  ? real.likes
-                                  : toNum(real?.like_count ?? real?.likeCount ?? real?.likes_count ?? real?.likesCount ?? real?.likes)
-
-                          const commentsCountRaw =
-                            typeof real?.comments_count === "number"
-                              ? real.comments_count
-                              : typeof real?.commentsCount === "number"
-                                ? real.commentsCount
-                                : typeof real?.comments === "number"
-                                  ? real.comments
-                                  : toNum(real?.comments_count ?? real?.commentsCount ?? real?.comment_count ?? real?.commentCount ?? real?.comments)
-
+                          const metrics = getPostMetrics(real)
                           const views = typeof real?.views === "number" ? real.views : null
-                          const likes = (toNum(likeCountRaw) ?? 0)
-                          const comments = (toNum(commentsCountRaw) ?? 0)
-                          const engagement =
-                            typeof real?.engagement === "number" && Number.isFinite(real.engagement)
-                              ? real.engagement
-                              : typeof likes === "number" && typeof comments === "number"
-                                ? likes + comments
-                                : null
+                          const likes = metrics.likes ?? 0
+                          const comments = metrics.comments ?? 0
+                          const engagement = metrics.engagement ?? 0
 
                           const mediaType =
                             typeof (real?.media_type ?? real?.mediaType) === "string" && String(real?.media_type ?? real?.mediaType)

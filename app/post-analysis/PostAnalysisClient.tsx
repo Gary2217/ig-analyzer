@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Input } from "../../components/ui/input"
 import { Info, Lock, HelpCircle } from "lucide-react"
 import { useRefetchTick } from "../lib/useRefetchTick"
+import { getPostMetrics } from "../lib/postMetrics"
 
 const isValidPostUrl = (s: string) => /instagram\.com|threads\.net/i.test((s || "").trim())
 
@@ -2150,9 +2151,10 @@ export default function PostAnalysisClient() {
                         (typeof p?.thumbnail_url === "string" && p.thumbnail_url ? p.thumbnail_url : "") ||
                         (typeof p?.media_url === "string" && p.media_url ? p.media_url : "")
                       const type = String(p?.media_type || "POST").toUpperCase()
-                      const likes = (p?.like_count ?? p?.likes) ?? "—"
-                      const comments = (p?.comments_count ?? p?.comments) ?? "—"
-                      const engagement = p?.engagement ?? "—"
+                      const metrics = getPostMetrics(p)
+                      const likes = metrics.likes ?? "—"
+                      const comments = metrics.comments ?? "—"
+                      const engagement = metrics.engagement ?? "—"
 
                       return (
                         <div
