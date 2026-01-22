@@ -57,11 +57,11 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
             </div>
             <div className="mt-2 min-w-0">
               <h2 className="text-2xl font-bold tracking-tight min-w-0 truncate leading-tight">
-                {locale === "zh-TW" ? "Instagram 創作者資料庫" : "Instagram Creator Directory"}
+                {locale === "zh-TW" ? "快速找到合作對象" : "Instagram Creator Directory"}
               </h2>
               <p className="mt-2 text-sm text-white/70 leading-relaxed max-w-[60ch] whitespace-pre-line break-words">
                 {locale === "zh-TW"
-                  ? "瀏覽 Instagram 創作者名片\n快速找到合作對象"
+                  ? "Instagram 創作者資料庫\n瀏覽 Instagram 創作者名片"
                   : "Browse Instagram creator profiles\nFind collaboration partners"}
               </p>
             </div>
@@ -85,10 +85,13 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="text-xs font-semibold tracking-widest text-white/60">DEMO TOOL</div>
-            <div className="mt-2 flex items-start justify-between gap-3 min-w-0">
+            <div className="mt-2 min-w-0">
               <h2 className="text-2xl font-bold tracking-tight min-w-0 truncate leading-tight">
-                {locale === "zh-TW" ? "Instagram 創作者分析" : "Instagram Creator Analysis"}
+                {locale === "zh-TW" ? "分析我的 Instagram 帳號" : "Instagram Creator Analysis"}
               </h2>
+              <p className="mt-2 text-sm text-white/70 leading-relaxed max-w-[60ch] whitespace-pre-line break-words">
+                {locale === "zh-TW" ? "查看數據並編輯對外公開名片" : ""}
+              </p>
             </div>
           </div>
         </div>
