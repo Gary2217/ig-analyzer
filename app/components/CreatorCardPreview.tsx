@@ -422,7 +422,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         {!loaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
         <Image
           src={url}
-          alt="creator"
+          alt={resolvedDisplayName ? t("alt.avatar").replace("{name}", resolvedDisplayName) : ""}
           fill
           sizes="(max-width: 640px) 90vw, 400px"
           unoptimized
@@ -584,7 +584,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     className="relative shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5"
                   >
                     {item.url ? (
-                      <Image src={item.url} alt="" fill sizes="170px" unoptimized className="object-cover" />
+                      <Image 
+                        src={item.url} 
+                        alt={item.brand ? t("alt.highlightWithBrand").replace("{brand}", item.brand) : t("alt.highlightItem")} 
+                        fill 
+                        sizes="170px" 
+                        unoptimized 
+                        className="object-cover" 
+                      />
                     ) : (
                       <div className="h-full w-full flex items-center justify-center">
                         <Plus className="h-7 w-7 text-white/25" />
@@ -624,7 +631,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   onClick={() => scrollFeaturedBy(-1)}
                   disabled={!canScrollFeaturedLeft}
                   className="pointer-events-auto absolute left-2 top-1/2 z-20 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white/85 backdrop-blur hover:bg-black/40 disabled:opacity-30 disabled:pointer-events-none"
-                  aria-label="scroll left"
+                  aria-label={t("aria.scrollLeft")}
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
@@ -633,7 +640,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   onClick={() => scrollFeaturedBy(1)}
                   disabled={!canScrollFeaturedRight}
                   className="pointer-events-auto absolute right-2 top-1/2 z-20 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white/85 backdrop-blur hover:bg-black/40 disabled:opacity-30 disabled:pointer-events-none"
-                  aria-label="scroll right"
+                  aria-label={t("aria.scrollRight")}
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>

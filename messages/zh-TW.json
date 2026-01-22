@@ -211,7 +211,24 @@
       "remove": "移除"
     }
   },
+  "aria": {
+    "previous": "上一個",
+    "next": "下一個",
+    "close": "關閉",
+    "scrollLeft": "向左捲動",
+    "scrollRight": "向右捲動",
+    "addHighlight": "新增亮點"
+  },
+  "alt": {
+    "avatar": "{name} 大頭照",
+    "highlightItem": "亮點內容",
+    "highlightWithBrand": "{brand} - 亮點內容"
+  },
   "results": {
+    "meta": {
+      "title": "帳號分析結果 | Social Analytics",
+      "description": "查看 Instagram 帳號的真實性、互動率、自動化風險等深度分析報告"
+    },
     "title": "帳號分析結果",
     "subtitle": "依公開訊號與推論模式產生的專業風格快照。",
     "proReminder": "專業版包含貼文層級拆解與更深入的建議。",
@@ -1820,6 +1837,10 @@
       "noData": "尚無資料"
     },
     "postAnalysis": {
+    "meta": {
+      "title": "貼文分析 | Social Analytics",
+      "description": "深度分析單篇 Instagram 貼文的表現、互動率與受眾反應"
+    },
       "cta": "前往貼文分析",
       "freeLeft": "免費剩餘"
     },
@@ -2508,6 +2529,10 @@
     }
   },
   "creatorCard": {
+    "meta": {
+      "title": "創作者名片 | Social Analytics",
+      "description": "建立並分享你的專業創作者名片，展示作品集、合作案例與關鍵數據"
+    },
     "db": {
       "loading": "載入中…",
       "saving": "儲存中…",

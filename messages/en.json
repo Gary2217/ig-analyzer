@@ -211,7 +211,24 @@
       "remove": "Remove"
     }
   },
+  "aria": {
+    "previous": "Previous",
+    "next": "Next",
+    "close": "Close",
+    "scrollLeft": "Scroll left",
+    "scrollRight": "Scroll right",
+    "addHighlight": "Add highlight"
+  },
+  "alt": {
+    "avatar": "{name} avatar",
+    "highlightItem": "Highlight item",
+    "highlightWithBrand": "{brand} - Highlight"
+  },
   "results": {
+    "meta": {
+      "title": "Account Analysis Results | Social Analytics",
+      "description": "View in-depth analysis of Instagram account authenticity, engagement rate, automation risk, and more"
+    },
     "title": "Account Analysis Results",
     "subtitle": "Pro-style snapshot based on public signals and inferred patterns.",
     "proReminder": "Pro includes deeper post-level details and more actionable recommendations.",
@@ -1820,6 +1837,10 @@
       "noData": "No data"
     },
     "postAnalysis": {
+    "meta": {
+      "title": "Post Analysis | Social Analytics",
+      "description": "Deep analysis of individual Instagram post performance, engagement rate, and audience response"
+    },
       "cta": "Analyze Posts",
       "freeLeft": "Free left"
     },
@@ -2529,6 +2550,10 @@
     }
   },
   "creatorCard": {
+    "meta": {
+      "title": "Creator Card | Social Analytics",
+      "description": "Create and share your professional creator card with portfolio, collaborations, and key metrics"
+    },
     "db": {
       "loading": "Loading…",
       "saving": "Saving…",
