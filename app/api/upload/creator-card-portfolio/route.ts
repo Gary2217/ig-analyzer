@@ -15,6 +15,8 @@ const supabaseService = createClient(
 const BUCKET = "creator-card"
 
 export async function POST(req: Request) {
+  const BUILD = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "local"
+
   console.log(
     "[upload] url host:",
     new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).host
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
   const c = await cookies()
   const token = (c.get("ig_access_token")?.value ?? "").trim()
   if (!token) {
-    return NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401 })
+    return NextResponse.json({ ok: false, error: "unauthenticated", build: BUILD }, { status: 401 })
   }
 
   const formData = await req.formData()
@@ -35,21 +37,21 @@ export async function POST(req: Request) {
 
   if (!file || !(file instanceof File)) {
     return NextResponse.json(
-      { ok: false, error: "missing_file" },
+      { ok: false, error: "missing_file", build: BUILD },
       { status: 400 }
     )
   }
 
   if (!file.type.startsWith("image/")) {
     return NextResponse.json(
-      { ok: false, error: "file_must_be_image" },
+      { ok: false, error: "file_must_be_image", build: BUILD },
       { status: 400 }
     )
   }
 
   if (file.size > 5 * 1024 * 1024) {
     return NextResponse.json(
-      { ok: false, error: "file_too_large_max_5mb" },
+      { ok: false, error: "file_too_large_max_5mb", build: BUILD },
       { status: 400 }
     )
   }
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
   if (error) {
     console.error("[upload_failed]", error)
     return NextResponse.json(
-      { ok: false, error: "upload_failed", detail: error.message },
+      { ok: false, error: "upload_failed", detail: error.message, build: BUILD },
       { status: 500 }
     )
   }
@@ -83,5 +85,7 @@ export async function POST(req: Request) {
     .from(BUCKET)
     .getPublicUrl(storagePath)
 
-  return NextResponse.json({ ok: true, url: data.publicUrl, path: storagePath })
+  const response = NextResponse.json({ ok: true, url: data.publicUrl, path: storagePath, build: BUILD })
+  response.headers.set("x-build", BUILD)
+  return response
 }
