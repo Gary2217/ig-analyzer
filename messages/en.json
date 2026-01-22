@@ -262,11 +262,11 @@
         "noData": "No data"
       },
       "highlights": {
-        "title": "Highlights",
-        "subtitle": "Showcase your top posts or collaboration work",
-        "empty": "No highlights yet",
-        "emptyHint": "Add your first highlight to help brands understand you faster",
-        "count": "{count} items added",
+        "title": "Showcase",
+        "subtitle": "Portfolio / collaborations / top posts",
+        "empty": "No items yet",
+        "emptyHint": "Add your first item to help brands understand you faster",
+        "count": "{count} items",
         "cta": "Add highlight"
       },
       "collaborationFormats": {
