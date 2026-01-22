@@ -15,6 +15,15 @@ const supabaseService = createClient(
 const BUCKET = "creator-card"
 
 export async function POST(req: Request) {
+  console.log(
+    "[upload] url host:",
+    new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).host
+  )
+  console.log(
+    "[upload] has service key:",
+    Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  )
+
   const c = await cookies()
   const token = (c.get("ig_access_token")?.value ?? "").trim()
   if (!token) {
