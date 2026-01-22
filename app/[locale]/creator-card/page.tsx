@@ -2100,6 +2100,12 @@ export default function CreatorCardPage() {
                         }}
                       />
 
+                      {featuredItems.some((item) => item.uploadStatus === "failed") && (
+                        <div className="mb-3 rounded-lg border border-white/15 bg-black/70 px-3 py-2 text-sm text-white/90">
+                          ⚠ 有部分圖片上傳失敗，已保留預覽，請重新上傳或刪除後再試
+                        </div>
+                      )}
+
                       <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
