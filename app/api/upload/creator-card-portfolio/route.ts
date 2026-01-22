@@ -12,6 +12,8 @@ const supabaseService = createClient(
   { auth: { persistSession: false } }
 )
 
+const BUCKET = "creator-card"
+
 export async function POST(req: Request) {
   const c = await cookies()
   const token = (c.get("ig_access_token")?.value ?? "").trim()
@@ -55,8 +57,9 @@ export async function POST(req: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer())
 
+  console.log("[upload] using bucket:", BUCKET)
   const { error } = await supabaseService.storage
-    .from("public")
+    .from(BUCKET)
     .upload(storagePath, buffer, { contentType: file.type, upsert: false })
 
   if (error) {
@@ -68,7 +71,7 @@ export async function POST(req: Request) {
   }
 
   const { data } = supabaseService.storage
-    .from("public")
+    .from(BUCKET)
     .getPublicUrl(storagePath)
 
   return NextResponse.json({ ok: true, url: data.publicUrl, path: storagePath })
