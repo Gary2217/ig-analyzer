@@ -261,9 +261,13 @@
         },
         "noData": "尚無資料"
       },
-      "featured": {
-        "title": "精選貼文",
-        "empty": "尚未選擇精選貼文"
+      "highlights": {
+        "title": "個人亮點",
+        "subtitle": "展示你的熱門貼文或合作作品",
+        "empty": "尚未新增內容",
+        "emptyHint": "新增你的第一個亮點，讓品牌更快了解你",
+        "count": "已新增 {count} 件內容",
+        "cta": "新增亮點"
       },
       "collaborationFormats": {
         "title": "合作形式",

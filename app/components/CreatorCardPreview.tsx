@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
@@ -533,15 +533,37 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           </div>
         ) : null}
 
+          <div id="creator-card-highlights" className="min-w-0">
           <div className="min-w-0">
-          <div className="flex items-end justify-between gap-3 min-w-0">
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold tracking-wide text-white/70">作品集展示</div>
-              <div className="mt-0.5 text-[11px] text-white/45">展示你的熱門貼文或合作作品</div>
-            </div>
-            <div className="shrink-0 flex items-center gap-2">
-              <div className="text-[11px] text-white/35 whitespace-nowrap">已新增 {featuredCount} 件作品</div>
-            </div>
+            <div className="text-[11px] font-semibold tracking-wide text-white/70">{t("results.mediaKit.highlights.title")}</div>
+            <div className="mt-0.5 text-[11px] text-white/45">{t("results.mediaKit.highlights.subtitle")}</div>
+            {featuredCount === 0 ? (
+              <div className="mt-1.5 flex items-start gap-2">
+                <Sparkles className="mt-[2px] h-4 w-4 text-white/40" aria-hidden="true" />
+                <div className="min-w-0">
+                  <div className="text-sm text-white/70">
+                    {t("results.mediaKit.highlights.empty")}
+                  </div>
+                  <div className="mt-1 text-xs text-white/50">
+                    {t("results.mediaKit.highlights.emptyHint")}
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-2 inline-flex items-center rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-xs font-medium text-white/80 hover:bg-white/[0.09] active:bg-white/[0.12]"
+                    onClick={() => {
+                      const el = document.getElementById("creator-card-highlights")
+                      el?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    }}
+                  >
+                    {t("results.mediaKit.highlights.cta")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-white/70">
+                {t("results.mediaKit.highlights.count").replace("{count}", String(featuredCount))}
+              </div>
+            )}
           </div>
 
           <div className="relative mt-3 min-w-0">

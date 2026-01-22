@@ -261,9 +261,13 @@
         },
         "noData": "No data"
       },
-      "featured": {
-        "title": "Featured Posts",
-        "empty": "No featured posts selected yet"
+      "highlights": {
+        "title": "Highlights",
+        "subtitle": "Showcase your top posts or collaboration work",
+        "empty": "No highlights yet",
+        "emptyHint": "Add your first highlight to help brands understand you faster",
+        "count": "{count} items added",
+        "cta": "Add highlight"
       },
       "collaborationFormats": {
         "title": "Collaboration formats",
