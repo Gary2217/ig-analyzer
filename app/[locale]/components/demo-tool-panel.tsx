@@ -74,7 +74,7 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
               type="button"
               className="w-full sm:w-auto h-11 px-6 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10"
             >
-              {locale === "zh-TW" ? "前往媒合平台" : "Open Matchmaking"}
+              {locale === "zh-TW" ? "瀏覽 Instagram 創作者名片" : "Browse Instagram Creator Profiles"}
             </Button>
           </Link>
         </div>
