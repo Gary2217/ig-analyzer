@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createPublicClient } from "@/lib/supabase/server"
 import { CollabAutoScroll } from "./CollabAutoScroll"
+import { PortfolioCarousel } from "./PortfolioCarousel"
 
 interface CreatorProfilePageProps {
   params: Promise<{
@@ -319,68 +320,13 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
           </div>
           
           {portfolioItems.length > 0 ? (
-            <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide snap-x snap-mandatory">
-              <div className="flex gap-5 pb-2">
-                {portfolioItems.map((item: any, index: number) => {
-                  const normalized = normalizePortfolioItem(item)
-                  if (!normalized) return null
-
-                  const { displayTitle, displaySubtitle, thumbnailUrl, clickUrl, platformLabel } = normalized
-                  
-                  const CardContent = (
-                    <>
-                      {/* Thumbnail */}
-                      <div className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-white/10 border border-white/20 mb-3">
-                        {thumbnailUrl ? (
-                          <img
-                            src={thumbnailUrl}
-                            alt={displayTitle || "Portfolio item"}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
-                            {platformLabel || "Work"}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Title */}
-                      {displayTitle && (
-                        <div className="text-base sm:text-lg text-white/90 line-clamp-2 leading-tight mb-1">
-                          {displayTitle}
-                        </div>
-                      )}
-                      
-                      {/* Subtitle / Platform Badge */}
-                      {displaySubtitle && (
-                        <div className="text-xs text-white/60 uppercase tracking-wide">
-                          {getLocalizedTag(displaySubtitle)}
-                        </div>
-                      )}
-                    </>
-                  )
-                  
-                  return clickUrl && clickUrl.trim() !== "" ? (
-                    <a
-                      key={index}
-                      href={clickUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0 w-72 sm:w-80 rounded-xl bg-white/5 border border-white/10 p-5 hover:bg-white/10 hover:border-white/20 transition-colors snap-start"
-                    >
-                      {CardContent}
-                    </a>
-                  ) : (
-                    <div
-                      key={index}
-                      className="flex-shrink-0 w-72 sm:w-80 rounded-xl bg-white/5 border border-white/10 p-5 snap-start"
-                    >
-                      {CardContent}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            <PortfolioCarousel
+              items={portfolioItems
+                .map((item: any) => normalizePortfolioItem(item))
+                .filter((item: ReturnType<typeof normalizePortfolioItem>): item is NonNullable<ReturnType<typeof normalizePortfolioItem>> => item !== null)}
+              locale={locale}
+              getLocalizedTag={getLocalizedTag}
+            />
           ) : (
             <div className="py-6 text-center">
               <div className="inline-block px-4 py-3 rounded-lg border border-dashed border-white/20 bg-white/5">
