@@ -156,6 +156,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
 
   // Tag localization map
   const TAG_LABELS: Record<string, { "zh-TW": string; en: string }> = {
+    // Content themes
     beauty: { "zh-TW": "美妝", en: "Beauty" },
     fitness: { "zh-TW": "健身", en: "Fitness" },
     gaming: { "zh-TW": "遊戲", en: "Gaming" },
@@ -176,10 +177,23 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
     diy: { "zh-TW": "手作DIY", en: "DIY" },
     finance: { "zh-TW": "理財", en: "Finance" },
     health: { "zh-TW": "健康", en: "Health" },
+    // Deliverables (collab items)
+    reels: { "zh-TW": "Reels／短影音", en: "Reels" },
+    ugc: { "zh-TW": "UGC（用戶生成內容）", en: "UGC" },
+    posts: { "zh-TW": "貼文", en: "Posts" },
+    stories: { "zh-TW": "限時動態", en: "Stories" },
+    live: { "zh-TW": "直播", en: "Live" },
+    unboxing: { "zh-TW": "開箱", en: "Unboxing" },
+    youtube: { "zh-TW": "YouTube", en: "YouTube" },
+    tiktok: { "zh-TW": "TikTok", en: "TikTok" },
+    affiliate: { "zh-TW": "聯盟行銷", en: "Affiliate" },
+    event: { "zh-TW": "活動", en: "Event" },
+    giveaway: { "zh-TW": "抽獎", en: "Giveaway" },
+    fb_post: { "zh-TW": "Facebook貼文", en: "Facebook Post" },
   }
 
   const getLocalizedTag = (tag: string): string => {
-    const normalized = tag.toLowerCase().trim()
+    const normalized = tag.toLowerCase().trim().replace(/\s+/g, "_")
     return TAG_LABELS[normalized]?.[locale] ?? tag
   }
 
@@ -306,7 +320,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
               {cardData.deliverables.map((item, index) => (
                 <li key={index} className="flex items-start gap-2 text-sm text-white/80">
                   <span className="text-white/40 mt-1">•</span>
-                  <span className="break-words flex-1">{item}</span>
+                  <span className="break-words flex-1">{getLocalizedTag(item)}</span>
                 </li>
               ))}
             </ul>
