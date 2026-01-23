@@ -364,7 +364,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
           
           {portfolioItems.length > 0 ? (
             <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide">
-              <div className="flex gap-3 pb-2">
+              <div className="flex gap-4 pb-2">
                 {portfolioItems.map((item: any, index: number) => {
                   const normalized = normalizePortfolioItem(item)
                   if (!normalized) return null
@@ -374,7 +374,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                   const CardContent = (
                     <>
                       {/* Thumbnail */}
-                      <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-white/10 mb-2">
+                      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-white/10 mb-3">
                         {thumbnailUrl ? (
                           <img
                             src={thumbnailUrl}
@@ -390,7 +390,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                       
                       {/* Title */}
                       {displayTitle && (
-                        <div className="text-xs text-white/90 line-clamp-2 leading-tight mb-1">
+                        <div className="text-sm text-white/90 line-clamp-2 leading-tight mb-1">
                           {displayTitle}
                         </div>
                       )}
@@ -410,14 +410,14 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                       href={clickUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-shrink-0 w-36 rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 hover:border-white/20 transition-colors"
+                      className="flex-shrink-0 w-56 sm:w-64 rounded-xl bg-white/5 border border-white/10 p-4 hover:bg-white/10 hover:border-white/20 transition-colors"
                     >
                       {CardContent}
                     </a>
                   ) : (
                     <div
                       key={index}
-                      className="flex-shrink-0 w-36 rounded-lg bg-white/5 border border-white/10 p-3"
+                      className="flex-shrink-0 w-56 sm:w-64 rounded-xl bg-white/5 border border-white/10 p-4"
                     >
                       {CardContent}
                     </div>
