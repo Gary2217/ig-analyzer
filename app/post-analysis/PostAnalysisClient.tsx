@@ -9,6 +9,7 @@ import { Input } from "../../components/ui/input"
 import { Info, Lock, HelpCircle } from "lucide-react"
 import { useRefetchTick } from "../lib/useRefetchTick"
 import { getPostMetrics } from "../lib/postMetrics"
+import { useAuthNavigation } from "../lib/useAuthNavigation"
 
 const isValidPostUrl = (s: string) => /instagram\.com|threads\.net/i.test((s || "").trim())
 
@@ -1265,9 +1266,11 @@ export default function PostAnalysisClient() {
 
   const canAnalyze = postUrl.trim().length > 0
 
+  const { isAuthenticated, navigateToProtected } = useAuthNavigation()
+
   const beginOAuth = (nextUrl: string) => {
     const next = nextUrl || `/${locale}/post-analysis`
-    window.location.assign(`/api/auth/instagram?next=${encodeURIComponent(next)}`)
+    navigateToProtected(next)
   }
 
   const parseTsMs = (raw: any) => {
@@ -2799,8 +2802,7 @@ export default function PostAnalysisClient() {
                           size="lg"
                           className="w-full sm:w-auto"
                           onClick={() => {
-                            const returnUrl = encodeURIComponent(window.location.href)
-                            window.location.href = `/api/auth/instagram?returnUrl=${returnUrl}`
+                            navigateToProtected(`/${locale}/post-analysis`)
                           }}
                         >
                           {t("post.official.connect.cta")}

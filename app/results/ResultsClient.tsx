@@ -17,6 +17,7 @@ import { ShareResults } from "../../components/share-results"
 import { useRefetchTick } from "../lib/useRefetchTick"
 import { extractLocaleFromPathname, localePathname } from "../lib/locale-path"
 import { useInstagramMe } from "../lib/useInstagramMe"
+import { useAuthNavigation } from "../lib/useAuthNavigation"
 import { extractIgUserIdFromInsightsId } from "../lib/instagram"
 import { getPostMetrics } from "../lib/postMetrics"
 import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
@@ -3139,11 +3140,12 @@ export default function ResultsClient() {
     window.scrollTo({ top: targetY, behavior: "smooth" })
   }
 
+  const { navigateToProtected } = useAuthNavigation()
+
   const handleConnect = () => {
     setConnectEnvError(null)
     const nextPath = `/${activeLocale}/results`
-    const oauthUrl = `/api/auth/instagram?provider=instagram&next=${encodeURIComponent(nextPath)}`
-    window.location.href = oauthUrl
+    navigateToProtected(nextPath)
   }
 
   const priorityLabel = (label: string) => {

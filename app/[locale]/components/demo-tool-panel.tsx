@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { useAuthNavigation } from "@/app/lib/useAuthNavigation"
 
 type Provider = "instagram" | "threads"
 
@@ -18,27 +19,16 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
   // Derive locale from pathname (source of truth for client-side rendering)
   const pathname = usePathname()
   const locale = pathname?.startsWith("/zh-TW") ? "zh-TW" : "en"
-
-  // NOTE: Threads is not supported (API not complete). Lock provider to Instagram only.
-  const provider: Provider = "instagram"
-
-  const oauthBase = `/api/auth/instagram?provider=${provider}`
-
-  function goOAuth(next: string) {
-    const url = `${oauthBase}&next=${encodeURIComponent(next)}`
-    window.location.href = url
-  }
+  const { navigateToResults, navigateToPostAnalysis, loading: authLoading } = useAuthNavigation()
 
   function onAnalyzeAccount() {
-    if (checking) return
-    const next = `/${activeLocale}/results`
-    goOAuth(next)
+    if (checking || authLoading) return
+    navigateToResults()
   }
 
   function onAnalyzePost() {
-    if (checking) return
-    const next = `/${activeLocale}/post-analysis`
-    goOAuth(next)
+    if (checking || authLoading) return
+    navigateToPostAnalysis()
   }
 
   return (
