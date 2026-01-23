@@ -14,16 +14,17 @@ interface CreatorProfilePageProps {
 
 async function fetchCreatorProfile(slug: string): Promise<CreatorProfileData | null> {
   try {
-    // Using public client (contact info is public read)
-    // TODO: If contact becomes gated by auth/RLS, switch to:
+    // Using public client (creator card data is public read)
+    // TODO: If data becomes gated by auth/RLS, switch to:
     //   const supabase = await createAuthedClient()
     // and adjust RLS policies to check auth.uid()
     const supabase = createPublicClient()
 
+    // Fetch from creator_cards using ig_username (slug is the ig_username)
     const { data, error } = await supabase
-      .from("creator_profiles")
-      .select("contact_email, contact_instagram, contact_website, collaboration_methods")
-      .eq("creator_slug", slug)
+      .from("creator_cards")
+      .select("ig_username, collaboration_methods, contact_email, contact_instagram, contact_website")
+      .eq("ig_username", slug)
       .maybeSingle()
 
     if (error) {
@@ -36,10 +37,10 @@ async function fetchCreatorProfile(slug: string): Promise<CreatorProfileData | n
       return null
     }
 
-    // Build profile data with only non-null fields
+    // Build profile data with only non-null fields from creator_cards
     const profile: CreatorProfileData = {}
 
-    // Build contact object
+    // Build contact object (if fields exist in creator_cards)
     const contact: CreatorProfileData["contact"] = {}
     if (data.contact_email) contact.email = data.contact_email
     if (data.contact_instagram) contact.instagram = data.contact_instagram
@@ -51,7 +52,7 @@ async function fetchCreatorProfile(slug: string): Promise<CreatorProfileData | n
     }
 
     // Add collaboration methods if exists and not empty
-    if (data.collaboration_methods && data.collaboration_methods.length > 0) {
+    if (data.collaboration_methods && Array.isArray(data.collaboration_methods) && data.collaboration_methods.length > 0) {
       profile.collaborationMethods = data.collaboration_methods
     }
 
