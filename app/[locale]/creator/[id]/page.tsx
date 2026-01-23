@@ -170,6 +170,44 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
     return []
   })()
 
+  // Normalize portfolio item to support multiple shapes
+  const normalizePortfolioItem = (item: any) => {
+    if (!item || typeof item !== "object") return null
+
+    // Extract fields with fallbacks for different key variants
+    const brand = typeof item.brand === "string" ? item.brand.trim() : ""
+    const collabType = typeof item.collabType === "string" ? item.collabType.trim() : typeof item.collabtype === "string" ? item.collabtype.trim() : ""
+    const title = typeof item.title === "string" ? item.title.trim() : ""
+    const platform = typeof item.platform === "string" ? item.platform.trim() : ""
+    
+    // Image URL with multiple fallbacks
+    const thumbnailUrl = typeof item.thumbnail === "string" ? item.thumbnail.trim() :
+                        typeof item.url === "string" ? item.url.trim() :
+                        typeof item.imageUrl === "string" ? item.imageUrl.trim() :
+                        typeof item.image_url === "string" ? item.image_url.trim() : ""
+    
+    // Click URL
+    const clickUrl = typeof item.link === "string" ? item.link.trim() :
+                     typeof item.clickUrl === "string" ? item.clickUrl.trim() : ""
+
+    // Map to unified shape:
+    // Priority: explicit title > brand, explicit platform > collabType
+    const displayTitle = title || brand
+    const displaySubtitle = collabType
+    const platformLabel = platform || collabType
+
+    // Skip if completely empty
+    if (!displayTitle && !displaySubtitle && !thumbnailUrl && !platformLabel) return null
+
+    return {
+      displayTitle,
+      displaySubtitle,
+      thumbnailUrl,
+      clickUrl,
+      platformLabel,
+    }
+  }
+
   // Tag localization map
   const TAG_LABELS: Record<string, { "zh-TW": string; en: string }> = {
     // Content themes
@@ -328,50 +366,48 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
             <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide">
               <div className="flex gap-3 pb-2">
                 {portfolioItems.map((item: any, index: number) => {
-                  const thumbnail = typeof item?.thumbnail === "string" ? item.thumbnail : ""
-                  const title = typeof item?.title === "string" ? item.title : ""
-                  const platform = typeof item?.platform === "string" ? item.platform : ""
-                  const url = typeof item?.url === "string" && item.url.trim() !== "" ? item.url : ""
-                  
-                  if (!thumbnail && !title && !platform) return null
+                  const normalized = normalizePortfolioItem(item)
+                  if (!normalized) return null
+
+                  const { displayTitle, displaySubtitle, thumbnailUrl, clickUrl, platformLabel } = normalized
                   
                   const CardContent = (
                     <>
                       {/* Thumbnail */}
                       <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-white/10 mb-2">
-                        {thumbnail ? (
+                        {thumbnailUrl ? (
                           <img
-                            src={thumbnail}
-                            alt={title || "Portfolio item"}
+                            src={thumbnailUrl}
+                            alt={displayTitle || "Portfolio item"}
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
-                            {platform || "Work"}
+                            {platformLabel || "Work"}
                           </div>
                         )}
                       </div>
                       
                       {/* Title */}
-                      {title && (
+                      {displayTitle && (
                         <div className="text-xs text-white/90 line-clamp-2 leading-tight mb-1">
-                          {title}
+                          {displayTitle}
                         </div>
                       )}
                       
-                      {/* Platform Badge */}
-                      {platform && (
+                      {/* Subtitle / Platform Badge */}
+                      {displaySubtitle && (
                         <div className="text-[10px] text-white/50 uppercase tracking-wide">
-                          {platform}
+                          {getLocalizedTag(displaySubtitle)}
                         </div>
                       )}
                     </>
                   )
                   
-                  return url ? (
+                  return clickUrl && clickUrl.trim() !== "" ? (
                     <a
                       key={index}
-                      href={url}
+                      href={clickUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-shrink-0 w-36 rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 hover:border-white/20 transition-colors"
@@ -402,6 +438,50 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
             </div>
           )}
         </div>
+
+        {/* Showcase Section */}
+        {(cardData.theme_types?.length || cardData.audience_profiles?.length) && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold text-white mb-1">{copy.showcase}</h2>
+              <p className="text-xs text-white/50">{copy.showcaseSubtitle}</p>
+            </div>
+
+            {/* Content Themes in Showcase */}
+            {cardData.theme_types && cardData.theme_types.length > 0 && (
+              <div className="mb-4 last:mb-0">
+                <h3 className="text-sm font-medium text-white/70 mb-3">{copy.themes}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {cardData.theme_types.map((theme, index) => (
+                    <div
+                      key={index}
+                      className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                    >
+                      {getLocalizedTag(theme)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Audience Profiles in Showcase */}
+            {cardData.audience_profiles && cardData.audience_profiles.length > 0 && (
+              <div className="mb-0">
+                <h3 className="text-sm font-medium text-white/70 mb-3">{copy.audienceProfiles}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {cardData.audience_profiles.map((profile, index) => (
+                    <div
+                      key={index}
+                      className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                    >
+                      {getLocalizedTag(profile)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* About Section */}
         {cardData.audience && cardData.audience.trim() && (
