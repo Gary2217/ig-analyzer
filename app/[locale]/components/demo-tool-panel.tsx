@@ -55,11 +55,11 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
                 NEW
               </span>
             </div>
-            <div className="mt-2 min-w-0">
-              <h2 className="text-2xl font-bold tracking-tight min-w-0 truncate leading-tight">
+            <div className="mt-3 min-w-0">
+              <h2 className="text-3xl font-bold tracking-tight min-w-0 truncate leading-tight">
                 {locale === "zh-TW" ? "快速找到合作對象" : "Instagram Creator Directory"}
               </h2>
-              <p className="mt-2 text-sm text-white/70 leading-relaxed max-w-[60ch] whitespace-pre-line break-words">
+              <p className="mt-3 text-base text-white/70 leading-relaxed max-w-[60ch] whitespace-pre-line break-words">
                 {locale === "zh-TW"
                   ? "Instagram 創作者資料庫\n瀏覽 Instagram 創作者名片"
                   : "Browse Instagram creator profiles\nFind collaboration partners"}
@@ -68,11 +68,13 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-5">
           <Link href={`/${locale}/matchmaking`}>
             <Button
               type="button"
-              className="w-full sm:w-auto h-11 px-6 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10"
+              variant="primary"
+              size="lg-cta"
+              className="w-full sm:w-auto bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10"
             >
               {locale === "zh-TW" ? "瀏覽 Instagram 創作者名片" : "Browse Instagram Creator Profiles"}
             </Button>
