@@ -15,6 +15,8 @@ interface CreatorDetailsSheetProps {
 }
 
 // CTA A/B test variant
+// NOTE: Switch CTA to "查看合作資訊 / View Collaboration Info" (variant "INFO")
+// when brand collaboration features are launched and profile page has real data.
 type PrimaryCtaVariant = "CARD" | "INFO"
 const PRIMARY_CTA_VARIANT: PrimaryCtaVariant = "CARD" // Change to "INFO" to test variant B
 
@@ -70,6 +72,8 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
   }, [isOpen, card.id])
 
   // Toggle save state
+  // NOTE: When user authentication is enabled, sync local favorites to backend on login.
+  // Current implementation uses localStorage only for unauthenticated users.
   const handleToggleSave = () => {
     try {
       const saved = localStorage.getItem("matchmaking_saved_creators_v1")
@@ -83,6 +87,8 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
       
       localStorage.setItem("matchmaking_saved_creators_v1", JSON.stringify(savedIds))
       setIsSaved(!isSaved)
+      
+      // TODO: When auth is ready, also POST to /api/favorites/toggle
     } catch {
       // Ignore localStorage errors
     }
