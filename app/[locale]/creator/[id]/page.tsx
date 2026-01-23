@@ -70,6 +70,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         displayName: "顯示名稱",
         category: "分類",
         idLabel: "代號",
+        showcase: "個人展示",
+        showcaseSubtitle: "作品集／合作案例／熱門內容",
         about: "關於我",
         themes: "內容主題",
         audienceProfiles: "受眾輪廓",
@@ -92,6 +94,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         displayName: "Display Name",
         category: "Category",
         idLabel: "ID",
+        showcase: "Showcase",
+        showcaseSubtitle: "Portfolio · Case Studies · Top Content",
         about: "About",
         themes: "Content Themes",
         audienceProfiles: "Audience",
@@ -149,6 +153,35 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
   const displayName = cardData.ig_username || cardData.id
   const category = cardData.niche || (locale === "zh-TW" ? "創作者" : "Creator")
   const isCollab = tab === "collab"
+
+  // Tag localization map
+  const TAG_LABELS: Record<string, { "zh-TW": string; en: string }> = {
+    beauty: { "zh-TW": "美妝", en: "Beauty" },
+    fitness: { "zh-TW": "健身", en: "Fitness" },
+    gaming: { "zh-TW": "遊戲", en: "Gaming" },
+    education: { "zh-TW": "教育", en: "Education" },
+    lifestyle: { "zh-TW": "生活風格", en: "Lifestyle" },
+    fashion: { "zh-TW": "時尚", en: "Fashion" },
+    food: { "zh-TW": "美食", en: "Food" },
+    travel: { "zh-TW": "旅遊", en: "Travel" },
+    tech: { "zh-TW": "科技", en: "Tech" },
+    music: { "zh-TW": "音樂", en: "Music" },
+    art: { "zh-TW": "藝術", en: "Art" },
+    photography: { "zh-TW": "攝影", en: "Photography" },
+    comedy: { "zh-TW": "喜劇", en: "Comedy" },
+    sports: { "zh-TW": "運動", en: "Sports" },
+    business: { "zh-TW": "商業", en: "Business" },
+    parenting: { "zh-TW": "親子育兒", en: "Parenting" },
+    pets: { "zh-TW": "寵物", en: "Pets" },
+    diy: { "zh-TW": "手作DIY", en: "DIY" },
+    finance: { "zh-TW": "理財", en: "Finance" },
+    health: { "zh-TW": "健康", en: "Health" },
+  }
+
+  const getLocalizedTag = (tag: string): string => {
+    const normalized = tag.toLowerCase().trim()
+    return TAG_LABELS[normalized]?.[locale] ?? tag
+  }
 
   return (
     <div className="min-h-[calc(100dvh-80px)] w-full">
@@ -210,6 +243,50 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
           </div>
         </div>
 
+        {/* Showcase Section */}
+        {(cardData.theme_types?.length || cardData.audience_profiles?.length) && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-white mb-1">{copy.showcase}</h2>
+              <p className="text-xs text-white/50">{copy.showcaseSubtitle}</p>
+            </div>
+
+            {/* Content Themes in Showcase */}
+            {cardData.theme_types && cardData.theme_types.length > 0 && (
+              <div className="mb-6 last:mb-0">
+                <h3 className="text-sm font-medium text-white/70 mb-3">{copy.themes}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {cardData.theme_types.map((theme, index) => (
+                    <div
+                      key={index}
+                      className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                    >
+                      {getLocalizedTag(theme)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Audience Profiles in Showcase */}
+            {cardData.audience_profiles && cardData.audience_profiles.length > 0 && (
+              <div className="mb-0">
+                <h3 className="text-sm font-medium text-white/70 mb-3">{copy.audienceProfiles}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {cardData.audience_profiles.map((profile, index) => (
+                    <div
+                      key={index}
+                      className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                    >
+                      {getLocalizedTag(profile)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* About Section */}
         {cardData.audience && cardData.audience.trim() && (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
@@ -220,39 +297,6 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
           </div>
         )}
 
-        {/* Content Themes Section */}
-        {cardData.theme_types && cardData.theme_types.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
-            <h3 className="text-lg font-semibold text-white mb-4">{copy.themes}</h3>
-            <div className="flex flex-wrap gap-2">
-              {cardData.theme_types.map((theme, index) => (
-                <div
-                  key={index}
-                  className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
-                >
-                  {theme}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Audience Profiles Section */}
-        {cardData.audience_profiles && cardData.audience_profiles.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
-            <h3 className="text-lg font-semibold text-white mb-4">{copy.audienceProfiles}</h3>
-            <div className="flex flex-wrap gap-2">
-              {cardData.audience_profiles.map((profile, index) => (
-                <div
-                  key={index}
-                  className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
-                >
-                  {profile}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Deliverables Section */}
         {cardData.deliverables && cardData.deliverables.length > 0 && (
@@ -279,7 +323,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                   key={index}
                   className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
                 >
-                  {type}
+                  {getLocalizedTag(type)}
                 </div>
               ))}
             </div>
