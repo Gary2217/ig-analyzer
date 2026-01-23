@@ -19,6 +19,13 @@ interface CreatorCardData {
   profile_image_url: string | null
   updated_at: string | null
   is_public: boolean
+  audience: string | null
+  theme_types: string[] | null
+  audience_profiles: string[] | null
+  deliverables: string[] | null
+  collaboration_niches: string[] | null
+  past_collaborations: string[] | null
+  portfolio: unknown[] | null
 }
 
 async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
@@ -27,7 +34,7 @@ async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
 
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_username, niche, profile_image_url, updated_at, is_public")
+      .select("id, ig_username, niche, profile_image_url, updated_at, is_public, audience, theme_types, audience_profiles, deliverables, collaboration_niches, past_collaborations, portfolio")
       .eq("id", id)
       .eq("is_public", true)
       .maybeSingle()
@@ -63,6 +70,13 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         displayName: "顯示名稱",
         category: "分類",
         idLabel: "代號",
+        about: "關於我",
+        themes: "內容主題",
+        audienceProfiles: "受眾輪廓",
+        deliverables: "合作項目",
+        collabTypes: "合作類型",
+        pastBrands: "合作品牌",
+        portfolio: "作品集",
         collab: "合作洽談",
         collabDesc: "此創作者尚未公開聯絡方式。你可以先送出合作提案，之後再由系統通知對方。",
         collabHint: "已為你定位到合作區塊，請填寫表單送出提案。",
@@ -79,6 +93,13 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         displayName: "Display Name",
         category: "Category",
         idLabel: "ID",
+        about: "About",
+        themes: "Content Themes",
+        audienceProfiles: "Audience",
+        deliverables: "Deliverables",
+        collabTypes: "Collaboration Types",
+        pastBrands: "Past Collaborations",
+        portfolio: "Portfolio",
         collab: "Collaboration",
         collabDesc: "This creator has not shared contact info yet. You can submit a collaboration proposal and we'll notify them.",
         collabHint: "You're in collaboration mode. Fill the form to send a proposal.",
@@ -190,6 +211,132 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
             </div>
           </div>
         </div>
+
+        {/* About Section */}
+        {cardData.audience && cardData.audience.trim() && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <h3 className="text-lg font-semibold text-white mb-3">{copy.about}</h3>
+            <p className="text-sm text-white/80 leading-relaxed break-words whitespace-pre-wrap">
+              {cardData.audience}
+            </p>
+          </div>
+        )}
+
+        {/* Content Themes Section */}
+        {cardData.theme_types && cardData.theme_types.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">{copy.themes}</h3>
+            <div className="flex flex-wrap gap-2">
+              {cardData.theme_types.map((theme, index) => (
+                <div
+                  key={index}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                >
+                  {theme}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Audience Profiles Section */}
+        {cardData.audience_profiles && cardData.audience_profiles.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">{copy.audienceProfiles}</h3>
+            <div className="flex flex-wrap gap-2">
+              {cardData.audience_profiles.map((profile, index) => (
+                <div
+                  key={index}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                >
+                  {profile}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Deliverables Section */}
+        {cardData.deliverables && cardData.deliverables.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">{copy.deliverables}</h3>
+            <ul className="space-y-2">
+              {cardData.deliverables.map((item, index) => (
+                <li key={index} className="flex items-start gap-2 text-sm text-white/80">
+                  <span className="text-white/40 mt-1">•</span>
+                  <span className="break-words flex-1">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Collaboration Types Section */}
+        {cardData.collaboration_niches && cardData.collaboration_niches.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">{copy.collabTypes}</h3>
+            <div className="flex flex-wrap gap-2">
+              {cardData.collaboration_niches.map((type, index) => (
+                <div
+                  key={index}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                >
+                  {type}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Past Collaborations Section */}
+        {cardData.past_collaborations && cardData.past_collaborations.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">{copy.pastBrands}</h3>
+            <div className="flex flex-wrap gap-2">
+              {cardData.past_collaborations.map((brand, index) => (
+                <div
+                  key={index}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                >
+                  {brand}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Portfolio Section */}
+        {cardData.portfolio && Array.isArray(cardData.portfolio) && cardData.portfolio.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+            <h3 className="text-lg font-semibold text-white mb-4">{copy.portfolio}</h3>
+            <div className="space-y-3">
+              {cardData.portfolio.map((item: any, index) => {
+                const brand = typeof item?.brand === "string" ? item.brand : ""
+                const collabType = typeof item?.collabType === "string" ? item.collabType : ""
+                
+                if (!brand && !collabType) return null
+                
+                return (
+                  <div
+                    key={index}
+                    className="p-4 rounded-lg bg-white/5 border border-white/10"
+                  >
+                    {brand && (
+                      <div className="font-medium text-white/90 mb-1 break-words">
+                        {brand}
+                      </div>
+                    )}
+                    {collabType && (
+                      <div className="text-sm text-white/60 break-words">
+                        {collabType}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Collaboration Section */}
         <div 
