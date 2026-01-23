@@ -330,7 +330,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                   const CardContent = (
                     <>
                       {/* Thumbnail */}
-                      <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-white/10 border border-white/20 mb-3">
+                      <div className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-white/10 border border-white/20 mb-3">
                         {thumbnailUrl ? (
                           <img
                             src={thumbnailUrl}
