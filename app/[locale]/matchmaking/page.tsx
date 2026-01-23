@@ -2,6 +2,8 @@ import { MatchmakingClient } from "./MatchmakingClient"
 import { createPublicClient } from "@/lib/supabase/server"
 import type { CreatorCard } from "./types"
 
+export const dynamic = "force-dynamic"
+
 interface MatchmakingPageProps {
   params: Promise<{
     locale: string
