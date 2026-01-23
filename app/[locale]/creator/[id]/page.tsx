@@ -3,6 +3,7 @@ import { ArrowLeft, Mail, Globe, Instagram } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProfilePreviewClient } from "./ProfilePreviewClient"
 import { CreatorProfileData } from "./types"
+import { createPublicClient } from "@/lib/supabase/server"
 
 interface CreatorProfilePageProps {
   params: Promise<{
@@ -11,14 +12,68 @@ interface CreatorProfilePageProps {
   }>
 }
 
+async function fetchCreatorProfile(slug: string): Promise<CreatorProfileData | null> {
+  try {
+    // Using public client (contact info is public read)
+    // TODO: If contact becomes gated by auth/RLS, switch to:
+    //   const supabase = await createAuthedClient()
+    // and adjust RLS policies to check auth.uid()
+    const supabase = createPublicClient()
+
+    const { data, error } = await supabase
+      .from("creator_profiles")
+      .select("contact_email, contact_instagram, contact_website, collaboration_methods")
+      .eq("creator_slug", slug)
+      .maybeSingle()
+
+    if (error) {
+      console.error("Error fetching creator profile:", error)
+      return null
+    }
+
+    // If no row found, return null
+    if (!data) {
+      return null
+    }
+
+    // Build profile data with only non-null fields
+    const profile: CreatorProfileData = {}
+
+    // Build contact object
+    const contact: CreatorProfileData["contact"] = {}
+    if (data.contact_email) contact.email = data.contact_email
+    if (data.contact_instagram) contact.instagram = data.contact_instagram
+    if (data.contact_website) contact.website = data.contact_website
+
+    // Only add contact if at least one field exists
+    if (contact.email || contact.instagram || contact.website) {
+      profile.contact = contact
+    }
+
+    // Add collaboration methods if exists and not empty
+    if (data.collaboration_methods && data.collaboration_methods.length > 0) {
+      profile.collaborationMethods = data.collaboration_methods
+    }
+
+    // Return null if no data at all
+    if (!profile.contact && !profile.collaborationMethods) {
+      return null
+    }
+
+    return profile
+  } catch (error) {
+    console.error("Error fetching creator profile:", error)
+    return null
+  }
+}
+
 export default async function CreatorProfilePage({ params }: CreatorProfilePageProps) {
   const resolvedParams = await params
   const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
   const creatorId = resolvedParams.id
 
-  // TODO: Fetch real profile data from API
-  // const profileData = await fetchCreatorProfile(creatorId)
-  const profileData: CreatorProfileData | null = null
+  // Fetch real profile data from API
+  const profileData = await fetchCreatorProfile(creatorId)
 
   const copy = locale === "zh-TW"
     ? {
