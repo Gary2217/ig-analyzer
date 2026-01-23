@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { X, CheckCircle2, ExternalLink } from "lucide-react"
+import { X, CheckCircle2, ExternalLink, Mail, Heart, Copy, Check } from "lucide-react"
 import { CreatorCard } from "../types"
 import { Button } from "@/components/ui/button"
 
@@ -12,6 +13,10 @@ interface CreatorDetailsSheetProps {
   isOpen: boolean
   onClose: () => void
 }
+
+// CTA A/B test variant
+type PrimaryCtaVariant = "CARD" | "INFO"
+const PRIMARY_CTA_VARIANT: PrimaryCtaVariant = "CARD" // Change to "INFO" to test variant B
 
 const categoryTranslations: Record<string, { "zh-TW": string; en: string }> = {
   "Beauty & Fashion": { "zh-TW": "美妝時尚", en: "Beauty & Fashion" },
@@ -41,16 +46,90 @@ function formatFollowerCount(count: number, locale: "zh-TW" | "en"): string {
 }
 
 export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDetailsSheetProps) {
+  const router = useRouter()
   const sheetRef = useRef<HTMLDivElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
+  
+  // Save (favorite) state
+  const [isSaved, setIsSaved] = useState(false)
+  const [showContactInfo, setShowContactInfo] = useState(false)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  // Check if creator is saved on mount
+  useEffect(() => {
+    if (!isOpen) return
+    try {
+      const saved = localStorage.getItem("matchmaking_saved_creators_v1")
+      if (saved) {
+        const savedIds = JSON.parse(saved) as string[]
+        setIsSaved(savedIds.includes(card.id))
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [isOpen, card.id])
+
+  // Toggle save state
+  const handleToggleSave = () => {
+    try {
+      const saved = localStorage.getItem("matchmaking_saved_creators_v1")
+      let savedIds: string[] = saved ? JSON.parse(saved) : []
+      
+      if (isSaved) {
+        savedIds = savedIds.filter(id => id !== card.id)
+      } else {
+        savedIds.push(card.id)
+      }
+      
+      localStorage.setItem("matchmaking_saved_creators_v1", JSON.stringify(savedIds))
+      setIsSaved(!isSaved)
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
+
+  // Copy to clipboard
+  const handleCopy = async (text: string, field: string) => {
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        // Fallback: create temp input and select
+        const input = document.createElement("input")
+        input.value = text
+        document.body.appendChild(input)
+        input.select()
+        document.execCommand("copy")
+        document.body.removeChild(input)
+      }
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 2000)
+    } catch {
+      // Ignore copy errors
+    }
+  }
+
+  // Compute primary CTA label based on variant
+  const primaryCtaLabel = PRIMARY_CTA_VARIANT === "CARD"
+    ? (locale === "zh-TW" ? "查看合作名片" : "View Creator Card")
+    : (locale === "zh-TW" ? "查看合作資訊" : "View Collaboration Info")
 
   const copy = {
     close: locale === "zh-TW" ? "關閉" : "Close",
     verified: locale === "zh-TW" ? "已驗證" : "Verified",
-    viewFullProfile: locale === "zh-TW" ? "查看合作名片" : "View Creator Card",
+    viewFullProfile: primaryCtaLabel,
     about: locale === "zh-TW" ? "關於" : "About",
     comingSoon: locale === "zh-TW" ? "即將推出完整個人檔案功能" : "Full profile coming soon",
     backToList: locale === "zh-TW" ? "返回列表" : "Back to list",
+    contact: locale === "zh-TW" ? "聯絡" : "Contact",
+    save: locale === "zh-TW" ? "收藏" : "Save",
+    saved: locale === "zh-TW" ? "已收藏" : "Saved",
+    contactInfo: locale === "zh-TW" ? "聯絡資訊" : "Contact Info",
+    contactComingSoon: locale === "zh-TW" ? "聯絡資訊即將推出" : "Contact info coming soon",
+    instagram: locale === "zh-TW" ? "Instagram" : "Instagram",
+    email: locale === "zh-TW" ? "電子郵件" : "Email",
+    copy: locale === "zh-TW" ? "複製" : "Copy",
+    copied: locale === "zh-TW" ? "已複製" : "Copied",
   }
 
   const translatedCategory = translateCategory(card.category, locale)
@@ -250,14 +329,72 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
               <p className="text-sm text-white/60 leading-relaxed">{copy.comingSoon}</p>
             </div>
 
-            {/* CTA Button */}
+            {/* Weak CTAs: Contact + Save */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => setShowContactInfo(!showContactInfo)}
+                className="flex-1 h-11 border-white/10 text-white/80 hover:bg-white/5 hover:text-white"
+                aria-label={copy.contact}
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                {copy.contact}
+              </Button>
+              <Button
+                variant={isSaved ? "default" : "outline"}
+                size="default"
+                onClick={handleToggleSave}
+                className={`flex-1 h-11 ${
+                  isSaved
+                    ? "bg-pink-500/20 border-pink-500/30 text-pink-300 hover:bg-pink-500/30"
+                    : "border-white/10 text-white/80 hover:bg-white/5 hover:text-white"
+                }`}
+                aria-label={isSaved ? copy.saved : copy.save}
+              >
+                <Heart className={`w-4 h-4 mr-2 ${isSaved ? "fill-current" : ""}`} />
+                {isSaved ? copy.saved : copy.save}
+              </Button>
+            </div>
+
+            {/* Contact Info Section (expandable) */}
+            {showContactInfo && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <h4 className="text-sm font-semibold text-white">{copy.contactInfo}</h4>
+                <p className="text-sm text-white/60 leading-relaxed">{copy.contactComingSoon}</p>
+                {/* Future: Add actual contact fields here when API provides them */}
+              </div>
+            )}
+
+            {/* Primary CTA Button */}
             <Button
               variant="default"
               size="lg"
               className="w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-white font-semibold"
               onClick={() => {
-                // Navigate to full profile
-                window.location.href = `${card.profileUrl}`
+                // Store context in sessionStorage for seamless transition
+                try {
+                  const creatorSlug = card.profileUrl.split("/").pop() || card.id
+                  sessionStorage.setItem(
+                    "last_viewed_creator_v1",
+                    JSON.stringify({
+                      id: card.id,
+                      displayName: card.displayName,
+                      avatarUrl: card.avatarUrl,
+                      category: card.category,
+                      followerCount: card.followerCount,
+                      engagementRate: card.engagementRate,
+                      isVerified: card.isVerified,
+                      profileUrl: card.profileUrl,
+                      creatorSlug: creatorSlug,
+                      ts: Date.now(),
+                    })
+                  )
+                } catch {
+                  // Ignore sessionStorage errors
+                }
+                // Navigate to full profile with locale prefix
+                router.push(`/${locale}${card.profileUrl}`)
               }}
             >
               {copy.viewFullProfile}

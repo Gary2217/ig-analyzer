@@ -1,10 +1,7 @@
-"use client"
-
-import React from "react"
-import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ProfilePreviewClient } from "./ProfilePreviewClient"
 
 interface CreatorProfilePageProps {
   params: Promise<{
@@ -13,19 +10,12 @@ interface CreatorProfilePageProps {
   }>
 }
 
-export default function CreatorProfilePage({ params }: CreatorProfilePageProps) {
-  const pathname = usePathname()
-  const isZh = pathname?.startsWith("/zh-TW")
-  const locale = isZh ? "zh-TW" : "en"
+export default async function CreatorProfilePage({ params }: CreatorProfilePageProps) {
+  const resolvedParams = await params
+  const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
+  const creatorId = resolvedParams.id
 
-  // Unwrap params (Next.js 15+ async params pattern)
-  const [resolvedParams, setResolvedParams] = React.useState<{ locale: string; id: string } | null>(null)
-
-  React.useEffect(() => {
-    params.then(setResolvedParams)
-  }, [params])
-
-  const copy = isZh
+  const copy = locale === "zh-TW"
     ? {
         title: "創作者名片",
         comingSoon: "完整個人檔案即將推出",
@@ -41,14 +31,12 @@ export default function CreatorProfilePage({ params }: CreatorProfilePageProps) 
         idLabel: "ID",
       }
 
-  const creatorId = resolvedParams?.id || ""
-
   return (
     <div className="min-h-[calc(100dvh-80px)] w-full">
       <div className="w-full max-w-4xl mx-auto px-4 py-8 sm:py-12">
         {/* Back Button */}
         <div className="mb-6">
-          <Link href={`/${locale}/matchmaking`}>
+          <Link href={`/${resolvedParams.locale}/matchmaking`}>
             <Button
               variant="ghost"
               size="sm"
@@ -66,6 +54,13 @@ export default function CreatorProfilePage({ params }: CreatorProfilePageProps) 
             {copy.title}
           </h1>
         </div>
+
+        {/* Preview from sessionStorage (if available) */}
+        {creatorId && (
+          <div className="max-w-2xl mx-auto mb-6">
+            <ProfilePreviewClient creatorId={creatorId} locale={locale} />
+          </div>
+        )}
 
         {/* Coming Soon Notice */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 text-center max-w-2xl mx-auto space-y-6">
@@ -90,7 +85,7 @@ export default function CreatorProfilePage({ params }: CreatorProfilePageProps) 
 
         {/* Back to Matchmaking */}
         <div className="mt-8 text-center">
-          <Link href={`/${locale}/matchmaking`}>
+          <Link href={`/${resolvedParams.locale}/matchmaking`}>
             <Button
               variant="outline"
               size="lg"
