@@ -9,7 +9,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_username, niche, follower_count, engagement_rate, profile_image_url, is_verified, collaboration_methods, updated_at")
+      .select("id, ig_username, niche, profile_image_url, is_verified, updated_at")
       .eq("is_public", true)
       .order("updated_at", { ascending: false })
 

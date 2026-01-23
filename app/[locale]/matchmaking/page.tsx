@@ -16,7 +16,7 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
 
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_username, niche, follower_count, engagement_rate, profile_image_url, is_verified")
+      .select("id, ig_username, niche, profile_image_url, is_verified, updated_at")
       .eq("is_public", true)
       .order("updated_at", { ascending: false })
 
@@ -31,9 +31,9 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
       displayName: card.ig_username,
       avatarUrl: card.profile_image_url || "",
       category: card.niche || "Creator",
-      followerCount: card.follower_count || 0,
-      engagementRate: card.engagement_rate || null,
-      isVerified: card.is_verified || false,
+      followerCount: 0,
+      engagementRate: null,
+      isVerified: card.is_verified ?? false,
       profileUrl: `${localePrefix}/creator/${card.ig_username}`,
     }))
   } catch (error) {
