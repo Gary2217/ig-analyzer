@@ -76,7 +76,6 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         deliverables: "合作項目",
         collabTypes: "合作類型",
         pastBrands: "合作品牌",
-        portfolio: "作品集",
         collab: "合作洽談",
         collabDesc: "此創作者尚未公開聯絡方式。你可以先送出合作提案，之後再由系統通知對方。",
         collabHint: "已為你定位到合作區塊，請填寫表單送出提案。",
@@ -99,7 +98,6 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         deliverables: "Deliverables",
         collabTypes: "Collaboration Types",
         pastBrands: "Past Collaborations",
-        portfolio: "Portfolio",
         collab: "Collaboration",
         collabDesc: "This creator has not shared contact info yet. You can submit a collaboration proposal and we'll notify them.",
         collabHint: "You're in collaboration mode. Fill the form to send a proposal.",
@@ -301,39 +299,6 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                   {brand}
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Portfolio Section */}
-        {cardData.portfolio && Array.isArray(cardData.portfolio) && cardData.portfolio.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
-            <h3 className="text-lg font-semibold text-white mb-4">{copy.portfolio}</h3>
-            <div className="space-y-3">
-              {cardData.portfolio.map((item: any, index) => {
-                const brand = typeof item?.brand === "string" ? item.brand : ""
-                const collabType = typeof item?.collabType === "string" ? item.collabType : ""
-                
-                if (!brand && !collabType) return null
-                
-                return (
-                  <div
-                    key={index}
-                    className="p-4 rounded-lg bg-white/5 border border-white/10"
-                  >
-                    {brand && (
-                      <div className="font-medium text-white/90 mb-1 break-words">
-                        {brand}
-                      </div>
-                    )}
-                    {collabType && (
-                      <div className="text-sm text-white/60 break-words">
-                        {collabType}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
             </div>
           </div>
         )}
