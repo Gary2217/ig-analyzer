@@ -74,6 +74,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         showcaseSubtitle: "作品集／合作案例／熱門內容",
         portfolio: "作品集",
         portfolioSubtitle: "精選合作與代表作品",
+        portfolioEmpty: "尚未新增作品集",
         about: "關於我",
         themes: "內容主題",
         audienceProfiles: "受眾輪廓",
@@ -100,6 +101,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         showcaseSubtitle: "Portfolio · Case Studies · Top Content",
         portfolio: "Portfolio",
         portfolioSubtitle: "Selected collaborations & works",
+        portfolioEmpty: "No portfolio items yet",
         about: "About",
         themes: "Content Themes",
         audienceProfiles: "Audience",
@@ -157,6 +159,16 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
   const displayName = cardData.ig_username || cardData.id
   const category = cardData.niche || (locale === "zh-TW" ? "創作者" : "Creator")
   const isCollab = tab === "collab"
+
+  // Safe portfolio normalization
+  const portfolioItems = (() => {
+    if (!cardData.portfolio) return []
+    if (Array.isArray(cardData.portfolio)) return cardData.portfolio
+    if (typeof cardData.portfolio === "object" && Array.isArray((cardData.portfolio as any).items)) {
+      return (cardData.portfolio as any).items
+    }
+    return []
+  })()
 
   // Tag localization map
   const TAG_LABELS: Record<string, { "zh-TW": string; en: string }> = {
@@ -306,20 +318,20 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         )}
 
         {/* Portfolio Section */}
-        {cardData.portfolio && Array.isArray(cardData.portfolio) && cardData.portfolio.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
-            <div className="mb-3">
-              <h3 className="text-lg font-semibold text-white mb-1">{copy.portfolio}</h3>
-              <p className="text-xs text-white/50">{copy.portfolioSubtitle}</p>
-            </div>
-            
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
+          <div className="mb-3">
+            <h3 className="text-lg font-semibold text-white mb-1">{copy.portfolio}</h3>
+            <p className="text-xs text-white/50">{copy.portfolioSubtitle}</p>
+          </div>
+          
+          {portfolioItems.length > 0 ? (
             <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide">
               <div className="flex gap-3 pb-2">
-                {cardData.portfolio.map((item: any, index) => {
+                {portfolioItems.map((item: any, index: number) => {
                   const thumbnail = typeof item?.thumbnail === "string" ? item.thumbnail : ""
                   const title = typeof item?.title === "string" ? item.title : ""
                   const platform = typeof item?.platform === "string" ? item.platform : ""
-                  const url = typeof item?.url === "string" ? item.url : ""
+                  const url = typeof item?.url === "string" && item.url.trim() !== "" ? item.url : ""
                   
                   if (!thumbnail && !title && !platform) return null
                   
@@ -328,12 +340,10 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                       {/* Thumbnail */}
                       <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-white/10 mb-2">
                         {thumbnail ? (
-                          <Image
+                          <img
                             src={thumbnail}
                             alt={title || "Portfolio item"}
-                            fill
-                            className="object-cover"
-                            sizes="144px"
+                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
@@ -379,8 +389,19 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                 })}
               </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="py-6 text-center">
+              <div className="inline-block px-4 py-3 rounded-lg border border-dashed border-white/20 bg-white/5">
+                <p className="text-xs text-white/50">{copy.portfolioEmpty}</p>
+              </div>
+              {process.env.NODE_ENV !== "production" && (
+                <p className="text-[10px] text-white/30 mt-2">
+                  debug: portfolio type = {typeof cardData.portfolio}, isArray = {Array.isArray(cardData.portfolio).toString()}, length = {portfolioItems.length}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* About Section */}
         {cardData.audience && cardData.audience.trim() && (
