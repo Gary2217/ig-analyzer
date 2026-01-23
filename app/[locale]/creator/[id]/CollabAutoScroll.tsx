@@ -14,6 +14,14 @@ export function CollabAutoScroll({ tab }: CollabAutoScrollProps) {
         const collabSection = document.getElementById("collab")
         if (collabSection) {
           collabSection.scrollIntoView({ behavior: "smooth", block: "start" })
+          
+          // Auto-focus the first input after scroll completes
+          setTimeout(() => {
+            const input = document.querySelector("#collab input[data-collab-first='1']") as HTMLInputElement | null
+            if (input) {
+              input.focus()
+            }
+          }, 500) // Wait for smooth scroll to complete
         }
       })
     }

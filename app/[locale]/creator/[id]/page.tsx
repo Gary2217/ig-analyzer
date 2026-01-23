@@ -65,11 +65,11 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         idLabel: "代號",
         collab: "合作洽談",
         collabDesc: "此創作者尚未公開聯絡方式。你可以先送出合作提案，之後再由系統通知對方。",
+        collabHint: "已為你定位到合作區塊，請填寫表單送出提案。",
         brandName: "你的品牌/公司名稱",
         contactInfo: "你的聯絡方式（Email/LINE）",
         proposal: "合作需求簡述（檔期、預算、形式…）",
         submit: "送出合作提案",
-        collabNote: "已為你定位到合作區塊。",
       }
     : {
         title: "Creator Profile",
@@ -81,11 +81,11 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         idLabel: "ID",
         collab: "Collaboration",
         collabDesc: "This creator has not shared contact info yet. You can submit a collaboration proposal and we'll notify them.",
+        collabHint: "You're in collaboration mode. Fill the form to send a proposal.",
         brandName: "Your Brand/Company Name",
         contactInfo: "Your Contact (Email/LINE)",
         proposal: "Collaboration Details (timeline, budget, format...)",
         submit: "Submit Proposal",
-        collabNote: "Scrolled to collaboration section.",
       }
 
   // If card not found or not public, show error state
@@ -129,6 +129,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
 
   const displayName = cardData.ig_username || cardData.id
   const category = cardData.niche || (locale === "zh-TW" ? "創作者" : "Creator")
+  const isCollab = tab === "collab"
 
   return (
     <div className="min-h-[calc(100dvh-80px)] w-full">
@@ -191,8 +192,22 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         </div>
 
         {/* Collaboration Section */}
-        <div id="collab" className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+        <div 
+          id="collab" 
+          className={`rounded-2xl border p-6 max-w-2xl mx-auto mb-6 transition-all ${
+            isCollab 
+              ? "ring-2 ring-white/20 border-white/20 bg-white/[0.07]" 
+              : "border-white/10 bg-white/5"
+          }`}
+        >
           <h2 className="text-xl font-semibold text-white mb-3">{copy.collab}</h2>
+          
+          {isCollab && (
+            <p className="text-sm text-amber-200/90 mb-4 leading-relaxed px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-400/20">
+              {copy.collabHint}
+            </p>
+          )}
+          
           <p className="text-sm text-white/70 mb-6 leading-relaxed">
             {copy.collabDesc}
           </p>
@@ -201,6 +216,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
             <input
               type="text"
               placeholder={copy.brandName}
+              data-collab-first="1"
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
             />
             <input
@@ -220,10 +236,6 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
               {copy.submit}
             </button>
           </form>
-
-          {tab === "collab" && (
-            <p className="mt-4 text-xs text-white/60 text-center">{copy.collabNote}</p>
-          )}
         </div>
 
         {/* Auto-scroll handler */}
