@@ -16,7 +16,7 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
 
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_username, display_name, niche, follower_count, engagement_rate, profile_image_url, is_verified")
+      .select("id, ig_username, niche, follower_count, engagement_rate, profile_image_url, is_verified")
       .eq("is_public", true)
       .order("updated_at", { ascending: false })
 
@@ -28,7 +28,7 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
     // Map DB fields to CreatorCard type
     return (data || []).map((card) => ({
       id: card.id,
-      displayName: card.display_name || card.ig_username,
+      displayName: card.ig_username,
       avatarUrl: card.profile_image_url || "",
       category: card.niche || "Creator",
       followerCount: card.follower_count || 0,
