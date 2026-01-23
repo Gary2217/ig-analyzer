@@ -1,7 +1,8 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Card, CardContent } from "../../../components/ui/card"
+import { CreatorCardList } from "./components/CreatorCardList"
+import { mockCreatorCards } from "./mockData"
 
 export default function MatchmakingPage() {
   const pathname = usePathname()
@@ -43,39 +44,21 @@ export default function MatchmakingPage() {
           </p>
         </div>
 
-        {/* Placeholder Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card
-              key={i}
-              className="rounded-xl border border-white/10 bg-white/5 overflow-hidden"
-            >
-              <CardContent className="p-0">
-                {/* Skeleton Avatar */}
-                <div className="aspect-square bg-white/10 animate-pulse" />
-
-                {/* Skeleton Content */}
-                <div className="p-4 space-y-3">
-                  <div className="h-5 bg-white/10 rounded animate-pulse w-3/4" />
-                  <div className="h-4 bg-white/10 rounded animate-pulse w-full" />
-                  <div className="h-4 bg-white/10 rounded animate-pulse w-5/6" />
-
-                  <div className="pt-2 flex items-center gap-2">
-                    <div className="h-8 bg-white/10 rounded animate-pulse flex-1" />
-                    <div className="h-8 w-8 bg-white/10 rounded animate-pulse shrink-0" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Creator Cards */}
+        <CreatorCardList
+          cards={mockCreatorCards}
+          locale={isZh ? "zh-TW" : "en"}
+          onViewProfile={(id) => {
+            console.log("View creator profile:", id)
+          }}
+        />
 
         {/* Footer Note */}
-        <div className="mt-8 text-center">
+        <div className="mt-12 text-center">
           <p className="text-xs text-white/40">
             {isZh
-              ? "此功能正在開發中，敬請期待"
-              : "This feature is under development"}
+              ? "預覽模式：使用模擬數據展示"
+              : "Preview Mode: Showing mock data"}
           </p>
         </div>
       </div>
