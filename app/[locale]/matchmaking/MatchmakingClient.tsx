@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CreatorCardList } from "./components/CreatorCardList"
+import { CreatorCardBrowser } from "./components/CreatorCardBrowser"
 import { CreatorDetailsSheet } from "./components/CreatorDetailsSheet"
 import { AuthGateModal } from "./components/AuthGateModal"
 import { DEFAULT_CARD_CLICK_CONFIG, type CardClickBehavior } from "./cardClickConfig"
@@ -63,8 +63,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           </p>
         </div>
 
-        {/* Creator Cards */}
-        <CreatorCardList
+        {/* Creator Cards with Search/Filter */}
+        <CreatorCardBrowser
           cards={initialCards}
           locale={locale}
           behavior={cardBehavior}

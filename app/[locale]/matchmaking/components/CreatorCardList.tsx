@@ -26,7 +26,7 @@ export function CreatorCardList({ cards, locale, behavior, onCardClick }: Creato
         {Array.from({ length: fillers }).map((_, i) => (
           <div
             key={`skeleton-${i}`}
-            className="rounded-2xl border border-white/10 bg-white/5 p-4"
+            className="rounded-2xl border border-white/10 bg-white/5 p-4 animate-pulse"
           >
             <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white/10" />
             <div className="mt-4 space-y-2">

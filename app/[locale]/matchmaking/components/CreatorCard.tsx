@@ -1,13 +1,17 @@
 "use client"
 
 import Image from "next/image"
+import Link from "next/link"
+import { useMemo } from "react"
 import { CheckCircle2 } from "lucide-react"
 import { CreatorCard as CreatorCardType } from "../types"
+import { CardClickBehavior } from "../cardClickConfig"
 
 interface CreatorCardProps {
   card: CreatorCardType
   locale: "zh-TW" | "en"
-  onViewProfile: (id: string) => void
+  behavior: CardClickBehavior
+  onClick: (id: string) => void
 }
 
 const categoryTranslations: Record<string, { "zh-TW": string; en: string }> = {
@@ -37,9 +41,13 @@ function formatFollowerCount(count: number, locale: "zh-TW" | "en"): string {
   return locale === "zh-TW" ? `${count} 追蹤者` : `${count} followers`
 }
 
-export function CreatorCard({ card, locale, onViewProfile }: CreatorCardProps) {
+export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProps) {
+  const profileHref = useMemo(() => `/${locale}/creator/${card.id}`, [locale, card.id])
+  const collabHref = useMemo(() => `/${locale}/creator/${card.id}?tab=collab`, [locale, card.id])
+
   const copy = {
-    cta: locale === "zh-TW" ? "查看創作者名片" : "View Creator Profile",
+    viewCard: locale === "zh-TW" ? "查看名片" : "View Card",
+    collaborate: locale === "zh-TW" ? "開啟合作" : "Collaborate",
     verified: locale === "zh-TW" ? "已驗證" : "Verified",
   }
 
@@ -53,8 +61,8 @@ export function CreatorCard({ card, locale, onViewProfile }: CreatorCardProps) {
       ? "互動率未提供"
       : "Engagement N/A"
 
-  return (
-    <div className="group relative rounded-2xl border border-white/10 bg-white/5 overflow-hidden transition-all hover:border-white/20 hover:bg-white/[0.07] hover:shadow-lg hover:shadow-black/20">
+  const cardContent = (
+    <>
       {/* Avatar */}
       <div className="relative aspect-square w-full overflow-hidden bg-white/10">
         <Image
@@ -88,15 +96,31 @@ export function CreatorCard({ card, locale, onViewProfile }: CreatorCardProps) {
           <span className="truncate">{engagementText}</span>
         </div>
 
-        {/* CTA Button */}
-        <button
-          type="button"
-          onClick={() => onViewProfile(card.id)}
-          className="w-full mt-2 px-4 py-2.5 text-sm font-medium text-white bg-white/10 hover:bg-white/15 rounded-lg transition-colors border border-white/10 hover:border-white/20"
-        >
-          {copy.cta}
-        </button>
+        {/* Two-button layout */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <span className="inline-flex items-center justify-center rounded-xl bg-white/10 px-3 py-2 text-sm text-white/90">
+            {copy.viewCard}
+          </span>
+          <Link
+            href={collabHref}
+            className="inline-flex items-center justify-center rounded-xl bg-white/15 px-3 py-2 text-sm text-white/95 hover:bg-white/20 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {copy.collaborate}
+          </Link>
+        </div>
       </div>
-    </div>
+    </>
+  )
+
+  // Always wrap in Link for profile navigation
+  return (
+    <Link
+      href={profileHref}
+      className="group relative block rounded-2xl border border-white/10 bg-white/5 overflow-hidden transition-all hover:border-white/20 hover:bg-white/[0.07] hover:shadow-lg hover:shadow-black/20 focus:outline-none focus:ring-2 focus:ring-white/20"
+      onClick={() => onClick?.(card.id)}
+    >
+      {cardContent}
+    </Link>
   )
 }
