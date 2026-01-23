@@ -68,39 +68,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           cards={initialCards}
           locale={locale}
           behavior={cardBehavior}
-          onCardClick={(id) => {
-            const card = initialCards.find((c) => c.id === id)
-            if (!card) return
-
-            if (cardBehavior === "NAVIGATE_PROFILE") {
-              // Navigation handled by Link component
-              return
-            }
-
-            if (cardBehavior === "OPEN_DETAILS") {
-              setSelectedCard(card)
-              setIsSheetOpen(true)
-              return
-            }
-
-            if (cardBehavior === "GATED") {
-              if (isAuthenticated) {
-                // Already authenticated, proceed to post-gate target
-                const postGateTarget = DEFAULT_CARD_CLICK_CONFIG.postGateTarget || "NAVIGATE_PROFILE"
-                if (postGateTarget === "NAVIGATE_PROFILE") {
-                  navigateToProtected(`${card.profileUrl}`)
-                } else {
-                  setSelectedCard(card)
-                  setIsSheetOpen(true)
-                }
-              } else {
-                // Not authenticated, show gate modal
-                setSelectedCard(card)
-                setIsAuthModalOpen(true)
-              }
-              return
-            }
-          }}
+          onCardClick={undefined}
         />
 
         {/* Footer Note - only show if using real data */}

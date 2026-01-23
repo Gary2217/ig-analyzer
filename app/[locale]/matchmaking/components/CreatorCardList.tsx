@@ -8,7 +8,7 @@ interface CreatorCardListProps {
   cards: CreatorCardType[]
   locale: "zh-TW" | "en"
   behavior: CardClickBehavior
-  onCardClick: (id: string) => void
+  onCardClick?: (id: string) => void
 }
 
 export function CreatorCardList({ cards, locale, behavior, onCardClick }: CreatorCardListProps) {

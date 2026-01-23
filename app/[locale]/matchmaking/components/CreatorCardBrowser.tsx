@@ -9,7 +9,7 @@ interface CreatorCardBrowserProps {
   cards: CreatorCard[]
   locale: "zh-TW" | "en"
   behavior: CardClickBehavior
-  onCardClick: (id: string) => void
+  onCardClick?: (id: string) => void
 }
 
 export function CreatorCardBrowser({

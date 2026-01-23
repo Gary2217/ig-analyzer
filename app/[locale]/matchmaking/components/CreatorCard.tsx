@@ -3,6 +3,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { CheckCircle2 } from "lucide-react"
 import { CreatorCard as CreatorCardType } from "../types"
 import { CardClickBehavior } from "../cardClickConfig"
@@ -11,7 +12,7 @@ interface CreatorCardProps {
   card: CreatorCardType
   locale: "zh-TW" | "en"
   behavior: CardClickBehavior
-  onClick: (id: string) => void
+  onClick?: (id: string) => void
 }
 
 const categoryTranslations: Record<string, { "zh-TW": string; en: string }> = {
@@ -42,6 +43,7 @@ function formatFollowerCount(count: number, locale: "zh-TW" | "en"): string {
 }
 
 export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProps) {
+  const router = useRouter()
   const profileHref = useMemo(() => `/${locale}/creator/${card.id}`, [locale, card.id])
   const collabHref = useMemo(() => `/${locale}/creator/${card.id}?tab=collab`, [locale, card.id])
 
@@ -95,32 +97,43 @@ export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProp
           <span className="text-white/30">•</span>
           <span className="truncate">{engagementText}</span>
         </div>
-
-        {/* Two-button layout */}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <span className="inline-flex items-center justify-center rounded-xl bg-white/10 px-3 py-2 text-sm text-white/90">
-            {copy.viewCard}
-          </span>
-          <Link
-            href={collabHref}
-            className="inline-flex items-center justify-center rounded-xl bg-white/15 px-3 py-2 text-sm text-white/95 hover:bg-white/20 transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {copy.collaborate}
-          </Link>
-        </div>
       </div>
     </>
   )
 
-  // Always wrap in Link for profile navigation
+  const handleCardClick = () => {
+    router.push(profileHref)
+  }
+
   return (
-    <Link
-      href={profileHref}
-      className="group relative block rounded-2xl border border-white/10 bg-white/5 overflow-hidden transition-all hover:border-white/20 hover:bg-white/[0.07] hover:shadow-lg hover:shadow-black/20 focus:outline-none focus:ring-2 focus:ring-white/20"
-      onClick={() => onClick?.(card.id)}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") handleCardClick()
+      }}
+      className="group relative rounded-2xl border border-white/10 bg-white/5 overflow-hidden transition-all hover:border-white/20 hover:bg-white/[0.07] hover:shadow-lg hover:shadow-black/20 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
     >
       {cardContent}
-    </Link>
+
+      {/* Two-button layout moved outside cardContent */}
+      <div className="mt-3 grid grid-cols-2 gap-2 px-4 pb-4">
+        <Link
+          href={profileHref}
+          className="inline-flex items-center justify-center rounded-xl bg-white/10 px-3 py-2 text-sm text-white/90 hover:bg-white/15 transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {copy.viewCard}
+        </Link>
+        <Link
+          href={collabHref}
+          className="inline-flex items-center justify-center rounded-xl bg-white/15 px-3 py-2 text-sm text-white/95 hover:bg-white/20 transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {copy.collaborate}
+        </Link>
+      </div>
+    </div>
   )
 }
