@@ -259,15 +259,15 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
 
         {/* Showcase Section */}
         {(cardData.theme_types?.length || cardData.audience_profiles?.length) && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
-            <div className="mb-6">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
+            <div className="mb-4">
               <h2 className="text-xl font-semibold text-white mb-1">{copy.showcase}</h2>
               <p className="text-xs text-white/50">{copy.showcaseSubtitle}</p>
             </div>
 
             {/* Content Themes in Showcase */}
             {cardData.theme_types && cardData.theme_types.length > 0 && (
-              <div className="mb-6 last:mb-0">
+              <div className="mb-4 last:mb-0">
                 <h3 className="text-sm font-medium text-white/70 mb-3">{copy.themes}</h3>
                 <div className="flex flex-wrap gap-2">
                   {cardData.theme_types.map((theme, index) => (
@@ -303,7 +303,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
 
         {/* About Section */}
         {cardData.audience && cardData.audience.trim() && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
             <h3 className="text-lg font-semibold text-white mb-3">{copy.about}</h3>
             <p className="text-sm text-white/80 leading-relaxed break-words whitespace-pre-wrap">
               {cardData.audience}
@@ -314,23 +314,25 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
 
         {/* Deliverables Section */}
         {cardData.deliverables && cardData.deliverables.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
-            <h3 className="text-lg font-semibold text-white mb-4">{copy.deliverables}</h3>
-            <ul className="space-y-2">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
+            <h3 className="text-lg font-semibold text-white mb-3">{copy.deliverables}</h3>
+            <div className="flex flex-wrap gap-2">
               {cardData.deliverables.map((item, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm text-white/80">
-                  <span className="text-white/40 mt-1">•</span>
-                  <span className="break-words flex-1">{getLocalizedTag(item)}</span>
-                </li>
+                <div
+                  key={index}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
+                >
+                  {getLocalizedTag(item)}
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
 
         {/* Collaboration Types Section */}
         {cardData.collaboration_niches && cardData.collaboration_niches.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
-            <h3 className="text-lg font-semibold text-white mb-4">{copy.collabTypes}</h3>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
+            <h3 className="text-lg font-semibold text-white mb-3">{copy.collabTypes}</h3>
             <div className="flex flex-wrap gap-2">
               {cardData.collaboration_niches.map((type, index) => (
                 <div
@@ -346,8 +348,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
 
         {/* Past Collaborations Section */}
         {cardData.past_collaborations && cardData.past_collaborations.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
-            <h3 className="text-lg font-semibold text-white mb-4">{copy.pastBrands}</h3>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
+            <h3 className="text-lg font-semibold text-white mb-3">{copy.pastBrands}</h3>
             <div className="flex flex-wrap gap-2">
               {cardData.past_collaborations.map((brand, index) => (
                 <div
@@ -364,7 +366,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         {/* Collaboration Section */}
         <div 
           id="collab" 
-          className={`rounded-2xl border p-6 max-w-2xl mx-auto mb-6 transition-all ${
+          className={`rounded-2xl border p-4 sm:p-5 max-w-2xl mx-auto mb-4 transition-all ${
             isCollab 
               ? "ring-2 ring-white/20 border-white/20 bg-white/[0.07]" 
               : "border-white/10 bg-white/5"
