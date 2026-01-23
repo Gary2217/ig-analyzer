@@ -1,68 +1,52 @@
-"use client"
+import { MatchmakingClient } from "./MatchmakingClient"
+import { createPublicClient } from "@/lib/supabase/server"
+import type { CreatorCard } from "./types"
 
-import { usePathname } from "next/navigation"
-import { CreatorCardList } from "./components/CreatorCardList"
-import { mockCreatorCards } from "./mockData"
+interface MatchmakingPageProps {
+  params: Promise<{
+    locale: string
+  }>
+}
 
-export default function MatchmakingPage() {
-  const pathname = usePathname()
-  const isZh = pathname?.startsWith("/zh-TW")
-  const locale = isZh ? "zh-TW" : "en"
+async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCard[]> {
+  try {
+    const supabase = createPublicClient()
 
-  const copy = isZh
-    ? {
-        heading: "瀏覽創作者名片，開啟合作機會",
-        comingSoon: "即將推出",
-        description:
-          "我們正在建立一個公開的創作者名片展示平台。品牌與創作者將能在此探索合作機會。",
-        placeholderLabel: "創作者名片",
-      }
-    : {
-        heading: "Browse creator cards and collaborate",
-        comingSoon: "Coming Soon",
-        description:
-          "We're building a public creator card showcase. Brands and creators will be able to discover collaboration opportunities here.",
-        placeholderLabel: "Creator Card",
-      }
+    const { data, error } = await supabase
+      .from("creator_cards")
+      .select("id, ig_username, display_name, niche, follower_count, engagement_rate, profile_image_url, is_verified")
+      .eq("is_public", true)
+      .order("updated_at", { ascending: false })
 
-  return (
-    <div className="min-h-[calc(100dvh-220px)] w-full">
-      <div className="w-full max-w-6xl mx-auto px-4 py-8 sm:py-12">
-        {/* Header */}
-        <div className="text-center mb-8 sm:mb-12">
-          <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight max-w-3xl mx-auto text-balance">
-            {copy.heading}
-          </h1>
-        </div>
+    if (error) {
+      console.error("Error fetching public creator cards:", error)
+      return []
+    }
 
-        {/* Coming Soon Notice */}
-        <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-6 text-center max-w-2xl mx-auto">
-          <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-200 border border-amber-400/20 mb-3">
-            {copy.comingSoon}
-          </div>
-          <p className="text-sm text-white/60 leading-relaxed">
-            {copy.description}
-          </p>
-        </div>
+    // Map DB fields to CreatorCard type
+    return (data || []).map((card) => ({
+      id: card.id,
+      displayName: card.display_name || card.ig_username,
+      avatarUrl: card.profile_image_url || "",
+      category: card.niche || "Creator",
+      followerCount: card.follower_count || 0,
+      engagementRate: card.engagement_rate || null,
+      isVerified: card.is_verified || false,
+      profileUrl: `${localePrefix}/creator/${card.ig_username}`,
+    }))
+  } catch (error) {
+    console.error("Error fetching creator cards:", error)
+    return []
+  }
+}
 
-        {/* Creator Cards */}
-        <CreatorCardList
-          cards={mockCreatorCards}
-          locale={isZh ? "zh-TW" : "en"}
-          onViewProfile={(id) => {
-            console.log("View creator profile:", id)
-          }}
-        />
+export default async function MatchmakingPage({ params }: MatchmakingPageProps) {
+  const resolvedParams = await params
+  const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
+  const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
 
-        {/* Footer Note */}
-        <div className="mt-12 text-center">
-          <p className="text-xs text-white/40">
-            {isZh
-              ? "預覽模式：使用模擬數據展示"
-              : "Preview Mode: Showing mock data"}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
+  // Fetch real creator cards ordered by updated_at desc
+  const creatorCards = await fetchPublicCreatorCards(localePrefix)
+
+  return <MatchmakingClient locale={locale} initialCards={creatorCards} />
 }
