@@ -72,6 +72,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         idLabel: "代號",
         showcase: "個人展示",
         showcaseSubtitle: "作品集／合作案例／熱門內容",
+        portfolio: "作品集",
+        portfolioSubtitle: "精選合作與代表作品",
         about: "關於我",
         themes: "內容主題",
         audienceProfiles: "受眾輪廓",
@@ -96,6 +98,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         idLabel: "ID",
         showcase: "Showcase",
         showcaseSubtitle: "Portfolio · Case Studies · Top Content",
+        portfolio: "Portfolio",
+        portfolioSubtitle: "Selected collaborations & works",
         about: "About",
         themes: "Content Themes",
         audienceProfiles: "Audience",
@@ -298,6 +302,83 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Portfolio Section */}
+        {cardData.portfolio && Array.isArray(cardData.portfolio) && cardData.portfolio.length > 0 && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
+            <div className="mb-3">
+              <h3 className="text-lg font-semibold text-white mb-1">{copy.portfolio}</h3>
+              <p className="text-xs text-white/50">{copy.portfolioSubtitle}</p>
+            </div>
+            
+            <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide">
+              <div className="flex gap-3 pb-2">
+                {cardData.portfolio.map((item: any, index) => {
+                  const thumbnail = typeof item?.thumbnail === "string" ? item.thumbnail : ""
+                  const title = typeof item?.title === "string" ? item.title : ""
+                  const platform = typeof item?.platform === "string" ? item.platform : ""
+                  const url = typeof item?.url === "string" ? item.url : ""
+                  
+                  if (!thumbnail && !title && !platform) return null
+                  
+                  const CardContent = (
+                    <>
+                      {/* Thumbnail */}
+                      <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-white/10 mb-2">
+                        {thumbnail ? (
+                          <Image
+                            src={thumbnail}
+                            alt={title || "Portfolio item"}
+                            fill
+                            className="object-cover"
+                            sizes="144px"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
+                            {platform || "Work"}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Title */}
+                      {title && (
+                        <div className="text-xs text-white/90 line-clamp-2 leading-tight mb-1">
+                          {title}
+                        </div>
+                      )}
+                      
+                      {/* Platform Badge */}
+                      {platform && (
+                        <div className="text-[10px] text-white/50 uppercase tracking-wide">
+                          {platform}
+                        </div>
+                      )}
+                    </>
+                  )
+                  
+                  return url ? (
+                    <a
+                      key={index}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 w-36 rounded-lg bg-white/5 border border-white/10 p-3 hover:bg-white/10 hover:border-white/20 transition-colors"
+                    >
+                      {CardContent}
+                    </a>
+                  ) : (
+                    <div
+                      key={index}
+                      className="flex-shrink-0 w-36 rounded-lg bg-white/5 border border-white/10 p-3"
+                    >
+                      {CardContent}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         )}
 
