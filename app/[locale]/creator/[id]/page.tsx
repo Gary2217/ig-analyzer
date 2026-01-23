@@ -311,50 +311,6 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
           </div>
         </div>
 
-        {/* Showcase Section */}
-        {(cardData.theme_types?.length || cardData.audience_profiles?.length) && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold text-white mb-1">{copy.showcase}</h2>
-              <p className="text-xs text-white/50">{copy.showcaseSubtitle}</p>
-            </div>
-
-            {/* Content Themes in Showcase */}
-            {cardData.theme_types && cardData.theme_types.length > 0 && (
-              <div className="mb-4 last:mb-0">
-                <h3 className="text-sm font-medium text-white/70 mb-3">{copy.themes}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {cardData.theme_types.map((theme, index) => (
-                    <div
-                      key={index}
-                      className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
-                    >
-                      {getLocalizedTag(theme)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Audience Profiles in Showcase */}
-            {cardData.audience_profiles && cardData.audience_profiles.length > 0 && (
-              <div className="mb-0">
-                <h3 className="text-sm font-medium text-white/70 mb-3">{copy.audienceProfiles}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {cardData.audience_profiles.map((profile, index) => (
-                    <div
-                      key={index}
-                      className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/10 text-sm text-white/90"
-                    >
-                      {getLocalizedTag(profile)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Portfolio Section */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 max-w-2xl mx-auto mb-4">
           <div className="mb-3">
@@ -363,8 +319,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
           </div>
           
           {portfolioItems.length > 0 ? (
-            <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide">
-              <div className="flex gap-4 pb-2">
+            <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide snap-x snap-mandatory">
+              <div className="flex gap-5 pb-2">
                 {portfolioItems.map((item: any, index: number) => {
                   const normalized = normalizePortfolioItem(item)
                   if (!normalized) return null
@@ -374,7 +330,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                   const CardContent = (
                     <>
                       {/* Thumbnail */}
-                      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-white/10 mb-3">
+                      <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-white/10 border border-white/20 mb-3">
                         {thumbnailUrl ? (
                           <img
                             src={thumbnailUrl}
@@ -390,14 +346,14 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                       
                       {/* Title */}
                       {displayTitle && (
-                        <div className="text-sm text-white/90 line-clamp-2 leading-tight mb-1">
+                        <div className="text-base sm:text-lg text-white/90 line-clamp-2 leading-tight mb-1">
                           {displayTitle}
                         </div>
                       )}
                       
                       {/* Subtitle / Platform Badge */}
                       {displaySubtitle && (
-                        <div className="text-[10px] text-white/50 uppercase tracking-wide">
+                        <div className="text-xs text-white/60 uppercase tracking-wide">
                           {getLocalizedTag(displaySubtitle)}
                         </div>
                       )}
@@ -410,14 +366,14 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                       href={clickUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-shrink-0 w-56 sm:w-64 rounded-xl bg-white/5 border border-white/10 p-4 hover:bg-white/10 hover:border-white/20 transition-colors"
+                      className="flex-shrink-0 w-72 sm:w-80 rounded-xl bg-white/5 border border-white/10 p-5 hover:bg-white/10 hover:border-white/20 transition-colors snap-start"
                     >
                       {CardContent}
                     </a>
                   ) : (
                     <div
                       key={index}
-                      className="flex-shrink-0 w-56 sm:w-64 rounded-xl bg-white/5 border border-white/10 p-4"
+                      className="flex-shrink-0 w-72 sm:w-80 rounded-xl bg-white/5 border border-white/10 p-5 snap-start"
                     >
                       {CardContent}
                     </div>
