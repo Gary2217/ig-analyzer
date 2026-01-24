@@ -239,6 +239,7 @@ function SortableFeaturedTile(props: {
   onCaptionChange: (id: string, caption: string) => void
   onTextChange: (id: string, text: string, title?: string) => void
   onIgUrlChange: (id: string, url: string) => void
+  onIgThumbnailClick?: (url: string) => void
   setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
   markDirty: () => void
   suppressClick: boolean
@@ -381,15 +382,26 @@ function SortableFeaturedTile(props: {
           </>
         )}
 
-        {/* Instagram embed preview - compact after added, larger for draft */}
+        {/* Instagram compact thumbnail preview - clickable */}
         {item.url && isValidIgUrl ? (
-          <div className={`w-full max-w-full overflow-hidden rounded-xl overflow-y-auto ${
-            isAdded 
-              ? "min-h-[420px] md:min-h-[460px] max-h-[520px] md:max-h-[560px]" 
-              : "min-h-[520px] md:min-h-[600px] max-h-[720px]"
-          }`}>
-            <IgEmbedPreview url={item.url} />
-          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (props.onIgThumbnailClick) {
+                props.onIgThumbnailClick(item.url)
+              }
+            }}
+            className="relative w-full h-[280px] sm:h-[320px] md:h-[340px] overflow-hidden rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-colors"
+          >
+            <div className="absolute inset-0 origin-top-left scale-[0.65] sm:scale-[0.7] pointer-events-none">
+              <IgEmbedPreview url={item.url} />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/50 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
+              <span>👆 {t("creatorCard.featured.clickToView")}</span>
+            </div>
+          </button>
         ) : null}
         
         {/* Add Post button - only show if not added and has valid URL */}
@@ -809,6 +821,7 @@ export default function CreatorCardPage() {
   const [editingFeaturedBrand, setEditingFeaturedBrand] = useState("")
   const [editingFeaturedCollabTypeSelect, setEditingFeaturedCollabTypeSelect] = useState("")
   const [editingFeaturedCollabTypeCustom, setEditingFeaturedCollabTypeCustom] = useState("")
+  const [igModalUrl, setIgModalUrl] = useState<string | null>(null)
 
   const [__overlayMounted, set__overlayMounted] = useState(false)
   useEffect(() => {
@@ -2549,6 +2562,7 @@ export default function CreatorCardPage() {
                                   setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, url } : x)))
                                   markDirty()
                                 }}
+                                onIgThumbnailClick={(url) => setIgModalUrl(url)}
                                 setFeaturedItems={setFeaturedItems}
                                 markDirty={markDirty}
                               />
@@ -3484,6 +3498,44 @@ export default function CreatorCardPage() {
                   >
                     {t("creatorCardEditor.actions.save")}
                   </Button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {/* IG Post Full-Screen Modal */}
+      {__overlayMounted && igModalUrl
+        ? createPortal(
+            <div
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6"
+              onClick={() => setIgModalUrl(null)}
+            >
+              <div
+                className="w-full max-w-[640px] h-[95vh] sm:h-auto sm:max-h-[92vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10 shrink-0">
+                  <h3 className="text-sm font-semibold text-white/90">
+                    {t("creatorCard.featured.igPreviewTitle")}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIgModalUrl(null)}
+                    className="shrink-0 rounded-full bg-white/10 p-2 hover:bg-white/20 transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4 text-white/90" />
+                  </button>
+                </div>
+
+                {/* Body with full embed */}
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+                  <div className="w-full max-w-full">
+                    <IgEmbedPreview url={igModalUrl} />
+                  </div>
                 </div>
               </div>
             </div>,

@@ -662,11 +662,12 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                       key={item.id}
                       type="button"
                       onClick={() => setOpenIgUrl(item.url)}
-                      className="relative shrink-0 w-[170px] md:w-[190px] h-[240px] md:h-[260px] overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-colors"
+                      className="relative shrink-0 w-[160px] sm:w-[170px] md:w-[180px] h-[220px] sm:h-[240px] md:h-[260px] overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-colors"
                     >
-                      <div className="absolute inset-0 origin-top-left scale-[0.55] md:scale-[0.6] pointer-events-none">
+                      <div className="absolute inset-0 origin-top-left scale-[0.5] sm:scale-[0.55] md:scale-[0.58] pointer-events-none">
                         <IgEmbedPreview url={item.url} />
                       </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
                     </button>
                   ))
               )}
