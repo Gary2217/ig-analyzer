@@ -2644,8 +2644,18 @@
     },
     "featured": {
       "actions": {
-        "add": "Add featured"
-      }
+        "add": "Add featured",
+        "addMedia": "Add Media",
+        "addText": "Add Text",
+        "addIg": "Add IG Post"
+      },
+      "caption": "Caption",
+      "textItem": "Text Content",
+      "textTitle": "Title (optional)",
+      "textContent": "Text",
+      "igItem": "IG Post",
+      "igUrl": "IG Post URL",
+      "openOnInstagram": "Open on Instagram"
     },
     "options": {
       "niche": {

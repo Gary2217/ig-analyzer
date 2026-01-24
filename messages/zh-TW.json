@@ -2623,8 +2623,18 @@
     },
     "featured": {
       "actions": {
-        "add": "新增作品"
-      }
+        "add": "新增作品",
+        "addMedia": "新增作品",
+        "addText": "新增文字",
+        "addIg": "新增 IG 貼文"
+      },
+      "caption": "文案",
+      "textItem": "文字內容",
+      "textTitle": "標題（選填）",
+      "textContent": "文字內容",
+      "igItem": "IG 貼文",
+      "igUrl": "IG 貼文網址",
+      "openOnInstagram": "在 Instagram 開啟"
     },
     "options": {
       "niche": {

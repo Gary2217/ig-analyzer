@@ -139,6 +139,68 @@ type FeaturedItem = {
   brand: string
   collabType: string
   uploadStatus?: "idle" | "uploading" | "failed"
+  caption?: string
+  type?: "media" | "text" | "ig"
+  title?: string
+  text?: string
+}
+
+function IgEmbedPreview({ url }: { url: string }) {
+  const embedRef = useRef<HTMLDivElement>(null)
+  const [embedLoaded, setEmbedLoaded] = useState(false)
+
+  useEffect(() => {
+    // Load Instagram embed script once
+    if (!window.instgrm) {
+      const script = document.createElement("script")
+      script.src = "https://www.instagram.com/embed.js"
+      script.async = true
+      script.onload = () => {
+        setEmbedLoaded(true)
+        if (window.instgrm?.Embeds) {
+          window.instgrm.Embeds.process()
+        }
+      }
+      document.body.appendChild(script)
+    } else {
+      setEmbedLoaded(true)
+      if (window.instgrm?.Embeds) {
+        window.instgrm.Embeds.process()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (embedLoaded && window.instgrm?.Embeds) {
+      window.instgrm.Embeds.process()
+    }
+  }, [url, embedLoaded])
+
+  return (
+    <div ref={embedRef} className="w-full max-w-full overflow-hidden rounded-lg">
+      <blockquote
+        className="instagram-media"
+        data-instgrm-permalink={url}
+        data-instgrm-version="14"
+        style={{ maxWidth: "100%", minWidth: "326px" }}
+      >
+        <div className="p-4 rounded-lg bg-white/5 border border-white/10 text-center">
+          <p className="text-xs text-white/60">Loading Instagram post...</p>
+        </div>
+      </blockquote>
+    </div>
+  )
+}
+
+// Declare Instagram embed global
+declare global {
+  interface Window {
+    instgrm?: {
+      Embeds?: {
+        process: () => void
+      }
+    }
+  }
 }
 
 function SortableFeaturedTile(props: {
@@ -147,11 +209,16 @@ function SortableFeaturedTile(props: {
   onReplace: (id: string) => void
   onRemove: (id: string) => void
   onEdit: (id: string) => void
+  onCaptionChange: (id: string, caption: string) => void
+  onTextChange: (id: string, text: string, title?: string) => void
+  onIgUrlChange: (id: string, url: string) => void
   suppressClick: boolean
   activeLocale: string
 }) {
-  const { item, t, onReplace, onRemove, onEdit, suppressClick, activeLocale } = props
+  const { item, t, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
+
+  const itemType = item.type || "media"
 
   const featuredChipText = (() => {
     const rawType = typeof item.collabType === "string" ? item.collabType : ""
@@ -164,64 +231,232 @@ function SortableFeaturedTile(props: {
     return getCollabTypeDisplayLabel(rawType, t)
   })()
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={
-        "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors " +
-        (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
-        (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
-        (isDragging ? " cursor-grabbing" : " cursor-grab")
-      }
-      {...attributes}
-      {...listeners}
-    >
-      <button
-        type="button"
+  // Text item rendering
+  if (itemType === "text") {
+    return (
+      <div
+        ref={setNodeRef}
+        style={{ transform: CSS.Transform.toString(transform), transition }}
         className={
-          "absolute inset-0 z-0 " +
-          (!item.url
-            ? "flex flex-col items-center justify-center gap-1 text-slate-600"
-            : "")
+          "group relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 " +
+          (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
+          (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
+          (isDragging ? " cursor-grabbing" : " cursor-grab")
         }
-        onClick={() => {
-          if (suppressClick) return
-          onReplace(item.id)
-        }}
-        aria-label={item.url ? "更換" : "請選擇"}
+        {...attributes}
+        {...listeners}
       >
-        {!item.url ? (
-          <span className="pointer-events-none flex flex-col items-center justify-center">
-            <span className="text-sm font-semibold">請選擇</span>
-            <span className="text-[11px] leading-4 text-slate-500">Choose</span>
-          </span>
-        ) : null}
-      </button>
-
-      {item.url ? (
-        <Image src={item.url} alt="" fill sizes="100vw" unoptimized className="object-cover" />
-      ) : (
-        <div className="h-full w-full flex items-center justify-center bg-white/5">
-          <Plus className="h-7 w-7 text-white/25" />
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-semibold text-white/60">{t("creatorCard.featured.textItem")}</span>
         </div>
-      )}
 
-      {item.url ? (
-        <div
-          className={
-            "pointer-events-none absolute inset-0 bg-black/35 transition-opacity " +
-            (isDragging ? "opacity-0" : "opacity-35 group-hover:opacity-0")
-          }
+        <input
+          type="text"
+          value={item.title || ""}
+          onChange={(e) => onTextChange(item.id, item.text || "", e.target.value)}
+          placeholder={t("creatorCard.featured.textTitle")}
+          className="w-full px-3 py-2 text-sm font-semibold bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
+          onPointerDown={(e) => e.stopPropagation()}
         />
-      ) : null}
 
-      {item.url ? (
+        <textarea
+          value={item.text || ""}
+          onChange={(e) => onTextChange(item.id, e.target.value, item.title)}
+          placeholder={t("creatorCard.featured.textContent")}
+          className="w-full min-h-[120px] px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none resize-y"
+          rows={5}
+          onPointerDown={(e) => e.stopPropagation()}
+        />
+
         <button
           type="button"
-          className="absolute left-1 top-1 z-10 rounded-md bg-white/90 px-2 py-1 shadow-sm hover:bg-white"
-          aria-label={featuredChipText}
-          title={featuredChipTitle}
+          className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+          onPointerDownCapture={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onRemove(item.id)
+          }}
+          aria-label="移除"
+        >
+          <X className="h-3.5 w-3.5 text-slate-700" />
+        </button>
+      </div>
+    )
+  }
+
+  // IG item rendering
+  if (itemType === "ig") {
+    const isValidIgUrl = item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/"))
+    
+    return (
+      <div className="space-y-3">
+        <div
+          ref={setNodeRef}
+          style={{ transform: CSS.Transform.toString(transform), transition }}
+          className={
+            "group relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 " +
+            (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
+            (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
+            (isDragging ? " cursor-grabbing" : " cursor-grab")
+          }
+          {...attributes}
+          {...listeners}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-semibold text-white/60">{t("creatorCard.featured.igItem")}</span>
+          </div>
+
+          <input
+            type="url"
+            value={item.url || ""}
+            onChange={(e) => onIgUrlChange(item.id, e.target.value)}
+            placeholder={t("creatorCard.featured.igUrl")}
+            className="w-full px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+
+          <textarea
+            value={item.caption || ""}
+            onChange={(e) => onCaptionChange(item.id, e.target.value)}
+            placeholder={t("creatorCard.featured.caption")}
+            className="w-full min-h-[60px] px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none resize-y"
+            rows={2}
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+
+          <button
+            type="button"
+            className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+            onPointerDownCapture={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onRemove(item.id)
+            }}
+            aria-label="移除"
+          >
+            <X className="h-3.5 w-3.5 text-slate-700" />
+          </button>
+        </div>
+
+        {/* Instagram embed preview */}
+        {item.url && isValidIgUrl && (
+          <IgEmbedPreview url={item.url} />
+        )}
+        
+        {/* Always show Open on Instagram link */}
+        {item.url && (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors"
+          >
+            <span>{t("creatorCard.featured.openOnInstagram")}</span>
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  // Media item rendering (default)
+  return (
+    <div className="space-y-2">
+      <div
+        ref={setNodeRef}
+        style={{ transform: CSS.Transform.toString(transform), transition }}
+        className={
+          "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors " +
+          (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
+          (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
+          (isDragging ? " cursor-grabbing" : " cursor-grab")
+        }
+        {...attributes}
+        {...listeners}
+      >
+        <button
+          type="button"
+          className={
+            "absolute inset-0 z-0 " +
+            (!item.url
+              ? "flex flex-col items-center justify-center gap-1 text-slate-600"
+              : "")
+          }
+          onClick={() => {
+            if (suppressClick) return
+            onReplace(item.id)
+          }}
+          aria-label={item.url ? "更換" : "請選擇"}
+        >
+          {!item.url ? (
+            <span className="pointer-events-none flex flex-col items-center justify-center">
+              <span className="text-sm font-semibold">請選擇</span>
+              <span className="text-[11px] leading-4 text-slate-500">Choose</span>
+            </span>
+          ) : null}
+        </button>
+
+        {item.url ? (
+          <Image src={item.url} alt="" fill sizes="100vw" unoptimized className="object-cover" />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center bg-white/5">
+            <Plus className="h-7 w-7 text-white/25" />
+          </div>
+        )}
+
+        {item.url ? (
+          <div
+            className={
+              "pointer-events-none absolute inset-0 bg-black/35 transition-opacity " +
+              (isDragging ? "opacity-0" : "opacity-35 group-hover:opacity-0")
+            }
+          />
+        ) : null}
+
+        {item.url ? (
+          <button
+            type="button"
+            className="absolute left-1 top-1 z-10 rounded-md bg-white/90 px-2 py-1 shadow-sm hover:bg-white"
+            aria-label={featuredChipText}
+            title={featuredChipTitle}
+            onPointerDownCapture={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onEdit(item.id)
+            }}
+          >
+            <span className="block min-w-0 max-w-full truncate text-[11px] font-semibold text-slate-700">
+              {featuredChipText}
+            </span>
+          </button>
+        ) : null}
+
+        {item.uploadStatus === "failed" ? (
+          <div className="absolute bottom-1 left-1 right-1 z-10 rounded-md bg-red-500/90 px-2 py-1 text-center shadow-sm">
+            <span className="block text-[11px] font-semibold text-white">
+              {t("creatorCard.form.featured.uploadFailed")}
+            </span>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          className="absolute right-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
           onPointerDownCapture={(e) => {
             e.preventDefault()
             e.stopPropagation()
@@ -233,43 +468,24 @@ function SortableFeaturedTile(props: {
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            onEdit(item.id)
+            onRemove(item.id)
           }}
+          aria-label="移除"
         >
-          <span className="block min-w-0 max-w-full truncate text-[11px] font-semibold text-slate-700">
-            {featuredChipText}
-          </span>
+          <X className="h-3.5 w-3.5 text-slate-700" />
         </button>
-      ) : null}
+      </div>
 
-      {item.uploadStatus === "failed" ? (
-        <div className="absolute bottom-1 left-1 right-1 z-10 rounded-md bg-red-500/90 px-2 py-1 text-center shadow-sm">
-          <span className="block text-[11px] font-semibold text-white">
-            {t("creatorCard.form.featured.uploadFailed")}
-          </span>
-        </div>
-      ) : null}
-
-      <button
-        type="button"
-        className="absolute right-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
-        onPointerDownCapture={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onPointerDown={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          onRemove(item.id)
-        }}
-        aria-label="移除"
-      >
-        <X className="h-3.5 w-3.5 text-slate-700" />
-      </button>
+      {/* Caption textarea for media items */}
+      {itemType === "media" && (
+        <textarea
+          value={item.caption || ""}
+          onChange={(e) => onCaptionChange(item.id, e.target.value)}
+          placeholder={t("creatorCard.featured.caption")}
+          className="w-full min-h-[60px] px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none resize-y"
+          rows={2}
+        />
+      )}
     </div>
   )
 }
@@ -952,8 +1168,56 @@ export default function CreatorCardPage() {
         setContactOtherInput("")
 
         const nextFeaturedItems = (() => {
+          // Check if card has featuredItems stored in flexible JSON field
+          const storedFeaturedItems = Array.isArray(card?.featuredItems) ? (card.featuredItems as unknown[]) : null
+          
+          if (storedFeaturedItems) {
+            // Use stored featuredItems (full data with text/ig items)
+            const items: FeaturedItem[] = []
+            for (const row of storedFeaturedItems) {
+              if (!row || typeof row !== "object") continue
+              const obj = row as Record<string, unknown>
+              const id = typeof obj.id === "string" ? obj.id.trim() : ""
+              if (!id) continue
+              
+              const itemType = typeof obj.type === "string" ? obj.type : "media"
+              
+              if (itemType === "text") {
+                items.push({
+                  id,
+                  type: "text",
+                  url: "",
+                  brand: "",
+                  collabType: "",
+                  title: typeof obj.title === "string" ? obj.title : "",
+                  text: typeof obj.text === "string" ? obj.text : "",
+                })
+              } else if (itemType === "ig") {
+                items.push({
+                  id,
+                  type: "ig",
+                  url: typeof obj.url === "string" ? obj.url : "",
+                  brand: "",
+                  collabType: "",
+                  caption: typeof obj.caption === "string" ? obj.caption : "",
+                })
+              } else {
+                items.push({
+                  id,
+                  type: "media",
+                  url: typeof obj.url === "string" ? obj.url : "",
+                  brand: typeof obj.brand === "string" ? obj.brand : "",
+                  collabType: typeof obj.collabType === "string" ? obj.collabType : "",
+                  caption: typeof obj.caption === "string" ? obj.caption : "",
+                })
+              }
+            }
+            return items.slice(0, 20)
+          }
+          
+          // Fallback: migrate from legacy portfolio (media-only)
           const raw = Array.isArray(card?.portfolio) ? (card.portfolio as unknown[]) : []
-          const items: Array<{ id: string; url: string; brand: string; collabType: string; order: number }> = []
+          const items: FeaturedItem[] = []
 
           for (const row of raw) {
             if (!row || typeof row !== "object") continue
@@ -963,14 +1227,13 @@ export default function CreatorCardPage() {
             if (!id) continue
 
             const brand = typeof obj.brand === "string" ? obj.brand : ""
-
             const collabType =
               typeof obj.collabType === "string"
                 ? obj.collabType
                 : typeof obj.collabtype === "string"
                   ? obj.collabtype
                   : ""
-
+            const caption = typeof obj.caption === "string" ? obj.caption : ""
             const url =
               typeof obj.url === "string"
                 ? obj.url
@@ -980,27 +1243,17 @@ export default function CreatorCardPage() {
                     ? obj.image_url
                     : ""
 
-            const order =
-              typeof obj.order === "number"
-                ? obj.order
-                : typeof obj.order === "string"
-                  ? Number(obj.order)
-                  : 0
-
             items.push({
               id,
+              type: "media",
               url,
               brand,
               collabType,
-              order: Number.isFinite(order) ? order : 0,
+              caption,
             })
           }
 
-          items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-          return items
-            .filter((x) => typeof x.url === "string" && x.url.trim().length > 0)
-            .slice(0, 20)
-            .map((x) => ({ id: x.id, url: x.url, brand: x.brand, collabType: x.collabType }))
+          return items.slice(0, 20)
         })()
 
         setFeaturedItems((prev) => {
@@ -1241,7 +1494,7 @@ export default function CreatorCardPage() {
 
       const nextAudience = introDraft.trim() ? introDraft : (baseCard?.audience ?? "")
 
-      const payload: CreatorCardUpsertPayload = {
+      const payload: any = {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
         profileImageUrl: nextProfileImageUrl,
@@ -1251,14 +1504,48 @@ export default function CreatorCardPage() {
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         contact: serializedContact,
         portfolio: featuredItems
-          .filter((x) => isPersistedUrl(typeof x.url === "string" ? x.url : ""))
+          .filter((x) => {
+            const itemType = x.type || "media"
+            return itemType === "media" && isPersistedUrl(x.url || "")
+          })
           .map((x, idx) => ({
             id: x.id,
-            url: typeof x.url === "string" ? x.url : "",
-            brand: typeof x.brand === "string" ? x.brand : "",
-            collabType: typeof x.collabType === "string" ? x.collabType : "",
+            url: x.url || "",
+            brand: x.brand || "",
+            collabType: x.collabType || "",
+            caption: x.caption || "",
             order: idx,
-          })),
+          })) as any,
+        featuredItems: featuredItems.map((x, idx) => {
+          const itemType = x.type || "media"
+          if (itemType === "text") {
+            return {
+              id: x.id,
+              type: "text",
+              title: x.title || "",
+              text: x.text || "",
+              order: idx,
+            }
+          }
+          if (itemType === "ig") {
+            return {
+              id: x.id,
+              type: "ig",
+              url: x.url || "",
+              caption: x.caption || "",
+              order: idx,
+            }
+          }
+          return {
+            id: x.id,
+            type: "media",
+            url: x.url || "",
+            brand: x.brand || "",
+            collabType: x.collabType || "",
+            caption: x.caption || "",
+            order: idx,
+          }
+        }) as any,
         isPublic: baseCard?.isPublic ?? undefined,
         deliverables: normalizeStringArray(deliverables, 50),
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
@@ -1322,14 +1609,48 @@ export default function CreatorCardPage() {
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
         contact: serializedContact,
         portfolio: featuredItems
-          .filter((x) => isPersistedUrl(typeof x.url === "string" ? x.url : ""))
+          .filter((x) => {
+            const itemType = x.type || "media"
+            return itemType === "media" && isPersistedUrl(x.url || "")
+          })
           .map((x, idx) => ({
             id: x.id,
-            url: typeof x.url === "string" ? x.url : "",
-            brand: typeof x.brand === "string" ? x.brand : "",
-            collabType: typeof x.collabType === "string" ? x.collabType : "",
+            url: x.url || "",
+            brand: x.brand || "",
+            collabType: x.collabType || "",
+            caption: x.caption || "",
             order: idx,
-          })),
+          })) as any,
+        featuredItems: featuredItems.map((x, idx) => {
+          const itemType = x.type || "media"
+          if (itemType === "text") {
+            return {
+              id: x.id,
+              type: "text",
+              title: x.title || "",
+              text: x.text || "",
+              order: idx,
+            }
+          }
+          if (itemType === "ig") {
+            return {
+              id: x.id,
+              type: "ig",
+              url: x.url || "",
+              caption: x.caption || "",
+              order: idx,
+            }
+          }
+          return {
+            id: x.id,
+            type: "media",
+            url: x.url || "",
+            brand: x.brand || "",
+            collabType: x.collabType || "",
+            caption: x.caption || "",
+            order: idx,
+          }
+        }) as any,
       }))
 
       clearDirty()
@@ -2162,6 +2483,18 @@ export default function CreatorCardPage() {
                                     return prev.filter((x) => x.id !== id)
                                   })
                                 }}
+                                onCaptionChange={(id, caption) => {
+                                  setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, caption } : x)))
+                                  markDirty()
+                                }}
+                                onTextChange={(id, text, title) => {
+                                  setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, text, title } : x)))
+                                  markDirty()
+                                }}
+                                onIgUrlChange={(id, url) => {
+                                  setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, url } : x)))
+                                  markDirty()
+                                }}
                               />
                             ))}
 
@@ -2169,13 +2502,55 @@ export default function CreatorCardPage() {
                               type="button"
                               onClick={openAddFeatured}
                               className="group relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                              aria-label={t("creatorCard.featured.actions.add")}
-                              title={t("creatorCard.featured.actions.add")}
+                              aria-label={t("creatorCard.featured.actions.addMedia")}
+                              title={t("creatorCard.featured.actions.addMedia")}
                             >
                               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                                 <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
                                 <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
-                                  {t("creatorCard.featured.actions.add")}
+                                  {t("creatorCard.featured.actions.addMedia")}
+                                </div>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const id = `text-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                                setFeaturedItems((prev) => [
+                                  ...prev,
+                                  { id, type: "text", url: "", brand: "", collabType: "", text: "", title: "" },
+                                ])
+                                markDirty()
+                              }}
+                              className="group relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                              aria-label={t("creatorCard.featured.actions.addText")}
+                              title={t("creatorCard.featured.actions.addText")}
+                            >
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
+                                <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
+                                  {t("creatorCard.featured.actions.addText")}
+                                </div>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                                setFeaturedItems((prev) => [
+                                  ...prev,
+                                  { id, type: "ig", url: "", brand: "", collabType: "", caption: "" },
+                                ])
+                                markDirty()
+                              }}
+                              className="group relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                              aria-label={t("creatorCard.featured.actions.addIg")}
+                              title={t("creatorCard.featured.actions.addIg")}
+                            >
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
+                                <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
+                                  {t("creatorCard.featured.actions.addIg")}
                                 </div>
                               </div>
                             </button>
