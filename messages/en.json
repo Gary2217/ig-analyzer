@@ -2663,7 +2663,11 @@
       "added": "Added",
       "emptyIg": "No Instagram posts added yet",
       "igPreviewTitle": "Instagram Post Preview",
-      "tapToView": "Tap to view full post"
+      "tapToView": "Tap to view full post",
+      "loadingThumbnail": "Loading preview...",
+      "thumbnailError": "Failed to load preview. Please retry.",
+      "retry": "Retry",
+      "previewUnavailable": "Preview unavailable"
     },
     "options": {
       "niche": {

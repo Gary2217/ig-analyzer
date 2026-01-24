@@ -91,12 +91,16 @@ function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => strin
 
 export type CreatorCardPreviewHighlightTarget = "formats" | "niches" | "brands" | null
 
+type OEmbedStatus = "idle" | "loading" | "success" | "error"
+
 type IgOEmbedData = {
-  thumbnail_url: string
-  thumbnail_width: number
-  thumbnail_height: number
-  author_name: string
-  provider_name: string
+  status: OEmbedStatus
+  thumbnail_url?: string
+  thumbnail_width?: number
+  thumbnail_height?: number
+  author_name?: string
+  provider_name?: string
+  error?: string
 }
 
 export type CreatorCardPreviewProps = {
@@ -362,29 +366,68 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   useEffect(() => {
     const igItems = featuredTiles.filter(isAddedIg)
     igItems.forEach((item) => {
-      if (!item.url || igOEmbedCache[item.url]) return
+      const cached = igOEmbedCache[item.url]
+      if (!item.url || (cached && cached.status !== "idle")) return
       
       const fetchOEmbed = async () => {
+        // Set loading state
+        setIgOEmbedCache((prev) => ({
+          ...prev,
+          [item.url]: { status: "loading" },
+        }))
+        
+        const abortController = new AbortController()
+        const timeoutId = setTimeout(() => abortController.abort(), 8000)
+        
         try {
           const response = await fetch(
-            `https://www.instagram.com/oembed/?url=${encodeURIComponent(item.url)}&omitscript=true`
+            `/api/ig/oembed?url=${encodeURIComponent(item.url)}`,
+            { signal: abortController.signal }
           )
-          if (response.ok) {
-            const data = await response.json()
-            if (data.thumbnail_url) {
-              setIgOEmbedCache((prev) => ({
-                ...prev,
-                [item.url]: {
-                  thumbnail_url: data.thumbnail_url,
-                  thumbnail_width: data.thumbnail_width || 640,
-                  thumbnail_height: data.thumbnail_height || 640,
-                  author_name: data.author_name || "",
-                  provider_name: data.provider_name || "Instagram",
-                },
-              }))
-            }
+          clearTimeout(timeoutId)
+          
+          const json = await response.json()
+          
+          if (json.ok && json.data?.thumbnail_url) {
+            setIgOEmbedCache((prev) => ({
+              ...prev,
+              [item.url]: {
+                status: "success",
+                thumbnail_url: json.data.thumbnail_url,
+                thumbnail_width: json.data.thumbnail_width || 640,
+                thumbnail_height: json.data.thumbnail_height || 640,
+                author_name: json.data.author_name || "",
+                provider_name: json.data.provider_name || "Instagram",
+              },
+            }))
+          } else {
+            const errorMsg = json.error?.message || "Failed to load preview"
+            setIgOEmbedCache((prev) => ({
+              ...prev,
+              [item.url]: {
+                status: "error",
+                error: errorMsg,
+              },
+            }))
+            console.error("Instagram oEmbed API error:", json)
           }
         } catch (error) {
+          clearTimeout(timeoutId)
+          let errorMsg = "Network error"
+          if (error instanceof Error) {
+            if (error.name === "AbortError") {
+              errorMsg = "Request timeout"
+            } else {
+              errorMsg = error.message
+            }
+          }
+          setIgOEmbedCache((prev) => ({
+            ...prev,
+            [item.url]: {
+              status: "error",
+              error: errorMsg,
+            },
+          }))
           console.error("Failed to fetch Instagram oEmbed:", error)
         }
       }
@@ -720,7 +763,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                         className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
                         style={{ aspectRatio: "4 / 5" }}
                       >
-                        {oembedData?.thumbnail_url ? (
+                        {oembedData?.status === "success" && oembedData.thumbnail_url ? (
                           <>
                             <div className="absolute inset-0 bg-gradient-to-br from-slate-900/50 to-black/50" />
                             <div className="absolute inset-0 p-2 flex items-center justify-center">
@@ -732,9 +775,22 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                             </div>
                             <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
                           </>
-                        ) : (
+                        ) : oembedData?.status === "error" ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">
+                            <svg className="w-8 h-8 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                            </svg>
+                            <div className="text-[10px] text-center text-white/40 leading-tight">Preview unavailable</div>
+                          </div>
+                        ) : oembedData?.status === "loading" ? (
                           <div className="w-full h-full flex items-center justify-center">
                             <div className="text-xs text-white/40">Loading...</div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">
+                            <svg className="w-8 h-8 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                            </svg>
                           </div>
                         )}
                       </button>

@@ -2642,7 +2642,11 @@
       "added": "已新增",
       "emptyIg": "尚未新增 Instagram 貼文",
       "igPreviewTitle": "Instagram 貼文預覽",
-      "tapToView": "點擊查看完整貼文"
+      "tapToView": "點擊查看完整貼文",
+      "loadingThumbnail": "載入預覽中...",
+      "thumbnailError": "無法載入預覽，請重試",
+      "retry": "重試",
+      "previewUnavailable": "預覽無法使用"
     },
     "options": {
       "niche": {

@@ -146,12 +146,16 @@ type FeaturedItem = {
   isAdded?: boolean
 }
 
+type OEmbedStatus = "idle" | "loading" | "success" | "error"
+
 type IgOEmbedData = {
-  thumbnail_url: string
-  thumbnail_width: number
-  thumbnail_height: number
-  author_name: string
-  provider_name: string
+  status: OEmbedStatus
+  thumbnail_url?: string
+  thumbnail_width?: number
+  thumbnail_height?: number
+  author_name?: string
+  provider_name?: string
+  error?: string
 }
 
 function IgEmbedPreview({ url }: { url: string }) {
@@ -334,34 +338,68 @@ function SortableFeaturedTile(props: {
     const isAdded = item.isAdded ?? false
     const oembedData = props.igOEmbedCache[item.url]
     
-    // Fetch oEmbed data for thumbnail
-    useEffect(() => {
-      if (!isValidIgUrl || !item.url || props.igOEmbedCache[item.url]) return
+    // Fetch oEmbed data for thumbnail with timeout
+    const fetchOEmbed = useCallback(async () => {
+      if (!isValidIgUrl || !item.url) return
       
-      const fetchOEmbed = async () => {
-        try {
-          const response = await fetch(
-            `https://www.instagram.com/oembed/?url=${encodeURIComponent(item.url)}&omitscript=true`
-          )
-          if (response.ok) {
-            const data = await response.json()
-            if (data.thumbnail_url) {
-              props.onIgOEmbedFetch(item.url, {
-                thumbnail_url: data.thumbnail_url,
-                thumbnail_width: data.thumbnail_width || 640,
-                thumbnail_height: data.thumbnail_height || 640,
-                author_name: data.author_name || "",
-                provider_name: data.provider_name || "Instagram",
-              })
-            }
-          }
-        } catch (error) {
-          console.error("Failed to fetch Instagram oEmbed:", error)
+      // Set loading state
+      props.onIgOEmbedFetch(item.url, {
+        status: "loading",
+      })
+      
+      const abortController = new AbortController()
+      const timeoutId = setTimeout(() => abortController.abort(), 8000)
+      
+      try {
+        const response = await fetch(
+          `/api/ig/oembed?url=${encodeURIComponent(item.url)}`,
+          { signal: abortController.signal }
+        )
+        clearTimeout(timeoutId)
+        
+        const json = await response.json()
+        
+        if (json.ok && json.data?.thumbnail_url) {
+          props.onIgOEmbedFetch(item.url, {
+            status: "success",
+            thumbnail_url: json.data.thumbnail_url,
+            thumbnail_width: json.data.thumbnail_width || 640,
+            thumbnail_height: json.data.thumbnail_height || 640,
+            author_name: json.data.author_name || "",
+            provider_name: json.data.provider_name || "Instagram",
+          })
+        } else {
+          const errorMsg = json.error?.message || "Failed to load preview"
+          props.onIgOEmbedFetch(item.url, {
+            status: "error",
+            error: errorMsg,
+          })
+          console.error("Instagram oEmbed API error:", json)
         }
+      } catch (error) {
+        clearTimeout(timeoutId)
+        let errorMsg = "Network error"
+        if (error instanceof Error) {
+          if (error.name === "AbortError") {
+            errorMsg = "Request timeout. Please try again."
+          } else {
+            errorMsg = error.message
+          }
+        }
+        props.onIgOEmbedFetch(item.url, {
+          status: "error",
+          error: errorMsg,
+        })
+        console.error("Failed to fetch Instagram oEmbed:", error)
       }
-      
-      fetchOEmbed()
     }, [item.url, isValidIgUrl])
+    
+    useEffect(() => {
+      if (!isValidIgUrl || !item.url) return
+      const cached = props.igOEmbedCache[item.url]
+      if (cached && cached.status !== "idle") return
+      fetchOEmbed()
+    }, [item.url, isValidIgUrl, fetchOEmbed])
     
     return (
       <div
@@ -423,7 +461,7 @@ function SortableFeaturedTile(props: {
         )}
 
         {/* Instagram image thumbnail - clickable */}
-        {item.url && isValidIgUrl && oembedData?.thumbnail_url ? (
+        {item.url && isValidIgUrl && oembedData?.status === "success" && oembedData.thumbnail_url ? (
           <button
             type="button"
             onClick={(e) => {
@@ -448,9 +486,46 @@ function SortableFeaturedTile(props: {
               <span>{t("creatorCard.featured.tapToView")}</span>
             </div>
           </button>
-        ) : item.url && isValidIgUrl ? (
-          <div className="w-full h-[220px] sm:h-[240px] md:h-[260px] rounded-xl border border-white/10 bg-slate-800/50 flex items-center justify-center">
-            <div className="text-xs text-white/50">Loading thumbnail...</div>
+        ) : item.url && isValidIgUrl && oembedData?.status === "error" ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (props.onIgThumbnailClick) {
+                props.onIgThumbnailClick(item.url)
+              }
+            }}
+            className="relative w-full rounded-xl border border-white/10 bg-slate-800/50 flex flex-col items-center justify-center gap-3 p-4 hover:bg-white/10 hover:border-white/20 transition-colors"
+            style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+          >
+            <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <div className="text-xs text-center text-white/60 break-words [overflow-wrap:anywhere]">
+              {t("creatorCard.featured.previewUnavailable")}
+            </div>
+            <div className="text-xs text-center text-white/40 break-words [overflow-wrap:anywhere]">
+              {oembedData.error}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  fetchOEmbed()
+                }}
+                className="px-4 py-2 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-colors min-h-[40px]"
+              >
+                {t("creatorCard.featured.retry")}
+              </button>
+            </div>
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
+              <span>{t("creatorCard.featured.tapToView")}</span>
+            </div>
+          </button>
+        ) : item.url && isValidIgUrl && oembedData?.status === "loading" ? (
+          <div className="w-full rounded-xl border border-white/10 bg-slate-800/50 flex items-center justify-center" style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}>
+            <div className="text-xs text-white/50">{t("creatorCard.featured.loadingThumbnail")}</div>
           </div>
         ) : null}
         
