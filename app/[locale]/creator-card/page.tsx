@@ -242,8 +242,8 @@ declare global {
   }
 }
 
-// Helper to build Instagram embed iframe src (used only for modal)
-function buildInstagramEmbedSrc(inputUrl: string): string | null {
+// Helper to extract Instagram shortcode from URL
+function extractInstagramShortcode(inputUrl: string): { kind: string; code: string } | null {
   try {
     const u = new URL(inputUrl)
     if (!/instagram\.com$/i.test(u.hostname) && !/(\.|^)instagram\.com$/i.test(u.hostname)) return null
@@ -258,11 +258,28 @@ function buildInstagramEmbedSrc(inputUrl: string): string | null {
 
     if (kind !== "p" && kind !== "reel" && kind !== "tv") return null
 
-    // captioned embed tends to be more reliable for previews
-    return `https://www.instagram.com/${kind}/${code}/embed/captioned/`
+    return { kind, code }
   } catch {
     return null
   }
+}
+
+// Helper to generate direct Instagram media URL (no oEmbed required)
+function buildInstagramDirectMediaUrl(inputUrl: string): string | null {
+  const extracted = extractInstagramShortcode(inputUrl)
+  if (!extracted) return null
+  
+  // Direct media URL format: https://www.instagram.com/p/{code}/media/?size=l
+  return `https://www.instagram.com/${extracted.kind}/${extracted.code}/media/?size=l`
+}
+
+// Helper to build Instagram embed iframe src (used only for modal)
+function buildInstagramEmbedSrc(inputUrl: string): string | null {
+  const extracted = extractInstagramShortcode(inputUrl)
+  if (!extracted) return null
+  
+  // captioned embed tends to be more reliable for previews
+  return `https://www.instagram.com/${extracted.kind}/${extracted.code}/embed/captioned/`
 }
 
 function SortableFeaturedTile(props: {
@@ -357,18 +374,30 @@ function SortableFeaturedTile(props: {
 
   // IG item rendering
   if (itemType === "ig") {
-    const isValidIgUrl = item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/"))
+    // Normalize URL for consistent cache keys (remove trailing slash)
+    const normalizedUrl = item.url ? item.url.trim().replace(/\/$/, "") : ""
+    const isValidIgUrl = normalizedUrl && (normalizedUrl.includes("instagram.com/p/") || normalizedUrl.includes("instagram.com/reel/") || normalizedUrl.includes("instagram.com/tv/"))
     const isAdded = item.isAdded ?? false
-    const oembedData = props.igOEmbedCache[item.url]
+    const oembedData = props.igOEmbedCache[normalizedUrl]
     const debounceRef = useRef<number | null>(null)
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
+    const [retryKey, setRetryKey] = useState(0)
+    
+    // Generate direct media URL (always available, no oEmbed required)
+    const directMediaUrl = isValidIgUrl ? buildInstagramDirectMediaUrl(normalizedUrl) : null
+    
+    // Reset thumbnail error when URL changes
+    useEffect(() => {
+      setThumbnailLoadError(false)
+      setRetryKey(0)
+    }, [normalizedUrl])
     
     // Fetch oEmbed data for thumbnail with timeout
     const fetchOEmbed = useCallback(async () => {
-      if (!isValidIgUrl || !item.url) return
+      if (!isValidIgUrl || !normalizedUrl) return
       
       // Set loading state
-      props.onIgOEmbedFetch(item.url, {
+      props.onIgOEmbedFetch(normalizedUrl, {
         status: "loading",
       })
       
@@ -377,7 +406,7 @@ function SortableFeaturedTile(props: {
       
       try {
         const response = await fetch(
-          `/api/ig/oembed?url=${encodeURIComponent(item.url)}`,
+          `/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`,
           { signal: abortController.signal }
         )
         clearTimeout(timeoutId)
@@ -385,7 +414,7 @@ function SortableFeaturedTile(props: {
         const json = await response.json()
         
         if (json.ok && json.data?.thumbnail_url) {
-          props.onIgOEmbedFetch(item.url, {
+          props.onIgOEmbedFetch(normalizedUrl, {
             status: "success",
             thumbnail_url: json.data.thumbnail_url,
             thumbnail_width: json.data.thumbnail_width || 640,
@@ -393,13 +422,18 @@ function SortableFeaturedTile(props: {
             author_name: json.data.author_name || "",
             provider_name: json.data.provider_name || "Instagram",
           })
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[IG oEmbed Success]", { url: normalizedUrl, thumbnail: json.data.thumbnail_url })
+          }
         } else {
           const errorMsg = json.error?.message || "Failed to load preview"
-          props.onIgOEmbedFetch(item.url, {
+          props.onIgOEmbedFetch(normalizedUrl, {
             status: "error",
             error: errorMsg,
           })
-          console.error("Instagram oEmbed API error:", json)
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[IG oEmbed Error]", { url: normalizedUrl, error: errorMsg, json })
+          }
         }
       } catch (error) {
         clearTimeout(timeoutId)
@@ -411,20 +445,22 @@ function SortableFeaturedTile(props: {
             errorMsg = error.message
           }
         }
-        props.onIgOEmbedFetch(item.url, {
+        props.onIgOEmbedFetch(normalizedUrl, {
           status: "error",
           error: errorMsg,
         })
-        console.error("Failed to fetch Instagram oEmbed:", error)
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[IG oEmbed Fetch Error]", { url: normalizedUrl, error })
+        }
       }
-    }, [item.url, isValidIgUrl])
+    }, [normalizedUrl, isValidIgUrl, props])
     
     useEffect(() => {
-      if (!item.url) return
+      if (!normalizedUrl) return
       if (!isValidIgUrl) return
 
       // If we already have success/error for this URL, don't refetch automatically
-      const st = props.igOEmbedCache[item.url]?.status
+      const st = props.igOEmbedCache[normalizedUrl]?.status
       if (st === "success" || st === "error" || st === "loading") return
 
       if (debounceRef.current) window.clearTimeout(debounceRef.current)
@@ -435,7 +471,7 @@ function SortableFeaturedTile(props: {
       return () => {
         if (debounceRef.current) window.clearTimeout(debounceRef.current)
       }
-    }, [item.url, isValidIgUrl, fetchOEmbed])
+    }, [normalizedUrl, isValidIgUrl, fetchOEmbed])
     
     return (
       <div
@@ -496,8 +532,20 @@ function SortableFeaturedTile(props: {
           </>
         )}
 
+        {/* Dev diagnostics */}
+        {process.env.NODE_ENV !== "production" && isValidIgUrl && (() => {
+          console.log("[IG Tile Render]", {
+            url: normalizedUrl,
+            status: oembedData?.status,
+            hasThumbnail: !!oembedData?.thumbnail_url,
+            thumbnailLoadError,
+            error: oembedData?.error,
+          })
+          return null
+        })()}
+
         {/* Instagram image thumbnail - clickable */}
-        {item.url && isValidIgUrl && oembedData?.status === "success" && oembedData.thumbnail_url ? (
+        {normalizedUrl && isValidIgUrl && directMediaUrl ? (
           <button
             type="button"
             onClick={(e) => {
@@ -511,19 +559,43 @@ function SortableFeaturedTile(props: {
           >
             {!thumbnailLoadError ? (
               <img
-                src={`/api/ig/thumbnail?url=${encodeURIComponent(oembedData.thumbnail_url)}`}
+                key={retryKey}
+                src={`/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}`}
                 alt="Instagram post thumbnail"
                 className="w-full h-full object-cover block"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                decoding="async"
                 onError={() => {
                   setThumbnailLoadError(true)
+                  if (process.env.NODE_ENV !== "production") {
+                    console.error("[IG Thumbnail Load Failed]", { url: normalizedUrl, directMediaUrl })
+                  }
                 }}
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6">
-                <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-                </svg>
-                <div className="text-xs text-center text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
+              <div className="relative w-full h-full flex flex-col items-center justify-center gap-3 p-6">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setThumbnailLoadError(false)
+                    setRetryKey(prev => prev + 1)
+                  }}
+                  className="absolute top-2 right-2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                  style={{ minWidth: "44px", minHeight: "44px" }}
+                  title="Retry loading thumbnail"
+                >
+                  <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6">
+                  <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                  </svg>
+                  <div className="text-xs text-center text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
+                </div>
               </div>
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
@@ -531,13 +603,13 @@ function SortableFeaturedTile(props: {
               <span>{t("creatorCard.featured.tapToView")}</span>
             </div>
           </button>
-        ) : item.url && isValidIgUrl && oembedData?.status === "error" ? (
+        ) : normalizedUrl && isValidIgUrl ? (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation()
               if (props.onIgThumbnailClick) {
-                props.onIgThumbnailClick(item.url)
+                props.onIgThumbnailClick(normalizedUrl)
               }
             }}
             className="relative w-full rounded-xl border border-white/10 bg-slate-800/50 flex flex-col items-center justify-center gap-3 p-6 hover:bg-white/10 hover:border-white/20 transition-colors"
@@ -547,14 +619,7 @@ function SortableFeaturedTile(props: {
               <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
             </svg>
             <div className="text-xs text-center text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
-              <span>{t("creatorCard.featured.tapToView")}</span>
-            </div>
           </button>
-        ) : item.url && isValidIgUrl && oembedData?.status === "loading" ? (
-          <div className="w-full rounded-xl border border-white/10 bg-slate-800/50 flex items-center justify-center" style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}>
-            <div className="text-xs text-white/50">{t("creatorCard.featured.loadingThumbnail")}</div>
-          </div>
         ) : null}
         
         {/* Add Post button - only show if not added and has valid URL */}

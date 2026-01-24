@@ -91,8 +91,8 @@ function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => strin
 
 export type CreatorCardPreviewHighlightTarget = "formats" | "niches" | "brands" | null
 
-// Helper to build Instagram embed iframe src (used only for modal)
-function buildInstagramEmbedSrc(inputUrl: string): string | null {
+// Helper to extract Instagram shortcode from URL
+function extractInstagramShortcode(inputUrl: string): { kind: string; code: string } | null {
   try {
     const u = new URL(inputUrl)
     if (!/instagram\.com$/i.test(u.hostname) && !/(\.|^)instagram\.com$/i.test(u.hostname)) return null
@@ -107,11 +107,28 @@ function buildInstagramEmbedSrc(inputUrl: string): string | null {
 
     if (kind !== "p" && kind !== "reel" && kind !== "tv") return null
 
-    // captioned embed tends to be more reliable for previews
-    return `https://www.instagram.com/${kind}/${code}/embed/captioned/`
+    return { kind, code }
   } catch {
     return null
   }
+}
+
+// Helper to generate direct Instagram media URL (no oEmbed required)
+function buildInstagramDirectMediaUrl(inputUrl: string): string | null {
+  const extracted = extractInstagramShortcode(inputUrl)
+  if (!extracted) return null
+  
+  // Direct media URL format: https://www.instagram.com/p/{code}/media/?size=l
+  return `https://www.instagram.com/${extracted.kind}/${extracted.code}/media/?size=l`
+}
+
+// Helper to build Instagram embed iframe src (used only for modal)
+function buildInstagramEmbedSrc(inputUrl: string): string | null {
+  const extracted = extractInstagramShortcode(inputUrl)
+  if (!extracted) return null
+  
+  // captioned embed tends to be more reliable for previews
+  return `https://www.instagram.com/${extracted.kind}/${extracted.code}/embed/captioned/`
 }
 
 type OEmbedStatus = "idle" | "loading" | "success" | "error"
@@ -253,11 +270,16 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const [openIgUrl, setOpenIgUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, IgOEmbedData>>(props.igOEmbedCache || {})
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
+  const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
+
+  // Helper to normalize URL (remove trailing slash)
+  const normalizeUrl = (url: string) => url ? url.trim().replace(/\/$/, "") : ""
 
   // Helper to check if item is an added IG post
   const isAddedIg = (item: any) => {
-    const isIg = item.type === "ig" || (item.type == null && item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/")))
-    const hasUrl = !!item.url
+    const normalizedUrl = normalizeUrl(item.url)
+    const isIg = item.type === "ig" || (item.type == null && normalizedUrl && (normalizedUrl.includes("instagram.com/p/") || normalizedUrl.includes("instagram.com/reel/") || normalizedUrl.includes("instagram.com/tv/")))
+    const hasUrl = !!normalizedUrl
     const isAdded = item.isAdded === true || item.isAdded === undefined
     return isIg && hasUrl && isAdded
   }
@@ -390,14 +412,15 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   useEffect(() => {
     const igItems = featuredTiles.filter(isAddedIg)
     igItems.forEach((item) => {
-      const cached = igOEmbedCache[item.url]
-      if (!item.url || (cached && cached.status !== "idle")) return
+      const normalizedUrl = normalizeUrl(item.url)
+      const cached = igOEmbedCache[normalizedUrl]
+      if (!normalizedUrl || (cached && cached.status !== "idle")) return
       
       const fetchOEmbed = async () => {
         // Set loading state
         setIgOEmbedCache((prev) => ({
           ...prev,
-          [item.url]: { status: "loading" },
+          [normalizedUrl]: { status: "loading" },
         }))
         
         const abortController = new AbortController()
@@ -405,7 +428,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         
         try {
           const response = await fetch(
-            `/api/ig/oembed?url=${encodeURIComponent(item.url)}`,
+            `/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`,
             { signal: abortController.signal }
           )
           clearTimeout(timeoutId)
@@ -415,7 +438,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           if (json.ok && json.data?.thumbnail_url) {
             setIgOEmbedCache((prev) => ({
               ...prev,
-              [item.url]: {
+              [normalizedUrl]: {
                 status: "success",
                 thumbnail_url: json.data.thumbnail_url,
                 thumbnail_width: json.data.thumbnail_width || 640,
@@ -424,16 +447,21 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 provider_name: json.data.provider_name || "Instagram",
               },
             }))
+            if (process.env.NODE_ENV !== "production") {
+              console.log("[Preview IG oEmbed Success]", { url: normalizedUrl, thumbnail: json.data.thumbnail_url })
+            }
           } else {
             const errorMsg = json.error?.message || "Failed to load preview"
             setIgOEmbedCache((prev) => ({
               ...prev,
-              [item.url]: {
+              [normalizedUrl]: {
                 status: "error",
                 error: errorMsg,
               },
             }))
-            console.error("Instagram oEmbed API error:", json)
+            if (process.env.NODE_ENV !== "production") {
+              console.error("[Preview IG oEmbed Error]", { url: normalizedUrl, error: errorMsg, json })
+            }
           }
         } catch (error) {
           clearTimeout(timeoutId)
@@ -447,18 +475,20 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           }
           setIgOEmbedCache((prev) => ({
             ...prev,
-            [item.url]: {
+            [normalizedUrl]: {
               status: "error",
               error: errorMsg,
             },
           }))
-          console.error("Failed to fetch Instagram oEmbed:", error)
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[Preview IG oEmbed Fetch Error]", { url: normalizedUrl, error })
+          }
         }
       }
       
       fetchOEmbed()
     })
-  }, [featuredTiles, igOEmbedCache, isAddedIg])
+  }, [featuredTiles, igOEmbedCache, isAddedIg, normalizeUrl])
 
   const featuredStripRef = useRef<HTMLDivElement | null>(null)
 
@@ -778,33 +808,66 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 featuredTiles
                   .filter(item => isAddedIg(item))
                   .map((item) => {
-                    const oembedData = igOEmbedCache[item.url]
+                    const normalizedUrl = normalizeUrl(item.url)
+                    const oembedData = igOEmbedCache[normalizedUrl]
+                    const retryKey = retryKeys[normalizedUrl] || 0
+                    const directMediaUrl = buildInstagramDirectMediaUrl(normalizedUrl)
+                    
+                    if (process.env.NODE_ENV !== "production") {
+                      console.log("[Preview IG Tile Render]", {
+                        url: normalizedUrl,
+                        directMediaUrl,
+                        status: oembedData?.status,
+                        hasThumbnail: !!oembedData?.thumbnail_url,
+                        thumbnailLoadError: thumbnailLoadErrors[normalizedUrl],
+                        error: oembedData?.error,
+                      })
+                    }
+                    
                     return (
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setOpenIgUrl(item.url)}
+                        onClick={() => setOpenIgUrl(normalizedUrl)}
                         className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
                         style={{ aspectRatio: "4 / 5" }}
                       >
-                        {oembedData?.status === "success" && oembedData.thumbnail_url && !thumbnailLoadErrors[item.url] ? (
+                        {directMediaUrl && !thumbnailLoadErrors[normalizedUrl] ? (
                           <img
-                            src={`/api/ig/thumbnail?url=${encodeURIComponent(oembedData.thumbnail_url)}`}
+                            key={retryKey}
+                            src={`/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}`}
                             alt="Instagram post"
                             className="w-full h-full object-cover block"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            decoding="async"
                             onError={() => {
-                              setThumbnailLoadErrors(prev => ({ ...prev, [item.url]: true }))
+                              setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: true }))
+                              if (process.env.NODE_ENV !== "production") {
+                                console.error("[Preview IG Thumbnail Load Failed]", { url: normalizedUrl, directMediaUrl })
+                              }
                             }}
                           />
-                        ) : oembedData?.status === "success" && thumbnailLoadErrors[item.url] ? (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">
+                        ) : directMediaUrl && thumbnailLoadErrors[normalizedUrl] ? (
+                          <div className="relative w-full h-full flex flex-col items-center justify-center gap-2 p-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: false }))
+                                setRetryKeys(prev => ({ ...prev, [normalizedUrl]: (prev[normalizedUrl] || 0) + 1 }))
+                              }}
+                              className="absolute top-1 right-1 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                              style={{ minWidth: "44px", minHeight: "44px" }}
+                              title="Retry loading thumbnail"
+                            >
+                              <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            </button>
                             <svg className="w-8 h-8 text-white/30" fill="currentColor" viewBox="0 0 24 24">
                               <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
                             </svg>
-                          </div>
-                        ) : oembedData?.status === "loading" ? (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="text-xs text-white/40">Loading...</div>
                           </div>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2">

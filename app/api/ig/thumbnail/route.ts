@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
-// Whitelist of allowed Instagram/Facebook CDN hostnames (image CDNs only)
-const ALLOWED_HOSTNAMES = [
+// Whitelist of allowed CDN hostnames (for final redirect validation)
+const ALLOWED_CDN_HOSTNAMES = [
   "cdninstagram.com",
   "fbcdn.net",
 ]
+
+// Regex for Instagram media path: /(p|reel|tv)/{shortcode}/media/
+const INSTAGRAM_MEDIA_PATH_REGEX = /^\/(p|reel|tv)\/[A-Za-z0-9_-]+\/media\/$/
 
 function isAllowedImageUrl(url: string): boolean {
   try {
@@ -17,14 +20,34 @@ function isAllowedImageUrl(url: string): boolean {
       return false
     }
     
-    // Check if hostname matches any allowed pattern
     const hostname = parsed.hostname.toLowerCase()
-    return ALLOWED_HOSTNAMES.some(allowed => 
+    
+    // Allow CDN domains (cdninstagram.com, fbcdn.net and subdomains)
+    const isCDN = ALLOWED_CDN_HOSTNAMES.some(allowed => 
       hostname === allowed || hostname.endsWith(`.${allowed}`)
     )
+    
+    if (isCDN) {
+      return true
+    }
+    
+    // Allow www.instagram.com ONLY for /media/ paths
+    if (hostname === "www.instagram.com") {
+      const pathname = parsed.pathname
+      return INSTAGRAM_MEDIA_PATH_REGEX.test(pathname)
+    }
+    
+    return false
   } catch {
     return false
   }
+}
+
+function isCDNHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase()
+  return ALLOWED_CDN_HOSTNAMES.some(allowed => 
+    lower === allowed || lower.endsWith(`.${allowed}`)
+  )
 }
 
 export async function GET(request: NextRequest) {
@@ -51,17 +74,69 @@ export async function GET(request: NextRequest) {
     const abortController = new AbortController()
     const timeoutId = setTimeout(() => abortController.abort(), 8000)
     
+    if (process.env.NODE_ENV !== "production") {
+      const urlObj = new URL(thumbnailUrl)
+      console.log("[Thumbnail Proxy Request]", { hostname: urlObj.hostname, path: urlObj.pathname })
+    }
+    
     try {
       const imageResponse = await fetch(thumbnailUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; InstagramThumbnailProxy/1.0)",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
           "Referer": "https://www.instagram.com/",
+          "Origin": "https://www.instagram.com",
+          "Sec-Fetch-Dest": "image",
+          "Sec-Fetch-Mode": "no-cors",
+          "Sec-Fetch-Site": "cross-site",
         },
         cache: "no-store",
         signal: abortController.signal,
       })
       
       clearTimeout(timeoutId)
+      
+      // Verify final response URL (after redirects) is from allowed CDN
+      const finalUrl = imageResponse.url
+      let finalHostname = ""
+      try {
+        const finalParsed = new URL(finalUrl)
+        finalHostname = finalParsed.hostname.toLowerCase()
+      } catch {
+        console.error("Failed to parse final response URL")
+        return NextResponse.json(
+          { error: "Invalid final response URL" },
+          { 
+            status: 502,
+            headers: {
+              "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            },
+          }
+        )
+      }
+      
+      // Final URL must be from CDN domains (not arbitrary instagram.com pages)
+      if (!isCDNHostname(finalHostname)) {
+        console.error(`Final URL not from allowed CDN: ${finalHostname}`)
+        return NextResponse.json(
+          { error: "Final redirect URL not from allowed CDN" },
+          { 
+            status: 502,
+            headers: {
+              "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            },
+          }
+        )
+      }
+      
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Thumbnail Proxy Response]", { 
+          status: imageResponse.status, 
+          finalHostname,
+          contentType: imageResponse.headers.get("content-type") 
+        })
+      }
       
       if (!imageResponse.ok) {
         console.error(`Failed to fetch thumbnail: ${imageResponse.status} ${imageResponse.statusText}`)
