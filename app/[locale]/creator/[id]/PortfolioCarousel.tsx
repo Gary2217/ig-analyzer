@@ -4,19 +4,17 @@ import { useRef, useState, useEffect } from "react"
 
 interface PortfolioItem {
   displayTitle: string
-  displaySubtitle: string
+  subtitleLabel: string
   thumbnailUrl: string
   clickUrl: string
-  platformLabel: string
 }
 
 interface PortfolioCarouselProps {
   items: PortfolioItem[]
   locale: "zh-TW" | "en"
-  getLocalizedTag: (tag: string) => string
 }
 
-export function PortfolioCarousel({ items, locale, getLocalizedTag }: PortfolioCarouselProps) {
+export function PortfolioCarousel({ items, locale }: PortfolioCarouselProps) {
   const railRef = useRef<HTMLDivElement | null>(null)
   const [canPrev, setCanPrev] = useState(false)
   const [canNext, setCanNext] = useState(false)
@@ -102,7 +100,7 @@ export function PortfolioCarousel({ items, locale, getLocalizedTag }: PortfolioC
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
-                      {item.platformLabel || "Work"}
+                      {item.subtitleLabel || "Work"}
                     </div>
                   )}
                 </div>
@@ -115,9 +113,9 @@ export function PortfolioCarousel({ items, locale, getLocalizedTag }: PortfolioC
                 )}
                 
                 {/* Subtitle / Platform Badge */}
-                {item.displaySubtitle && (
+                {item.subtitleLabel && (
                   <div className="text-xs text-white/60 uppercase tracking-wide">
-                    {getLocalizedTag(item.displaySubtitle)}
+                    {item.subtitleLabel}
                   </div>
                 )}
               </>

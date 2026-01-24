@@ -323,9 +323,14 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
             <PortfolioCarousel
               items={portfolioItems
                 .map((item: any) => normalizePortfolioItem(item))
-                .filter((item: ReturnType<typeof normalizePortfolioItem>): item is NonNullable<ReturnType<typeof normalizePortfolioItem>> => item !== null)}
+                .filter((item: ReturnType<typeof normalizePortfolioItem>): item is NonNullable<ReturnType<typeof normalizePortfolioItem>> => item !== null)
+                .map((n: NonNullable<ReturnType<typeof normalizePortfolioItem>>) => ({
+                  displayTitle: n.displayTitle,
+                  subtitleLabel: n.displaySubtitle ? getLocalizedTag(n.displaySubtitle) : "",
+                  thumbnailUrl: n.thumbnailUrl,
+                  clickUrl: n.clickUrl,
+                }))}
               locale={locale}
-              getLocalizedTag={getLocalizedTag}
             />
           ) : (
             <div className="py-6 text-center">
