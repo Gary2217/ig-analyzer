@@ -640,11 +640,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="mt-1 text-sm text-white/70">
-                {t("results.mediaKit.highlights.count").replace("{count}", String(featuredCount))}
-              </div>
-            )}
+            ) : null}
           </div>
 
           <div className="relative mt-3 min-w-0">
@@ -666,17 +662,11 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                       key={item.id}
                       type="button"
                       onClick={() => setOpenIgUrl(item.url)}
-                      className="shrink-0 w-[200px] md:w-[220px] rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3 hover:bg-white/10 hover:border-white/20 transition-colors text-left"
+                      className="relative shrink-0 w-[170px] md:w-[190px] h-[240px] md:h-[260px] overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-colors"
                     >
-                      <div className="text-xs font-semibold text-white/60">Instagram Post</div>
-                      <div className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg">
-                        <span>Tap to Preview</span>
+                      <div className="absolute inset-0 origin-top-left scale-[0.55] md:scale-[0.6] pointer-events-none">
+                        <IgEmbedPreview url={item.url} />
                       </div>
-                      {item.url && (
-                        <div className="text-xs text-white/50 truncate">
-                          {item.url.replace(/^https?:\/\/(www\.)?/, "")}
-                        </div>
-                      )}
                     </button>
                   ))
               )}

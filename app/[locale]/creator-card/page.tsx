@@ -381,9 +381,13 @@ function SortableFeaturedTile(props: {
           </>
         )}
 
-        {/* Instagram embed preview - auto-fit */}
+        {/* Instagram embed preview - compact after added, larger for draft */}
         {item.url && isValidIgUrl ? (
-          <div className="w-full max-w-full overflow-hidden rounded-xl overflow-y-auto min-h-[520px] md:min-h-[600px] max-h-[800px]">
+          <div className={`w-full max-w-full overflow-hidden rounded-xl overflow-y-auto ${
+            isAdded 
+              ? "min-h-[420px] md:min-h-[460px] max-h-[520px] md:max-h-[560px]" 
+              : "min-h-[520px] md:min-h-[600px] max-h-[720px]"
+          }`}>
             <IgEmbedPreview url={item.url} />
           </div>
         ) : null}
