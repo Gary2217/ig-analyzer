@@ -146,6 +146,14 @@ type FeaturedItem = {
   isAdded?: boolean
 }
 
+type IgOEmbedData = {
+  thumbnail_url: string
+  thumbnail_width: number
+  thumbnail_height: number
+  author_name: string
+  provider_name: string
+}
+
 function IgEmbedPreview({ url }: { url: string }) {
   const embedRef = useRef<HTMLDivElement>(null)
   const [embedLoaded, setEmbedLoaded] = useState(false)
@@ -240,6 +248,8 @@ function SortableFeaturedTile(props: {
   onTextChange: (id: string, text: string, title?: string) => void
   onIgUrlChange: (id: string, url: string) => void
   onIgThumbnailClick?: (url: string) => void
+  igOEmbedCache: Record<string, IgOEmbedData>
+  onIgOEmbedFetch: (url: string, data: IgOEmbedData) => void
   setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
   markDirty: () => void
   suppressClick: boolean
@@ -322,6 +332,36 @@ function SortableFeaturedTile(props: {
   if (itemType === "ig") {
     const isValidIgUrl = item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/"))
     const isAdded = item.isAdded ?? false
+    const oembedData = props.igOEmbedCache[item.url]
+    
+    // Fetch oEmbed data for thumbnail
+    useEffect(() => {
+      if (!isValidIgUrl || !item.url || props.igOEmbedCache[item.url]) return
+      
+      const fetchOEmbed = async () => {
+        try {
+          const response = await fetch(
+            `https://www.instagram.com/oembed/?url=${encodeURIComponent(item.url)}&omitscript=true`
+          )
+          if (response.ok) {
+            const data = await response.json()
+            if (data.thumbnail_url) {
+              props.onIgOEmbedFetch(item.url, {
+                thumbnail_url: data.thumbnail_url,
+                thumbnail_width: data.thumbnail_width || 640,
+                thumbnail_height: data.thumbnail_height || 640,
+                author_name: data.author_name || "",
+                provider_name: data.provider_name || "Instagram",
+              })
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch Instagram oEmbed:", error)
+        }
+      }
+      
+      fetchOEmbed()
+    }, [item.url, isValidIgUrl])
     
     return (
       <div
@@ -382,8 +422,8 @@ function SortableFeaturedTile(props: {
           </>
         )}
 
-        {/* Instagram compact thumbnail preview - clickable */}
-        {item.url && isValidIgUrl ? (
+        {/* Instagram image thumbnail - clickable */}
+        {item.url && isValidIgUrl && oembedData?.thumbnail_url ? (
           <button
             type="button"
             onClick={(e) => {
@@ -392,16 +432,26 @@ function SortableFeaturedTile(props: {
                 props.onIgThumbnailClick(item.url)
               }
             }}
-            className="relative w-full h-[280px] sm:h-[320px] md:h-[340px] overflow-hidden rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-colors"
+            className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
+            style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
           >
-            <div className="absolute inset-0 origin-top-left scale-[0.65] sm:scale-[0.7] pointer-events-none">
-              <IgEmbedPreview url={item.url} />
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900/50 to-black/50" />
+            <div className="absolute inset-0 p-3 flex items-center justify-center">
+              <img
+                src={oembedData.thumbnail_url}
+                alt="Instagram post thumbnail"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/50 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
-              <span>👆 {t("creatorCard.featured.clickToView")}</span>
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
+              <span>{t("creatorCard.featured.tapToView")}</span>
             </div>
           </button>
+        ) : item.url && isValidIgUrl ? (
+          <div className="w-full h-[220px] sm:h-[240px] md:h-[260px] rounded-xl border border-white/10 bg-slate-800/50 flex items-center justify-center">
+            <div className="text-xs text-white/50">Loading thumbnail...</div>
+          </div>
         ) : null}
         
         {/* Add Post button - only show if not added and has valid URL */}
@@ -822,6 +872,7 @@ export default function CreatorCardPage() {
   const [editingFeaturedCollabTypeSelect, setEditingFeaturedCollabTypeSelect] = useState("")
   const [editingFeaturedCollabTypeCustom, setEditingFeaturedCollabTypeCustom] = useState("")
   const [igModalUrl, setIgModalUrl] = useState<string | null>(null)
+  const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, IgOEmbedData>>({})
 
   const [__overlayMounted, set__overlayMounted] = useState(false)
   useEffect(() => {
@@ -2563,6 +2614,10 @@ export default function CreatorCardPage() {
                                   markDirty()
                                 }}
                                 onIgThumbnailClick={(url) => setIgModalUrl(url)}
+                                igOEmbedCache={igOEmbedCache}
+                                onIgOEmbedFetch={(url, data) => {
+                                  setIgOEmbedCache((prev) => ({ ...prev, [url]: data }))
+                                }}
                                 setFeaturedItems={setFeaturedItems}
                                 markDirty={markDirty}
                               />
@@ -3330,6 +3385,7 @@ export default function CreatorCardPage() {
                   contact={previewContact}
                   featuredItems={featuredItems}
                   featuredImageUrls={featuredItems.map((x) => x.url)}
+                  igOEmbedCache={igOEmbedCache}
                   themeTypes={themeTypes}
                   audienceProfiles={audienceProfiles}
                   collaborationNiches={collaborationNiches}
@@ -3400,6 +3456,7 @@ export default function CreatorCardPage() {
                     contact={previewContact}
                     featuredItems={featuredItems}
                     featuredImageUrls={featuredItems.map((x) => x.url)}
+                    igOEmbedCache={igOEmbedCache}
                     themeTypes={themeTypes}
                     audienceProfiles={audienceProfiles}
                     collaborationNiches={collaborationNiches}
@@ -3513,7 +3570,7 @@ export default function CreatorCardPage() {
               onClick={() => setIgModalUrl(null)}
             >
               <div
-                className="w-full max-w-[640px] h-[95vh] sm:h-auto sm:max-h-[92vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col"
+                className="w-full max-w-[720px] h-[96vh] sm:h-auto sm:max-h-[94vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Header */}

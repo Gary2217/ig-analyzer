@@ -91,6 +91,14 @@ function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => strin
 
 export type CreatorCardPreviewHighlightTarget = "formats" | "niches" | "brands" | null
 
+type IgOEmbedData = {
+  thumbnail_url: string
+  thumbnail_width: number
+  thumbnail_height: number
+  author_name: string
+  provider_name: string
+}
+
 export type CreatorCardPreviewProps = {
   t: (key: string) => string
   className?: string
@@ -134,6 +142,8 @@ export type CreatorCardPreviewProps = {
 
   highlightTarget?: CreatorCardPreviewHighlightTarget
   highlightSection?: "about" | "primaryNiche" | "audienceSummary" | "collaborationNiches" | "contact" | "formats" | null
+
+  igOEmbedCache?: Record<string, IgOEmbedData>
 }
 
 function normalizeStringArray(value: unknown, maxLen: number) {
@@ -214,6 +224,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   // Modal state for IG post preview
   const [openIgUrl, setOpenIgUrl] = useState<string | null>(null)
+  const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, IgOEmbedData>>(props.igOEmbedCache || {})
 
   // Helper to check if item is an added IG post
   const isAddedIg = (item: any) => {
@@ -339,6 +350,48 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   }, [featuredImageUrls, featuredItems])
 
   const featuredCount = featuredTiles.length
+
+  // Sync with parent cache if provided
+  useEffect(() => {
+    if (props.igOEmbedCache) {
+      setIgOEmbedCache(props.igOEmbedCache)
+    }
+  }, [props.igOEmbedCache])
+
+  // Fetch oEmbed data for IG items
+  useEffect(() => {
+    const igItems = featuredTiles.filter(isAddedIg)
+    igItems.forEach((item) => {
+      if (!item.url || igOEmbedCache[item.url]) return
+      
+      const fetchOEmbed = async () => {
+        try {
+          const response = await fetch(
+            `https://www.instagram.com/oembed/?url=${encodeURIComponent(item.url)}&omitscript=true`
+          )
+          if (response.ok) {
+            const data = await response.json()
+            if (data.thumbnail_url) {
+              setIgOEmbedCache((prev) => ({
+                ...prev,
+                [item.url]: {
+                  thumbnail_url: data.thumbnail_url,
+                  thumbnail_width: data.thumbnail_width || 640,
+                  thumbnail_height: data.thumbnail_height || 640,
+                  author_name: data.author_name || "",
+                  provider_name: data.provider_name || "Instagram",
+                },
+              }))
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch Instagram oEmbed:", error)
+        }
+      }
+      
+      fetchOEmbed()
+    })
+  }, [featuredTiles, igOEmbedCache, isAddedIg])
 
   const featuredStripRef = useRef<HTMLDivElement | null>(null)
 
@@ -657,19 +710,36 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               ) : (
                 featuredTiles
                   .filter(item => isAddedIg(item))
-                  .map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setOpenIgUrl(item.url)}
-                      className="relative shrink-0 w-[160px] sm:w-[170px] md:w-[180px] h-[220px] sm:h-[240px] md:h-[260px] overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-colors"
-                    >
-                      <div className="absolute inset-0 origin-top-left scale-[0.5] sm:scale-[0.55] md:scale-[0.58] pointer-events-none">
-                        <IgEmbedPreview url={item.url} />
-                      </div>
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
-                    </button>
-                  ))
+                  .map((item) => {
+                    const oembedData = igOEmbedCache[item.url]
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setOpenIgUrl(item.url)}
+                        className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
+                        style={{ aspectRatio: "4 / 5" }}
+                      >
+                        {oembedData?.thumbnail_url ? (
+                          <>
+                            <div className="absolute inset-0 bg-gradient-to-br from-slate-900/50 to-black/50" />
+                            <div className="absolute inset-0 p-2 flex items-center justify-center">
+                              <img
+                                src={oembedData.thumbnail_url}
+                                alt="Instagram post"
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-xs text-white/40">Loading...</div>
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })
               )}
             </div>
 
@@ -874,7 +944,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           onClick={() => setOpenIgUrl(null)}
         >
           <div
-            className="w-full max-w-[640px] h-[92vh] sm:h-auto sm:max-h-[92vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col"
+            className="w-full max-w-[720px] h-[96vh] sm:h-auto sm:max-h-[94vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
