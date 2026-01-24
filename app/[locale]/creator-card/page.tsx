@@ -242,6 +242,51 @@ declare global {
   }
 }
 
+// Helper to build Instagram embed iframe src
+function buildInstagramEmbedSrc(inputUrl: string): string | null {
+  try {
+    const u = new URL(inputUrl)
+    if (!/instagram\.com$/i.test(u.hostname) && !/(\.|^)instagram\.com$/i.test(u.hostname)) return null
+
+    // Normalize pathname and extract shortcode for /p/{code}/, /reel/{code}/, /tv/{code}/
+    const parts = u.pathname.split("/").filter(Boolean)
+    if (parts.length < 2) return null
+
+    const kind = parts[0] // p | reel | tv
+    const code = parts[1]
+    if (!code) return null
+
+    if (kind !== "p" && kind !== "reel" && kind !== "tv") return null
+
+    // captioned embed tends to be more reliable for previews
+    return `https://www.instagram.com/${kind}/${code}/embed/captioned/`
+  } catch {
+    return null
+  }
+}
+
+function IgEmbedFrame({ url }: { url: string }) {
+  const src = buildInstagramEmbedSrc(url)
+  if (!src) return null
+
+  return (
+    <div
+      className="w-full rounded-xl overflow-hidden border border-white/10 bg-black/30"
+      style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+    >
+      <iframe
+        title="Instagram embed preview"
+        src={src}
+        className="w-full h-full"
+        style={{ border: 0 }}
+        loading="lazy"
+        scrolling="no"
+        allow="encrypted-media; picture-in-picture"
+      />
+    </div>
+  )
+}
+
 function SortableFeaturedTile(props: {
   item: FeaturedItem
   t: (key: string) => string
@@ -337,6 +382,7 @@ function SortableFeaturedTile(props: {
     const isValidIgUrl = item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/"))
     const isAdded = item.isAdded ?? false
     const oembedData = props.igOEmbedCache[item.url]
+    const debounceRef = useRef<number | null>(null)
     
     // Fetch oEmbed data for thumbnail with timeout
     const fetchOEmbed = useCallback(async () => {
@@ -395,10 +441,21 @@ function SortableFeaturedTile(props: {
     }, [item.url, isValidIgUrl])
     
     useEffect(() => {
-      if (!isValidIgUrl || !item.url) return
-      const cached = props.igOEmbedCache[item.url]
-      if (cached && cached.status !== "idle") return
-      fetchOEmbed()
+      if (!item.url) return
+      if (!isValidIgUrl) return
+
+      // If we already have success/error for this URL, don't refetch automatically
+      const st = props.igOEmbedCache[item.url]?.status
+      if (st === "success" || st === "error" || st === "loading") return
+
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+      debounceRef.current = window.setTimeout(() => {
+        fetchOEmbed()
+      }, 600)
+
+      return () => {
+        if (debounceRef.current) window.clearTimeout(debounceRef.current)
+      }
     }, [item.url, isValidIgUrl, fetchOEmbed])
     
     return (
@@ -495,19 +552,20 @@ function SortableFeaturedTile(props: {
                 props.onIgThumbnailClick(item.url)
               }
             }}
-            className="relative w-full rounded-xl border border-white/10 bg-slate-800/50 flex flex-col items-center justify-center gap-3 p-4 hover:bg-white/10 hover:border-white/20 transition-colors"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+            className="w-full text-left space-y-2"
           >
-            <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-            </svg>
-            <div className="text-xs text-center text-white/60 break-words [overflow-wrap:anywhere]">
-              {t("creatorCard.featured.previewUnavailable")}
-            </div>
-            <div className="text-xs text-center text-white/40 break-words [overflow-wrap:anywhere]">
-              {oembedData.error}
-            </div>
-            <div className="mt-2 flex gap-2">
+            {/* Try showing the embed right inside the card (original behavior) */}
+            <IgEmbedFrame url={item.url} />
+
+            {/* Keep previous fallback UI under it (so user still sees the error + Retry) */}
+            <div className="relative w-full rounded-xl border border-white/10 bg-slate-800/50 flex flex-col items-center justify-center gap-3 p-4 hover:bg-white/10 hover:border-white/20 transition-colors">
+              <div className="text-xs text-center text-white/60 break-words [overflow-wrap:anywhere]">
+                {t("creatorCard.featured.previewUnavailable")}
+              </div>
+              <div className="text-xs text-center text-white/40 break-words [overflow-wrap:anywhere]">
+                {oembedData.error}
+              </div>
+
               <button
                 type="button"
                 onClick={(e) => {
@@ -518,9 +576,10 @@ function SortableFeaturedTile(props: {
               >
                 {t("creatorCard.featured.retry")}
               </button>
-            </div>
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
-              <span>{t("creatorCard.featured.tapToView")}</span>
+
+              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
+                <span>{t("creatorCard.featured.tapToView")}</span>
+              </div>
             </div>
           </button>
         ) : item.url && isValidIgUrl && oembedData?.status === "loading" ? (
