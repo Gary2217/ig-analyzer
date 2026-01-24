@@ -91,7 +91,7 @@ function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => strin
 
 export type CreatorCardPreviewHighlightTarget = "formats" | "niches" | "brands" | null
 
-// Helper to build Instagram embed iframe src
+// Helper to build Instagram embed iframe src (used only for modal)
 function buildInstagramEmbedSrc(inputUrl: string): string | null {
   try {
     const u = new URL(inputUrl)
@@ -112,29 +112,6 @@ function buildInstagramEmbedSrc(inputUrl: string): string | null {
   } catch {
     return null
   }
-}
-
-function IgEmbedFrameCompact({ url }: { url: string }) {
-  const src = buildInstagramEmbedSrc(url)
-  if (!src) return null
-
-  const cropTop = 100
-  const cropBottom = 120
-  const totalCrop = cropTop + cropBottom
-
-  return (
-    <div className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/30">
-      <iframe
-        title="Instagram embed preview"
-        src={src}
-        className="absolute left-0 w-full"
-        style={{ top: `-${cropTop}px`, height: `calc(100% + ${totalCrop}px)`, border: 0, display: "block" }}
-        loading="lazy"
-        scrolling="no"
-        allow="encrypted-media; picture-in-picture"
-      />
-    </div>
-  )
 }
 
 type OEmbedStatus = "idle" | "loading" | "success" | "error"
@@ -810,21 +787,11 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                         style={{ aspectRatio: "4 / 5" }}
                       >
                         {oembedData?.status === "success" && oembedData.thumbnail_url ? (
-                          <>
-                            <div className="absolute inset-0 bg-gradient-to-br from-slate-900/50 to-black/50" />
-                            <div className="absolute inset-0 p-2 flex items-center justify-center">
-                              <img
-                                src={oembedData.thumbnail_url}
-                                alt="Instagram post"
-                                className="w-full h-full object-contain"
-                              />
-                            </div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
-                          </>
-                        ) : oembedData?.status === "error" ? (
-                          <div className="w-full h-full">
-                            <IgEmbedFrameCompact url={item.url} />
-                          </div>
+                          <img
+                            src={oembedData.thumbnail_url}
+                            alt="Instagram post"
+                            className="w-full h-full object-cover block"
+                          />
                         ) : oembedData?.status === "loading" ? (
                           <div className="w-full h-full flex items-center justify-center">
                             <div className="text-xs text-white/40">Loading...</div>

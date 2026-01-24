@@ -242,7 +242,7 @@ declare global {
   }
 }
 
-// Helper to build Instagram embed iframe src
+// Helper to build Instagram embed iframe src (used only for modal)
 function buildInstagramEmbedSrc(inputUrl: string): string | null {
   try {
     const u = new URL(inputUrl)
@@ -263,32 +263,6 @@ function buildInstagramEmbedSrc(inputUrl: string): string | null {
   } catch {
     return null
   }
-}
-
-function IgEmbedFrame({ url }: { url: string }) {
-  const src = buildInstagramEmbedSrc(url)
-  if (!src) return null
-
-  const cropTop = 120
-  const cropBottom = 140
-  const totalCrop = cropTop + cropBottom
-
-  return (
-    <div
-      className="relative w-full rounded-xl overflow-hidden border border-white/10 bg-black/30"
-      style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
-    >
-      <iframe
-        title="Instagram embed preview"
-        src={src}
-        className="absolute left-0 w-full"
-        style={{ top: `-${cropTop}px`, height: `calc(100% + ${totalCrop}px)`, border: 0, display: "block" }}
-        loading="lazy"
-        scrolling="no"
-        allow="encrypted-media; picture-in-picture"
-      />
-    </div>
-  )
 }
 
 function SortableFeaturedTile(props: {
@@ -534,14 +508,11 @@ function SortableFeaturedTile(props: {
             className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
             style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-900/50 to-black/50" />
-            <div className="absolute inset-0 p-3 flex items-center justify-center">
-              <img
-                src={oembedData.thumbnail_url}
-                alt="Instagram post thumbnail"
-                className="w-full h-full object-contain"
-              />
-            </div>
+            <img
+              src={oembedData.thumbnail_url}
+              alt="Instagram post thumbnail"
+              className="w-full h-full object-cover block"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
             <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
               <span>{t("creatorCard.featured.tapToView")}</span>
@@ -556,9 +527,16 @@ function SortableFeaturedTile(props: {
                 props.onIgThumbnailClick(item.url)
               }
             }}
-            className="w-full"
+            className="relative w-full rounded-xl border border-white/10 bg-slate-800/50 flex flex-col items-center justify-center gap-3 p-6 hover:bg-white/10 hover:border-white/20 transition-colors"
+            style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
           >
-            <IgEmbedFrame url={item.url} />
+            <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+            </svg>
+            <div className="text-xs text-center text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
+              <span>{t("creatorCard.featured.tapToView")}</span>
+            </div>
           </button>
         ) : item.url && isValidIgUrl && oembedData?.status === "loading" ? (
           <div className="w-full rounded-xl border border-white/10 bg-slate-800/50 flex items-center justify-center" style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}>
