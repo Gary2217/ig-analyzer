@@ -1471,7 +1471,12 @@ export default function CreatorCardPage() {
 
         const nextFeaturedItems = (() => {
           // Check if card has featuredItems stored in flexible JSON field
-          const storedFeaturedItems = Array.isArray(card?.featuredItems) ? (card.featuredItems as unknown[]) : null
+          // Support both camelCase (from API mapping) and snake_case (from DB)
+          const storedFeaturedItems = Array.isArray(card?.featuredItems) 
+            ? (card.featuredItems as unknown[])
+            : Array.isArray((card as any)?.featured_items)
+              ? ((card as any).featured_items as unknown[])
+              : null
           
           if (storedFeaturedItems) {
             // Use stored featuredItems (full data with text/ig items)

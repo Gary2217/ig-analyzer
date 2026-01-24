@@ -23,7 +23,13 @@ export async function GET(req: Request) {
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     if (!data) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 })
 
-    return NextResponse.json({ ok: true, card: data })
+    const row = asRecord(data as unknown)
+    const card = row ? {
+      ...row,
+      featuredItems: Array.isArray(row.featured_items) ? row.featured_items : [],
+    } : data
+
+    return NextResponse.json({ ok: true, card })
   } catch (e: unknown) {
     const errObj = asRecord(e)
     const msg = typeof errObj?.message === "string" ? errObj.message : "unknown"

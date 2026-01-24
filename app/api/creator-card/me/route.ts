@@ -114,6 +114,7 @@ export async function GET(req: NextRequest) {
             pastCollaborations: Array.isArray(row.past_collaborations) ? row.past_collaborations : null,
             themeTypes: Array.isArray(row.theme_types) ? row.theme_types : null,
             audienceProfiles: Array.isArray(row.audience_profiles) ? row.audience_profiles : null,
+            featuredItems: Array.isArray(row.featured_items) ? row.featured_items : [],
           }
         : null
 

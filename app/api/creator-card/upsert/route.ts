@@ -193,6 +193,15 @@ export async function POST(req: Request) {
     const pastCollaborations = normalizeStringArray(body.pastCollaborations, 50)
 
     const contactText = normalizeContactToText(body.contact)
+    
+    // DEV-ONLY: Log featuredItems in request
+    if (process.env.NODE_ENV !== "production") {
+      const featuredItemsArray = Array.isArray(body.featuredItems) ? body.featuredItems : []
+      console.log("[upsert] REQUEST featuredItems count:", featuredItemsArray.length)
+      if (featuredItemsArray.length > 0) {
+        console.log("[upsert] REQUEST featuredItems sample:", JSON.stringify(featuredItemsArray[0]))
+      }
+    }
 
     const dbWrite: Record<string, unknown> = {
       ig_user_id: igUserId,
@@ -206,6 +215,7 @@ export async function POST(req: Request) {
       deliverables,
       past_collaborations: pastCollaborations,
       portfolio: Array.isArray(body.portfolio) ? body.portfolio : [],
+      featured_items: Array.isArray(body.featuredItems) ? body.featuredItems : [],
       is_public: Boolean(body.isPublic),
       theme_types: themeTypes,
       audience_profiles: audienceProfiles,
@@ -234,10 +244,26 @@ export async function POST(req: Request) {
       length: typeof returnedPiu === "string" ? returnedPiu.length : null,
       supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50) ?? "not_set",
     })
+    
+    // DEV-ONLY: Log featuredItems in response
+    if (process.env.NODE_ENV !== "production") {
+      const returnedFeaturedItems = Array.isArray(dataObj?.featured_items) ? dataObj.featured_items : []
+      console.log("[upsert] RESPONSE featuredItems count:", returnedFeaturedItems.length)
+      if (returnedFeaturedItems.length > 0) {
+        console.log("[upsert] RESPONSE featuredItems sample:", JSON.stringify(returnedFeaturedItems[0]))
+      }
+    }
+    
+    // Map snake_case DB column to camelCase for client
+    const featuredItems = Array.isArray(dataObj?.featured_items) ? dataObj.featured_items : []
 
     return NextResponse.json({
       ok: true,
-      card: data && typeof data === "object" ? { ...(data as Record<string, unknown>), completion_pct: completionPct } : data,
+      card: data && typeof data === "object" ? { 
+        ...(data as Record<string, unknown>), 
+        featuredItems,  // Add camelCase alias for client
+        completion_pct: completionPct 
+      } : data,
       completionPct,
     })
   } catch (e: unknown) {
