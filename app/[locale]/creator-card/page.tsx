@@ -361,6 +361,7 @@ function SortableFeaturedTile(props: {
     const isAdded = item.isAdded ?? false
     const oembedData = props.igOEmbedCache[item.url]
     const debounceRef = useRef<number | null>(null)
+    const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     
     // Fetch oEmbed data for thumbnail with timeout
     const fetchOEmbed = useCallback(async () => {
@@ -508,11 +509,23 @@ function SortableFeaturedTile(props: {
             className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
             style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
           >
-            <img
-              src={oembedData.thumbnail_url}
-              alt="Instagram post thumbnail"
-              className="w-full h-full object-cover block"
-            />
+            {!thumbnailLoadError ? (
+              <img
+                src={`/api/ig/thumbnail?url=${encodeURIComponent(oembedData.thumbnail_url)}`}
+                alt="Instagram post thumbnail"
+                className="w-full h-full object-cover block"
+                onError={() => {
+                  setThumbnailLoadError(true)
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6">
+                <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                </svg>
+                <div className="text-xs text-center text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
             <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
               <span>{t("creatorCard.featured.tapToView")}</span>
