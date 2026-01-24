@@ -11,7 +11,7 @@ interface TopRightActionsProps {
   backHref?: string
 }
 
-const BUTTON_BASE_CLASSES =
+export const BUTTON_BASE_CLASSES =
   "inline-flex items-center justify-center gap-2 px-3 py-2 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-white/15 via-white/10 to-white/5 border border-white/15 hover:from-white/25 hover:via-white/15 hover:to-white/10 text-white/90 backdrop-blur transition-all whitespace-nowrap"
 
 export function TopRightActions({

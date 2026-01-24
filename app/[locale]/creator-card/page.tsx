@@ -1113,6 +1113,12 @@ export default function CreatorCardPage() {
   }, [confirmLeaveIfDirty])
 
   useEffect(() => {
+    if (creatorId) {
+      localStorage.setItem("creatorCardId", creatorId)
+    }
+  }, [creatorId])
+
+  useEffect(() => {
     if (!creatorId) {
       setCreatorStats(null)
       return
