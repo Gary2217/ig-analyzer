@@ -293,47 +293,22 @@ function SortableFeaturedTile(props: {
     const isValidIgUrl = item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/"))
     
     return (
-      <div className="space-y-3">
-        <div
-          ref={setNodeRef}
-          style={{ transform: CSS.Transform.toString(transform), transition }}
-          className={
-            "group relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 " +
-            (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
-            (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
-            (isDragging ? " cursor-grabbing" : " cursor-grab")
-          }
-          {...attributes}
-          {...listeners}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-semibold text-white/60">{t("creatorCard.featured.igItem")}</span>
-          </div>
-
-          <div className="space-y-1">
-            <input
-              type="url"
-              value={item.url || ""}
-              onChange={(e) => onIgUrlChange(item.id, e.target.value)}
-              placeholder={t("creatorCard.featured.igUrl")}
-              className="w-full px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
-              onPointerDown={(e) => e.stopPropagation()}
-            />
-            <p className="text-xs text-white/50">{t("creatorCard.featured.igUrlHint")}</p>
-          </div>
-
-          <textarea
-            value={item.caption || ""}
-            onChange={(e) => onCaptionChange(item.id, e.target.value)}
-            placeholder={t("creatorCard.featured.caption")}
-            className="w-full min-h-[60px] px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none resize-y"
-            rows={2}
-            onPointerDown={(e) => e.stopPropagation()}
-          />
-
+      <div
+        ref={setNodeRef}
+        style={{ transform: CSS.Transform.toString(transform), transition }}
+        className={
+          "group relative w-full p-4 rounded-xl border border-white/10 bg-white/5 shadow-sm transition-colors space-y-4 " +
+          (isDragging ? "scale-[1.02] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
+          (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "")
+        }
+        {...attributes}
+        {...listeners}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-white/60">{t("creatorCard.featured.igItem")}</span>
           <button
             type="button"
-            className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+            className="shrink-0 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
             onPointerDownCapture={(e) => {
               e.preventDefault()
               e.stopPropagation()
@@ -349,18 +324,33 @@ function SortableFeaturedTile(props: {
           </button>
         </div>
 
-        {/* Instagram embed preview */}
-        {item.url && isValidIgUrl && (
-          <IgEmbedPreview url={item.url} />
-        )}
+        <div className="space-y-1">
+          <input
+            type="url"
+            value={item.url || ""}
+            onChange={(e) => onIgUrlChange(item.id, e.target.value)}
+            placeholder={t("creatorCard.featured.igUrl")}
+            className="w-full px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
+            onPointerDown={(e) => e.stopPropagation()}
+          />
+          <p className="text-xs text-white/50">{t("creatorCard.featured.igUrlHint")}</p>
+        </div>
+
+        {/* Instagram embed preview directly in tile */}
+        {item.url && isValidIgUrl ? (
+          <div className="w-full">
+            <IgEmbedPreview url={item.url} />
+          </div>
+        ) : null}
         
-        {/* Always show Open on Instagram link */}
+        {/* Always show Open on Instagram link if URL exists */}
         {item.url && (
           <a
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors"
+            onClick={(e) => e.stopPropagation()}
           >
             <span>{t("creatorCard.featured.openOnInstagram")}</span>
           </a>
@@ -2274,12 +2264,14 @@ export default function CreatorCardPage() {
                   titleEn: "Featured",
                   render: () => (
                     <>
+                      {/* Legacy file input - hidden, no longer used for IG-only featured */}
                       <input
                         ref={featuredAddInputRef}
                         type="file"
                         accept="image/*"
                         multiple
                         className="hidden"
+                        disabled
                         onChange={async (e) => {
                           const files = Array.from(e.currentTarget.files ?? [])
                           if (!files.length) return
@@ -2463,9 +2455,9 @@ export default function CreatorCardPage() {
                           window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
                         }}
                       >
-                        <SortableContext items={featuredItems.map((x) => x.id)}>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                            {featuredItems.map((item) => (
+                        <SortableContext items={featuredItems.filter(x => x.type === "ig").map((x) => x.id)}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {featuredItems.filter(item => item.type === "ig").map((item) => (
                               <SortableFeaturedTile
                                 key={item.id}
                                 item={item}
@@ -2503,41 +2495,6 @@ export default function CreatorCardPage() {
 
                             <button
                               type="button"
-                              onClick={openAddFeatured}
-                              className="group relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                              aria-label={t("creatorCard.featured.actions.addMedia")}
-                              title={t("creatorCard.featured.actions.addMedia")}
-                            >
-                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                                <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
-                                <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
-                                  {t("creatorCard.featured.actions.addMedia")}
-                                </div>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const id = `text-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                setFeaturedItems((prev) => [
-                                  ...prev,
-                                  { id, type: "text", url: "", brand: "", collabType: "", text: "", title: "" },
-                                ])
-                                markDirty()
-                              }}
-                              className="group relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                              aria-label={t("creatorCard.featured.actions.addText")}
-                              title={t("creatorCard.featured.actions.addText")}
-                            >
-                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                                <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
-                                <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
-                                  {t("creatorCard.featured.actions.addText")}
-                                </div>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
                               onClick={() => {
                                 const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
                                 setFeaturedItems((prev) => [
@@ -2546,7 +2503,7 @@ export default function CreatorCardPage() {
                                 ])
                                 markDirty()
                               }}
-                              className="group relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                              className="group relative w-full min-h-[120px] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                               aria-label={t("creatorCard.featured.actions.addIg")}
                               title={t("creatorCard.featured.actions.addIg")}
                             >
@@ -2561,8 +2518,10 @@ export default function CreatorCardPage() {
                         </SortableContext>
                       </DndContext>
 
-                      {featuredItems.length === 0 ? (
-                        <div className="mt-2 text-sm text-slate-500">尚未新增作品</div>
+                      {featuredItems.filter(x => x.type === "ig").length === 0 ? (
+                        <div className="mt-2 text-sm text-slate-500">
+                          {t("creatorCard.featured.emptyIg")}
+                        </div>
                       ) : null}
                     </>
                   ),

@@ -582,101 +582,31 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   </div>
                 </div>
               ) : (
-                featuredTiles.map((item) => {
-                  const itemType = item.type || "media"
-                  
-                  // Text item
-                  if (itemType === "text") {
-                    return (
-                      <div
-                        key={item.id}
-                        className="shrink-0 w-[200px] md:w-[220px] rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2"
-                      >
-                        {item.title && (
-                          <div className="text-sm font-semibold text-white/90 line-clamp-2">
-                            {item.title}
-                          </div>
-                        )}
-                        {item.text && (
-                          <div className="text-xs text-white/70 whitespace-pre-wrap line-clamp-6">
-                            {item.text}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }
-                  
-                  // IG item
-                  if (itemType === "ig") {
-                    return (
-                      <div
-                        key={item.id}
-                        className="shrink-0 w-[200px] md:w-[220px] rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3"
-                      >
-                        <div className="text-xs font-semibold text-white/60">Instagram Post</div>
-                        {item.url && (
-                          <a
-                            href={item.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors"
-                          >
-                            <span>Open on Instagram</span>
-                          </a>
-                        )}
-                        {item.caption && (
-                          <div className="text-xs text-white/70 whitespace-pre-wrap line-clamp-4">
-                            {item.caption}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }
-                  
-                  // Media item (default)
-                  return (
-                    <div key={item.id} className="shrink-0 w-[150px] md:w-[170px] space-y-2">
-                      <div className="relative w-full aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                        {item.url ? (
-                          <Image 
-                            src={item.url} 
-                            alt={item.brand ? t("alt.highlightWithBrand").replace("{brand}", item.brand) : t("alt.highlightItem")} 
-                            fill 
-                            sizes="170px" 
-                            unoptimized 
-                            className="object-cover" 
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center">
-                            <Plus className="h-7 w-7 text-white/25" />
-                          </div>
-                        )}
-
-                        {item.brand || item.collabType ? (
-                          <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1.5">
-                            {item.brand ? (
-                              <span className="inline-flex items-center rounded-full bg-black/40 px-2 py-1 text-[12px] font-semibold text-white/90 backdrop-blur">
-                                {item.brand}
-                              </span>
-                            ) : null}
-                            {item.collabType ? (
-                              <span className="inline-flex items-center rounded-full bg-black/35 px-2 py-1 text-[11px] font-semibold text-white/85 backdrop-blur">
-                                {getCollabTypeDisplayLabel(item.collabType, t)}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                      
-                      {/* Caption below media */}
-                      {item.caption && (
-                        <div className="text-xs text-white/70 whitespace-pre-wrap line-clamp-3 px-1">
-                          {item.caption}
+                featuredTiles
+                  .filter(item => (item.type || "media") === "ig")
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      className="shrink-0 w-[200px] md:w-[220px] rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3"
+                    >
+                      <div className="text-xs font-semibold text-white/60">Instagram Post</div>
+                      {item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors"
+                        >
+                          <span>Open on Instagram</span>
+                        </a>
+                      )}
+                      {item.url && (
+                        <div className="text-xs text-white/50 truncate">
+                          {item.url.replace(/^https?:\/\/(www\.)?/, "")}
                         </div>
                       )}
                     </div>
-                  )
-                })
+                  ))
               )}
             </div>
 

@@ -2656,7 +2656,8 @@
       "igItem": "IG Post",
       "igUrl": "IG Post URL",
       "igUrlHint": "Paste an Instagram post URL (/p/, /reel/ supported)",
-      "openOnInstagram": "Open on Instagram"
+      "openOnInstagram": "Open on Instagram",
+      "emptyIg": "No Instagram posts added yet"
     },
     "options": {
       "niche": {
