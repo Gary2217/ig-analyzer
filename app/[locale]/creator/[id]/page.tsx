@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { createPublicClient } from "@/lib/supabase/server"
 import { CollabAutoScroll } from "./CollabAutoScroll"
 import { PortfolioCarousel } from "./PortfolioCarousel"
+import { TopRightActions } from "@/app/components/TopRightActions"
 
 interface CreatorProfilePageProps {
   params: Promise<{
@@ -123,7 +124,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
     return (
       <div className="min-h-[calc(100dvh-80px)] w-full">
         <div className="w-full max-w-4xl mx-auto px-4 py-8 sm:py-12">
-          <div className="mb-6">
+          {/* Top Actions */}
+          <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
             <Link href={`/${resolvedParams.locale}/matchmaking`}>
               <Button
                 variant="ghost"
@@ -134,23 +136,15 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
                 {copy.back}
               </Button>
             </Link>
+            <TopRightActions
+              locale={locale}
+              showBack={false}
+            />
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 text-center max-w-2xl mx-auto space-y-4">
             <h2 className="text-2xl font-bold text-white">{copy.notFound}</h2>
             <p className="text-base text-white/70 leading-relaxed">{copy.notFoundDesc}</p>
-            <div className="pt-4">
-              <Link href={`/${resolvedParams.locale}/matchmaking`}>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="border-white/10 text-white/80 hover:bg-white/5"
-                >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  {copy.back}
-                </Button>
-              </Link>
-            </div>
           </div>
         </div>
       </div>
@@ -255,8 +249,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
   return (
     <div className="min-h-[calc(100dvh-80px)] w-full">
       <div className="w-full max-w-4xl mx-auto px-4 py-8 sm:py-12">
-        {/* Back Button */}
-        <div className="mb-6">
+        {/* Top Actions */}
+        <div className="mb-6 flex items-center justify-between gap-4">
           <Link href={`/${resolvedParams.locale}/matchmaking`}>
             <Button
               variant="ghost"
@@ -267,6 +261,11 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
               {copy.back}
             </Button>
           </Link>
+          <TopRightActions
+            locale={locale}
+            creatorId={cardData?.id}
+            showBack={false}
+          />
         </div>
 
         {/* Header */}

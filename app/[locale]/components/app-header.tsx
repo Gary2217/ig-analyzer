@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState, useEffect } from "react"
 import { Eye } from "lucide-react"
 import Logo from "../../../components/Logo"
 import LocaleSwitcher from "../../components/locale-switcher"
@@ -12,22 +11,14 @@ export default function AppHeader({ locale }: { locale: string }) {
   const pathname = usePathname()
   const isMatchmaking = pathname?.includes("/matchmaking")
   const isCreatorCard = pathname?.includes("/creator-card")
-  const [creatorCardId, setCreatorCardId] = useState<string | null>(null)
-  
-  useEffect(() => {
-    if (isCreatorCard) {
-      const id = localStorage.getItem("creatorCardId")
-      setCreatorCardId(id)
-    }
-  }, [isCreatorCard, pathname])
   
   const isZh = locale === "zh-TW"
   const copy = isZh
     ? {
-        viewProfile: "瀏覽創作者名片",
+        browseCreators: "瀏覽創作者名片",
       }
     : {
-        viewProfile: "View Creator Profile",
+        browseCreators: "Browse Creator Cards",
       }
 
   return (
@@ -47,11 +38,11 @@ export default function AppHeader({ locale }: { locale: string }) {
               {isMatchmaking && (
                 <TopRightActions locale={locale as "zh-TW" | "en"} showBack={false} />
               )}
-              {isCreatorCard && creatorCardId && (
-                <Link href={`/${locale}/creator/${creatorCardId}`} className={BUTTON_BASE_CLASSES}>
+              {isCreatorCard && (
+                <Link href={`/${locale}/matchmaking`} className={BUTTON_BASE_CLASSES}>
                   <Eye className="w-4 h-4" />
-                  <span className="hidden sm:inline">{copy.viewProfile}</span>
-                  <span className="sr-only sm:hidden">{copy.viewProfile}</span>
+                  <span className="hidden sm:inline">{copy.browseCreators}</span>
+                  <span className="sr-only sm:hidden">{copy.browseCreators}</span>
                 </Link>
               )}
               <LocaleSwitcher />
