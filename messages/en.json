@@ -2655,6 +2655,7 @@
       "textContent": "Text",
       "igItem": "IG Post",
       "igUrl": "IG Post URL",
+      "igUrlHint": "Paste an Instagram post URL (/p/, /reel/ supported)",
       "openOnInstagram": "Open on Instagram"
     },
     "options": {

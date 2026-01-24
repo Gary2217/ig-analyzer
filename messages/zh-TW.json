@@ -2634,6 +2634,7 @@
       "textContent": "文字內容",
       "igItem": "IG 貼文",
       "igUrl": "IG 貼文網址",
+      "igUrlHint": "貼上 Instagram 貼文連結（/p/、/reel/ 皆可）",
       "openOnInstagram": "在 Instagram 開啟"
     },
     "options": {

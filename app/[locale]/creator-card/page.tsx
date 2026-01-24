@@ -310,14 +310,17 @@ function SortableFeaturedTile(props: {
             <span className="text-xs font-semibold text-white/60">{t("creatorCard.featured.igItem")}</span>
           </div>
 
-          <input
-            type="url"
-            value={item.url || ""}
-            onChange={(e) => onIgUrlChange(item.id, e.target.value)}
-            placeholder={t("creatorCard.featured.igUrl")}
-            className="w-full px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
-            onPointerDown={(e) => e.stopPropagation()}
-          />
+          <div className="space-y-1">
+            <input
+              type="url"
+              value={item.url || ""}
+              onChange={(e) => onIgUrlChange(item.id, e.target.value)}
+              placeholder={t("creatorCard.featured.igUrl")}
+              className="w-full px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+            <p className="text-xs text-white/50">{t("creatorCard.featured.igUrlHint")}</p>
+          </div>
 
           <textarea
             value={item.caption || ""}
@@ -368,19 +371,20 @@ function SortableFeaturedTile(props: {
 
   // Media item rendering (default)
   return (
-    <div className="space-y-2">
-      <div
-        ref={setNodeRef}
-        style={{ transform: CSS.Transform.toString(transform), transition }}
-        className={
-          "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors " +
-          (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
-          (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
-          (isDragging ? " cursor-grabbing" : " cursor-grab")
-        }
-        {...attributes}
-        {...listeners}
-      >
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={
+        "group relative w-full flex flex-col md:flex-row gap-3 p-3 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors " +
+        (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
+        (!isDragging && isOver ? " ring-2 ring-emerald-400/50" : "") +
+        (isDragging ? " cursor-grabbing" : " cursor-grab")
+      }
+      {...attributes}
+      {...listeners}
+    >
+      {/* Thumbnail */}
+      <div className="relative w-full md:w-48 aspect-[3/4] shrink-0 overflow-hidden rounded-lg border border-white/10 bg-white/5">
         <button
           type="button"
           className={
@@ -454,38 +458,37 @@ function SortableFeaturedTile(props: {
           </div>
         ) : null}
 
-        <button
-          type="button"
-          className="absolute right-1 top-1 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
-          onPointerDownCapture={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-          }}
-          onPointerDown={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-          }}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onRemove(item.id)
-          }}
-          aria-label="移除"
-        >
-          <X className="h-3.5 w-3.5 text-slate-700" />
-        </button>
       </div>
 
-      {/* Caption textarea for media items */}
-      {itemType === "media" && (
+      {/* Caption textarea - right side on desktop, below on mobile */}
+      <div className="flex-1 flex flex-col gap-2">
         <textarea
           value={item.caption || ""}
           onChange={(e) => onCaptionChange(item.id, e.target.value)}
           placeholder={t("creatorCard.featured.caption")}
-          className="w-full min-h-[60px] px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none resize-y"
-          rows={2}
+          className="w-full min-h-[80px] md:min-h-[120px] px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none resize-y"
+          rows={3}
+          onPointerDown={(e) => e.stopPropagation()}
         />
-      )}
+      </div>
+
+      {/* Remove button - absolute positioned on parent */}
+      <button
+        type="button"
+        className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
+        onPointerDownCapture={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          onRemove(item.id)
+        }}
+        aria-label="移除"
+      >
+        <X className="h-3.5 w-3.5 text-slate-700" />
+      </button>
     </div>
   )
 }
