@@ -119,7 +119,7 @@ function IgEmbedFrameCompact({ url }: { url: string }) {
   if (!src) return null
 
   return (
-    <div className="w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/30">
+    <div className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/30">
       <iframe
         title="Instagram embed preview"
         src={src}
@@ -128,6 +128,11 @@ function IgEmbedFrameCompact({ url }: { url: string }) {
         loading="lazy"
         scrolling="no"
         allow="encrypted-media; picture-in-picture"
+      />
+      {/* Mask to hide Instagram header bar */}
+      <div
+        className="absolute top-0 left-0 right-0 bg-slate-900/60 pointer-events-none"
+        style={{ height: "44px" }}
       />
     </div>
   )

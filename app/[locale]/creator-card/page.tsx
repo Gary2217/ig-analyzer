@@ -271,7 +271,7 @@ function IgEmbedFrame({ url }: { url: string }) {
 
   return (
     <div
-      className="w-full rounded-xl overflow-hidden border border-white/10 bg-black/30"
+      className="relative w-full rounded-xl overflow-hidden border border-white/10 bg-black/30"
       style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
     >
       <iframe
@@ -282,6 +282,11 @@ function IgEmbedFrame({ url }: { url: string }) {
         loading="lazy"
         scrolling="no"
         allow="encrypted-media; picture-in-picture"
+      />
+      {/* Mask to hide Instagram header bar */}
+      <div
+        className="absolute top-0 left-0 right-0 bg-black/30 pointer-events-none"
+        style={{ height: "56px" }}
       />
     </div>
   )
