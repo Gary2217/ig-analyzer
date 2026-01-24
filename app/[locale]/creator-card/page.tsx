@@ -169,11 +169,37 @@ function IgEmbedPreview({ url }: { url: string }) {
         window.instgrm.Embeds.process()
       }
     }
+
+    // Add global CSS for iframe height fix
+    if (!document.getElementById('ig-embed-fix')) {
+      const style = document.createElement('style')
+      style.id = 'ig-embed-fix'
+      style.textContent = `
+        iframe.instagram-media-rendered {
+          min-height: 700px !important;
+          height: 700px !important;
+        }
+        .instagram-media {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+      `
+      document.head.appendChild(style)
+    }
   }, [])
 
   useEffect(() => {
     if (embedLoaded && window.instgrm?.Embeds) {
-      window.instgrm.Embeds.process()
+      const process = () => {
+        if (window.instgrm?.Embeds) {
+          window.instgrm.Embeds.process()
+        }
+      }
+      
+      // Multiple process calls to handle timing issues
+      requestAnimationFrame(process)
+      setTimeout(process, 250)
+      setTimeout(process, 1000)
     }
   }, [url, embedLoaded])
 

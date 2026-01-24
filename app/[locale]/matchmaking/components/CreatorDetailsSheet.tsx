@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { X, CheckCircle2, ExternalLink, Mail, Heart, Copy, Check } from "lucide-react"
+import { X, CheckCircle2, ExternalLink, Mail, Heart, Copy, Check, Globe, Instagram } from "lucide-react"
 import { CreatorCard } from "../types"
 import { Button } from "@/components/ui/button"
 
@@ -56,6 +56,11 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
   const [isSaved, setIsSaved] = useState(false)
   const [showContactInfo, setShowContactInfo] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  
+  // Contact data fetching
+  const [contactData, setContactData] = useState<{ email?: string; instagram?: string; website?: string } | null>(null)
+  const [contactLoading, setContactLoading] = useState(false)
+  const [contactFetched, setContactFetched] = useState(false)
 
   // Check if creator is saved on mount
   useEffect(() => {
@@ -91,6 +96,37 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
       // TODO: When auth is ready, also POST to /api/favorites/toggle
     } catch {
       // Ignore localStorage errors
+    }
+  }
+
+  // Fetch contact data when user opens contact section
+  const fetchContactData = async () => {
+    if (contactFetched) return // Already fetched
+    
+    setContactLoading(true)
+    try {
+      const creatorSlug = card.profileUrl.split("/").pop() || card.id
+      const res = await fetch(`/api/creator/${creatorSlug}/profile`)
+      
+      if (res.ok) {
+        const data = await res.json()
+        setContactData(data.contact || {})
+      }
+    } catch (error) {
+      console.error("Failed to fetch contact data:", error)
+      setContactData({})
+    } finally {
+      setContactLoading(false)
+      setContactFetched(true)
+    }
+  }
+
+  // Toggle contact section and fetch data if needed
+  const handleToggleContact = () => {
+    const newState = !showContactInfo
+    setShowContactInfo(newState)
+    if (newState && !contactFetched) {
+      fetchContactData()
     }
   }
 
@@ -340,7 +376,7 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
               <Button
                 variant="outline"
                 size="default"
-                onClick={() => setShowContactInfo(!showContactInfo)}
+                onClick={handleToggleContact}
                 className="flex-1 h-11 border-white/10 text-white/80 hover:bg-white/5 hover:text-white"
                 aria-label={copy.contact}
               >
@@ -367,8 +403,52 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
             {showContactInfo && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                 <h4 className="text-sm font-semibold text-white">{copy.contactInfo}</h4>
-                <p className="text-sm text-white/60 leading-relaxed">{copy.contactComingSoon}</p>
-                {/* Future: Add actual contact fields here when API provides them */}
+                
+                {contactLoading && (
+                  <div className="space-y-2">
+                    <div className="h-4 bg-white/10 rounded animate-pulse" />
+                    <div className="h-4 bg-white/10 rounded animate-pulse w-3/4" />
+                  </div>
+                )}
+                
+                {!contactLoading && contactData && (
+                  <div className="space-y-2">
+                    {contactData.instagram && (
+                      <a
+                        href={`https://instagram.com/${contactData.instagram}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-sm text-white/90 hover:text-white"
+                      >
+                        <Instagram className="w-4 h-4 text-white/60" />
+                        <span className="break-words">@{contactData.instagram}</span>
+                      </a>
+                    )}
+                    {contactData.email && (
+                      <a
+                        href={`mailto:${contactData.email}`}
+                        className="flex items-center gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-sm text-white/90 hover:text-white"
+                      >
+                        <Mail className="w-4 h-4 text-white/60" />
+                        <span className="break-all">{contactData.email}</span>
+                      </a>
+                    )}
+                    {contactData.website && (
+                      <a
+                        href={contactData.website.startsWith("http") ? contactData.website : `https://${contactData.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-sm text-white/90 hover:text-white"
+                      >
+                        <Globe className="w-4 h-4 text-white/60" />
+                        <span className="break-all">{contactData.website}</span>
+                      </a>
+                    )}
+                    {!contactData.instagram && !contactData.email && !contactData.website && (
+                      <p className="text-sm text-white/60 leading-relaxed">{copy.contactComingSoon}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
