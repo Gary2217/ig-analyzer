@@ -2661,7 +2661,8 @@
       "openOnInstagram": "Open on Instagram",
       "addPost": "Add Post",
       "added": "Added",
-      "emptyIg": "No Instagram posts added yet"
+      "emptyIg": "No Instagram posts added yet",
+      "igPreviewTitle": "Instagram Post Preview"
     },
     "options": {
       "niche": {

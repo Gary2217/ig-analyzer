@@ -170,18 +170,18 @@ function IgEmbedPreview({ url }: { url: string }) {
       }
     }
 
-    // Add global CSS for iframe height fix
+    // Add global CSS for responsive embed
     if (!document.getElementById('ig-embed-fix')) {
       const style = document.createElement('style')
       style.id = 'ig-embed-fix'
       style.textContent = `
-        iframe.instagram-media-rendered {
-          min-height: 700px !important;
-          height: 700px !important;
-        }
         .instagram-media {
           width: 100% !important;
           max-width: 100% !important;
+          min-width: 326px !important;
+        }
+        iframe.instagram-media-rendered {
+          width: 100% !important;
         }
       `
       document.head.appendChild(style)
@@ -381,12 +381,10 @@ function SortableFeaturedTile(props: {
           </>
         )}
 
-        {/* Instagram embed preview - enlarged */}
+        {/* Instagram embed preview - auto-fit */}
         {item.url && isValidIgUrl ? (
-          <div className="w-full max-w-full overflow-hidden rounded-xl">
-            <div className="min-h-[520px] md:min-h-[580px]">
-              <IgEmbedPreview url={item.url} />
-            </div>
+          <div className="w-full max-w-full overflow-hidden rounded-xl overflow-y-auto min-h-[520px] md:min-h-[600px] max-h-[800px]">
+            <IgEmbedPreview url={item.url} />
           </div>
         ) : null}
         
