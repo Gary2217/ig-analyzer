@@ -552,35 +552,9 @@ function SortableFeaturedTile(props: {
                 props.onIgThumbnailClick(item.url)
               }
             }}
-            className="w-full text-left space-y-2"
+            className="w-full"
           >
-            {/* Try showing the embed right inside the card (original behavior) */}
             <IgEmbedFrame url={item.url} />
-
-            {/* Keep previous fallback UI under it (so user still sees the error + Retry) */}
-            <div className="relative w-full rounded-xl border border-white/10 bg-slate-800/50 flex flex-col items-center justify-center gap-3 p-4 hover:bg-white/10 hover:border-white/20 transition-colors">
-              <div className="text-xs text-center text-white/60 break-words [overflow-wrap:anywhere]">
-                {t("creatorCard.featured.previewUnavailable")}
-              </div>
-              <div className="text-xs text-center text-white/40 break-words [overflow-wrap:anywhere]">
-                {oembedData.error}
-              </div>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  fetchOEmbed()
-                }}
-                className="px-4 py-2 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 rounded-lg border border-white/20 transition-colors min-h-[40px]"
-              >
-                {t("creatorCard.featured.retry")}
-              </button>
-
-              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 text-xs font-semibold text-white/90 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg pointer-events-none">
-                <span>{t("creatorCard.featured.tapToView")}</span>
-              </div>
-            </div>
           </button>
         ) : item.url && isValidIgUrl && oembedData?.status === "loading" ? (
           <div className="w-full rounded-xl border border-white/10 bg-slate-800/50 flex items-center justify-center" style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}>
