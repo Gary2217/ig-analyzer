@@ -276,17 +276,15 @@ function IgEmbedFrame({ url }: { url: string }) {
       className="relative w-full rounded-xl overflow-hidden border border-white/10 bg-black/30"
       style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
     >
-      <div style={{ transform: `translateY(-${cropTop}px)` }}>
-        <iframe
-          title="Instagram embed preview"
-          src={src}
-          className="w-full"
-          style={{ height: `calc(100% + ${cropTop}px)`, border: 0 }}
-          loading="lazy"
-          scrolling="no"
-          allow="encrypted-media; picture-in-picture"
-        />
-      </div>
+      <iframe
+        title="Instagram embed preview"
+        src={src}
+        className="absolute left-0 w-full"
+        style={{ top: `-${cropTop}px`, height: `calc(100% + ${cropTop}px)`, border: 0, display: "block" }}
+        loading="lazy"
+        scrolling="no"
+        allow="encrypted-media; picture-in-picture"
+      />
     </div>
   )
 }

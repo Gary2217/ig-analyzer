@@ -122,17 +122,15 @@ function IgEmbedFrameCompact({ url }: { url: string }) {
 
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/30">
-      <div style={{ transform: `translateY(-${cropTop}px)`, height: '100%' }}>
-        <iframe
-          title="Instagram embed preview"
-          src={src}
-          className="w-full"
-          style={{ height: `calc(100% + ${cropTop}px)`, border: 0 }}
-          loading="lazy"
-          scrolling="no"
-          allow="encrypted-media; picture-in-picture"
-        />
-      </div>
+      <iframe
+        title="Instagram embed preview"
+        src={src}
+        className="absolute left-0 w-full"
+        style={{ top: `-${cropTop}px`, height: `calc(100% + ${cropTop}px)`, border: 0, display: "block" }}
+        loading="lazy"
+        scrolling="no"
+        allow="encrypted-media; picture-in-picture"
+      />
     </div>
   )
 }
