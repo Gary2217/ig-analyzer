@@ -2655,8 +2655,12 @@
       "textContent": "Text",
       "igItem": "IG Post",
       "igUrl": "IG Post URL",
+      "igUrlLabel": "Instagram URL",
       "igUrlHint": "Paste an Instagram post URL (/p/, /reel/ supported)",
+      "openInstagram": "Open Instagram",
       "openOnInstagram": "Open on Instagram",
+      "addPost": "Add Post",
+      "added": "Added",
       "emptyIg": "No Instagram posts added yet"
     },
     "options": {

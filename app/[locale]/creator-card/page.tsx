@@ -143,6 +143,7 @@ type FeaturedItem = {
   type?: "media" | "text" | "ig"
   title?: string
   text?: string
+  isAdded?: boolean
 }
 
 function IgEmbedPreview({ url }: { url: string }) {
@@ -212,10 +213,12 @@ function SortableFeaturedTile(props: {
   onCaptionChange: (id: string, caption: string) => void
   onTextChange: (id: string, text: string, title?: string) => void
   onIgUrlChange: (id: string, url: string) => void
+  setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
+  markDirty: () => void
   suppressClick: boolean
-  activeLocale: string
+  activeLocale: "zh-TW" | "en"
 }) {
-  const { item, t, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, suppressClick } = props
+  const { item, t, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
 
   const itemType = item.type || "media"
@@ -291,6 +294,7 @@ function SortableFeaturedTile(props: {
   // IG item rendering
   if (itemType === "ig") {
     const isValidIgUrl = item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/"))
+    const isAdded = item.isAdded ?? false
     
     return (
       <div
@@ -324,36 +328,62 @@ function SortableFeaturedTile(props: {
           </button>
         </div>
 
-        <div className="space-y-1">
-          <input
-            type="url"
-            value={item.url || ""}
-            onChange={(e) => onIgUrlChange(item.id, e.target.value)}
-            placeholder={t("creatorCard.featured.igUrl")}
-            className="w-full px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
-            onPointerDown={(e) => e.stopPropagation()}
-          />
-          <p className="text-xs text-white/50">{t("creatorCard.featured.igUrlHint")}</p>
-        </div>
+        {/* Show URL input only if not added yet */}
+        {!isAdded && (
+          <>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-white/70">{t("creatorCard.featured.igUrlLabel")}</label>
+              <input
+                type="url"
+                value={item.url || ""}
+                onChange={(e) => onIgUrlChange(item.id, e.target.value)}
+                placeholder={t("creatorCard.featured.igUrl")}
+                className="w-full px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
+                onPointerDown={(e) => e.stopPropagation()}
+              />
+            </div>
+            
+            <a
+              href="https://www.instagram.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white/80 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-white/20 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span>{t("creatorCard.featured.openInstagram")}</span>
+            </a>
+          </>
+        )}
 
-        {/* Instagram embed preview directly in tile */}
+        {/* Instagram embed preview - enlarged */}
         {item.url && isValidIgUrl ? (
-          <div className="w-full">
-            <IgEmbedPreview url={item.url} />
+          <div className="w-full max-w-full overflow-hidden rounded-xl">
+            <div className="min-h-[520px] md:min-h-[580px]">
+              <IgEmbedPreview url={item.url} />
+            </div>
           </div>
         ) : null}
         
-        {/* Always show Open on Instagram link if URL exists */}
-        {item.url && (
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors"
-            onClick={(e) => e.stopPropagation()}
+        {/* Add Post button - only show if not added and has valid URL */}
+        {!isAdded && item.url && isValidIgUrl && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setFeaturedItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, isAdded: true } : x)))
+              markDirty()
+            }}
+            className="w-full px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors"
           >
-            <span>{t("creatorCard.featured.openOnInstagram")}</span>
-          </a>
+            {t("creatorCard.featured.addPost")}
+          </button>
+        )}
+        
+        {/* Added state indicator */}
+        {isAdded && (
+          <div className="text-xs font-semibold text-emerald-400/80">
+            ✓ {t("creatorCard.featured.added")}
+          </div>
         )}
       </div>
     )
@@ -1193,6 +1223,7 @@ export default function CreatorCardPage() {
                   brand: "",
                   collabType: "",
                   caption: typeof obj.caption === "string" ? obj.caption : "",
+                  isAdded: typeof obj.isAdded === "boolean" ? obj.isAdded : true,
                 })
               } else {
                 items.push({
@@ -2490,6 +2521,8 @@ export default function CreatorCardPage() {
                                   setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, url } : x)))
                                   markDirty()
                                 }}
+                                setFeaturedItems={setFeaturedItems}
+                                markDirty={markDirty}
                               />
                             ))}
 
@@ -2499,7 +2532,7 @@ export default function CreatorCardPage() {
                                 const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
                                 setFeaturedItems((prev) => [
                                   ...prev,
-                                  { id, type: "ig", url: "", brand: "", collabType: "", caption: "" },
+                                  { id, type: "ig", url: "", brand: "", collabType: "", caption: "", isAdded: false },
                                 ])
                                 markDirty()
                               }}

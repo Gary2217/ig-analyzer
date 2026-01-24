@@ -47,7 +47,7 @@ export type CreatorCardPreviewProps = {
 
   contact?: unknown
 
-  featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null; caption?: string | null; type?: string | null; title?: string | null; text?: string | null }[]
+  featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null; caption?: string | null; type?: string | null; title?: string | null; text?: string | null; isAdded?: boolean | null }[]
 
   featuredImageUrls?: (string | null)[]
 
@@ -231,7 +231,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   const featuredTiles = useMemo(() => {
     const rawItems = Array.isArray(featuredItems) ? featuredItems : []
-    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; title?: string; text?: string }> = []
+    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; title?: string; text?: string; isAdded?: boolean }> = []
 
     if (rawItems.length > 0) {
       for (const item of rawItems) {
@@ -583,7 +583,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 </div>
               ) : (
                 featuredTiles
-                  .filter(item => (item.type || "media") === "ig")
+                  .filter(item => (item.type || "media") === "ig" && item.isAdded !== false)
                   .map((item) => (
                     <div
                       key={item.id}
