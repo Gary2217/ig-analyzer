@@ -118,7 +118,9 @@ function IgEmbedFrameCompact({ url }: { url: string }) {
   const src = buildInstagramEmbedSrc(url)
   if (!src) return null
 
-  const cropTop = 90
+  const cropTop = 100
+  const cropBottom = 120
+  const totalCrop = cropTop + cropBottom
 
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/30">
@@ -126,7 +128,7 @@ function IgEmbedFrameCompact({ url }: { url: string }) {
         title="Instagram embed preview"
         src={src}
         className="absolute left-0 w-full"
-        style={{ top: `-${cropTop}px`, height: `calc(100% + ${cropTop}px)`, border: 0, display: "block" }}
+        style={{ top: `-${cropTop}px`, height: `calc(100% + ${totalCrop}px)`, border: 0, display: "block" }}
         loading="lazy"
         scrolling="no"
         allow="encrypted-media; picture-in-picture"
