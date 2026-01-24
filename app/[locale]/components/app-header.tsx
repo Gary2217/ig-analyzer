@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, useEffect } from "react"
-import { Eye, Handshake } from "lucide-react"
+import { Eye } from "lucide-react"
 import Logo from "../../../components/Logo"
 import LocaleSwitcher from "../../components/locale-switcher"
 import { TopRightActions, BUTTON_BASE_CLASSES } from "@/app/components/TopRightActions"
@@ -25,11 +25,9 @@ export default function AppHeader({ locale }: { locale: string }) {
   const copy = isZh
     ? {
         viewProfile: "瀏覽創作者名片",
-        matchmaking: "合作機會",
       }
     : {
         viewProfile: "View Creator Profile",
-        matchmaking: "Matchmaking",
       }
 
   return (
@@ -49,21 +47,12 @@ export default function AppHeader({ locale }: { locale: string }) {
               {isMatchmaking && (
                 <TopRightActions locale={locale as "zh-TW" | "en"} showBack={false} />
               )}
-              {isCreatorCard && (
-                <>
-                  {creatorCardId && (
-                    <Link href={`/${locale}/creator/${creatorCardId}`} className={BUTTON_BASE_CLASSES}>
-                      <Eye className="w-4 h-4" />
-                      <span className="hidden sm:inline">{copy.viewProfile}</span>
-                      <span className="sr-only sm:hidden">{copy.viewProfile}</span>
-                    </Link>
-                  )}
-                  <Link href={`/${locale}/matchmaking`} className={BUTTON_BASE_CLASSES}>
-                    <Handshake className="w-4 h-4" />
-                    <span className="hidden sm:inline">{copy.matchmaking}</span>
-                    <span className="sr-only sm:hidden">{copy.matchmaking}</span>
-                  </Link>
-                </>
+              {isCreatorCard && creatorCardId && (
+                <Link href={`/${locale}/creator/${creatorCardId}`} className={BUTTON_BASE_CLASSES}>
+                  <Eye className="w-4 h-4" />
+                  <span className="hidden sm:inline">{copy.viewProfile}</span>
+                  <span className="sr-only sm:hidden">{copy.viewProfile}</span>
+                </Link>
               )}
               <LocaleSwitcher />
             </div>
