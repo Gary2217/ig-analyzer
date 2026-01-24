@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Eye } from "lucide-react"
+import { ArrowLeft, Eye } from "lucide-react"
 import Logo from "../../../components/Logo"
 import LocaleSwitcher from "../../components/locale-switcher"
 import { TopRightActions, BUTTON_BASE_CLASSES } from "@/app/components/TopRightActions"
@@ -15,9 +15,11 @@ export default function AppHeader({ locale }: { locale: string }) {
   const isZh = locale === "zh-TW"
   const copy = isZh
     ? {
+        back: "返回",
         browseCreators: "瀏覽創作者名片",
       }
     : {
+        back: "Back",
         browseCreators: "Browse Creator Cards",
       }
 
@@ -39,11 +41,18 @@ export default function AppHeader({ locale }: { locale: string }) {
                 <TopRightActions locale={locale as "zh-TW" | "en"} showBack={false} />
               )}
               {isCreatorCard && (
-                <Link href={`/${locale}/matchmaking`} className={BUTTON_BASE_CLASSES}>
-                  <Eye className="w-4 h-4" />
-                  <span className="hidden sm:inline">{copy.browseCreators}</span>
-                  <span className="sr-only sm:hidden">{copy.browseCreators}</span>
-                </Link>
+                <>
+                  <Link href={`/${locale}/results#creator-card-section`} className={BUTTON_BASE_CLASSES}>
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">{copy.back}</span>
+                    <span className="sr-only sm:hidden">{copy.back}</span>
+                  </Link>
+                  <Link href={`/${locale}/matchmaking`} className={BUTTON_BASE_CLASSES}>
+                    <Eye className="w-4 h-4" />
+                    <span className="hidden sm:inline">{copy.browseCreators}</span>
+                    <span className="sr-only sm:hidden">{copy.browseCreators}</span>
+                  </Link>
+                </>
               )}
               <LocaleSwitcher />
             </div>

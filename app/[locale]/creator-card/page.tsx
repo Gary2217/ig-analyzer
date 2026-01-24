@@ -1451,9 +1451,6 @@ export default function CreatorCardPage() {
         </div>
 
         <div className="shrink-0 flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={handleBack}>
-            返回
-          </Button>
           <div className="relative">
             <Button
               variant="primary"
@@ -2837,14 +2834,6 @@ export default function CreatorCardPage() {
                             >
                               <div className="mx-auto w-full max-w-6xl px-4 pt-3">
                                 <div className="flex items-center gap-3">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
-                                    onClick={handleBack}
-                                  >
-                                    {t("creatorCardEditor.actions.back")}
-                                  </Button>
                                   <Button
                                     type="button"
                                     variant="primary"
