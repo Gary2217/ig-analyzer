@@ -42,7 +42,7 @@ export default function AppHeader({ locale }: { locale: string }) {
               )}
               {isCreatorCard && (
                 <>
-                  <Link href={`/${locale}/results#creator-card-section`} className={BUTTON_BASE_CLASSES}>
+                  <Link href={`/${locale}/results#creator-card`} className={BUTTON_BASE_CLASSES}>
                     <ArrowLeft className="w-4 h-4" />
                     <span className="hidden sm:inline">{copy.back}</span>
                     <span className="sr-only sm:hidden">{copy.back}</span>

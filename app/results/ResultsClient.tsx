@@ -2761,6 +2761,26 @@ export default function ResultsClient() {
     void reloadCreatorCard()
   }, [creatorCardReload, isConnectedInstagram, reloadCreatorCard])
 
+  // Scroll to hash anchor after page loads (for Back navigation from Creator Card)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const hash = window.location.hash
+    if (!hash) return
+    
+    // Wait for content to render, then scroll
+    const timer = setTimeout(() => {
+      const targetId = hash.slice(1) // Remove #
+      const element = document.getElementById(targetId)
+      if (element) {
+        requestAnimationFrame(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "start" })
+        })
+      }
+    }, 150)
+    
+    return () => clearTimeout(timer)
+  }, [creatorCard]) // Re-run when creator card loads
+
   useEffect(() => {
     if (typeof window === "undefined") return
 
@@ -3215,7 +3235,6 @@ export default function ResultsClient() {
     const isMobileVariant = variant === "mobile"
     return (
       <Card
-        id="creator-card-section"
         className={
           isMobileVariant
             ? "mt-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm"
@@ -3867,7 +3886,9 @@ export default function ResultsClient() {
   })()
 
   const creatorCardPreviewCard = (
-    <Card id="creator-card" className={"mt-3 scroll-mt-40 " + CARD_SHELL_HOVER}>
+    <>
+      <div id="creator-card-section" className="absolute -mt-24" />
+      <Card id="creator-card" className={"mt-3 scroll-mt-24 sm:scroll-mt-28 " + CARD_SHELL_HOVER}>
       <CardHeader className={CARD_HEADER_ROW}>
         <div className="w-full flex flex-wrap items-start sm:items-center gap-2">
           <div className="min-w-0">
@@ -4066,6 +4087,7 @@ export default function ResultsClient() {
         />
       </CardContent>
     </Card>
+    </>
   )
 
   if (derivedGateState === "loading")
