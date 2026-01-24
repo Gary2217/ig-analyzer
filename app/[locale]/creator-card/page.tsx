@@ -905,6 +905,11 @@ export default function CreatorCardPage() {
   const [refetchTick, setRefetchTick] = useState(0)
   const [creatorId, setCreatorId] = useState<string | null>(null)
   const [creatorStats, setCreatorStats] = useState<CreatorStats | null>(null)
+  
+  // Featured carousel scroll state
+  const featuredCarouselRef = useRef<HTMLDivElement>(null)
+  const [canScrollFeaturedLeft, setCanScrollFeaturedLeft] = useState(false)
+  const [canScrollFeaturedRight, setCanScrollFeaturedRight] = useState(false)
 
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<number | null>(null)
@@ -1046,6 +1051,20 @@ export default function CreatorCardPage() {
   useEffect(() => {
     set__overlayMounted(true)
   }, [])
+  
+  // Initialize featured carousel scroll state
+  useEffect(() => {
+    const el = featuredCarouselRef.current
+    if (!el) return
+    const updateScrollState = () => {
+      setCanScrollFeaturedLeft(el.scrollLeft > 2)
+      setCanScrollFeaturedRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
+    }
+    updateScrollState()
+    const observer = new ResizeObserver(updateScrollState)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [featuredItems])
 
   useEffect(() => {
     if (!isMobile) {
@@ -2747,71 +2766,138 @@ export default function CreatorCardPage() {
                         }}
                       >
                         <SortableContext items={featuredItems.filter(x => x.type === "ig").map((x) => x.id)}>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {featuredItems.filter(item => item.type === "ig").map((item) => (
-                              <SortableFeaturedTile
-                                key={item.id}
-                                item={item}
-                                t={t}
-                                activeLocale={activeLocale}
-                                suppressClick={suppressFeaturedTileClick}
-                                onReplace={(id) => {
-                                  pendingFeaturedReplaceIdRef.current = id
-                                  featuredReplaceInputRef.current?.click()
+                          <div className="relative group/carousel">
+                            {canScrollFeaturedLeft && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = featuredCarouselRef.current
+                                  if (!el) return
+                                  const firstItem = el.querySelector('[data-carousel-item]')
+                                  if (!firstItem) return
+                                  const cardWidth = firstItem.getBoundingClientRect().width
+                                  el.scrollBy({ left: -(cardWidth + 12), behavior: 'smooth' })
                                 }}
-                                onEdit={(id) => {
-                                  openEditFeatured(id)
+                                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm text-white/90 hover:bg-black/85 transition-all shadow-lg"
+                                style={{ minWidth: "44px", minHeight: "44px" }}
+                                aria-label="Previous"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                              </button>
+                            )}
+                            {canScrollFeaturedRight && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = featuredCarouselRef.current
+                                  if (!el) return
+                                  const firstItem = el.querySelector('[data-carousel-item]')
+                                  if (!firstItem) return
+                                  const cardWidth = firstItem.getBoundingClientRect().width
+                                  el.scrollBy({ left: cardWidth + 12, behavior: 'smooth' })
                                 }}
-                                onRemove={(id) => {
-                                  setFeaturedItems((prev) => {
-                                    const picked = prev.find((x) => x.id === id)
-                                    if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
-                                    return prev.filter((x) => x.id !== id)
-                                  })
-                                }}
-                                onCaptionChange={(id, caption) => {
-                                  setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, caption } : x)))
-                                  markDirty()
-                                }}
-                                onTextChange={(id, text, title) => {
-                                  setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, text, title } : x)))
-                                  markDirty()
-                                }}
-                                onIgUrlChange={(id, url) => {
-                                  setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, url } : x)))
-                                  markDirty()
-                                }}
-                                onIgThumbnailClick={(url) => setIgModalUrl(url)}
-                                igOEmbedCache={igOEmbedCache}
-                                onIgOEmbedFetch={(url, data) => {
-                                  setIgOEmbedCache((prev) => ({ ...prev, [url]: data }))
-                                }}
-                                setFeaturedItems={setFeaturedItems}
-                                markDirty={markDirty}
-                              />
-                            ))}
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                setFeaturedItems((prev) => [
-                                  ...prev,
-                                  { id, type: "ig", url: "", brand: "", collabType: "", caption: "", isAdded: false },
-                                ])
-                                markDirty()
+                                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm text-white/90 hover:bg-black/85 transition-all shadow-lg"
+                                style={{ minWidth: "44px", minHeight: "44px" }}
+                                aria-label="Next"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </button>
+                            )}
+                            <div 
+                              ref={featuredCarouselRef}
+                              id="featured-carousel-container"
+                              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-10"
+                              style={{ scrollPaddingLeft: "0px" }}
+                              onScroll={() => {
+                                const el = featuredCarouselRef.current
+                                if (!el) return
+                                setCanScrollFeaturedLeft(el.scrollLeft > 2)
+                                setCanScrollFeaturedRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
                               }}
-                              className="group relative w-full min-h-[120px] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                              aria-label={t("creatorCard.featured.actions.addIg")}
-                              title={t("creatorCard.featured.actions.addIg")}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                                  e.preventDefault()
+                                  const el = featuredCarouselRef.current
+                                  if (!el) return
+                                  const firstItem = el.querySelector('[data-carousel-item]')
+                                  if (!firstItem) return
+                                  const cardWidth = firstItem.getBoundingClientRect().width
+                                  const delta = e.key === 'ArrowLeft' ? -(cardWidth + 12) : (cardWidth + 12)
+                                  el.scrollBy({ left: delta, behavior: 'smooth' })
+                                }
+                              }}
+                              tabIndex={0}
                             >
-                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                                <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
-                                <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
-                                  {t("creatorCard.featured.actions.addIg")}
+                              {featuredItems.filter(item => item.type === "ig").map((item) => (
+                                <div key={item.id} data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
+                                  <SortableFeaturedTile
+                                    item={item}
+                                    t={t}
+                                    activeLocale={activeLocale}
+                                    suppressClick={suppressFeaturedTileClick}
+                                    onReplace={(id) => {
+                                      pendingFeaturedReplaceIdRef.current = id
+                                      featuredReplaceInputRef.current?.click()
+                                    }}
+                                    onEdit={(id) => {
+                                      openEditFeatured(id)
+                                    }}
+                                    onRemove={(id) => {
+                                      setFeaturedItems((prev) => {
+                                        const picked = prev.find((x) => x.id === id)
+                                        if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
+                                        return prev.filter((x) => x.id !== id)
+                                      })
+                                    }}
+                                    onCaptionChange={(id, caption) => {
+                                      setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, caption } : x)))
+                                      markDirty()
+                                    }}
+                                    onTextChange={(id, text, title) => {
+                                      setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, text, title } : x)))
+                                      markDirty()
+                                    }}
+                                    onIgUrlChange={(id, url) => {
+                                      setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, url } : x)))
+                                      markDirty()
+                                    }}
+                                    onIgThumbnailClick={(url) => setIgModalUrl(url)}
+                                    igOEmbedCache={igOEmbedCache}
+                                    onIgOEmbedFetch={(url, data) => {
+                                      setIgOEmbedCache((prev) => ({ ...prev, [url]: data }))
+                                    }}
+                                    setFeaturedItems={setFeaturedItems}
+                                    markDirty={markDirty}
+                                  />
                                 </div>
-                              </div>
-                            </button>
+                              ))}
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                                  setFeaturedItems((prev) => [
+                                    ...prev,
+                                    { id, type: "ig", url: "", brand: "", collabType: "", caption: "", isAdded: false },
+                                  ])
+                                  markDirty()
+                                }}
+                                className="group relative snap-start shrink-0 w-full sm:w-[calc(50%-6px)] min-h-[120px] overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                                aria-label={t("creatorCard.featured.actions.addIg")}
+                                title={t("creatorCard.featured.actions.addIg")}
+                              >
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                  <Plus className="h-7 w-7 text-white/30 group-hover:text-white/45" />
+                                  <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
+                                    {t("creatorCard.featured.actions.addIg")}
+                                  </div>
+                                </div>
+                              </button>
+                            </div>
                           </div>
                         </SortableContext>
                       </DndContext>
@@ -3452,10 +3538,8 @@ export default function CreatorCardPage() {
                                       <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-white/60 transition-transform duration-200 group-data-[state=open]:rotate-180 group-data-[state=open]:text-white/80" />
                                     </div>
                                   </AccordionTrigger>
-                                  <AccordionContent forceMount>
-                                    <div className="px-3 pb-4">
-                                      <div className="space-y-3">{s.render()}</div>
-                                    </div>
+                                  <AccordionContent className="px-3 pb-3">
+                                    <div className="space-y-2">{s.render()}</div>
                                   </AccordionContent>
                                 </AccordionItem>
                               ))}

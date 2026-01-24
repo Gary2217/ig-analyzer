@@ -271,6 +271,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, IgOEmbedData>>(props.igOEmbedCache || {})
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
   const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
+  const [previewCarouselIndex, setPreviewCarouselIndex] = useState(0)
+  const previewCarouselRef = useRef<HTMLDivElement>(null)
+  const [canScrollPreviewLeft, setCanScrollPreviewLeft] = useState(false)
+  const [canScrollPreviewRight, setCanScrollPreviewRight] = useState(false)
 
   // Helper to normalize URL (remove trailing slash)
   const normalizeUrl = (url: string) => url ? url.trim().replace(/\/$/, "") : ""
@@ -400,6 +404,20 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   }, [featuredImageUrls, featuredItems])
 
   const featuredCount = featuredTiles.length
+  
+  // Initialize preview carousel scroll state
+  useEffect(() => {
+    const el = previewCarouselRef.current
+    if (!el) return
+    const updateScrollState = () => {
+      setCanScrollPreviewLeft(el.scrollLeft > 2)
+      setCanScrollPreviewRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
+    }
+    updateScrollState()
+    const observer = new ResizeObserver(updateScrollState)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [featuredTiles])
 
   // Sync with parent cache if provided
   useEffect(() => {
@@ -794,9 +812,58 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           </div>
 
           <div className="relative mt-3 min-w-0">
+            {canScrollPreviewLeft && (
+              <button
+                type="button"
+                onClick={() => {
+                  const el = previewCarouselRef.current
+                  if (!el) return
+                  const firstItem = el.querySelector('button[data-preview-item]')
+                  if (!firstItem) return
+                  const cardWidth = firstItem.getBoundingClientRect().width
+                  el.scrollBy({ left: -(cardWidth + 16), behavior: 'smooth' })
+                }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm text-white/90 hover:bg-black/85 transition-all shadow-lg"
+                style={{ minWidth: "44px", minHeight: "44px" }}
+                aria-label="Previous"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+            {canScrollPreviewRight && (
+              <button
+                type="button"
+                onClick={() => {
+                  const el = previewCarouselRef.current
+                  if (!el) return
+                  const firstItem = el.querySelector('button[data-preview-item]')
+                  if (!firstItem) return
+                  const cardWidth = firstItem.getBoundingClientRect().width
+                  el.scrollBy({ left: cardWidth + 16, behavior: 'smooth' })
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm text-white/90 hover:bg-black/85 transition-all shadow-lg"
+                style={{ minWidth: "44px", minHeight: "44px" }}
+                aria-label="Next"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
             <div
-              ref={featuredStripRef}
-              className="flex gap-4 overflow-x-auto min-w-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              ref={(el) => {
+                featuredStripRef.current = el
+                previewCarouselRef.current = el
+              }}
+              className="flex gap-4 overflow-x-auto min-w-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-10"
+              onScroll={() => {
+                const el = previewCarouselRef.current
+                if (!el) return
+                setCanScrollPreviewLeft(el.scrollLeft > 2)
+                setCanScrollPreviewRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
+              }}
             >
               {featuredCount === 0 ? (
                 <div className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
@@ -827,6 +894,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     return (
                       <button
                         key={item.id}
+                        data-preview-item
                         type="button"
                         onClick={() => setOpenIgUrl(normalizedUrl)}
                         className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
