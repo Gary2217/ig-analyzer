@@ -1134,7 +1134,7 @@ export default function CreatorCardPage() {
   const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
   const [isAddIgOpen, setIsAddIgOpen] = useState(false)
   const [newIgUrl, setNewIgUrl] = useState("")
-  const [pendingIg, setPendingIg] = useState<{ url: string; oembed?: any; status: "idle" | "loading" | "success" | "error" } | null>(null)
+  const [pendingIg, setPendingIg] = useState<{ url: string; oembed?: any; status: "idle" | "loading" | "success" | "error" | "added" } | null>(null)
   const previewDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
   const [suppressFeaturedTileClick, setSuppressFeaturedTileClick] = useState(false)
@@ -1748,6 +1748,46 @@ export default function CreatorCardPage() {
     featuredItemsRef.current = featuredItems
   }, [featuredItems])
 
+  // Client-side localStorage hydration for featuredItems
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (featuredItems.length > 0) return // Already hydrated from API
+    if (!hasLoadedRef.current) return // Wait for initial API load
+    
+    try {
+      const draftJson = localStorage.getItem("creator_card_draft_v1")
+      if (!draftJson) return
+      
+      const draft = JSON.parse(draftJson)
+      if (!draft || typeof draft !== "object") return
+      
+      // Read from either camelCase or snake_case
+      const items = Array.isArray(draft.featuredItems) 
+        ? draft.featuredItems 
+        : Array.isArray(draft.featured_items) 
+          ? draft.featured_items 
+          : []
+      
+      if (items.length === 0) return
+      
+      // Restore featuredItems from localStorage
+      const restoredItems: FeaturedItem[] = items.map((item: any) => ({
+        id: item.id || `restored-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        type: item.type || "media",
+        url: item.url || "",
+        brand: item.brand || "",
+        collabType: item.collabType || "",
+        caption: item.caption || "",
+        title: item.title || "",
+        text: item.text || "",
+      }))
+      
+      setFeaturedItems(restoredItems)
+    } catch (err) {
+      // Silently fail - localStorage might be corrupted
+    }
+  }, [featuredItems.length, hasLoadedRef])
+
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!isDirtyRef.current) return
@@ -1869,6 +1909,91 @@ export default function CreatorCardPage() {
       return { ...prev, niche: joined }
     })
   }, [activeLocale, primaryTypeTags])
+
+  // Immediate localStorage persistence helper (no API call)
+  const persistDraftNow = useCallback((updatedFeaturedItems: FeaturedItem[]) => {
+    if (typeof window === "undefined") return
+    
+    try {
+      // Build the same draft structure as handleSave
+      const draftCard = {
+        ...baseCard,
+        audience: introDraft.trim() || baseCard?.audience || null,
+        themeTypes: normalizeStringArray(themeTypes, 20),
+        audienceProfiles: normalizeStringArray(audienceProfiles, 20),
+        deliverables: normalizeStringArray(deliverables, 50),
+        collaborationNiches: normalizeStringArray(collaborationNiches, 20),
+        pastCollaborations: normalizeStringArray(pastCollaborations, 20),
+        contact: serializedContact,
+        featuredItems: updatedFeaturedItems.map((x, idx) => {
+          const itemType = x.type || "media"
+          if (itemType === "text") {
+            return {
+              id: x.id,
+              type: "text",
+              title: x.title || "",
+              text: x.text || "",
+              order: idx,
+            }
+          }
+          if (itemType === "ig") {
+            return {
+              id: x.id,
+              type: "ig",
+              url: x.url || "",
+              caption: x.caption || "",
+              order: idx,
+            }
+          }
+          return {
+            id: x.id,
+            type: "media",
+            url: x.url || "",
+            brand: x.brand || "",
+            collabType: x.collabType || "",
+            caption: x.caption || "",
+            order: idx,
+          }
+        }),
+        featured_items: updatedFeaturedItems.map((x, idx) => {
+          const itemType = x.type || "media"
+          if (itemType === "text") {
+            return {
+              id: x.id,
+              type: "text",
+              title: x.title || "",
+              text: x.text || "",
+              order: idx,
+            }
+          }
+          if (itemType === "ig") {
+            return {
+              id: x.id,
+              type: "ig",
+              url: x.url || "",
+              caption: x.caption || "",
+              order: idx,
+            }
+          }
+          return {
+            id: x.id,
+            type: "media",
+            url: x.url || "",
+            brand: x.brand || "",
+            collabType: x.collabType || "",
+            caption: x.caption || "",
+            order: idx,
+          }
+        }),
+      }
+      
+      const draftJson = JSON.stringify(draftCard)
+      localStorage.setItem("creator_card_draft_v1", draftJson)
+      localStorage.setItem("creator_card_updated_at", String(Date.now()))
+    } catch (err) {
+      // Silently fail in production
+    }
+  }, [baseCard, introDraft, themeTypes, audienceProfiles, deliverables, collaborationNiches, pastCollaborations, serializedContact])
 
   const handleSave = useCallback(async () => {
     if (saving) return
@@ -3004,45 +3129,6 @@ export default function CreatorCardPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                // Allow adding even if preview fails - graceful degradation
-                                const urlToAdd = pendingIg?.url || newIgUrl.trim()
-                                if (!urlToAdd) return
-                                
-                                // Validate IG URL
-                                const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(urlToAdd)
-                                if (!isValidIg) {
-                                  showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
-                                  return
-                                }
-                                
-                                const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                setFeaturedItems((prev) => [
-                                  { id, type: "ig", url: urlToAdd, brand: "", collabType: "", caption: "", isAdded: true },
-                                  ...prev,
-                                ])
-                                setPendingIg(null)
-                                setNewIgUrl("")
-                                markDirty()
-                                
-                                // Scroll to show newly added item (second tile after placeholder)
-                                setTimeout(() => {
-                                  const el = featuredCarouselRef.current
-                                  if (!el) return
-                                  const items = el.querySelectorAll('[data-carousel-item]')
-                                  if (items.length > 1) {
-                                    items[1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
-                                  }
-                                }, 100)
-                              }}
-                              disabled={!newIgUrl.trim() && !pendingIg?.url}
-                              className="shrink-0 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{ minHeight: "44px" }}
-                            >
-                              {activeLocale === "zh-TW" ? "新增" : "Add"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
                                 setIsAddIgOpen(false)
                                 setNewIgUrl("")
                                 setPendingIg(null)
@@ -3146,46 +3232,140 @@ export default function CreatorCardPage() {
                             >
                               {/* Persistent Add Placeholder Tile - always first */}
                               <div data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
-                                <button
-                                  type="button"
-                                  onClick={() => setIsAddIgOpen(true)}
-                                  className="relative w-full rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-colors overflow-hidden cursor-pointer"
-                                  style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px" }}
-                                  aria-label={activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
-                                >
-                                  {pendingIg?.status === "loading" ? (
-                                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
-                                      <div className="h-12 w-12 rounded-full bg-white/10" />
-                                      <div className="h-3 w-24 rounded bg-white/10" />
-                                    </div>
-                                  ) : pendingIg?.status === "success" && pendingIg.oembed?.thumbnailUrl ? (
-                                    <img
-                                      src={pendingIg.oembed.thumbnailUrl}
-                                      alt="Preview"
-                                      className="w-full h-full object-cover block"
-                                      loading="lazy"
-                                      referrerPolicy="no-referrer"
-                                      decoding="async"
-                                    />
-                                  ) : pendingIg?.status === "error" ? (
-                                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
-                                      <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                      </svg>
-                                      <span className="text-xs leading-tight text-white/60">
-                                        {t("results.mediaKit.featured.previewUnavailable")}
-                                      </span>
-                                      <Plus className="h-6 w-6 text-white/30 mt-2" />
-                                    </div>
-                                  ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                                      <Plus className="h-10 w-10 text-white/30" />
-                                      <div className="text-xs font-medium text-white/50">
-                                        {activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
+                                <div className="relative w-full space-y-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsAddIgOpen(true)}
+                                    className="relative w-full rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-colors overflow-hidden cursor-pointer"
+                                    style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px" }}
+                                    aria-label={activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
+                                  >
+                                    {pendingIg?.status === "loading" ? (
+                                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
+                                        <div className="h-12 w-12 rounded-full bg-white/10" />
+                                        <div className="h-3 w-24 rounded bg-white/10" />
                                       </div>
-                                    </div>
+                                    ) : pendingIg?.status === "added" ? (
+                                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6">
+                                        {pendingIg.oembed?.thumbnailUrl ? (
+                                          <img
+                                            src={pendingIg.oembed.thumbnailUrl}
+                                            alt="Preview"
+                                            className="absolute inset-0 w-full h-full object-cover block opacity-50"
+                                            loading="lazy"
+                                            referrerPolicy="no-referrer"
+                                            decoding="async"
+                                          />
+                                        ) : null}
+                                        <div className="relative z-10 flex items-center gap-2 text-emerald-400">
+                                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          <span className="text-sm font-semibold">
+                                            {activeLocale === "zh-TW" ? "已新增" : "Added"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ) : pendingIg?.status === "success" && pendingIg.oembed?.thumbnailUrl ? (
+                                      <img
+                                        src={pendingIg.oembed.thumbnailUrl}
+                                        alt="Preview"
+                                        className="w-full h-full object-cover block"
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer"
+                                        decoding="async"
+                                      />
+                                    ) : pendingIg?.status === "error" ? (
+                                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+                                        <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                        <span className="text-xs leading-tight text-white/60">
+                                          {t("results.mediaKit.featured.previewUnavailable")}
+                                        </span>
+                                        <Plus className="h-6 w-6 text-white/30 mt-2" />
+                                      </div>
+                                    ) : (
+                                      <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                                        <Plus className="h-10 w-10 text-white/30" />
+                                        <div className="text-xs font-medium text-white/50">
+                                          {activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </button>
+                                  
+                                  {/* Add button below preview tile */}
+                                  {pendingIg && pendingIg.status !== "added" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        // Normalize and validate URL
+                                        const urlToAdd = pendingIg?.url || newIgUrl.trim()
+                                        if (!urlToAdd) return
+                                        
+                                        const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(urlToAdd)
+                                        if (!isValidIg) {
+                                          showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
+                                          return
+                                        }
+                                        
+                                        // Normalize URL for duplicate detection
+                                        const normalizedUrl = urlToAdd.trim().replace(/\/$/, "")
+                                        
+                                        // Check for duplicates
+                                        const isDuplicate = featuredItems.some(item => {
+                                          if (item.type !== "ig") return false
+                                          const existingUrl = item.url.trim().replace(/\/$/, "")
+                                          return existingUrl === normalizedUrl
+                                        })
+                                        
+                                        if (isDuplicate) {
+                                          showToast(activeLocale === "zh-TW" ? "已新增過這則貼文" : "This post is already added")
+                                          return
+                                        }
+                                        
+                                        // Add new item with functional setState
+                                        const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                                        const newItem = { id, type: "ig" as const, url: normalizedUrl, brand: "", collabType: "", caption: "", isAdded: true }
+                                        
+                                        setFeaturedItems(prev => {
+                                          const nextItems = [newItem, ...prev]
+                                          // Persist immediately to localStorage
+                                          persistDraftNow(nextItems)
+                                          return nextItems
+                                        })
+                                        
+                                        // Show "Added" state
+                                        setPendingIg({ ...pendingIg, status: "added" })
+                                        markDirty()
+                                        
+                                        // Reset after delay
+                                        setTimeout(() => {
+                                          setPendingIg(null)
+                                          setNewIgUrl("")
+                                        }, 1500)
+                                        
+                                        // Scroll to show newly added item
+                                        setTimeout(() => {
+                                          const el = featuredCarouselRef.current
+                                          if (!el) return
+                                          const items = el.querySelectorAll('[data-carousel-item]')
+                                          if (items.length > 1) {
+                                            items[1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+                                          }
+                                        }, 100)
+                                      }}
+                                      disabled={pendingIg.status === "loading" || !newIgUrl.trim()}
+                                      className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      style={{ minHeight: "44px" }}
+                                    >
+                                      {pendingIg.status === "loading" 
+                                        ? (activeLocale === "zh-TW" ? "載入中..." : "Loading...") 
+                                        : (activeLocale === "zh-TW" ? "新增" : "Add")}
+                                    </button>
                                   )}
-                                </button>
+                                </div>
                               </div>
 
                               {featuredItems.filter(item => item.type === "ig").map((item) => (
@@ -3203,11 +3383,17 @@ export default function CreatorCardPage() {
                                       openEditFeatured(id)
                                     }}
                                     onRemove={(id) => {
-                                      setFeaturedItems((prev) => {
+                                      setFeaturedItems(prev => {
                                         const picked = prev.find((x) => x.id === id)
                                         if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
-                                        return prev.filter((x) => x.id !== id)
+                                        const nextItems = prev.filter((x) => x.id !== id)
+                                        
+                                        // Persist immediately to localStorage
+                                        persistDraftNow(nextItems)
+                                        
+                                        return nextItems
                                       })
+                                      markDirty()
                                     }}
                                     onCaptionChange={(id, caption) => {
                                       setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, caption } : x)))
