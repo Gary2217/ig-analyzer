@@ -22,7 +22,89 @@ import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 
-// Safe fetch helper: never throws, returns null on any failure
+// Strict oEmbed types
+type OEmbedStatus = "idle" | "loading" | "success" | "error"
+
+type OEmbedSuccess = {
+  ok: true
+  data?: {
+    thumbnail_url?: string
+    thumbnail_width?: number
+    thumbnail_height?: number
+    title?: string
+    author_name?: string
+    provider_name?: string
+  }
+  [k: string]: any
+}
+
+type OEmbedError = {
+  ok: false
+  error?: { status?: number; message?: string } | any
+  [k: string]: any
+}
+
+type OEmbedResponse = OEmbedSuccess | OEmbedError
+
+type OEmbedState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: OEmbedResponse }
+  | { status: "error"; errorMessage?: string; httpStatus?: number }
+
+// Strict fetch helper: NEVER returns null, always returns explicit ok/error shape
+async function fetchOEmbedStrict(url: string): Promise<OEmbedResponse> {
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    
+    const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(url)}`, {
+      method: "GET",
+      signal: controller.signal,
+      cache: "no-store",
+      headers: { "cache-control": "no-cache", pragma: "no-cache" },
+    })
+    
+    clearTimeout(timeoutId)
+
+    let json: any = null
+    try {
+      json = await res.json()
+    } catch {
+      // JSON parse failed
+    }
+
+    // If HTTP is not ok => treat as error
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: {
+          status: res.status,
+          message: json?.error?.message ?? "Failed to load Instagram preview",
+        },
+      } as OEmbedError
+    }
+
+    // If API returns ok:false => treat as error
+    if (json?.ok === false) {
+      return json as OEmbedError
+    }
+
+    // Otherwise success
+    return (json ?? { ok: true }) as OEmbedSuccess
+  } catch (e: any) {
+    // Network error, timeout, etc.
+    return {
+      ok: false,
+      error: {
+        status: 0,
+        message: e?.message ?? "Network error",
+      },
+    } as OEmbedError
+  }
+}
+
+// Safe fetch helper for non-oEmbed calls: never throws, returns null on any failure
 async function safeFetchJson<T = any>(input: RequestInfo | URL, init?: RequestInit): Promise<T | null> {
   try {
     const res = await fetch(input, init)
@@ -156,18 +238,6 @@ type FeaturedItem = {
   title?: string
   text?: string
   isAdded?: boolean
-}
-
-type OEmbedStatus = "idle" | "loading" | "success" | "error"
-
-type IgOEmbedData = {
-  status: OEmbedStatus
-  thumbnail_url?: string
-  thumbnail_width?: number
-  thumbnail_height?: number
-  author_name?: string
-  provider_name?: string
-  error?: string
 }
 
 function IgEmbedPreview({ url }: { url: string }) {
@@ -304,8 +374,8 @@ function SortableFeaturedTile(props: {
   onTextChange: (id: string, text: string, title?: string) => void
   onIgUrlChange: (id: string, url: string) => void
   onIgThumbnailClick?: (url: string) => void
-  igOEmbedCache: Record<string, IgOEmbedData>
-  onIgOEmbedFetch: (url: string, data: IgOEmbedData) => void
+  igOEmbedCache: Record<string, OEmbedState>
+  onIgOEmbedFetch: (url: string, data: OEmbedState) => void
   setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
   markDirty: () => void
   suppressClick: boolean
@@ -404,7 +474,7 @@ function SortableFeaturedTile(props: {
       setRetryKey(0)
     }, [normalizedUrl])
     
-    // Fetch oEmbed data for thumbnail with timeout
+    // Fetch oEmbed data for thumbnail using strict fetch
     const fetchOEmbed = useCallback(async () => {
       if (!isValidIgUrl || !normalizedUrl) return
       
@@ -413,35 +483,37 @@ function SortableFeaturedTile(props: {
         status: "loading",
       })
       
-      const abortController = new AbortController()
-      const timeoutId = setTimeout(() => abortController.abort(), 8000)
-      
-      const json = await safeFetchJson<{ ok?: boolean; data?: { thumbnail_url?: string; thumbnail_width?: number; thumbnail_height?: number; author_name?: string; provider_name?: string }; error?: { message?: string } }>(
-        `/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`,
-        { signal: abortController.signal }
-      )
-      clearTimeout(timeoutId)
-      
-      if (json?.ok && json.data?.thumbnail_url) {
-        props.onIgOEmbedFetch(normalizedUrl, {
-          status: "success",
-          thumbnail_url: json.data!.thumbnail_url!,
-          thumbnail_width: json.data!.thumbnail_width || 640,
-          thumbnail_height: json.data!.thumbnail_height || 640,
-          author_name: json.data!.author_name || "",
-          provider_name: json.data!.provider_name || "Instagram",
-        })
-        if (process.env.NODE_ENV !== "production") {
-          console.log("[IG oEmbed Success]", { url: normalizedUrl, thumbnail: json.data.thumbnail_url })
+      try {
+        const response = await fetchOEmbedStrict(normalizedUrl)
+        
+        if (response.ok === false) {
+          // Error response
+          props.onIgOEmbedFetch(normalizedUrl, {
+            status: "error",
+            httpStatus: response.error?.status,
+            errorMessage: response.error?.message ?? "Preview unavailable",
+          })
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[IG oEmbed Error]", { url: normalizedUrl, error: response.error })
+          }
+        } else {
+          // Success response
+          props.onIgOEmbedFetch(normalizedUrl, {
+            status: "success",
+            data: response,
+          })
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[IG oEmbed Success]", { url: normalizedUrl, thumbnail: response.data?.thumbnail_url })
+          }
         }
-      } else {
-        const errorMsg = json?.error?.message || (json === null ? "API request failed (500/502)" : "Failed to load preview")
+      } catch (e: any) {
+        // Should not happen with fetchOEmbedStrict, but handle just in case
         props.onIgOEmbedFetch(normalizedUrl, {
           status: "error",
-          error: errorMsg,
+          errorMessage: e?.message ?? "Network error",
         })
         if (process.env.NODE_ENV !== "production") {
-          console.error("[IG oEmbed Error]", { url: normalizedUrl, error: errorMsg, json })
+          console.error("[IG oEmbed Exception]", { url: normalizedUrl, error: e })
         }
       }
     }, [normalizedUrl, isValidIgUrl, props])
@@ -525,12 +597,16 @@ function SortableFeaturedTile(props: {
 
         {/* Dev diagnostics */}
         {process.env.NODE_ENV !== "production" && isValidIgUrl && (() => {
+          const thumbnailUrl = oembedData?.status === "success" && oembedData.data.ok === true 
+            ? oembedData.data.data?.thumbnail_url 
+            : undefined
+          const errorMsg = oembedData?.status === "error" ? oembedData.errorMessage : undefined
           console.log("[IG Tile Render]", {
             url: normalizedUrl,
             status: oembedData?.status,
-            hasThumbnail: !!oembedData?.thumbnail_url,
+            hasThumbnail: !!thumbnailUrl,
             thumbnailLoadError,
-            error: oembedData?.error,
+            error: errorMsg,
           })
           return null
         })()}
@@ -1065,7 +1141,7 @@ export default function CreatorCardPage() {
   const [editingFeaturedCollabTypeSelect, setEditingFeaturedCollabTypeSelect] = useState("")
   const [editingFeaturedCollabTypeCustom, setEditingFeaturedCollabTypeCustom] = useState("")
   const [igModalUrl, setIgModalUrl] = useState<string | null>(null)
-  const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, IgOEmbedData>>({})
+  const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>({})
 
   const [__overlayMounted, set__overlayMounted] = useState(false)
   useEffect(() => {
