@@ -617,34 +617,60 @@ function SortableFeaturedTile(props: {
 
         {/* Show loading skeleton while fetching oEmbed */}
         {normalizedUrl && isValidIgUrl && oembedData?.status === "loading" ? (
-          <div
-            className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
-          >
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
-              <div className="h-12 w-12 rounded-full bg-white/10" />
-              <div className="h-3 w-24 rounded bg-white/10" />
+          <div className="space-y-2">
+            <div
+              className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
+              style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+            >
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
+                <div className="h-12 w-12 rounded-full bg-white/10" />
+                <div className="h-3 w-24 rounded bg-white/10" />
+              </div>
             </div>
+            <a
+              href={normalizedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 hover:brightness-110 rounded-lg transition-all shadow-lg shadow-purple-500/25"
+              style={{ minHeight: "44px" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+              </svg>
+              <span>{t("creatorCard.featured.openInstagram")}</span>
+            </a>
           </div>
         ) : normalizedUrl && isValidIgUrl && oembedData?.status === "error" ? (
-          <a
-            href={normalizedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors flex flex-col items-center justify-center gap-3 p-6 text-center"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-            <span className="text-xs leading-tight text-white/60 break-words">
-              {t("results.mediaKit.featured.previewUnavailable")}
-            </span>
-            <span className="text-[11px] leading-tight text-white/40 break-words">
-              {t("results.mediaKit.featured.tapToOpen")}
-            </span>
-          </a>
+          <div className="space-y-2">
+            <div
+              className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 flex flex-col items-center justify-center gap-3 p-6 text-center"
+              style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+            >
+              <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              <span className="text-xs leading-tight text-white/60 break-words">
+                {t("results.mediaKit.featured.previewUnavailable")}
+              </span>
+              <span className="text-[11px] leading-tight text-white/40 break-words">
+                {t("results.mediaKit.featured.tapToOpen")}
+              </span>
+            </div>
+            <a
+              href={normalizedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 hover:brightness-110 rounded-lg transition-all shadow-lg shadow-purple-500/25"
+              style={{ minHeight: "44px" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+              </svg>
+              <span>{t("creatorCard.featured.openInstagram")}</span>
+            </a>
+          </div>
         ) : normalizedUrl && isValidIgUrl && oembedData?.status === "success" && oembedData.data.ok === true && (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url) ? (
           <div className="space-y-2">
             <div
@@ -1149,6 +1175,7 @@ export default function CreatorCardPage() {
   const featuredItemsRef = useRef<FeaturedItem[]>([])
   const featuredAddInputRef = useRef<HTMLInputElement | null>(null)
   const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
+  const [newIgUrl, setNewIgUrl] = useState("")
   const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
   const [suppressFeaturedTileClick, setSuppressFeaturedTileClick] = useState(false)
   const [featuredUploadingIds, setFeaturedUploadingIds] = useState<Set<string>>(new Set())
@@ -3092,6 +3119,50 @@ export default function CreatorCardPage() {
                           {t("creatorCard.featured.emptyIg")}
                         </div>
                       ) : null}
+
+                      {/* Always-visible Add Post panel */}
+                      <div className="mt-4 p-4 rounded-xl border border-white/10 bg-white/5 space-y-3">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-white/70">
+                            {t("creatorCard.featured.igUrlLabel")}
+                          </label>
+                          <input
+                            type="url"
+                            value={newIgUrl}
+                            onChange={(e) => setNewIgUrl(e.target.value)}
+                            placeholder={t("creatorCard.featured.igUrl")}
+                            className="w-full px-3 py-2.5 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none [overflow-wrap:anywhere] break-words"
+                            style={{ minHeight: "44px" }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const trimmed = newIgUrl.trim()
+                            if (!trimmed) return
+                            
+                            // Validate Instagram URL
+                            const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(trimmed)
+                            if (!isValidIg) {
+                              showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
+                              return
+                            }
+                            
+                            // Create new item and trigger oEmbed fetch
+                            const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                            setFeaturedItems((prev) => [
+                              ...prev,
+                              { id, type: "ig", url: trimmed, brand: "", collabType: "", caption: "", isAdded: true },
+                            ])
+                            setNewIgUrl("")
+                            markDirty()
+                          }}
+                          className="w-full sm:w-auto px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors"
+                          style={{ minHeight: "44px" }}
+                        >
+                          {t("creatorCard.featured.addPost")}
+                        </button>
+                      </div>
                     </>
                   ),
                 },
