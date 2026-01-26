@@ -22,6 +22,17 @@ import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 
+// Safe fetch helper: never throws, returns null on any failure
+async function safeFetchJson<T = any>(input: RequestInfo | URL, init?: RequestInit): Promise<T | null> {
+  try {
+    const res = await fetch(input, init)
+    if (!res.ok) return null
+    return (await res.json()) as T
+  } catch {
+    return null
+  }
+}
+
 function useIsMobileMax640() {
   const [isMobile, setIsMobile] = useState(false)
 
@@ -405,53 +416,32 @@ function SortableFeaturedTile(props: {
       const abortController = new AbortController()
       const timeoutId = setTimeout(() => abortController.abort(), 8000)
       
-      try {
-        const response = await fetch(
-          `/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`,
-          { signal: abortController.signal }
-        )
-        clearTimeout(timeoutId)
-        
-        const json = await response.json()
-        
-        if (json.ok && json.data?.thumbnail_url) {
-          props.onIgOEmbedFetch(normalizedUrl, {
-            status: "success",
-            thumbnail_url: json.data.thumbnail_url,
-            thumbnail_width: json.data.thumbnail_width || 640,
-            thumbnail_height: json.data.thumbnail_height || 640,
-            author_name: json.data.author_name || "",
-            provider_name: json.data.provider_name || "Instagram",
-          })
-          if (process.env.NODE_ENV !== "production") {
-            console.log("[IG oEmbed Success]", { url: normalizedUrl, thumbnail: json.data.thumbnail_url })
-          }
-        } else {
-          const errorMsg = json.error?.message || "Failed to load preview"
-          props.onIgOEmbedFetch(normalizedUrl, {
-            status: "error",
-            error: errorMsg,
-          })
-          if (process.env.NODE_ENV !== "production") {
-            console.error("[IG oEmbed Error]", { url: normalizedUrl, error: errorMsg, json })
-          }
+      const json = await safeFetchJson<{ ok?: boolean; data?: { thumbnail_url?: string; thumbnail_width?: number; thumbnail_height?: number; author_name?: string; provider_name?: string }; error?: { message?: string } }>(
+        `/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`,
+        { signal: abortController.signal }
+      )
+      clearTimeout(timeoutId)
+      
+      if (json?.ok && json.data?.thumbnail_url) {
+        props.onIgOEmbedFetch(normalizedUrl, {
+          status: "success",
+          thumbnail_url: json.data!.thumbnail_url!,
+          thumbnail_width: json.data!.thumbnail_width || 640,
+          thumbnail_height: json.data!.thumbnail_height || 640,
+          author_name: json.data!.author_name || "",
+          provider_name: json.data!.provider_name || "Instagram",
+        })
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[IG oEmbed Success]", { url: normalizedUrl, thumbnail: json.data.thumbnail_url })
         }
-      } catch (error) {
-        clearTimeout(timeoutId)
-        let errorMsg = "Network error"
-        if (error instanceof Error) {
-          if (error.name === "AbortError") {
-            errorMsg = "Request timeout. Please try again."
-          } else {
-            errorMsg = error.message
-          }
-        }
+      } else {
+        const errorMsg = json?.error?.message || (json === null ? "API request failed (500/502)" : "Failed to load preview")
         props.onIgOEmbedFetch(normalizedUrl, {
           status: "error",
           error: errorMsg,
         })
         if (process.env.NODE_ENV !== "production") {
-          console.error("[IG oEmbed Fetch Error]", { url: normalizedUrl, error })
+          console.error("[IG oEmbed Error]", { url: normalizedUrl, error: errorMsg, json })
         }
       }
     }, [normalizedUrl, isValidIgUrl, props])

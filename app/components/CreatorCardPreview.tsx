@@ -7,6 +7,17 @@ import { ChevronLeft, ChevronRight, Plus, Sparkles, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
 
+// Safe fetch helper: never throws, returns null on any failure
+async function safeFetchJson<T = any>(input: RequestInfo | URL, init?: RequestInit): Promise<T | null> {
+  try {
+    const res = await fetch(input, init)
+    if (!res.ok) return null
+    return (await res.json()) as T
+  } catch {
+    return null
+  }
+}
+
 // Instagram embed preview component (reused from editor)
 function IgEmbedPreview({ url }: { url: string }) {
   const embedRef = useRef<HTMLDivElement>(null)
@@ -444,53 +455,29 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         const abortController = new AbortController()
         const timeoutId = setTimeout(() => abortController.abort(), 8000)
         
-        try {
-          const response = await fetch(
-            `/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`,
-            { signal: abortController.signal }
-          )
-          clearTimeout(timeoutId)
-          
-          const json = await response.json()
-          
-          if (json.ok && json.data?.thumbnail_url) {
-            setIgOEmbedCache((prev) => ({
-              ...prev,
-              [normalizedUrl]: {
-                status: "success",
-                thumbnail_url: json.data.thumbnail_url,
-                thumbnail_width: json.data.thumbnail_width || 640,
-                thumbnail_height: json.data.thumbnail_height || 640,
-                author_name: json.data.author_name || "",
-                provider_name: json.data.provider_name || "Instagram",
-              },
-            }))
-            if (process.env.NODE_ENV !== "production") {
-              console.log("[Preview IG oEmbed Success]", { url: normalizedUrl, thumbnail: json.data.thumbnail_url })
-            }
-          } else {
-            const errorMsg = json.error?.message || "Failed to load preview"
-            setIgOEmbedCache((prev) => ({
-              ...prev,
-              [normalizedUrl]: {
-                status: "error",
-                error: errorMsg,
-              },
-            }))
-            if (process.env.NODE_ENV !== "production") {
-              console.error("[Preview IG oEmbed Error]", { url: normalizedUrl, error: errorMsg, json })
-            }
+        const json = await safeFetchJson<{ ok?: boolean; data?: { thumbnail_url?: string; thumbnail_width?: number; thumbnail_height?: number; author_name?: string; provider_name?: string }; error?: { message?: string } }>(
+          `/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`,
+          { signal: abortController.signal }
+        )
+        clearTimeout(timeoutId)
+        
+        if (json?.ok && json.data?.thumbnail_url) {
+          setIgOEmbedCache((prev) => ({
+            ...prev,
+            [normalizedUrl]: {
+              status: "success",
+              thumbnail_url: json.data!.thumbnail_url!,
+              thumbnail_width: json.data!.thumbnail_width || 640,
+              thumbnail_height: json.data!.thumbnail_height || 640,
+              author_name: json.data!.author_name || "",
+              provider_name: json.data!.provider_name || "Instagram",
+            },
+          }))
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[Preview IG oEmbed Success]", { url: normalizedUrl, thumbnail: json.data.thumbnail_url })
           }
-        } catch (error) {
-          clearTimeout(timeoutId)
-          let errorMsg = "Network error"
-          if (error instanceof Error) {
-            if (error.name === "AbortError") {
-              errorMsg = "Request timeout"
-            } else {
-              errorMsg = error.message
-            }
-          }
+        } else {
+          const errorMsg = json?.error?.message || (json === null ? "API request failed (500/502)" : "Failed to load preview")
           setIgOEmbedCache((prev) => ({
             ...prev,
             [normalizedUrl]: {
@@ -499,7 +486,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             },
           }))
           if (process.env.NODE_ENV !== "production") {
-            console.error("[Preview IG oEmbed Fetch Error]", { url: normalizedUrl, error })
+            console.error("[Preview IG oEmbed Error]", { url: normalizedUrl, error: errorMsg, json })
           }
         }
       }
