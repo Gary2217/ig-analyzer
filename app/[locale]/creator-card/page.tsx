@@ -3116,136 +3116,135 @@ export default function CreatorCardPage() {
                         </SortableContext>
                       </DndContext>
 
-                      {featuredItems.filter(x => x.type === "ig").length === 0 ? (
-                        <div className="mt-2 text-sm text-slate-500">
-                          {t("creatorCard.featured.emptyIg")}
-                        </div>
-                      ) : null}
-
-                      {/* Collapsed/Expandable Add IG panel */}
-                      <div className="mt-4 space-y-3">
-                        {/* Small Add button */}
+                      {/* Add button inside Featured section */}
+                      <div className="mb-3">
                         <button
                           type="button"
                           onClick={() => setIsAddIgOpen(v => !v)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-white/15 bg-white/5 hover:bg-white/10 transition-colors"
                         >
                           <Plus className="h-3.5 w-3.5" />
-                          <span>{activeLocale === "zh-TW" ? "新增" : "Add"}</span>
+                          <span>{t("creatorCard.featured.addPost")}</span>
                         </button>
+                      </div>
 
-                        {/* Expandable input panel */}
-                        {isAddIgOpen && (
-                          <div className="p-4 rounded-xl border border-white/10 bg-white/5 space-y-3">
-                            <div className="space-y-2">
-                              <input
-                                type="url"
-                                value={newIgUrl}
-                                onChange={(e) => setNewIgUrl(e.target.value)}
-                                placeholder={t("creatorCard.featured.igUrl")}
-                                className="w-full px-3 py-2.5 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none [overflow-wrap:anywhere] break-words"
-                                style={{ minHeight: "44px" }}
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const trimmed = newIgUrl.trim()
-                                if (!trimmed) return
+                      {/* Expandable input panel - inside Featured card */}
+                      {isAddIgOpen && (
+                        <div className="mb-4 p-4 rounded-xl border border-white/10 bg-white/5 space-y-3">
+                          <div className="space-y-2">
+                            <input
+                              type="url"
+                              value={newIgUrl}
+                              onChange={(e) => setNewIgUrl(e.target.value)}
+                              placeholder={t("creatorCard.featured.igUrl")}
+                              className="w-full px-3 py-2.5 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none [overflow-wrap:anywhere] break-words"
+                              style={{ minHeight: "44px" }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const trimmed = newIgUrl.trim()
+                              if (!trimmed) return
+                              
+                              // Validate Instagram URL
+                              const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(trimmed)
+                              if (!isValidIg) {
+                                showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
+                                return
+                              }
+                              
+                              // Start preview fetch
+                              setPendingIg({ url: trimmed, status: "loading" })
+                              
+                              try {
+                                const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(trimmed)}`)
+                                const data = await res.json()
                                 
-                                // Validate Instagram URL
-                                const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(trimmed)
-                                if (!isValidIg) {
-                                  showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
-                                  return
-                                }
-                                
-                                // Start preview fetch
-                                setPendingIg({ url: trimmed, status: "loading" })
-                                
-                                try {
-                                  const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(trimmed)}`)
-                                  const data = await res.json()
-                                  
-                                  if (res.ok && data.ok) {
-                                    setPendingIg({ url: trimmed, status: "success", oembed: data })
-                                  } else {
-                                    setPendingIg({ url: trimmed, status: "error" })
-                                  }
-                                } catch (err) {
+                                if (res.ok && data.ok) {
+                                  setPendingIg({ url: trimmed, status: "success", oembed: data })
+                                } else {
                                   setPendingIg({ url: trimmed, status: "error" })
                                 }
-                              }}
-                              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/15 transition-colors"
-                            >
-                              <span>{activeLocale === "zh-TW" ? "預覽" : "Preview"}</span>
-                            </button>
+                              } catch (err) {
+                                setPendingIg({ url: trimmed, status: "error" })
+                              }
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/15 transition-colors"
+                          >
+                            <span>{activeLocale === "zh-TW" ? "預覽" : "Preview"}</span>
+                          </button>
 
-                            {/* Preview area */}
-                            {pendingIg?.status === "loading" && (
+                          {/* Preview area */}
+                          {pendingIg?.status === "loading" && (
+                            <div
+                              className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
+                              style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+                            >
+                              <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
+                                <div className="h-12 w-12 rounded-full bg-white/10" />
+                                <div className="h-3 w-24 rounded bg-white/10" />
+                              </div>
+                            </div>
+                          )}
+
+                          {pendingIg?.status === "error" && (
+                            <div
+                              className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 flex flex-col items-center justify-center gap-3 p-6 text-center"
+                              style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+                            >
+                              <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              <span className="text-xs leading-tight text-white/60 break-words">
+                                {t("results.mediaKit.featured.previewUnavailable")}
+                              </span>
+                            </div>
+                          )}
+
+                          {pendingIg?.status === "success" && pendingIg.oembed?.thumbnailUrl && (
+                            <div className="space-y-3">
                               <div
                                 className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
                                 style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
                               >
-                                <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
-                                  <div className="h-12 w-12 rounded-full bg-white/10" />
-                                  <div className="h-3 w-24 rounded bg-white/10" />
-                                </div>
+                                <img
+                                  src={pendingIg.oembed.thumbnailUrl}
+                                  alt="Instagram post preview"
+                                  className="w-full h-full object-cover block"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  decoding="async"
+                                />
                               </div>
-                            )}
-
-                            {pendingIg?.status === "error" && (
-                              <div
-                                className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 flex flex-col items-center justify-center gap-3 p-6 text-center"
-                                style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // Confirm and add to featuredItems
+                                  const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                                  setFeaturedItems((prev) => [
+                                    ...prev,
+                                    { id, type: "ig", url: pendingIg.url, brand: "", collabType: "", caption: "", isAdded: true },
+                                  ])
+                                  setPendingIg(null)
+                                  setNewIgUrl("")
+                                  setIsAddIgOpen(false)
+                                  markDirty()
+                                }}
+                                className="w-full sm:w-auto px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors"
                               >
-                                <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                                <span className="text-xs leading-tight text-white/60 break-words">
-                                  {t("results.mediaKit.featured.previewUnavailable")}
-                                </span>
-                              </div>
-                            )}
+                                {t("creatorCard.featured.addPost")}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                            {pendingIg?.status === "success" && pendingIg.oembed?.thumbnailUrl && (
-                              <div className="space-y-3">
-                                <div
-                                  className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
-                                  style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
-                                >
-                                  <img
-                                    src={pendingIg.oembed.thumbnailUrl}
-                                    alt="Instagram post preview"
-                                    className="w-full h-full object-cover block"
-                                    loading="lazy"
-                                    referrerPolicy="no-referrer"
-                                    decoding="async"
-                                  />
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    // Confirm and add to featuredItems
-                                    const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                    setFeaturedItems((prev) => [
-                                      ...prev,
-                                      { id, type: "ig", url: pendingIg.url, brand: "", collabType: "", caption: "", isAdded: true },
-                                    ])
-                                    setPendingIg(null)
-                                    setNewIgUrl("")
-                                    setIsAddIgOpen(false)
-                                    markDirty()
-                                  }}
-                                  className="w-full sm:w-auto px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors"
-                                >
-                                  {t("creatorCard.featured.addPost")}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      {featuredItems.filter(x => x.type === "ig").length === 0 ? (
+                        <div className="mt-2 text-sm text-slate-500">
+                          {t("creatorCard.featured.emptyIg")}
+                        </div>
+                      ) : null}
                     </>
                   ),
                 },
