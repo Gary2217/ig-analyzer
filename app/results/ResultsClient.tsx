@@ -6675,22 +6675,14 @@ export default function ResultsClient() {
             </div>
 
             {(() => {
-              // Only render creator card if it exists AND is public
-              // Support both snake_case (is_public) and camelCase (isPublic)
-              const cardIsPublic = isRecord(creatorCard) && (creatorCard.isPublic ?? creatorCard.is_public) === true
-              const cardExists = isRecord(creatorCard) && (
-                creatorCard.audience || 
-                creatorCard.niche || 
-                Array.isArray(creatorCard.portfolio) ||
-                Array.isArray(creatorCard.themeTypes) ||
-                Array.isArray(creatorCard.theme_types) ||
-                Array.isArray(creatorCard.audienceProfiles) ||
-                Array.isArray(creatorCard.audience_profiles) ||
-                Array.isArray(creatorCard.deliverables)
-              )
-              
-              if (!cardExists || !cardIsPublic) return null
-              
+              if (!isRecord(creatorCard)) return null
+
+              const isPublic =
+                creatorCard.isPublic === true ||
+                creatorCard.is_public === true
+
+              if (!isPublic) return null
+
               return creatorCardPreviewCard
             })()}
 
