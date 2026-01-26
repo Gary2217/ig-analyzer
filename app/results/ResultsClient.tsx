@@ -2572,17 +2572,40 @@ export default function ResultsClient() {
 
   const reloadCreatorCard = useCallback(async () => {
     try {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[CreatorCard Fetch] Starting fetch /api/creator-card/me")
+      }
+
       const res = await fetch(`/api/creator-card/me?t=${Date.now()}`, {
         method: "GET",
         cache: "no-store",
+        credentials: "include",
         headers: {
           "cache-control": "no-cache",
           pragma: "no-cache",
         },
       })
 
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[CreatorCard Fetch] Response:", {
+          ok: res.ok,
+          status: res.status,
+        })
+      }
+
       if (!res.ok) throw new Error("failed to load creator card")
       const json = await res.json()
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[CreatorCard Fetch] JSON keys:", Object.keys(json))
+        console.log("[CreatorCard Fetch] card exists:", !!json.card)
+        console.log("[CreatorCard Fetch] card keys:", json.card ? Object.keys(json.card).slice(0, 10) : null)
+        if (json.card) {
+          console.log("[CreatorCard Fetch] is_public:", json.card.is_public)
+          console.log("[CreatorCard Fetch] isPublic:", json.card.isPublic)
+        }
+      }
+
       setCreatorCard(normalizeCreatorCardForResults(json.card))
       
       // Clear sessionStorage flag after successful DB reload
@@ -2774,6 +2797,12 @@ export default function ResultsClient() {
           url: window.location.href,
         })
       }
+
+      if (hasCcUpdated || hasSessionFlag) {
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[CreatorCard Hydration] ✅ Trigger detected, will reload")
+        }
+      }
       
       if (hasCcUpdated || hasSessionFlag) {
         // Try to hydrate from localStorage for immediate sync
@@ -2829,7 +2858,12 @@ export default function ResultsClient() {
         if (process.env.NODE_ENV !== "production") {
           console.log("[CreatorCard Hydration] 🔄 Triggering DB refresh (source of truth)")
         }
-        setCreatorCardReload((v) => v + 1)
+        setCreatorCardReload((v) => {
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[CreatorCard Hydration] setCreatorCardReload:", v, "→", v + 1)
+          }
+          return v + 1
+        })
       }
     }
   }, [normalizeCreatorCardForResults])
@@ -4078,8 +4112,7 @@ export default function ResultsClient() {
 
   const creatorCardPreviewCard = (
     <>
-      <div id="creator-card-section" className="absolute -mt-24" />
-      <Card id="creator-card" className={"mt-3 scroll-mt-24 sm:scroll-mt-28 " + CARD_SHELL_HOVER}>
+      <Card className={"mt-3 scroll-mt-24 sm:scroll-mt-28 " + CARD_SHELL_HOVER}>
       <CardHeader className={CARD_HEADER_ROW}>
         <div className="w-full flex flex-wrap items-start sm:items-center gap-2">
           <div className="min-w-0">
@@ -6696,17 +6729,49 @@ export default function ResultsClient() {
               </div>
             </div>
 
-            {(() => {
-              if (!isRecord(creatorCard)) return null
+            <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28">
+              {(() => {
+                if (process.env.NODE_ENV !== "production") {
+                  console.log("[CreatorCard Render] Evaluating render conditions:", {
+                    isRecord: isRecord(creatorCard),
+                    creatorCard: creatorCard ? "exists" : "null",
+                    cardKeys: isRecord(creatorCard) ? Object.keys(creatorCard).slice(0, 10) : null,
+                  })
+                }
 
-              const isPublic =
-                creatorCard.isPublic === true ||
-                creatorCard.is_public === true
+                if (!isRecord(creatorCard)) {
+                  if (process.env.NODE_ENV !== "production") {
+                    console.log("[CreatorCard Render] ❌ Not rendering: creatorCard is not a record")
+                  }
+                  return null
+                }
 
-              if (!isPublic) return null
+                const isPublic =
+                  creatorCard.isPublic === true ||
+                  creatorCard.is_public === true
 
-              return creatorCardPreviewCard
-            })()}
+                if (process.env.NODE_ENV !== "production") {
+                  console.log("[CreatorCard Render] Public check:", {
+                    isPublic,
+                    "creatorCard.isPublic": creatorCard.isPublic,
+                    "creatorCard.is_public": creatorCard.is_public,
+                  })
+                }
+
+                if (!isPublic) {
+                  if (process.env.NODE_ENV !== "production") {
+                    console.log("[CreatorCard Render] ❌ Not rendering: card is not public")
+                  }
+                  return null
+                }
+
+                if (process.env.NODE_ENV !== "production") {
+                  console.log("[CreatorCard Render] ✅ Rendering creatorCardPreviewCard")
+                }
+
+                return creatorCardPreviewCard
+              })()}
+            </section>
 
             {selectedGoal === "brandCollaborationProfile" ? (
               <section id="insights-section" className="mt-3 scroll-mt-32">
