@@ -2491,10 +2491,12 @@ export default function ResultsClient() {
   const meQuery = useInstagramMe({ enabled: isConnectedInstagram })
 
   const [creatorCard, setCreatorCard] = useState<unknown>(null)
+  const [isCreatorCardLoading, setIsCreatorCardLoading] = useState(false)
   const [creatorStats, setCreatorStats] = useState<unknown>(null)
   const [creatorIdFromCardMe, setCreatorIdFromCardMe] = useState<string | null>(null)
   const [creatorCardReload, setCreatorCardReload] = useState(0)
   const creatorCardFetchedRef = useRef(false)
+  const didTriggerCreatorCardOnThisEntryRef = useRef(false)
   const creatorStatsUpsertKeyRef = useRef<string>("")
   const reloadCardInFlightRef = useRef(false)
   const reloadCardLastAtRef = useRef(0)
@@ -2571,11 +2573,8 @@ export default function ResultsClient() {
   }, [])
 
   const reloadCreatorCard = useCallback(async () => {
+    setIsCreatorCardLoading(true)
     try {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[CreatorCard Fetch] Starting fetch /api/creator-card/me")
-      }
-
       const res = await fetch(`/api/creator-card/me?t=${Date.now()}`, {
         method: "GET",
         cache: "no-store",
@@ -2586,27 +2585,13 @@ export default function ResultsClient() {
         },
       })
 
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[CreatorCard Fetch] Response:", {
-          ok: res.ok,
-          status: res.status,
-        })
-      }
-
       if (!res.ok) throw new Error("failed to load creator card")
       const json = await res.json()
 
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[CreatorCard Fetch] JSON keys:", Object.keys(json))
-        console.log("[CreatorCard Fetch] card exists:", !!json.card)
-        console.log("[CreatorCard Fetch] card keys:", json.card ? Object.keys(json.card).slice(0, 10) : null)
-        if (json.card) {
-          console.log("[CreatorCard Fetch] is_public:", json.card.is_public)
-          console.log("[CreatorCard Fetch] isPublic:", json.card.isPublic)
-        }
-      }
+      // Support multiple response shapes
+      const card = json?.card ?? json?.data?.card ?? json?.creatorCard ?? null
 
-      setCreatorCard(normalizeCreatorCardForResults(json.card))
+      setCreatorCard(normalizeCreatorCardForResults(card))
       
       // Clear sessionStorage flag after successful DB reload
       if (typeof window !== "undefined") {
@@ -2617,7 +2602,10 @@ export default function ResultsClient() {
         }
       }
     } catch {
-      return
+      // Set card to null on error so CTA shows
+      setCreatorCard(null)
+    } finally {
+      setIsCreatorCardLoading(false)
     }
   }, [normalizeCreatorCardForResults])
 
@@ -2790,20 +2778,6 @@ export default function ResultsClient() {
       const hasCcUpdated = params.has("ccUpdated")
       const hasSessionFlag = sessionStorage.getItem("creatorCard:updated") === "1"
       
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[CreatorCard Hydration] Checking triggers:", {
-          hasCcUpdated,
-          hasSessionFlag,
-          url: window.location.href,
-        })
-      }
-
-      if (hasCcUpdated || hasSessionFlag) {
-        if (process.env.NODE_ENV !== "production") {
-          console.log("[CreatorCard Hydration] ✅ Trigger detected, will reload")
-        }
-      }
-      
       if (hasCcUpdated || hasSessionFlag) {
         // Try to hydrate from localStorage for immediate sync
         let hydrated = false
@@ -2855,15 +2829,7 @@ export default function ResultsClient() {
         }
         
         // Trigger reload to fetch latest from API (non-blocking background refresh)
-        if (process.env.NODE_ENV !== "production") {
-          console.log("[CreatorCard Hydration] 🔄 Triggering DB refresh (source of truth)")
-        }
-        setCreatorCardReload((v) => {
-          if (process.env.NODE_ENV !== "production") {
-            console.log("[CreatorCard Hydration] setCreatorCardReload:", v, "→", v + 1)
-          }
-          return v + 1
-        })
+        setCreatorCardReload((v) => v + 1)
       }
     }
   }, [normalizeCreatorCardForResults])
@@ -2925,6 +2891,19 @@ export default function ResultsClient() {
     window.addEventListener("hashchange", run)
     return () => window.removeEventListener("hashchange", run)
   }, [])
+
+  // Trigger creator card fetch when goal changes to brandCollaborationProfile
+  useEffect(() => {
+    const isTarget = selectedGoal === "brandCollaborationProfile"
+    if (!isTarget) {
+      didTriggerCreatorCardOnThisEntryRef.current = false
+      return
+    }
+    if (!isConnectedInstagram) return
+    if (didTriggerCreatorCardOnThisEntryRef.current) return
+    didTriggerCreatorCardOnThisEntryRef.current = true
+    setCreatorCardReload((v) => v + 1)
+  }, [selectedGoal, isConnectedInstagram])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -6731,44 +6710,57 @@ export default function ResultsClient() {
 
             <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28">
               {(() => {
-                if (process.env.NODE_ENV !== "production") {
-                  console.log("[CreatorCard Render] Evaluating render conditions:", {
-                    isRecord: isRecord(creatorCard),
-                    creatorCard: creatorCard ? "exists" : "null",
-                    cardKeys: isRecord(creatorCard) ? Object.keys(creatorCard).slice(0, 10) : null,
-                  })
+                // 1) Show loading state while fetching
+                if (isCreatorCardLoading) {
+                  return (
+                    <Card className="mt-3">
+                      <CardContent className="py-8 sm:py-12">
+                        <div className="flex flex-col items-center justify-center gap-3 text-center">
+                          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                          <p className="text-sm text-white/60">
+                            {activeLocale === "zh-TW" ? "載入名片中..." : "Loading creator card..."}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
                 }
 
-                if (!isRecord(creatorCard)) {
-                  if (process.env.NODE_ENV !== "production") {
-                    console.log("[CreatorCard Render] ❌ Not rendering: creatorCard is not a record")
-                  }
-                  return null
+                // 2) Loading finished - show CTA if no card or not public
+                if (!isRecord(creatorCard) || creatorCard.isPublic !== true) {
+                  return (
+                    <Card className="mt-3">
+                      <CardContent className="py-8 sm:py-12">
+                        <div className="flex flex-col items-center justify-center gap-4 text-center">
+                          <div className="rounded-full bg-white/5 p-4">
+                            <svg className="h-8 w-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </div>
+                          <div className="space-y-2">
+                            <h3 className="text-base sm:text-lg font-semibold text-white">
+                              {activeLocale === "zh-TW" ? "建立你的創作者名片" : "Create Your Creator Card"}
+                            </h3>
+                            <p className="text-xs sm:text-sm text-white/60 max-w-md leading-relaxed">
+                              {activeLocale === "zh-TW" 
+                                ? "展示你的創作風格、合作案例和聯絡方式，讓品牌更容易找到你。" 
+                                : "Showcase your creative style, past collaborations, and contact info to help brands discover you."}
+                            </p>
+                          </div>
+                          <Link
+                            href={`/${activeLocale}/creator-card?returnTo=${encodeURIComponent(`/${activeLocale}/results#creator-card`)}`}
+                            className="inline-flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 border border-white/20 px-6 py-2.5 text-sm font-semibold text-white transition-colors"
+                          >
+                            {activeLocale === "zh-TW" ? "建立名片" : "Create Card"}
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
                 }
 
-                const isPublic =
-                  creatorCard.isPublic === true ||
-                  creatorCard.is_public === true
-
-                if (process.env.NODE_ENV !== "production") {
-                  console.log("[CreatorCard Render] Public check:", {
-                    isPublic,
-                    "creatorCard.isPublic": creatorCard.isPublic,
-                    "creatorCard.is_public": creatorCard.is_public,
-                  })
-                }
-
-                if (!isPublic) {
-                  if (process.env.NODE_ENV !== "production") {
-                    console.log("[CreatorCard Render] ❌ Not rendering: card is not public")
-                  }
-                  return null
-                }
-
-                if (process.env.NODE_ENV !== "production") {
-                  console.log("[CreatorCard Render] ✅ Rendering creatorCardPreviewCard")
-                }
-
+                // 3) Render the actual card if public
                 return creatorCardPreviewCard
               })()}
             </section>
