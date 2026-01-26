@@ -6708,62 +6708,6 @@ export default function ResultsClient() {
               </div>
             </div>
 
-            <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28">
-              {(() => {
-                // 1) Show loading state while fetching
-                if (isCreatorCardLoading) {
-                  return (
-                    <Card className="mt-3">
-                      <CardContent className="py-8 sm:py-12">
-                        <div className="flex flex-col items-center justify-center gap-3 text-center">
-                          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                          <p className="text-sm text-white/60">
-                            {activeLocale === "zh-TW" ? "載入名片中..." : "Loading creator card..."}
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                }
-
-                // 2) Loading finished - show CTA if no card or not public
-                if (!isRecord(creatorCard) || creatorCard.isPublic !== true) {
-                  return (
-                    <Card className="mt-3">
-                      <CardContent className="py-8 sm:py-12">
-                        <div className="flex flex-col items-center justify-center gap-4 text-center">
-                          <div className="rounded-full bg-white/5 p-4">
-                            <svg className="h-8 w-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </div>
-                          <div className="space-y-2">
-                            <h3 className="text-base sm:text-lg font-semibold text-white">
-                              {activeLocale === "zh-TW" ? "建立你的創作者名片" : "Create Your Creator Card"}
-                            </h3>
-                            <p className="text-xs sm:text-sm text-white/60 max-w-md leading-relaxed">
-                              {activeLocale === "zh-TW" 
-                                ? "展示你的創作風格、合作案例和聯絡方式，讓品牌更容易找到你。" 
-                                : "Showcase your creative style, past collaborations, and contact info to help brands discover you."}
-                            </p>
-                          </div>
-                          <Link
-                            href={`/${activeLocale}/creator-card?returnTo=${encodeURIComponent(`/${activeLocale}/results#creator-card`)}`}
-                            className="inline-flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 border border-white/20 px-6 py-2.5 text-sm font-semibold text-white transition-colors"
-                          >
-                            {activeLocale === "zh-TW" ? "建立名片" : "Create Card"}
-                          </Link>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                }
-
-                // 3) Render the actual card if public
-                return creatorCardPreviewCard
-              })()}
-            </section>
 
             {selectedGoal === "brandCollaborationProfile" ? (
               <section id="insights-section" className="mt-3 scroll-mt-32">
@@ -6830,6 +6774,116 @@ export default function ResultsClient() {
           </>
         }
       />
+
+      {/* Creator Card Section - Always rendered regardless of connection state */}
+      <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28 max-w-6xl mx-auto px-4 md:px-6 mt-4">
+        {/* DEV-ONLY: On-screen debug badge */}
+        {process.env.NODE_ENV !== "production" && (
+          <div className="mb-2 inline-flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-[10px] font-mono text-amber-200/90 max-w-full overflow-x-auto">
+            <span className="shrink-0 font-semibold">🔍 DEV:</span>
+            <span className="whitespace-nowrap">goal={selectedGoal || "null"}</span>
+            <span className="opacity-40">|</span>
+            <span className="whitespace-nowrap">connected={String(isConnectedInstagram)}</span>
+            <span className="opacity-40">|</span>
+            <span className="whitespace-nowrap">loading={String(isCreatorCardLoading)}</span>
+            <span className="opacity-40">|</span>
+            <span className="whitespace-nowrap">card={isRecord(creatorCard) ? "record" : "null"}</span>
+            <span className="opacity-40">|</span>
+            <span className="whitespace-nowrap">isPublic={String(isRecord(creatorCard) ? (creatorCard.isPublic ?? creatorCard.is_public ?? "null") : "null")}</span>
+          </div>
+        )}
+        {(() => {
+          // State 1: Not connected to Instagram
+          if (!isConnectedInstagram) {
+            return (
+              <Card className="mt-3">
+                <CardContent className="py-8 sm:py-12">
+                  <div className="flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 p-4">
+                      <svg className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
+                    </div>
+                    <div className="space-y-2 max-w-md">
+                      <h3 className="text-base sm:text-lg font-semibold text-white">
+                        {activeLocale === "zh-TW" ? "連結 Instagram 以建立創作者名片" : "Connect Instagram to Create Your Creator Card"}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-white/60 leading-relaxed break-words">
+                        {activeLocale === "zh-TW" 
+                          ? "連結你的 Instagram 帳號，即可建立專屬的創作者名片，展示你的創作風格、合作案例和聯絡方式。" 
+                          : "Connect your Instagram account to create a personalized creator card showcasing your style, collaborations, and contact info."}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/api/auth/instagram?provider=instagram&next=${encodeURIComponent(`/${activeLocale}/results#creator-card`)}`}
+                      className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 hover:brightness-110 px-6 py-2.5 text-sm font-semibold text-white transition-all shadow-lg shadow-purple-500/25"
+                      style={{ minHeight: "44px" }}
+                    >
+                      {activeLocale === "zh-TW" ? "連結 Instagram" : "Connect Instagram"}
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          }
+
+          // State 2: Connected but loading creator card
+          if (isCreatorCardLoading) {
+            return (
+              <Card className="mt-3">
+                <CardContent className="py-8 sm:py-12">
+                  <div className="flex flex-col items-center justify-center gap-3 text-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                    <p className="text-sm text-white/60">
+                      {activeLocale === "zh-TW" ? "載入名片中..." : "Loading creator card..."}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          }
+
+          // State 3: Connected but no card or card not public
+          // Normalize public flag from backend (camelCase / snake_case)
+          const isPublic = isRecord(creatorCard) ? (creatorCard.isPublic ?? creatorCard.is_public) : false
+          if (!isRecord(creatorCard) || isPublic !== true) {
+            return (
+              <Card className="mt-3">
+                <CardContent className="py-8 sm:py-12">
+                  <div className="flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="rounded-full bg-white/5 p-4">
+                      <svg className="h-8 w-8 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </div>
+                    <div className="space-y-2 max-w-md">
+                      <h3 className="text-base sm:text-lg font-semibold text-white">
+                        {activeLocale === "zh-TW" ? "建立你的創作者名片" : "Create Your Creator Card"}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-white/60 leading-relaxed break-words">
+                        {activeLocale === "zh-TW" 
+                          ? "展示你的創作風格、合作案例和聯絡方式，讓品牌更容易找到你。" 
+                          : "Showcase your creative style, past collaborations, and contact info to help brands discover you."}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/${activeLocale}/creator-card?returnTo=${encodeURIComponent(`/${activeLocale}/results#creator-card`)}`}
+                      className="inline-flex items-center justify-center rounded-full bg-white/10 hover:bg-white/15 border border-white/20 px-6 py-2.5 text-sm font-semibold text-white transition-colors"
+                      style={{ minHeight: "44px" }}
+                    >
+                      {activeLocale === "zh-TW" ? "建立名片" : "Create Card"}
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          }
+
+          // State 4: Connected with public card - render the preview
+          return creatorCardPreviewCard
+        })()}
+      </section>
     </>
   )
 }
