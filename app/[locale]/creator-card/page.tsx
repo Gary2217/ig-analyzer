@@ -535,8 +535,37 @@ function SortableFeaturedTile(props: {
           return null
         })()}
 
-        {/* Instagram image thumbnail - clickable */}
-        {normalizedUrl && isValidIgUrl && directMediaUrl ? (
+        {/* Show loading skeleton while fetching oEmbed */}
+        {normalizedUrl && isValidIgUrl && oembedData?.status === "loading" ? (
+          <div
+            className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
+            style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}
+          >
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
+              <div className="h-12 w-12 rounded-full bg-white/10" />
+              <div className="h-3 w-24 rounded bg-white/10" />
+            </div>
+          </div>
+        ) : normalizedUrl && isValidIgUrl && oembedData?.status === "error" ? (
+          <a
+            href={normalizedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors flex flex-col items-center justify-center gap-3 p-6 text-center"
+            style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            <span className="text-xs leading-tight text-white/60 break-words">
+              {t("results.mediaKit.featured.previewUnavailable")}
+            </span>
+            <span className="text-[11px] leading-tight text-white/40 break-words">
+              {t("results.mediaKit.featured.tapToOpen")}
+            </span>
+          </a>
+        ) : normalizedUrl && isValidIgUrl && directMediaUrl ? (
           <button
             type="button"
             onClick={(e) => {
