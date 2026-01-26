@@ -2962,14 +2962,36 @@ export default function CreatorCardPage() {
                                   setPendingIg({ url: normalized, status: "loading" })
                                   
                                   try {
+                                    // Try oEmbed first
                                     const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalized)}`)
                                     const data = await res.json()
                                     
-                                    if (res.ok && data.ok) {
+                                    if (res.ok && data.ok && data.thumbnailUrl) {
                                       setPendingIg({ url: normalized, status: "success", oembed: data })
-                                    } else {
-                                      setPendingIg({ url: normalized, status: "error" })
+                                      return
                                     }
+                                    
+                                    // Fallback: try /media/ path for direct thumbnail
+                                    const mediaUrl = normalized + "/media/"
+                                    const thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(mediaUrl)}`
+                                    
+                                    // Test if thumbnail endpoint works
+                                    const thumbRes = await fetch(thumbnailUrl, { method: 'HEAD' })
+                                    if (thumbRes.ok) {
+                                      setPendingIg({ 
+                                        url: normalized, 
+                                        status: "success", 
+                                        oembed: { 
+                                          ok: true, 
+                                          thumbnailUrl: thumbnailUrl,
+                                          source: "fallback"
+                                        } 
+                                      })
+                                      return
+                                    }
+                                    
+                                    // Last resort: error state but allow adding
+                                    setPendingIg({ url: normalized, status: "error" })
                                   } catch (err) {
                                     setPendingIg({ url: normalized, status: "error" })
                                   }
@@ -3209,25 +3231,6 @@ export default function CreatorCardPage() {
                                   />
                                 </div>
                               ))}
-                              
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  window.open("https://www.instagram.com/", "_blank", "noopener,noreferrer")
-                                }}
-                                className="group relative snap-start shrink-0 w-full sm:w-[calc(50%-6px)] min-h-[120px] overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-sm transition-colors hover:border-white/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-                                aria-label={activeLocale === "zh-TW" ? "開啟Instagram" : "Open Instagram"}
-                                title={activeLocale === "zh-TW" ? "開啟Instagram" : "Open Instagram"}
-                              >
-                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                                  <svg className="h-7 w-7 text-white/30 group-hover:text-white/45" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-                                  </svg>
-                                  <div className="text-[11px] font-semibold text-white/60 group-hover:text-white/75">
-                                    {activeLocale === "zh-TW" ? "開啟Instagram" : "Open Instagram"}
-                                  </div>
-                                </div>
-                              </button>
                             </div>
                           </div>
                         </SortableContext>
