@@ -6674,7 +6674,25 @@ export default function ResultsClient() {
               </div>
             </div>
 
-            {creatorCardPreviewCard}
+            {(() => {
+              // Only render creator card if it exists AND is public
+              // Support both snake_case (is_public) and camelCase (isPublic)
+              const cardIsPublic = isRecord(creatorCard) && (creatorCard.isPublic ?? creatorCard.is_public) === true
+              const cardExists = isRecord(creatorCard) && (
+                creatorCard.audience || 
+                creatorCard.niche || 
+                Array.isArray(creatorCard.portfolio) ||
+                Array.isArray(creatorCard.themeTypes) ||
+                Array.isArray(creatorCard.theme_types) ||
+                Array.isArray(creatorCard.audienceProfiles) ||
+                Array.isArray(creatorCard.audience_profiles) ||
+                Array.isArray(creatorCard.deliverables)
+              )
+              
+              if (!cardExists || !cardIsPublic) return null
+              
+              return creatorCardPreviewCard
+            })()}
 
             {selectedGoal === "brandCollaborationProfile" ? (
               <section id="insights-section" className="mt-3 scroll-mt-32">
