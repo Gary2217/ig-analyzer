@@ -2870,6 +2870,28 @@ export default function ResultsClient() {
     return () => clearTimeout(timer)
   }, [creatorCard]) // Re-run when creator card loads
 
+  // Handle #creator-card hash navigation
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const run = () => {
+      if (window.location.hash !== "#creator-card") return
+
+      // Ensure the correct section/tab is visible
+      setSelectedGoal("brandCollaborationProfile")
+
+      // After React paints the section, scroll to it
+      requestAnimationFrame(() => {
+        const el = document.getElementById("creator-card")
+        if (el) el.scrollIntoView({ block: "start", behavior: "smooth" })
+      })
+    }
+
+    run()
+    window.addEventListener("hashchange", run)
+    return () => window.removeEventListener("hashchange", run)
+  }, [])
+
   useEffect(() => {
     if (typeof window === "undefined") return
 
