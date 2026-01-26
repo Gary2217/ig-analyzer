@@ -1416,6 +1416,47 @@ export default function CreatorCardPage() {
     [setAudienceProfiles]
   )
 
+  // Helper: extract thumbnail map from localStorage draft (client-side safe)
+  const getLocalDraftThumbMap = useCallback((): Record<string, string> => {
+    if (typeof window === "undefined") return {}
+    try {
+      const draftJson = localStorage.getItem("creator_card_draft_v1")
+      if (!draftJson) return {}
+      const draft = JSON.parse(draftJson)
+      const items = Array.isArray(draft?.featuredItems)
+        ? draft.featuredItems
+        : Array.isArray(draft?.featured_items)
+          ? draft.featured_items
+          : []
+
+      const map: Record<string, string> = {}
+      for (const it of items) {
+        if (!it || it.type !== "ig") continue
+        const url = typeof it.url === "string" ? it.url.trim().replace(/\/$/, "") : ""
+        const thumb = typeof it.thumbnailUrl === "string" ? it.thumbnailUrl : ""
+        if (url && thumb) map[url] = thumb
+      }
+      return map
+    } catch {
+      return {}
+    }
+  }, [])
+
+  // Helper: merge thumbnails from localStorage draft into items
+  const mergeThumbsFromLocalDraft = useCallback((items: FeaturedItem[]): FeaturedItem[] => {
+    const map = getLocalDraftThumbMap()
+    if (!map || Object.keys(map).length === 0) return items
+
+    return items.map((it) => {
+      if (it.type !== "ig") return it
+      const normalizedUrl = (it.url || "").trim().replace(/\/$/, "")
+      if (!it.thumbnailUrl && normalizedUrl && map[normalizedUrl]) {
+        return { ...it, thumbnailUrl: map[normalizedUrl] }
+      }
+      return it
+    })
+  }, [getLocalDraftThumbMap])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -1665,13 +1706,16 @@ export default function CreatorCardPage() {
           return items.slice(0, 20)
         })()
 
+        // Merge thumbnails from localStorage draft BEFORE setting state
+        const mergedFromLocalDraft = mergeThumbsFromLocalDraft(nextFeaturedItems)
+        
         setFeaturedItems((prev) => {
           for (const item of prev) {
             if (typeof item.url === "string" && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url)
           }
           
-          // Merge thumbnailUrl from existing state if API response lacks it
-          const merged = nextFeaturedItems.map(apiItem => {
+          // Further merge thumbnailUrl from existing state if still missing
+          const merged = mergedFromLocalDraft.map(apiItem => {
             if (apiItem.type === "ig" && !apiItem.thumbnailUrl) {
               const normalizedUrl = apiItem.url.trim().replace(/\/$/, "")
               const existing = prev.find(p => p.type === "ig" && p.url.trim().replace(/\/$/, "") === normalizedUrl)
@@ -1683,6 +1727,22 @@ export default function CreatorCardPage() {
           })
           
           return merged
+        })
+        
+        // Seed igOEmbedCache from merged items with thumbnails
+        setIgOEmbedCache((prev) => {
+          const next = { ...prev }
+          for (const it of mergedFromLocalDraft) {
+            if (it.type !== "ig") continue
+            const normalizedUrl = (it.url || "").trim().replace(/\/$/, "")
+            if (!normalizedUrl || !it.thumbnailUrl) continue
+            if (next[normalizedUrl]?.status === "success") continue
+            next[normalizedUrl] = {
+              status: "success",
+              data: { ok: true, thumbnailUrl: it.thumbnailUrl },
+            }
+          }
+          return next
         })
 
         const primaryParts = (() => {
@@ -1766,9 +1826,20 @@ export default function CreatorCardPage() {
   // Client-side localStorage hydration for featuredItems
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (featuredItems.length > 0) return // Already hydrated from API
     if (!hasLoadedRef.current) return // Wait for initial API load
     
+    const hasIgMissingThumb = featuredItems.some((x) => x.type === "ig" && !x.thumbnailUrl)
+    
+    // If API already gave thumbs for all IG items, do nothing
+    if (featuredItems.length > 0 && !hasIgMissingThumb) return
+    
+    // If we have items but missing thumbs, merge from local draft
+    if (featuredItems.length > 0 && hasIgMissingThumb) {
+      setFeaturedItems((prev) => mergeThumbsFromLocalDraft(prev))
+      return
+    }
+    
+    // Else (no items), restore from localStorage
     try {
       const draftJson = localStorage.getItem("creator_card_draft_v1")
       if (!draftJson) return
@@ -1802,7 +1873,7 @@ export default function CreatorCardPage() {
     } catch (err) {
       // Silently fail - localStorage might be corrupted
     }
-  }, [featuredItems.length, hasLoadedRef])
+  }, [featuredItems, hasLoadedRef, mergeThumbsFromLocalDraft])
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
