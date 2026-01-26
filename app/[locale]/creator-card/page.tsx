@@ -2982,11 +2982,20 @@ export default function CreatorCardPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                if (!pendingIg?.url || pendingIg.status !== "success") return
+                                // Allow adding even if preview fails - graceful degradation
+                                const urlToAdd = pendingIg?.url || newIgUrl.trim()
+                                if (!urlToAdd) return
+                                
+                                // Validate IG URL
+                                const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(urlToAdd)
+                                if (!isValidIg) {
+                                  showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
+                                  return
+                                }
                                 
                                 const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
                                 setFeaturedItems((prev) => [
-                                  { id, type: "ig", url: pendingIg.url, brand: "", collabType: "", caption: "", isAdded: true },
+                                  { id, type: "ig", url: urlToAdd, brand: "", collabType: "", caption: "", isAdded: true },
                                   ...prev,
                                 ])
                                 setPendingIg(null)
@@ -3003,11 +3012,11 @@ export default function CreatorCardPage() {
                                   }
                                 }, 100)
                               }}
-                              disabled={!pendingIg?.url || pendingIg.status !== "success"}
+                              disabled={!newIgUrl.trim() && !pendingIg?.url}
                               className="shrink-0 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               style={{ minHeight: "44px" }}
                             >
-                              {t("creatorCard.featured.addPost")}
+                              {activeLocale === "zh-TW" ? "新增" : "Add"}
                             </button>
                             <button
                               type="button"
@@ -3115,7 +3124,13 @@ export default function CreatorCardPage() {
                             >
                               {/* Persistent Add Placeholder Tile - always first */}
                               <div data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
-                                <div className="relative w-full rounded-2xl border border-dashed border-white/15 bg-white/5 overflow-hidden" style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsAddIgOpen(true)}
+                                  className="relative w-full rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-colors overflow-hidden cursor-pointer"
+                                  style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px" }}
+                                  aria-label={activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
+                                >
                                   {pendingIg?.status === "loading" ? (
                                     <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
                                       <div className="h-12 w-12 rounded-full bg-white/10" />
@@ -3148,7 +3163,7 @@ export default function CreatorCardPage() {
                                       </div>
                                     </div>
                                   )}
-                                </div>
+                                </button>
                               </div>
 
                               {featuredItems.filter(item => item.type === "ig").map((item) => (
