@@ -23,7 +23,13 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
 
   function onAnalyzeAccount() {
     if (checking || authLoading) return
-    navigateToResults()
+    // Add autoConnect flag so /results auto-triggers OAuth if not connected
+    const resultsPath = `/${locale}/results?autoConnect=1`
+    if (typeof window !== "undefined") {
+      window.location.href = resultsPath
+    } else {
+      navigateToResults()
+    }
   }
 
   function onAnalyzePost() {

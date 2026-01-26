@@ -444,6 +444,7 @@ function ConnectCard(props: {
   onConnect: () => void
   onBack: () => void
   connectEnvError: "missing_env" | null
+  connecting?: boolean
 }) {
   return (
     <GateShell
@@ -466,15 +467,28 @@ function ConnectCard(props: {
 
       <div className="flex flex-col sm:flex-row gap-3">
         <Button
-          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full sm:w-auto"
+          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium px-6 py-3 rounded-lg w-full sm:w-auto min-h-[44px]"
           onClick={props.onConnect}
+          disabled={props.connecting}
+          aria-busy={props.connecting ? true : undefined}
         >
-          {props.t("results.gates.connect.cta")}
+          {props.connecting ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{props.t("results.gates.connect.cta")}</span>
+            </span>
+          ) : (
+            props.t("results.gates.connect.cta")
+          )}
         </Button>
         <Button
           variant="outline"
-          className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg w-full sm:w-auto"
+          className="border-white/15 text-slate-200 hover:bg-white/5 px-6 py-3 rounded-lg w-full sm:w-auto min-h-[44px]"
           onClick={props.onBack}
+          disabled={props.connecting}
         >
           {props.t("results.gates.common.back")}
         </Button>
@@ -801,6 +815,7 @@ export default function ResultsClient() {
   const [connectEnvError, setConnectEnvError] = useState<"missing_env" | null>(null)
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [connecting, setConnecting] = useState(false)
   const [headerCopied, setHeaderCopied] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -3160,13 +3175,86 @@ export default function ResultsClient() {
     window.scrollTo({ top: targetY, behavior: "smooth" })
   }
 
-  const { navigateToProtected } = useAuthNavigation()
+  const { navigateToProtected, isAuthenticated } = useAuthNavigation()
 
-  const handleConnect = () => {
+  const handleConnect = async () => {
+    if (connecting) return
+    setConnecting(true)
     setConnectEnvError(null)
-    const nextPath = `/${activeLocale}/results`
-    navigateToProtected(nextPath)
+    
+    try {
+      const nextPath = `/${activeLocale}/results`
+      const oauthUrl = `/api/auth/instagram?provider=instagram&locale=${activeLocale}&next=${encodeURIComponent(nextPath)}`
+      
+      // Check if OAuth endpoint is available
+      const checkRes = await fetch(oauthUrl, { method: "HEAD" }).catch(() => null)
+      if (checkRes && checkRes.status === 500) {
+        const jsonRes = await fetch(oauthUrl, { method: "GET", redirect: "manual" })
+        const data = await jsonRes.json().catch(() => null)
+        if (data?.code === "missing_env") {
+          setConnectEnvError("missing_env")
+          setConnecting(false)
+          showToast(t("results.toast.connectSoon"))
+          return
+        }
+      }
+      
+      // Redirect to OAuth
+      window.location.href = oauthUrl
+      // Keep connecting state true during redirect
+    } catch (err) {
+      console.error("[handleConnect] error:", err)
+      setConnecting(false)
+      showToast(t("results.toast.copyFailed"))
+    }
   }
+
+  // Auto-connect mechanism: trigger OAuth once when landing on /results without connection
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (connecting) return
+    if (igMeLoading) return // Wait for auth check to complete
+    
+    const AUTO_CONNECT_KEY = "ig_auto_connect_attempted"
+    const AUTO_CONNECT_TTL = 5 * 60 * 1000 // 5 minutes
+    
+    // Check if user is not connected and hasn't auto-connected recently
+    const isNotConnected = igMeUnauthorized || !isConnected
+    if (!isNotConnected) return
+    
+    // Check if we've already attempted auto-connect recently
+    try {
+      const lastAttempt = sessionStorage.getItem(AUTO_CONNECT_KEY)
+      if (lastAttempt) {
+        const ts = Number(lastAttempt)
+        if (Number.isFinite(ts) && Date.now() - ts < AUTO_CONNECT_TTL) {
+          return // Already attempted recently, don't spam
+        }
+      }
+    } catch {
+      // ignore
+    }
+    
+    // Check if there's an autoConnect flag in URL (from homepage navigation)
+    const params = new URLSearchParams(searchParams?.toString() || "")
+    const shouldAutoConnect = params.has("autoConnect") || params.has("fromHome")
+    
+    if (shouldAutoConnect) {
+      // Mark that we've attempted auto-connect
+      try {
+        sessionStorage.setItem(AUTO_CONNECT_KEY, String(Date.now()))
+      } catch {
+        // ignore
+      }
+      
+      // Trigger OAuth after a short delay to ensure UI is mounted
+      const timer = setTimeout(() => {
+        handleConnect()
+      }, 300)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [connecting, igMeLoading, igMeUnauthorized, isConnected, searchParams, activeLocale])
 
   const priorityLabel = (label: string) => {
     if (label === "High priority") return t("results.priority.high")
@@ -4164,6 +4252,7 @@ export default function ResultsClient() {
         onConnect={handleConnect}
         onBack={() => router.push(localePathname("/", activeLocale))}
         connectEnvError={connectEnvError}
+        connecting={connecting}
       />
     )
 
