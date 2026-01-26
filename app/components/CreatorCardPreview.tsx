@@ -139,12 +139,12 @@ function IgEmbedPreview({ url }: { url: string }) {
   }, [url, embedLoaded])
 
   return (
-    <div ref={embedRef} className="w-full max-w-full overflow-hidden rounded-lg">
+    <div ref={embedRef} className="w-full max-w-full rounded-lg">
       <blockquote
         className="instagram-media"
         data-instgrm-permalink={url}
         data-instgrm-version="14"
-        style={{ maxWidth: "100%", minWidth: "326px" }}
+        style={{ width: "100%", maxWidth: "100%", minWidth: "auto", margin: "0 auto" }}
       >
         <div className="p-4 rounded-lg bg-white/5 border border-white/10 text-center">
           <p className="text-xs text-white/60">Loading Instagram post...</p>
@@ -246,7 +246,7 @@ export type CreatorCardPreviewProps = {
 
   contact?: unknown
 
-  featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null; caption?: string | null; type?: string | null; title?: string | null; text?: string | null; isAdded?: boolean | null }[]
+  featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null; caption?: string | null; type?: string | null; title?: string | null; text?: string | null; isAdded?: boolean | null; thumbnailUrl?: string | null }[]
 
   featuredImageUrls?: (string | null)[]
 
@@ -454,7 +454,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   const featuredTiles = useMemo(() => {
     const rawItems = Array.isArray(featuredItems) ? featuredItems : []
-    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; title?: string; text?: string; isAdded?: boolean }> = []
+    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; title?: string; text?: string; isAdded?: boolean; thumbnailUrl?: string }> = []
 
     if (rawItems.length > 0) {
       for (const item of rawItems) {
@@ -469,6 +469,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           title: typeof item?.title === "string" ? item.title.trim() : undefined,
           text: typeof item?.text === "string" ? item.text.trim() : undefined,
           isAdded: typeof item?.isAdded === "boolean" ? item.isAdded : undefined,
+          thumbnailUrl: typeof item?.thumbnailUrl === "string" ? item.thumbnailUrl.trim() : undefined,
         })
       }
       return out
@@ -998,11 +999,12 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                       )
                     }
                     
-                    // Get thumbnail URL from cache first, then fallback to direct media
+                    // Get thumbnail URL: prioritize item.thumbnailUrl, then cache, then fallback to direct media
+                    const itemThumbnail = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl : undefined
                     const cachedThumbnail = oembedData?.status === "success" && oembedData.data.ok === true 
                       ? (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url)
                       : undefined
-                    const thumbnailSrc = cachedThumbnail || (directMediaUrl ? `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}` : undefined)
+                    const thumbnailSrc = itemThumbnail || cachedThumbnail || (directMediaUrl ? `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}` : undefined)
                     
                     return (
                       <button
@@ -1264,7 +1266,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           onClick={() => setOpenIgUrl(null)}
         >
           <div
-            className="w-full max-w-[720px] h-[96vh] sm:h-auto sm:max-h-[94vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col"
+            className="w-full max-w-[420px] h-[96vh] sm:h-auto sm:max-h-[94vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1277,14 +1279,15 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 onClick={() => setOpenIgUrl(null)}
                 className="shrink-0 rounded-full bg-white/10 p-2 hover:bg-white/20 transition-colors"
                 aria-label="Close"
+                style={{ minWidth: "44px", minHeight: "44px" }}
               >
                 <X className="h-4 w-4 text-white/90" />
               </button>
             </div>
 
             {/* Body with embed */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 max-h-[82vh] sm:max-h-[86vh]">
-              <div className="w-full max-w-full">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 max-h-[82vh] sm:max-h-[86vh]">
+              <div className="w-full mx-auto">
                 <IgEmbedPreview url={openIgUrl} />
               </div>
             </div>

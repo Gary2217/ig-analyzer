@@ -241,6 +241,7 @@ type FeaturedItem = {
   title?: string
   text?: string
   isAdded?: boolean
+  thumbnailUrl?: string
 }
 
 function IgEmbedPreview({ url }: { url: string }) {
@@ -649,7 +650,7 @@ function SortableFeaturedTile(props: {
               {t("results.mediaKit.featured.tapToOpen")}
             </span>
           </a>
-        ) : normalizedUrl && isValidIgUrl && oembedData?.status === "success" && oembedData.data.ok === true && (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url) ? (
+        ) : normalizedUrl && isValidIgUrl && (item.thumbnailUrl || (oembedData?.status === "success" && oembedData.data.ok === true && (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url))) ? (
           <a
             href={normalizedUrl}
             target="_blank"
@@ -661,7 +662,7 @@ function SortableFeaturedTile(props: {
             {!thumbnailLoadError ? (
               <img
                 key={retryKey}
-                src={oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url || ""}
+                src={item.thumbnailUrl || (oembedData?.status === "success" ? (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url) : undefined) || ""}
                 alt="Instagram post thumbnail"
                 className="w-full h-full object-cover block"
                 loading="lazy"
@@ -670,7 +671,7 @@ function SortableFeaturedTile(props: {
                 onError={() => {
                   setThumbnailLoadError(true)
                   if (process.env.NODE_ENV !== "production") {
-                    console.error("[IG Thumbnail Load Failed]", { url: normalizedUrl, thumbnailUrl: oembedData.data.thumbnailUrl })
+                    console.error("[IG Thumbnail Load Failed]", { url: normalizedUrl, thumbnailUrl: item.thumbnailUrl || (oembedData?.status === "success" ? oembedData.data.thumbnailUrl : undefined) })
                   }
                 }}
               />
@@ -1607,6 +1608,7 @@ export default function CreatorCardPage() {
                   collabType: "",
                   caption: typeof obj.caption === "string" ? obj.caption : "",
                   isAdded: typeof obj.isAdded === "boolean" ? obj.isAdded : true,
+                  thumbnailUrl: typeof obj.thumbnailUrl === "string" ? obj.thumbnailUrl : undefined,
                 })
               } else {
                 items.push({
@@ -1667,7 +1669,20 @@ export default function CreatorCardPage() {
           for (const item of prev) {
             if (typeof item.url === "string" && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url)
           }
-          return nextFeaturedItems
+          
+          // Merge thumbnailUrl from existing state if API response lacks it
+          const merged = nextFeaturedItems.map(apiItem => {
+            if (apiItem.type === "ig" && !apiItem.thumbnailUrl) {
+              const normalizedUrl = apiItem.url.trim().replace(/\/$/, "")
+              const existing = prev.find(p => p.type === "ig" && p.url.trim().replace(/\/$/, "") === normalizedUrl)
+              if (existing?.thumbnailUrl) {
+                return { ...apiItem, thumbnailUrl: existing.thumbnailUrl }
+              }
+            }
+            return apiItem
+          })
+          
+          return merged
         })
 
         const primaryParts = (() => {
@@ -1780,6 +1795,7 @@ export default function CreatorCardPage() {
         caption: item.caption || "",
         title: item.title || "",
         text: item.text || "",
+        thumbnailUrl: item.thumbnailUrl || undefined,
       }))
       
       setFeaturedItems(restoredItems)
@@ -1942,6 +1958,7 @@ export default function CreatorCardPage() {
               type: "ig",
               url: x.url || "",
               caption: x.caption || "",
+              thumbnailUrl: x.thumbnailUrl || undefined,
               order: idx,
             }
           }
@@ -1972,6 +1989,7 @@ export default function CreatorCardPage() {
               type: "ig",
               url: x.url || "",
               caption: x.caption || "",
+              thumbnailUrl: x.thumbnailUrl || undefined,
               order: idx,
             }
           }
@@ -2065,6 +2083,7 @@ export default function CreatorCardPage() {
               type: "ig",
               url: x.url || "",
               caption: x.caption || "",
+              thumbnailUrl: x.thumbnailUrl || undefined,
               order: idx,
             }
           }
@@ -2166,6 +2185,7 @@ export default function CreatorCardPage() {
               type: "ig",
               url: x.url || "",
               caption: x.caption || "",
+              thumbnailUrl: x.thumbnailUrl || undefined,
               order: idx,
             }
           }
@@ -3353,9 +3373,15 @@ export default function CreatorCardPage() {
                                           }))
                                         }
                                         
+                                        // Extract thumbnailUrl from pendingIg or cache
+                                        const thumbnailUrl = pendingIg?.oembed?.thumbnailUrl || 
+                                          (igOEmbedCache[normalizedUrl]?.status === "success" && igOEmbedCache[normalizedUrl].data.ok === true
+                                            ? (igOEmbedCache[normalizedUrl].data.thumbnailUrl || igOEmbedCache[normalizedUrl].data.data?.thumbnail_url)
+                                            : undefined)
+                                        
                                         // Add new item with functional setState
                                         const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                        const newItem = { id, type: "ig" as const, url: normalizedUrl, brand: "", collabType: "", caption: "", isAdded: true }
+                                        const newItem = { id, type: "ig" as const, url: normalizedUrl, brand: "", collabType: "", caption: "", isAdded: true, thumbnailUrl }
                                         
                                         setFeaturedItems(prev => {
                                           const nextItems = [newItem, ...prev]
