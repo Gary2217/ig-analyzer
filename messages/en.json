@@ -286,6 +286,10 @@
         "count": "{count} items",
         "cta": "Add highlight"
       },
+      "featured": {
+        "previewUnavailable": "Preview unavailable",
+        "tapToOpen": "Tap to open"
+      },
       "collaborationFormats": {
         "title": "Collaboration formats",
         "empty": "No collaboration formats added yet"

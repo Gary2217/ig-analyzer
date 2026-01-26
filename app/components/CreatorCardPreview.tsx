@@ -878,6 +878,46 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                       })
                     }
                     
+                    // Show loading skeleton while fetching oEmbed
+                    if (oembedData?.status === "loading") {
+                      return (
+                        <div
+                          key={item.id}
+                          className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60"
+                          style={{ aspectRatio: "4 / 5" }}
+                        >
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-2 animate-pulse">
+                            <div className="h-8 w-8 rounded-full bg-white/10" />
+                            <div className="h-2 w-16 rounded bg-white/10" />
+                          </div>
+                        </div>
+                      )
+                    }
+                    
+                    // Show fallback CTA card if oEmbed failed
+                    if (oembedData?.status === "error") {
+                      return (
+                        <a
+                          key={item.id}
+                          href={normalizedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors flex flex-col items-center justify-center gap-2 p-3 text-center"
+                          style={{ aspectRatio: "4 / 5", minHeight: "44px" }}
+                        >
+                          <svg className="w-6 h-6 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span className="text-[10px] leading-tight text-white/60 break-words">
+                            {t("results.mediaKit.featured.previewUnavailable")}
+                          </span>
+                          <span className="text-[9px] leading-tight text-white/40 break-words">
+                            {t("results.mediaKit.featured.tapToOpen")}
+                          </span>
+                        </a>
+                      )
+                    }
+                    
                     return (
                       <button
                         key={item.id}

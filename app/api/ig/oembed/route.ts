@@ -57,13 +57,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch from Instagram oEmbed API server-side
+    // Fetch from Instagram oEmbed API server-side with timeout
     const oembedUrl = `https://www.instagram.com/oembed/?url=${encodeURIComponent(url)}&omitscript=true`
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+    
     const response = await fetch(oembedUrl, {
+      signal: controller.signal,
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; InstagramOEmbedBot/1.0)",
       },
     })
+    
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error")
@@ -132,15 +138,26 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Failed to fetch Instagram oEmbed:", error)
     
+    // Handle timeout/abort errors
+    const isTimeout = error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"))
+    const userMessage = isTimeout 
+      ? "Request timed out. The post may be slow to load."
+      : error instanceof Error ? error.message : "Failed to fetch Instagram data"
+    
     return NextResponse.json(
       {
         ok: false,
         error: {
-          status: 500,
-          message: error instanceof Error ? error.message : "Failed to fetch Instagram data",
+          status: isTimeout ? 504 : 500,
+          message: userMessage,
         },
       } as OEmbedErrorResponse,
-      { status: 500 }
+      { 
+        status: isTimeout ? 504 : 500,
+        headers: {
+          "Cache-Control": "s-maxage=60, stale-while-revalidate=300",
+        },
+      }
     )
   }
 }

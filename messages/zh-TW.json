@@ -286,6 +286,10 @@
         "count": "已新增 {count} 則內容",
         "cta": "新增亮點"
       },
+      "featured": {
+        "previewUnavailable": "無法載入預覽",
+        "tapToOpen": "點擊在 IG 開啟"
+      },
       "collaborationFormats": {
         "title": "合作形式",
         "empty": "尚未新增合作形式"
