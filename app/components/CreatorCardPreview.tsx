@@ -998,6 +998,12 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                       )
                     }
                     
+                    // Get thumbnail URL from cache first, then fallback to direct media
+                    const cachedThumbnail = oembedData?.status === "success" && oembedData.data.ok === true 
+                      ? (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url)
+                      : undefined
+                    const thumbnailSrc = cachedThumbnail || (directMediaUrl ? `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}` : undefined)
+                    
                     return (
                       <button
                         key={item.id}
@@ -1007,10 +1013,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                         className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
                         style={{ aspectRatio: "4 / 5" }}
                       >
-                        {directMediaUrl && !thumbnailLoadErrors[normalizedUrl] ? (
+                        {thumbnailSrc && !thumbnailLoadErrors[normalizedUrl] ? (
                           <img
                             key={retryKey}
-                            src={`/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}`}
+                            src={thumbnailSrc}
                             alt="Instagram post"
                             className="w-full h-full object-cover block"
                             loading="lazy"
@@ -1019,11 +1025,11 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                             onError={() => {
                               setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: true }))
                               if (process.env.NODE_ENV !== "production") {
-                                console.error("[Preview IG Thumbnail Load Failed]", { url: normalizedUrl, directMediaUrl })
+                                console.error("[Preview IG Thumbnail Load Failed]", { url: normalizedUrl, thumbnailSrc })
                               }
                             }}
                           />
-                        ) : directMediaUrl && thumbnailLoadErrors[normalizedUrl] ? (
+                        ) : thumbnailSrc && thumbnailLoadErrors[normalizedUrl] ? (
                           <div className="relative w-full h-full flex flex-col items-center justify-center gap-2 p-2">
                             <button
                               type="button"

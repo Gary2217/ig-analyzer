@@ -3093,6 +3093,14 @@ export default function CreatorCardPage() {
                                     
                                     if (res.ok && data.ok && data.thumbnailUrl) {
                                       setPendingIg({ url: normalized, status: "success", oembed: data })
+                                      // Write-through cache on oEmbed success
+                                      setIgOEmbedCache(prev => ({
+                                        ...prev,
+                                        [normalized]: {
+                                          status: "success",
+                                          data: data
+                                        }
+                                      }))
                                       return
                                     }
                                     
@@ -3103,15 +3111,24 @@ export default function CreatorCardPage() {
                                     // Test if thumbnail endpoint works
                                     const thumbRes = await fetch(thumbnailUrl, { method: 'HEAD' })
                                     if (thumbRes.ok) {
+                                      const fallbackData: OEmbedSuccess = { 
+                                        ok: true, 
+                                        thumbnailUrl: thumbnailUrl,
+                                        source: "og"
+                                      }
                                       setPendingIg({ 
                                         url: normalized, 
                                         status: "success", 
-                                        oembed: { 
-                                          ok: true, 
-                                          thumbnailUrl: thumbnailUrl,
-                                          source: "fallback"
-                                        } 
+                                        oembed: fallbackData
                                       })
+                                      // Write-through cache on fallback success
+                                      setIgOEmbedCache(prev => ({
+                                        ...prev,
+                                        [normalized]: {
+                                          status: "success",
+                                          data: fallbackData
+                                        }
+                                      }))
                                       return
                                     }
                                     
@@ -3325,6 +3342,17 @@ export default function CreatorCardPage() {
                                           return
                                         }
                                         
+                                        // Ensure cache entry exists before adding (preserve thumbnail)
+                                        if (pendingIg?.oembed?.thumbnailUrl && !igOEmbedCache[normalizedUrl]) {
+                                          setIgOEmbedCache(prev => ({
+                                            ...prev,
+                                            [normalizedUrl]: {
+                                              status: "success",
+                                              data: pendingIg.oembed
+                                            }
+                                          }))
+                                        }
+                                        
                                         // Add new item with functional setState
                                         const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
                                         const newItem = { id, type: "ig" as const, url: normalizedUrl, brand: "", collabType: "", caption: "", isAdded: true }
@@ -3336,7 +3364,7 @@ export default function CreatorCardPage() {
                                           return nextItems
                                         })
                                         
-                                        // Show "Added" state
+                                        // Show "Added" state (keep pendingIg to preserve thumbnail in "added" state)
                                         setPendingIg({ ...pendingIg, status: "added" })
                                         markDirty()
                                         
