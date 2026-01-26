@@ -2584,6 +2584,15 @@ export default function ResultsClient() {
       if (!res.ok) throw new Error("failed to load creator card")
       const json = await res.json()
       setCreatorCard(normalizeCreatorCardForResults(json.card))
+      
+      // Clear sessionStorage flag after successful DB reload
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem("creatorCard:updated")
+        } catch {
+          // Ignore sessionStorage errors
+        }
+      }
     } catch {
       return
     }

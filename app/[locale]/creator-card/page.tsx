@@ -90,6 +90,7 @@ type CreatorStatsResponse = {
 
 type CreatorCardUpsertResponse = {
   ok: boolean
+  card?: unknown
   error?: unknown
   message?: unknown
 }
@@ -1902,7 +1903,7 @@ export default function CreatorCardPage() {
       setSaveOk(true)
       showToast(t("creatorCardEditor.success.saved"))
 
-      // Prepare updated card data for localStorage sync
+      // Prepare updated card data for state update
       const updatedCardData = {
         profileImageUrl: nextProfileImageUrl ?? null,
         audience: nextAudience || null,
@@ -1957,20 +1958,60 @@ export default function CreatorCardPage() {
         }) as any,
       }
 
+      // CRITICAL: Try to persist to localStorage for instant UI, but don't block on it
+      // Even if localStorage fails (privacy mode), DB sync will work via sessionStorage flag
       if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("creatorCard:updated", "1")
-        
-        // Save to localStorage for immediate sync with results page
+        // Best-effort localStorage write (instant UI hydration)
         try {
-          const draftPayload = {
-            ...baseCard,
-            ...updatedCardData,
+          let persistedCard = asRecord(json?.card)
+          
+          // If upsert didn't return card data, fetch from /me endpoint
+          if (!persistedCard || Object.keys(persistedCard).length === 0) {
+            if (process.env.NODE_ENV !== "production") {
+              console.log("[CreatorCard Save] ⚠️ No card in upsert response, fetching from /me")
+            }
+            
+            const meRes = await fetch("/api/creator-card/me", {
+              method: "GET",
+              cache: "no-store",
+              headers: { "cache-control": "no-cache" },
+            })
+            
+            if (meRes.ok) {
+              const meJson = await meRes.json()
+              persistedCard = asRecord(meJson?.card)
+            }
           }
-          localStorage.setItem("creator_card_draft_v1", JSON.stringify(draftPayload))
-          localStorage.setItem("creator_card_updated_at", String(Date.now()))
-        } catch {
-          // Ignore localStorage errors (privacy mode, quota exceeded, etc.)
+          
+          if (!persistedCard || Object.keys(persistedCard).length === 0) {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("[CreatorCard Save] ❌ No card data available for localStorage")
+            }
+          } else {
+            // Store the persisted card (already has both snake_case and camelCase from API)
+            const draftJson = JSON.stringify(persistedCard)
+            localStorage.setItem("creator_card_draft_v1", draftJson)
+            localStorage.setItem("creator_card_updated_at", String(Date.now()))
+            
+            if (process.env.NODE_ENV !== "production") {
+              console.log("[CreatorCard Save] ✅ localStorage written:", {
+                source: json?.card ? "upsert response" : "/me fetch",
+                size: draftJson.length,
+                keys: Object.keys(persistedCard).length,
+                hasAudience: !!(persistedCard.audience),
+                hasFeaturedItems: Array.isArray(persistedCard.featuredItems) || Array.isArray(persistedCard.featured_items),
+              })
+            }
+          }
+        } catch (err) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[CreatorCard Save] ❌ localStorage write failed:", err)
+          }
         }
+        
+        // ALWAYS set flag after save success (even if localStorage failed)
+        // This ensures DB refresh will happen on results page
+        window.sessionStorage.setItem("creatorCard:updated", "1")
       }
 
       setBaseCard((prev) => ({

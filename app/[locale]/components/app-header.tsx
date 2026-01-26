@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { ArrowLeft, Eye } from "lucide-react"
 import Logo from "../../../components/Logo"
 import LocaleSwitcher from "../../components/locale-switcher"
@@ -9,6 +9,7 @@ import { TopRightActions, BUTTON_BASE_CLASSES } from "@/app/components/TopRightA
 
 export default function AppHeader({ locale }: { locale: string }) {
   const pathname = usePathname()
+  const router = useRouter()
   const isMatchmaking = pathname?.includes("/matchmaking")
   const isCreatorCard = pathname?.includes("/creator-card")
   
@@ -22,6 +23,21 @@ export default function AppHeader({ locale }: { locale: string }) {
         back: "Back",
         browseCreators: "Browse Creator Cards",
       }
+
+  const handleBackToResults = () => {
+    if (typeof window === "undefined") return
+    
+    // Check if user just saved (sessionStorage flag set AFTER localStorage write)
+    const hasSaved = sessionStorage.getItem("creatorCard:updated") === "1"
+    
+    if (hasSaved) {
+      // Append ccUpdated flag to trigger immediate hydration
+      router.push(`/${locale}/results?ccUpdated=1#creator-card`)
+    } else {
+      // Normal navigation without flag
+      router.push(`/${locale}/results#creator-card`)
+    }
+  }
 
   return (
     <>
@@ -42,11 +58,11 @@ export default function AppHeader({ locale }: { locale: string }) {
               )}
               {isCreatorCard && (
                 <>
-                  <Link href={`/${locale}/results#creator-card`} className={BUTTON_BASE_CLASSES}>
+                  <button onClick={handleBackToResults} className={BUTTON_BASE_CLASSES}>
                     <ArrowLeft className="w-4 h-4" />
                     <span className="hidden sm:inline">{copy.back}</span>
                     <span className="sr-only sm:hidden">{copy.back}</span>
-                  </Link>
+                  </button>
                   <Link href={`/${locale}/matchmaking`} className={BUTTON_BASE_CLASSES}>
                     <Eye className="w-4 h-4" />
                     <span className="hidden sm:inline">{copy.browseCreators}</span>
