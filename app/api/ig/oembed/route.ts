@@ -4,6 +4,9 @@ export const runtime = "nodejs"
 
 type OEmbedSuccessResponse = {
   ok: true
+  thumbnailUrl: string
+  title?: string
+  source: "oembed" | "og"
   data: {
     thumbnail_url: string
     thumbnail_width: number
@@ -22,6 +25,44 @@ type OEmbedErrorResponse = {
 }
 
 type OEmbedResponse = OEmbedSuccessResponse | OEmbedErrorResponse
+
+// Helper function to scrape og:image from Instagram post HTML
+async function scrapeOgImage(url: string): Promise<{ thumbnailUrl: string; title?: string } | null> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    })
+
+    if (!response.ok) {
+      console.error(`Failed to fetch Instagram page: ${response.status}`)
+      return null
+    }
+
+    const html = await response.text()
+
+    // Extract og:image
+    const ogImageMatch = html.match(/property="og:image"\s+content="([^"]+)"/)
+    const thumbnailUrl = ogImageMatch?.[1]
+
+    // Extract og:title
+    const ogTitleMatch = html.match(/property="og:title"\s+content="([^"]+)"/)
+    const title = ogTitleMatch?.[1]
+
+    if (!thumbnailUrl) {
+      console.error("No og:image found in Instagram page HTML")
+      return null
+    }
+
+    return { thumbnailUrl, title }
+  } catch (error) {
+    console.error("Failed to scrape og:image:", error)
+    return null
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -71,9 +112,37 @@ export async function GET(request: NextRequest) {
     
     clearTimeout(timeoutId)
 
+    // Check content-type before attempting JSON parse
+    const contentType = response.headers.get("content-type") || ""
+    const isJson = contentType.includes("application/json")
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error")
       console.error(`Instagram oEmbed API error: ${response.status} - ${errorText}`)
+      
+      // Try og:image fallback
+      console.log("Attempting og:image fallback...")
+      const ogData = await scrapeOgImage(url)
+      if (ogData) {
+        const successResponse: OEmbedSuccessResponse = {
+          ok: true,
+          thumbnailUrl: ogData.thumbnailUrl,
+          title: ogData.title,
+          source: "og",
+          data: {
+            thumbnail_url: ogData.thumbnailUrl,
+            thumbnail_width: 640,
+            thumbnail_height: 640,
+            author_name: ogData.title || "",
+            provider_name: "Instagram",
+          },
+        }
+        return NextResponse.json(successResponse, {
+          headers: {
+            "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400",
+          },
+        })
+      }
       
       // Determine user-friendly message based on status
       let userMessage = "The post may be private or unavailable."
@@ -102,6 +171,43 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // If response is not JSON (e.g., HTML error page), try og:image fallback
+    if (!isJson) {
+      console.warn("Instagram oEmbed returned non-JSON response (likely HTML), attempting og:image fallback...")
+      const ogData = await scrapeOgImage(url)
+      if (ogData) {
+        const successResponse: OEmbedSuccessResponse = {
+          ok: true,
+          thumbnailUrl: ogData.thumbnailUrl,
+          title: ogData.title,
+          source: "og",
+          data: {
+            thumbnail_url: ogData.thumbnailUrl,
+            thumbnail_width: 640,
+            thumbnail_height: 640,
+            author_name: ogData.title || "",
+            provider_name: "Instagram",
+          },
+        }
+        return NextResponse.json(successResponse, {
+          headers: {
+            "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400",
+          },
+        })
+      }
+      
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            status: 500,
+            message: "Instagram returned HTML instead of JSON and og:image fallback failed",
+          },
+        } as OEmbedErrorResponse,
+        { status: 500 }
+      )
+    }
+
     const data = await response.json()
 
     // Validate response data
@@ -121,6 +227,9 @@ export async function GET(request: NextRequest) {
     // Return normalized response
     const successResponse: OEmbedSuccessResponse = {
       ok: true,
+      thumbnailUrl: data.thumbnail_url,
+      title: data.author_name,
+      source: "oembed",
       data: {
         thumbnail_url: data.thumbnail_url,
         thumbnail_width: data.thumbnail_width || 640,
