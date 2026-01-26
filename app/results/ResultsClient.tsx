@@ -2758,11 +2758,28 @@ export default function ResultsClient() {
       const hasCcUpdated = params.has("ccUpdated")
       const hasSessionFlag = sessionStorage.getItem("creatorCard:updated") === "1"
       
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[CreatorCard Hydration] Checking triggers:", {
+          hasCcUpdated,
+          hasSessionFlag,
+          url: window.location.href,
+        })
+      }
+      
       if (hasCcUpdated || hasSessionFlag) {
         // Try to hydrate from localStorage for immediate sync
+        let hydrated = false
         try {
           const draftJson = localStorage.getItem("creator_card_draft_v1")
           const updatedAt = localStorage.getItem("creator_card_updated_at")
+          
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[CreatorCard Hydration] localStorage data:", {
+              hasDraft: !!draftJson,
+              updatedAt,
+              age: updatedAt ? Date.now() - Number(updatedAt) : null,
+            })
+          }
           
           if (draftJson && updatedAt) {
             const draft = JSON.parse(draftJson)
@@ -2771,10 +2788,19 @@ export default function ResultsClient() {
             // Only hydrate if timestamp is recent (within last 5 minutes)
             if (Number.isFinite(timestamp) && Date.now() - timestamp < 5 * 60 * 1000) {
               setCreatorCard(normalizeCreatorCardForResults(draft))
+              hydrated = true
+              
+              if (process.env.NODE_ENV !== "production") {
+                console.log("[CreatorCard Hydration] ✅ Hydrated from localStorage")
+              }
+            } else if (process.env.NODE_ENV !== "production") {
+              console.log("[CreatorCard Hydration] ⏰ localStorage data too old, skipping")
             }
           }
-        } catch {
-          // Ignore JSON parse errors or localStorage access errors
+        } catch (err) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[CreatorCard Hydration] ❌ Error reading localStorage:", err)
+          }
         }
         
         // Clean up flags
@@ -2791,6 +2817,9 @@ export default function ResultsClient() {
         }
         
         // Trigger reload to fetch latest from API (non-blocking background refresh)
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[CreatorCard Hydration] 🔄 Triggering DB refresh (source of truth)")
+        }
         setCreatorCardReload((v) => v + 1)
       }
     }
