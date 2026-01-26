@@ -3182,6 +3182,13 @@ export default function ResultsClient() {
     setConnecting(true)
     setConnectEnvError(null)
     
+    // Clear auto-connect guard so user-initiated clicks are never blocked
+    try {
+      sessionStorage.removeItem("ig_auto_connect_attempted")
+    } catch {
+      // ignore
+    }
+    
     try {
       const nextPath = `/${activeLocale}/results`
       const oauthUrl = `/api/auth/instagram?provider=instagram&locale=${activeLocale}&next=${encodeURIComponent(nextPath)}`
