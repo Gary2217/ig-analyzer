@@ -2753,12 +2753,48 @@ export default function ResultsClient() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      if (sessionStorage.getItem("creatorCard:updated") === "1") {
-        sessionStorage.removeItem("creatorCard:updated")
+      // Check for ccUpdated query param or sessionStorage flag
+      const params = new URLSearchParams(window.location.search)
+      const hasCcUpdated = params.has("ccUpdated")
+      const hasSessionFlag = sessionStorage.getItem("creatorCard:updated") === "1"
+      
+      if (hasCcUpdated || hasSessionFlag) {
+        // Try to hydrate from localStorage for immediate sync
+        try {
+          const draftJson = localStorage.getItem("creator_card_draft_v1")
+          const updatedAt = localStorage.getItem("creator_card_updated_at")
+          
+          if (draftJson && updatedAt) {
+            const draft = JSON.parse(draftJson)
+            const timestamp = Number(updatedAt)
+            
+            // Only hydrate if timestamp is recent (within last 5 minutes)
+            if (Number.isFinite(timestamp) && Date.now() - timestamp < 5 * 60 * 1000) {
+              setCreatorCard(normalizeCreatorCardForResults(draft))
+            }
+          }
+        } catch {
+          // Ignore JSON parse errors or localStorage access errors
+        }
+        
+        // Clean up flags
+        if (hasSessionFlag) {
+          sessionStorage.removeItem("creatorCard:updated")
+        }
+        
+        // Remove ccUpdated query param while preserving hash
+        if (hasCcUpdated) {
+          params.delete("ccUpdated")
+          const newSearch = params.toString()
+          const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "") + window.location.hash
+          window.history.replaceState({}, "", newUrl)
+        }
+        
+        // Trigger reload to fetch latest from API (non-blocking background refresh)
         setCreatorCardReload((v) => v + 1)
       }
     }
-  }, [])
+  }, [normalizeCreatorCardForResults])
 
   useEffect(() => {
     if (!isConnectedInstagram) {

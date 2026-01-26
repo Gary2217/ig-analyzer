@@ -1902,12 +1902,8 @@ export default function CreatorCardPage() {
       setSaveOk(true)
       showToast(t("creatorCardEditor.success.saved"))
 
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("creatorCard:updated", "1")
-      }
-
-      setBaseCard((prev) => ({
-        ...(prev ?? {}),
+      // Prepare updated card data for localStorage sync
+      const updatedCardData = {
         profileImageUrl: nextProfileImageUrl ?? null,
         audience: nextAudience || null,
         themeTypes: normalizeStringArray(themeTypes, 20),
@@ -1959,6 +1955,27 @@ export default function CreatorCardPage() {
             order: idx,
           }
         }) as any,
+      }
+
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("creatorCard:updated", "1")
+        
+        // Save to localStorage for immediate sync with results page
+        try {
+          const draftPayload = {
+            ...baseCard,
+            ...updatedCardData,
+          }
+          localStorage.setItem("creator_card_draft_v1", JSON.stringify(draftPayload))
+          localStorage.setItem("creator_card_updated_at", String(Date.now()))
+        } catch {
+          // Ignore localStorage errors (privacy mode, quota exceeded, etc.)
+        }
+      }
+
+      setBaseCard((prev) => ({
+        ...(prev ?? {}),
+        ...updatedCardData,
       }))
 
       clearDirty()
@@ -1976,6 +1993,17 @@ export default function CreatorCardPage() {
 
   const handleBack = () => {
     if (returnTo) {
+      // If returning to results after save, add ccUpdated flag and hash
+      if (returnTo.includes("/results")) {
+        const hasHash = returnTo.includes("#creator-card")
+        const hasQuery = returnTo.includes("?")
+        const separator = hasQuery ? "&" : "?"
+        const updatedUrl = hasHash 
+          ? returnTo.replace("#creator-card", `${separator}ccUpdated=1#creator-card`)
+          : `${returnTo}${separator}ccUpdated=1#creator-card`
+        router.push(updatedUrl)
+        return
+      }
       router.push(returnTo)
       return
     }
