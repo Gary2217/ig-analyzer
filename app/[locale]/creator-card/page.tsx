@@ -1135,6 +1135,7 @@ export default function CreatorCardPage() {
   const [isAddIgOpen, setIsAddIgOpen] = useState(false)
   const [newIgUrl, setNewIgUrl] = useState("")
   const [pendingIg, setPendingIg] = useState<{ url: string; oembed?: any; status: "idle" | "loading" | "success" | "error" } | null>(null)
+  const previewDebounceRef = useRef<NodeJS.Timeout | null>(null)
   const pendingFeaturedReplaceIdRef = useRef<string | null>(null)
   const [suppressFeaturedTileClick, setSuppressFeaturedTileClick] = useState(false)
   const [featuredUploadingIds, setFeaturedUploadingIds] = useState<Set<string>>(new Set())
@@ -2927,6 +2928,103 @@ export default function CreatorCardPage() {
                         </div>
                       )}
 
+                      {/* Inline URL input row - only when isAddIgOpen === true */}
+                      {isAddIgOpen && (
+                        <div className="mb-3 p-3 rounded-xl border border-white/10 bg-white/5">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="url"
+                              value={newIgUrl}
+                              onChange={(e) => {
+                                const url = e.target.value
+                                setNewIgUrl(url)
+                                
+                                // Auto-preview on URL change (debounced)
+                                if (previewDebounceRef.current) {
+                                  clearTimeout(previewDebounceRef.current)
+                                }
+                                
+                                previewDebounceRef.current = setTimeout(async () => {
+                                  const trimmed = url.trim()
+                                  if (!trimmed) {
+                                    setPendingIg(null)
+                                    return
+                                  }
+                                  
+                                  const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(trimmed)
+                                  if (!isValidIg) {
+                                    setPendingIg(null)
+                                    return
+                                  }
+                                  
+                                  // Normalize URL
+                                  const normalized = trimmed.replace(/\/$/, "")
+                                  setPendingIg({ url: normalized, status: "loading" })
+                                  
+                                  try {
+                                    const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalized)}`)
+                                    const data = await res.json()
+                                    
+                                    if (res.ok && data.ok) {
+                                      setPendingIg({ url: normalized, status: "success", oembed: data })
+                                    } else {
+                                      setPendingIg({ url: normalized, status: "error" })
+                                    }
+                                  } catch (err) {
+                                    setPendingIg({ url: normalized, status: "error" })
+                                  }
+                                }, 400)
+                              }}
+                              placeholder={t("creatorCard.featured.igUrl")}
+                              className="flex-1 px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
+                              style={{ minHeight: "44px" }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!pendingIg?.url || pendingIg.status !== "success") return
+                                
+                                const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                                setFeaturedItems((prev) => [
+                                  { id, type: "ig", url: pendingIg.url, brand: "", collabType: "", caption: "", isAdded: true },
+                                  ...prev,
+                                ])
+                                setPendingIg(null)
+                                setNewIgUrl("")
+                                markDirty()
+                                
+                                // Scroll to show newly added item (second tile after placeholder)
+                                setTimeout(() => {
+                                  const el = featuredCarouselRef.current
+                                  if (!el) return
+                                  const items = el.querySelectorAll('[data-carousel-item]')
+                                  if (items.length > 1) {
+                                    items[1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+                                  }
+                                }, 100)
+                              }}
+                              disabled={!pendingIg?.url || pendingIg.status !== "success"}
+                              className="shrink-0 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ minHeight: "44px" }}
+                            >
+                              {t("creatorCard.featured.addPost")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAddIgOpen(false)
+                                setNewIgUrl("")
+                                setPendingIg(null)
+                              }}
+                              className="shrink-0 p-2 rounded-lg hover:bg-white/10 transition-colors"
+                              aria-label="Close"
+                            >
+                              <X className="h-4 w-4 text-white/60" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
@@ -3015,130 +3113,43 @@ export default function CreatorCardPage() {
                               }}
                               tabIndex={0}
                             >
-                              {/* Add IG carousel tile - only shown when isAddIgOpen === true */}
-                              {isAddIgOpen && (
-                                <div data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
-                                  <div className="relative w-full min-h-[280px] p-4 rounded-2xl border border-white/10 bg-white/5 shadow-sm space-y-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-xs font-semibold text-white/60">{t("creatorCard.featured.addPost")}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setIsAddIgOpen(false)
-                                          setNewIgUrl("")
-                                          setPendingIg(null)
-                                        }}
-                                        className="rounded-full bg-white/90 p-1 shadow-sm hover:bg-white"
-                                        aria-label="Close"
-                                      >
-                                        <X className="h-3.5 w-3.5 text-slate-700" />
-                                      </button>
+                              {/* Persistent Add Placeholder Tile - always first */}
+                              <div data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
+                                <div className="relative w-full rounded-2xl border border-dashed border-white/15 bg-white/5 overflow-hidden" style={{ aspectRatio: "4 / 5", maxHeight: "260px" }}>
+                                  {pendingIg?.status === "loading" ? (
+                                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
+                                      <div className="h-12 w-12 rounded-full bg-white/10" />
+                                      <div className="h-3 w-24 rounded bg-white/10" />
                                     </div>
-
-                                    <input
-                                      type="url"
-                                      value={newIgUrl}
-                                      onChange={(e) => setNewIgUrl(e.target.value)}
-                                      placeholder={t("creatorCard.featured.igUrl")}
-                                      className="w-full px-3 py-2.5 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
-                                      style={{ minHeight: "44px" }}
+                                  ) : pendingIg?.status === "success" && pendingIg.oembed?.thumbnailUrl ? (
+                                    <img
+                                      src={pendingIg.oembed.thumbnailUrl}
+                                      alt="Preview"
+                                      className="w-full h-full object-cover block"
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                      decoding="async"
                                     />
-
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        const trimmed = newIgUrl.trim()
-                                        if (!trimmed) return
-                                        
-                                        const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(trimmed)
-                                        if (!isValidIg) {
-                                          showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
-                                          return
-                                        }
-                                        
-                                        setPendingIg({ url: trimmed, status: "loading" })
-                                        
-                                        try {
-                                          const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(trimmed)}`)
-                                          const data = await res.json()
-                                          
-                                          if (res.ok && data.ok) {
-                                            setPendingIg({ url: trimmed, status: "success", oembed: data })
-                                          } else {
-                                            setPendingIg({ url: trimmed, status: "error" })
-                                          }
-                                        } catch (err) {
-                                          setPendingIg({ url: trimmed, status: "error" })
-                                        }
-                                      }}
-                                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/15 transition-colors"
-                                    >
-                                      <span>{activeLocale === "zh-TW" ? "預覽" : "Preview"}</span>
-                                    </button>
-
-                                    {pendingIg?.status === "loading" && (
-                                      <div
-                                        className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
-                                        style={{ aspectRatio: "4 / 5", maxHeight: "200px" }}
-                                      >
-                                        <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
-                                          <div className="h-12 w-12 rounded-full bg-white/10" />
-                                          <div className="h-3 w-24 rounded bg-white/10" />
-                                        </div>
+                                  ) : pendingIg?.status === "error" ? (
+                                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+                                      <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                      </svg>
+                                      <span className="text-xs leading-tight text-white/60">
+                                        {t("results.mediaKit.featured.previewUnavailable")}
+                                      </span>
+                                      <Plus className="h-6 w-6 text-white/30 mt-2" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                                      <Plus className="h-10 w-10 text-white/30" />
+                                      <div className="text-xs font-medium text-white/50">
+                                        {activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
                                       </div>
-                                    )}
-
-                                    {pendingIg?.status === "error" && (
-                                      <div
-                                        className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 flex flex-col items-center justify-center gap-3 p-6 text-center"
-                                        style={{ aspectRatio: "4 / 5", maxHeight: "200px" }}
-                                      >
-                                        <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                        </svg>
-                                        <span className="text-xs leading-tight text-white/60 break-words">
-                                          {t("results.mediaKit.featured.previewUnavailable")}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    {pendingIg?.status === "success" && pendingIg.oembed?.thumbnailUrl && (
-                                      <div className="space-y-3">
-                                        <div
-                                          className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60"
-                                          style={{ aspectRatio: "4 / 5", maxHeight: "200px" }}
-                                        >
-                                          <img
-                                            src={pendingIg.oembed.thumbnailUrl}
-                                            alt="Instagram post preview"
-                                            className="w-full h-full object-cover block"
-                                            loading="lazy"
-                                            referrerPolicy="no-referrer"
-                                            decoding="async"
-                                          />
-                                        </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                            setFeaturedItems((prev) => [
-                                              ...prev,
-                                              { id, type: "ig", url: pendingIg.url, brand: "", collabType: "", caption: "", isAdded: true },
-                                            ])
-                                            setPendingIg(null)
-                                            setNewIgUrl("")
-                                            setIsAddIgOpen(false)
-                                            markDirty()
-                                          }}
-                                          className="w-full px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors"
-                                        >
-                                          {t("creatorCard.featured.addPost")}
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
 
                               {featuredItems.filter(item => item.type === "ig").map((item) => (
                                 <div key={item.id} data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
