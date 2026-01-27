@@ -2208,15 +2208,42 @@ export default function ResultsClient() {
   }, [effectiveRecentMedia, hasRealMedia])
 
   const latestPosts = useMemo(() => {
-    if (!hasRealMedia) return []
+    if (!Array.isArray(effectiveRecentMedia) || effectiveRecentMedia.length === 0) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug("[latest-posts] empty input", {
+          isArray: Array.isArray(effectiveRecentMedia),
+          length: Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia.length : 0,
+        })
+      }
+      return []
+    }
 
     const validPosts = effectiveRecentMedia.filter((p) => {
-      if (!isRecord(p)) return false
-      if (!p.id) return false
-      if (!p.timestamp) return false
-      if (!p.media_url && !p.thumbnail_url) return false
+      const isRec = isRecord(p)
+      const hasId = isRec && Boolean(p.id)
+      const hasTs = isRec && Boolean(p.timestamp)
+      
+      if (process.env.NODE_ENV !== "production" && !isRec) {
+        // eslint-disable-next-line no-console
+        console.debug("[latest-posts] filtered out: not a record")
+      }
+      
+      if (!isRec) return false
+      if (!hasId) return false
+      if (!hasTs) return false
+      // Do NOT filter out posts just because thumbnail/media_url is missing
       return true
     })
+
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.debug("[latest-posts] filter results", {
+        rawCount: effectiveRecentMedia.length,
+        afterFilter: validPosts.length,
+        dropped: effectiveRecentMedia.length - validPosts.length,
+      })
+    }
 
     const copy = [...validPosts]
     copy.sort((a, b) => {
@@ -2226,27 +2253,39 @@ export default function ResultsClient() {
     })
 
     return copy.slice(0, 3)
-  }, [effectiveRecentMedia, hasRealMedia])
+  }, [effectiveRecentMedia])
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return
     const first = hasRealMedia && Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0 ? effectiveRecentMedia[0] : null
+    
+    // Enhanced debug logging for posts rendering diagnosis
+    const thumbUrl = first && typeof first.thumbnail_url === "string" ? first.thumbnail_url : ""
+    const mediaUrl = first && typeof first.media_url === "string" ? first.media_url : ""
+    const thumbHost = thumbUrl ? (() => { try { return new URL(thumbUrl).hostname } catch { return "invalid" } })() : ""
+    const mediaHost = mediaUrl ? (() => { try { return new URL(mediaUrl).hostname } catch { return "invalid" } })() : ""
+    
     // eslint-disable-next-line no-console
-    console.log("[top-posts]", {
+    console.log("[top-posts] data source", {
       mediaLen: Array.isArray(media) ? media.length : 0,
       effectiveRecentLen: Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia.length : 0,
       hasRealMedia,
       topPostsLen: Array.isArray(topPerformingPosts) ? topPerformingPosts.length : 0,
-      firstPresence: first
+      latestPostsLen: Array.isArray(latestPosts) ? latestPosts.length : 0,
+      firstPost: first
         ? {
-            hasMediaUrl: typeof first.media_url === "string" && first.media_url.length > 0,
-            hasThumb: typeof first.thumbnail_url === "string" && first.thumbnail_url.length > 0,
+            id: String(first.id ?? "").slice(0, 12),
+            media_type: first.media_type,
+            hasMediaUrl: Boolean(mediaUrl),
+            hasThumb: Boolean(thumbUrl),
+            thumbHost,
+            mediaHost,
             hasLike: typeof first.like_count === "number",
             hasComments: typeof first.comments_count === "number",
           }
         : null,
     })
-  }, [hasRealMedia, effectiveRecentMedia, topPerformingPosts, media])
+  }, [hasRealMedia, effectiveRecentMedia, topPerformingPosts, latestPosts, media])
 
   useEffect(() => {
     if (!__DEV__) return
@@ -6213,6 +6252,15 @@ export default function ResultsClient() {
                       ? (topPerformingPosts.length > 0 ? topPerformingPosts : effectiveRecentMedia.slice(0, 3))
                       : (isConnected ? placeholders : mockPosts.slice(0, 3))
 
+                    // Show empty state if connected but no posts available
+                    if (isConnected && renderCards.length === 0) {
+                      return (
+                        <div className="col-span-full text-center py-8 text-white/60 text-sm">
+                          {t("results.topPosts.emptyState")}
+                        </div>
+                      )
+                    }
+
                     const shown = !isSmUpViewport ? renderCards.slice(0, 3) : renderCards
                     return shown.map((p: unknown, index: number) => (
                       <div key={String(isRecord(p) && typeof p.id === "string" ? p.id : index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
@@ -6427,7 +6475,7 @@ export default function ResultsClient() {
               <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {(() => {
-                    const renderCards = hasRealMedia && latestPosts.length > 0 ? latestPosts : []
+                    const renderCards = latestPosts.length > 0 ? latestPosts : []
                     
                     if (renderCards.length === 0) {
                       return (
