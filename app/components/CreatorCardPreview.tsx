@@ -1381,7 +1381,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             </div>
 
             {/* Body with embed - scrollable container */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 min-h-0">
+            <div 
+              className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 min-h-0"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               <div className="w-full mx-auto break-words [overflow-wrap:anywhere]">
                 <IgEmbedPreview url={openIgUrl} />
               </div>

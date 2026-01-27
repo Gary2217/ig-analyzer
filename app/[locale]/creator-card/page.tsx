@@ -3340,12 +3340,19 @@ export default function CreatorCardPage() {
                             >
                               {/* Persistent Add Placeholder Tile - always first */}
                               <div data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
-                                <div className="relative w-full space-y-2">
+                                <div className="relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 hover:border-white/20 hover:bg-white/10">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Plus className="h-4 w-4 text-white/60" />
+                                    <span className="text-xs font-semibold text-white/60 break-words [overflow-wrap:anywhere]">
+                                      {activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
+                                    </span>
+                                  </div>
+                                  
                                   <button
                                     type="button"
                                     onClick={() => setIsAddIgOpen(true)}
-                                    className="relative w-full rounded-2xl border border-dashed border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-colors overflow-hidden cursor-pointer"
-                                    style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px" }}
+                                    className="relative w-full rounded-lg border border-dashed border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-colors overflow-hidden cursor-pointer"
+                                    style={{ aspectRatio: "4 / 5", minHeight: "44px" }}
                                     aria-label={activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
                                   >
                                     {pendingIg?.status === "loading" ? (
