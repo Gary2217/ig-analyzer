@@ -2650,8 +2650,31 @@
       "loadingThumbnail": "載入預覽中...",
       "thumbnailError": "無法載入預覽，請重試",
       "retry": "重試",
-      "previewUnavailable": "預覽無法使用"
+      "previewUnavailable": "預覽無法使用",
+      "hints": {
+        "emptyState": "品牌最常先看這裡，建議放 3–5 則代表作",
+        "dragToReorder": "拖曳以重新排序",
+        "mobileDragHint": "長按並拖曳以重新排序項目"
+      }
     },
+    "completion": {
+      "title": "完成度",
+      "percentage": "{percent}%",
+      "checklist": {
+        "basicInfo": "基本資料（名稱/照片/簡介）",
+        "contact": "聯絡資訊",
+        "featured": "精選作品",
+        "formats": "合作形式",
+        "niches": "合作類別"
+      }
+    },
+    "statsHelp": {
+      "followers": "平均單篇觸及",
+      "posts": "平均互動數",
+      "engagement": "互動率"
+    },
+    "brandViewNote": "這是品牌看到的樣子",
+    "mobileSave": "儲存變更",
     "options": {
       "niche": {
         "edu": "教育・實用",

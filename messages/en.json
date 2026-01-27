@@ -2671,8 +2671,31 @@
       "loadingThumbnail": "Loading preview...",
       "thumbnailError": "Failed to load preview. Please retry.",
       "retry": "Retry",
-      "previewUnavailable": "Preview unavailable"
+      "previewUnavailable": "Preview unavailable",
+      "hints": {
+        "emptyState": "Brands usually look here first. Add 3–5 best posts.",
+        "dragToReorder": "Drag to reorder",
+        "mobileDragHint": "Long-press and drag to reorder items"
+      }
     },
+    "completion": {
+      "title": "Profile Completion",
+      "percentage": "{percent}%",
+      "checklist": {
+        "basicInfo": "Basic info (name/photo/bio)",
+        "contact": "Contact info",
+        "featured": "Featured posts",
+        "formats": "Collaboration formats",
+        "niches": "Niches"
+      }
+    },
+    "statsHelp": {
+      "followers": "Average reach per post",
+      "posts": "Average interactions",
+      "engagement": "Engagement rate"
+    },
+    "brandViewNote": "This is what brands see",
+    "mobileSave": "Save Changes",
     "options": {
       "niche": {
         "edu": "Education • Practical",
