@@ -11,7 +11,6 @@ import { Button } from "../../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert"
 import { ArrowLeft, Instagram, AtSign, Lock } from "lucide-react"
-import GrowthPaths from "../../components/growth-paths"
 import { MonetizationSection } from "../../components/monetization-section"
 import { ShareResults } from "../../components/share-results"
 import { useRefetchTick } from "../lib/useRefetchTick"
@@ -3324,8 +3323,6 @@ export default function ResultsClient() {
     disclaimer: "",
   }
 
-  const hasSidebar = Boolean(displayUsername)
-
   const engagementPercent = (() => {
     const v = (safeResult.engagementQuality || "Medium").toLowerCase()
     if (v === "high") return 90
@@ -4688,33 +4685,6 @@ export default function ResultsClient() {
 
                 {/* Share Results Section - Moved to bottom of main content */}
               </div>
-
-              {hasSidebar && (
-                <div className="lg:col-span-1 w-full">
-                  <Card className={"lg:sticky lg:top-4 lg:max-h-[calc(100dvh-6rem)] " + CARD_SHELL_HOVER}>
-                    <CardHeader className={CARD_HEADER_ROW}>
-                      <CardTitle className="text-base text-white min-w-0 truncate">{t("results.sidebar.title")}</CardTitle>
-                      <p className="text-sm text-slate-400 mt-1 lg:mt-0.5">
-                        {t("results.sidebar.subtitle")} @{displayUsername}
-                      </p>
-                    </CardHeader>
-                    <div className="flex-1 lg:overflow-y-auto">
-                      <CardContent className="p-4 lg:p-6 pb-4 lg:pb-6">
-                        <GrowthPaths
-                          result={{
-                            handle: displayUsername,
-                            platform: safeResult.platform,
-                            confidence: safeResult.confidenceScore,
-                            abnormalBehaviorRisk: safeResult.abnormalBehaviorRisk as "Low" | "Medium" | "High",
-                            automationLikelihood: safeResult.automationLikelihood as "Low" | "Medium" | "High",
-                            engagementQuality: safeResult.engagementQuality as "Low" | "Medium" | "High",
-                          }}
-                        />
-                      </CardContent>
-                    </div>
-                  </Card>
-                </div>
-              )}
             </div>
 
             <Card className={"mt-3 " + CARD_SHELL}>
