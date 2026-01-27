@@ -26,6 +26,7 @@ import { CreatorCardPreviewCard } from "../components/CreatorCardPreview"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints"
+import { PostsDebugPanel } from "./PostsDebugPanel"
 
 // Dev StrictMode can mount/unmount/mount causing useRef to reset.
 // Module-scope flag survives remount in the same session and prevents duplicate fetch.
@@ -252,6 +253,25 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   const [broken, setBroken] = useState(false)
   const fallbackAttemptedRef = useRef(false)
 
+  // DEV-only: Extract hostname from original src URL
+  const getDebugHostname = (srcUrl?: string): string => {
+    if (!srcUrl) return ""
+    try {
+      // If proxied URL, extract the url parameter
+      if (srcUrl.includes("/api/ig/thumbnail?")) {
+        const params = new URLSearchParams(srcUrl.split("?")[1])
+        const originalUrl = params.get("url")
+        if (originalUrl) {
+          return new URL(originalUrl).hostname
+        }
+      }
+      // Direct URL
+      return new URL(srcUrl).hostname
+    } catch {
+      return "invalid-url"
+    }
+  }
+
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
       setBroken(false)
@@ -277,6 +297,21 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
           const params = new URLSearchParams(currentSrc.split("?")[1])
           const originalUrl = params.get("url")
           if (originalUrl) {
+            // Check if originalUrl is from instagram.com - if so, don't use it
+            // (instagram.com URLs often redirect to login/non-image pages)
+            try {
+              const originalUrlObj = new URL(originalUrl)
+              const hostname = originalUrlObj.hostname.toLowerCase()
+              if (hostname === "instagram.com" || hostname === "www.instagram.com") {
+                // Skip fallback for instagram.com URLs
+                setBroken(true)
+                return
+              }
+            } catch {
+              // If URL parsing fails, skip fallback
+              setBroken(true)
+              return
+            }
             setCurrentSrc(originalUrl)
             return
           }
@@ -290,9 +325,24 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   }, [currentSrc, src])
 
   if (broken || isVideoUrl) {
+    const hostname = process.env.NODE_ENV !== "production" && broken ? getDebugHostname(src) : ""
+
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-white/5 text-[11px] font-semibold text-white/70" aria-label={alt}>
-        Video
+      <div className="absolute inset-0 flex items-center justify-center bg-white/5 text-[11px] font-semibold text-white/70 min-h-[72px]" aria-label={alt}>
+        {isVideoUrl ? (
+          <span>Video</span>
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            {process.env.NODE_ENV !== "production" ? (
+              <>
+                <span className="text-[9px] text-red-400 font-bold">THUMB FAIL</span>
+                <span className="text-[8px] text-red-300 px-1 text-center max-w-full truncate">{hostname}</span>
+              </>
+            ) : (
+              <span>Image</span>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -2276,6 +2326,35 @@ export default function ResultsClient() {
 
     return copy.slice(0, 3)
   }, [effectiveRecentMedia])
+
+  // Helper to extract debug info from posts
+  const extractPostDebugInfo = useCallback((posts: unknown[]) => {
+    return posts.slice(0, 3).map((p) => {
+      if (!isRecord(p)) {
+        return {
+          id: "invalid",
+          media_type: "unknown",
+          hasThumb: false,
+          hasMediaUrl: false,
+          thumbHost: "",
+          mediaHost: "",
+        }
+      }
+      const thumbUrl = typeof p.thumbnail_url === "string" ? p.thumbnail_url : ""
+      const mediaUrl = typeof p.media_url === "string" ? p.media_url : ""
+      const thumbHost = thumbUrl ? (() => { try { return new URL(thumbUrl).hostname } catch { return "invalid" } })() : ""
+      const mediaHost = mediaUrl ? (() => { try { return new URL(mediaUrl).hostname } catch { return "invalid" } })() : ""
+      
+      return {
+        id: String(p.id ?? "unknown"),
+        media_type: String(p.media_type ?? "unknown"),
+        hasThumb: Boolean(thumbUrl),
+        hasMediaUrl: Boolean(mediaUrl),
+        thumbHost,
+        mediaHost,
+      }
+    })
+  }, [])
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return
@@ -6221,6 +6300,20 @@ export default function ResultsClient() {
                   })()}
               </CardContent>
             </Card>
+
+            {/* DEV-only Posts Debug Panel */}
+            {process.env.NODE_ENV !== "production" && (
+              <PostsDebugPanel
+                isConnected={isConnected}
+                hasRealMedia={hasRealMedia}
+                mediaLength={Array.isArray(media) ? media.length : 0}
+                effectiveRecentMediaLength={Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia.length : 0}
+                topPerformingPostsLength={topPerformingPosts.length}
+                latestPostsLength={latestPosts.length}
+                topPostsSample={extractPostDebugInfo(topPerformingPosts)}
+                latestPostsSample={extractPostDebugInfo(latestPosts)}
+              />
+            )}
 
             <Card
               id="top-posts-section"
