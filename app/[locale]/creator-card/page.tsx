@@ -2623,6 +2623,7 @@ export default function CreatorCardPage() {
                               e.preventDefault()
                               e.stopPropagation()
                               setBaseCard((prev) => ({ ...(prev ?? {}), audience: introDraft }))
+                              markDirty()
                               setIntroAppliedHint(true)
                               if (introAppliedHintTimerRef.current != null) window.clearTimeout(introAppliedHintTimerRef.current)
                               introAppliedHintTimerRef.current = window.setTimeout(() => {
