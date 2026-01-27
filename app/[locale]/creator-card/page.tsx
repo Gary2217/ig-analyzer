@@ -4250,7 +4250,7 @@ export default function CreatorCardPage() {
                   data={{
                     ...previewData,
                     creatorCard: {
-                      ...previewData.creatorCard,
+                      ...(previewData.creatorCard ?? {}),
                       profileImageUrl: (() => {
                         const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
                         const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
@@ -4259,7 +4259,7 @@ export default function CreatorCardPage() {
                       })(),
                       displayName: displayName,
                       username: displayUsername || null,
-                      aboutText: baseCard?.audience ?? null,
+                      aboutText: introDraft.trim() || baseCard?.audience || null,
                       primaryNiche: baseCard?.niche ?? null,
                       contact: previewContact,
                       featuredItems: featuredItems,
