@@ -25,6 +25,7 @@ import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints"
 import { PostsDebugPanel } from "./PostsDebugPanel"
+import { CreatorCardShowcase } from "./CreatorCardShowcase"
 
 // Dev StrictMode can mount/unmount/mount causing useRef to reset.
 // Module-scope flag survives remount in the same session and prevents duplicate fetch.
@@ -6415,6 +6416,34 @@ export default function ResultsClient() {
               </div>
             </div>
           </div>
+
+          {/* Creator Card Showcase Section */}
+          <CreatorCardShowcase
+            locale={activeLocale}
+            username={displayUsername}
+            displayName={displayName}
+            avatarUrl={(() => {
+              const cardImageUrl = isRecord(creatorCard) && typeof creatorCard.profileImageUrl === "string" 
+                ? String(creatorCard.profileImageUrl).trim() 
+                : ""
+              if (cardImageUrl) return cardImageUrl
+              
+              const igImageUrl = isRecord(igProfile) && typeof igProfile.profile_picture_url === "string"
+                ? String(igProfile.profile_picture_url)
+                : ""
+              return igImageUrl || undefined
+            })()}
+            followers={typeof followers === "number" && Number.isFinite(followers) ? followers : undefined}
+            following={typeof following === "number" && Number.isFinite(following) ? following : undefined}
+            posts={typeof mediaCount === "number" && Number.isFinite(mediaCount) ? mediaCount : undefined}
+            engagementRate={engagementRatePctFormatted !== "—" ? engagementRatePctFormatted : undefined}
+            isConnected={isConnectedInstagram}
+            isLoading={isCreatorCardLoading}
+            hasCard={isRecord(creatorCard)}
+            isCardPublic={isRecord(creatorCard) ? Boolean(creatorCard.isPublic ?? creatorCard.is_public) : false}
+            cardId={isRecord(creatorCard) && typeof creatorCard.id === "string" ? creatorCard.id : undefined}
+            t={t}
+          />
 
           {isProModalOpen && (
             <div className="fixed inset-0 z-[70] pointer-events-none">
