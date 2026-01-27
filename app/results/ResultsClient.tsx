@@ -2507,6 +2507,7 @@ export default function ResultsClient() {
   const creatorStatsUpsertKeyRef = useRef<string>("")
   const reloadCardInFlightRef = useRef(false)
   const reloadCardLastAtRef = useRef(0)
+  const lastReloadKeyRef = useRef<string>("")
 
   const normalizeCreatorCardForResults = useCallback((row: unknown): Record<string, unknown> | null => {
     if (!isRecord(row)) return null
@@ -2632,6 +2633,13 @@ export default function ResultsClient() {
     }
   }, [normalizeCreatorCardForResults])
 
+  const reloadCreatorCardOnce = useCallback((key?: string) => {
+    const k = key || ""
+    if (k && lastReloadKeyRef.current === k) return
+    if (k) lastReloadKeyRef.current = k
+    void reloadCreatorCard(k || undefined)
+  }, [reloadCreatorCard])
+
   const safeReloadCreatorCard = useCallback(() => {
     const now = Date.now()
 
@@ -2664,18 +2672,15 @@ export default function ResultsClient() {
         lastSeenTimestamp,
       })
       
-      // If timestamp changed, trigger refetch with the new timestamp
+      // Only reload when storageTimestamp exists AND differs from lastSeenTimestamp
       if (storageTimestamp && storageTimestamp !== lastSeenTimestamp) {
         lastSeenTimestamp = storageTimestamp
         debugCreatorCard("storage timestamp changed → reload", {
           storageTimestamp,
         })
-        void reloadCreatorCard(storageTimestamp)
-      } else {
-        // Otherwise use the regular safe reload (throttled)
-        debugCreatorCard("no timestamp change → safe reload")
-        void safeReloadCreatorCard()
+        reloadCreatorCardOnce(storageTimestamp)
       }
+      // Otherwise do nothing (no safeReload fallback to prevent excessive refreshes)
     }
     
     const onFocus = () => {
@@ -2695,7 +2700,7 @@ export default function ResultsClient() {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [reloadCreatorCard, safeReloadCreatorCard])
+  }, [reloadCreatorCardOnce])
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
@@ -2820,6 +2825,29 @@ export default function ResultsClient() {
     }
   }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
 
+  // Mount-time check: reload if hash includes creator-card AND storage has timestamp
+  // This handles router.back() navigation where ccUpdated param is not present
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    
+    const hash = window.location.hash
+    const hasCreatorCardHash = hash.includes("creator-card")
+    const storageTimestamp = sessionStorage.getItem("creatorCardUpdated") || localStorage.getItem("creatorCardUpdated")
+    
+    debugCreatorCard("mount-time check", {
+      hasCreatorCardHash,
+      storageTimestamp,
+      hash,
+    })
+    
+    if (hasCreatorCardHash && storageTimestamp) {
+      debugCreatorCard("mount-time reload triggered", {
+        storageTimestamp,
+      })
+      reloadCreatorCardOnce(storageTimestamp)
+    }
+  }, [reloadCreatorCardOnce])
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       // Check for ccUpdated query param or storage timestamp
@@ -2885,10 +2913,10 @@ export default function ResultsClient() {
         })
         
         // Trigger reload to fetch latest from API with refreshKey (non-blocking background refresh)
-        void reloadCreatorCard(refreshKey)
+        reloadCreatorCardOnce(refreshKey)
       }
     }
-  }, [normalizeCreatorCardForResults, reloadCreatorCard])
+  }, [normalizeCreatorCardForResults, reloadCreatorCardOnce])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
