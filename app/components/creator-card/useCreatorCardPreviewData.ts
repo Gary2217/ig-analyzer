@@ -90,7 +90,17 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
       }
 
   // Extract featured items from various possible locations
+  const DEBUG = true
   let featuredRaw: any = pick<any>(base, "portfolio", "featured", "featuredItems", "featured_items", "portfolioItems", "portfolio_items", "highlights")
+  
+  if (DEBUG) {
+    console.log('[useCreatorCardPreviewData] featuredRaw:', {
+      keys: featuredRaw ? Object.keys(featuredRaw) : null,
+      isArray: Array.isArray(featuredRaw),
+      hasItems: featuredRaw?.items ? true : false,
+      itemsLength: featuredRaw?.items?.length,
+    })
+  }
   
   // If container is an object with items array, extract it
   let featuredArray: any[] = []
@@ -100,7 +110,22 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
     featuredArray = featuredRaw.items
   }
   
+  if (DEBUG) {
+    console.log('[useCreatorCardPreviewData] featuredArray:', {
+      length: featuredArray.length,
+      firstItem: featuredArray[0] ? Object.keys(featuredArray[0]) : null,
+      firstItemSample: featuredArray[0],
+    })
+  }
+  
   const featuredItems = normalizeFeaturedItems(featuredArray)
+  
+  if (DEBUG) {
+    console.log('[useCreatorCardPreviewData] normalized featuredItems:', {
+      length: featuredItems.length,
+      firstItem: featuredItems[0],
+    })
+  }
   const deliverables = pick<any[]>(base, "deliverables", "formats", "formatTypes", "format_types") ?? []
   const collaborationNiches = pick<any[]>(base, "collaborationNiches", "collaboration_niches", "niches") ?? []
   const themeTypes = pick<any[]>(base, "themeTypes", "theme_types", "platforms") ?? []
