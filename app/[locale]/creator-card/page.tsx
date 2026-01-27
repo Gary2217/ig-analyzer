@@ -20,6 +20,8 @@ import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
+import { useCreatorCardPreviewData } from "../../components/creator-card/useCreatorCardPreviewData"
+import { CreatorCardPreviewShell } from "../../components/creator-card/CreatorCardPreviewShell"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 
 // Strict oEmbed types
@@ -1113,6 +1115,9 @@ export default function CreatorCardPage() {
   const [deliverables, setDeliverables] = useState<string[]>([])
   const [collaborationNiches, setCollaborationNiches] = useState<string[]>([])
   const [pastCollaborations, setPastCollaborations] = useState<string[]>([])
+
+  // Fetch preview data using shared hook (for stats and fallback data)
+  const previewData = useCreatorCardPreviewData({ enabled: true })
   const [themeTypes, setThemeTypes] = useState<string[]>([])
   const [audienceProfiles, setAudienceProfiles] = useState<string[]>([])
 
@@ -4235,55 +4240,38 @@ export default function CreatorCardPage() {
           <div className="lg:col-span-7 min-w-0">
             {isMobile ? null : (
               <div className="lg:sticky lg:top-24">
-                <CreatorCardPreview
+                <CreatorCardPreviewShell
+                  locale={activeLocale}
                   t={t}
-                  className="border-white/10 bg-transparent"
-                  headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
-                  useWidePhotoLayout
-                  photoUploadEnabled
-                  onProfileImageFileChange={(file) => {
-                    setProfileImageFile(file)
-                    markDirty()
+                  showHeaderButtons={false}
+                  editHref={`/${activeLocale}/creator-card`}
+                  publicHref={previewData.cardId ? `/${activeLocale}/creator/${previewData.cardId}` : null}
+                  isConnected={true}
+                  data={{
+                    ...previewData,
+                    creatorCard: {
+                      ...previewData.creatorCard,
+                      profileImageUrl: (() => {
+                        const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
+                        const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                        const u = (u1 || u2).trim()
+                        return u ? u : null
+                      })(),
+                      displayName: displayName,
+                      username: displayUsername || null,
+                      aboutText: baseCard?.audience ?? null,
+                      primaryNiche: baseCard?.niche ?? null,
+                      contact: previewContact,
+                      featuredItems: featuredItems,
+                      themeTypes: themeTypes,
+                      audienceProfiles: audienceProfiles,
+                      collaborationNiches: collaborationNiches,
+                      deliverables: deliverables,
+                      pastCollaborations: pastCollaborations,
+                    },
                   }}
-                  username={displayUsername || null}
-                  profileImageUrl={(() => {
-                    const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
-                    const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                    const u = (u1 || u2).trim()
-                    return u ? u : null
-                  })()}
+                  username={displayUsername || undefined}
                   displayName={displayName}
-                  aboutText={baseCard?.audience ?? null}
-                  primaryNiche={baseCard?.niche ?? null}
-                  contact={previewContact}
-                  featuredItems={featuredItems}
-                  onReorderIgIds={(nextIgIds) => {
-                    setFeaturedItems(prev => {
-                      const igMap = new Map(prev.filter(x => x.type === "ig").map(x => [x.id, x]))
-                      const orderedIg = nextIgIds.map(id => igMap.get(id)).filter((x): x is FeaturedItem => x !== undefined)
-                      const nonIg = prev.filter(x => x.type !== "ig")
-                      const next = [...nonIg, ...orderedIg]
-                      persistDraftNow(next)
-                      markDirty()
-                      return next
-                    })
-                  }}
-                  featuredImageUrls={featuredItems.map((x) => x.url)}
-                  igOEmbedCache={igOEmbedCache}
-                  themeTypes={themeTypes}
-                  audienceProfiles={audienceProfiles}
-                  collaborationNiches={collaborationNiches}
-                  deliverables={deliverables}
-                  pastCollaborations={pastCollaborations}
-                  followers={followers ?? undefined}
-                  following={following ?? undefined}
-                  posts={posts ?? undefined}
-                  engagementRate={engagementRate ?? undefined}
-                  followersText={followersText}
-                  postsText={postsText}
-                  engagementRateText={engagementRateText}
-                  highlightTarget={highlight}
-                  highlightSection={activePreviewSection}
                 />
               </div>
             )}
