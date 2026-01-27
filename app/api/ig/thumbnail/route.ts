@@ -8,6 +8,8 @@ const ALLOWED_CDN_HOSTNAMES = [
   "cdninstagram.com",
   "fbcdn.net",
   "fna.fbcdn.net",
+  "fbsbx.com",
+  "akamaihd.net",
 ]
 
 // Regex for Instagram media path: /(p|reel|tv)/{shortcode}/media/
@@ -46,7 +48,7 @@ function isAllowedImageUrl(url: string): boolean {
 }
 
 function isCDNHostname(hostname: string): boolean {
-  const lower = hostname.toLowerCase()
+  const lower = hostname.toLowerCase().replace(/\.$/, "") // strip trailing dot
   return ALLOWED_CDN_HOSTNAMES.some(allowed => 
     lower === allowed || lower.endsWith(`.${allowed}`)
   )
@@ -76,9 +78,13 @@ export async function GET(request: NextRequest) {
     const abortController = new AbortController()
     const timeoutId = setTimeout(() => abortController.abort(), 8000)
     
+    const initialUrlObj = new URL(thumbnailUrl)
     if (process.env.NODE_ENV !== "production") {
-      const urlObj = new URL(thumbnailUrl)
-      console.log("[Thumbnail Proxy Request]", { hostname: urlObj.hostname, path: urlObj.pathname })
+      // eslint-disable-next-line no-console
+      console.debug("[ig-thumb] start", { 
+        inputUrlHost: initialUrlObj.hostname, 
+        inputUrlPath: initialUrlObj.pathname 
+      })
     }
     
     try {
@@ -121,8 +127,21 @@ export async function GET(request: NextRequest) {
       // Final URL must be from CDN domains (not arbitrary instagram.com pages)
       if (!isCDNHostname(finalHostname)) {
         console.error(`Final URL not from allowed CDN: ${finalHostname}`)
+        
+        const errorPayload: Record<string, unknown> = {
+          error: "Final redirect URL not from allowed CDN",
+        }
+        
+        // Add DEV-only diagnostics
+        if (process.env.NODE_ENV !== "production") {
+          errorPayload.initialHostname = initialUrlObj.hostname
+          errorPayload.finalHostname = finalHostname
+          errorPayload.finalUrl = finalUrl
+          errorPayload.allowedList = ALLOWED_CDN_HOSTNAMES
+        }
+        
         return NextResponse.json(
-          { error: "Final redirect URL not from allowed CDN" },
+          errorPayload,
           { 
             status: 502,
             headers: {
@@ -133,9 +152,10 @@ export async function GET(request: NextRequest) {
       }
       
       if (process.env.NODE_ENV !== "production") {
-        console.log("[Thumbnail Proxy Response]", { 
-          status: imageResponse.status, 
+        // eslint-disable-next-line no-console
+        console.debug("[ig-thumb] final", { 
           finalHostname,
+          status: imageResponse.status,
           contentType: imageResponse.headers.get("content-type") 
         })
       }
