@@ -48,16 +48,15 @@ function normalizeFeaturedItems(raw: any): any[] {
   return arr
     .map((it) => {
       if (!isRecord(it)) return null
-      const url = pick<string>(it, "url", "permalink", "link")
-      let thumbnailUrl = pick<string>(it, "thumbnailUrl", "thumbnail_url", "thumbUrl", "thumb_url", "imageUrl", "image_url", "mediaUrl", "media_url")
+      
+      // Extract URL from various possible keys
+      const url = pick<string>(it, "url", "permalink", "link", "href", "postUrl", "post_url")
+      if (!url) return null
+      
+      // ALWAYS proxy thumbnails through our endpoint to avoid domain/CSP issues
+      const thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
       const type = pick<string>(it, "type", "mediaType", "media_type") ?? "ig_post"
       
-      // If no thumbnail but url exists, use fallback endpoint
-      if (!thumbnailUrl && url) {
-        thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
-      }
-      
-      if (!url && !thumbnailUrl) return null
       return {
         ...it,
         type,
@@ -90,17 +89,8 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
       }
 
   // Extract featured items from various possible locations
-  const DEBUG = true
+  // Support nested structures like payload.card.portfolio.items
   let featuredRaw: any = pick<any>(base, "portfolio", "featured", "featuredItems", "featured_items", "portfolioItems", "portfolio_items", "highlights")
-  
-  if (DEBUG) {
-    console.log('[useCreatorCardPreviewData] featuredRaw:', {
-      keys: featuredRaw ? Object.keys(featuredRaw) : null,
-      isArray: Array.isArray(featuredRaw),
-      hasItems: featuredRaw?.items ? true : false,
-      itemsLength: featuredRaw?.items?.length,
-    })
-  }
   
   // If container is an object with items array, extract it
   let featuredArray: any[] = []
@@ -110,22 +100,7 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
     featuredArray = featuredRaw.items
   }
   
-  if (DEBUG) {
-    console.log('[useCreatorCardPreviewData] featuredArray:', {
-      length: featuredArray.length,
-      firstItem: featuredArray[0] ? Object.keys(featuredArray[0]) : null,
-      firstItemSample: featuredArray[0],
-    })
-  }
-  
   const featuredItems = normalizeFeaturedItems(featuredArray)
-  
-  if (DEBUG) {
-    console.log('[useCreatorCardPreviewData] normalized featuredItems:', {
-      length: featuredItems.length,
-      firstItem: featuredItems[0],
-    })
-  }
   const deliverables = pick<any[]>(base, "deliverables", "formats", "formatTypes", "format_types") ?? []
   const collaborationNiches = pick<any[]>(base, "collaborationNiches", "collaboration_niches", "niches") ?? []
   const themeTypes = pick<any[]>(base, "themeTypes", "theme_types", "platforms") ?? []

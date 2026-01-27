@@ -123,15 +123,6 @@ export function CreatorCardPreviewShell({
   }
 
   // State 4: Has card - render full preview
-  const DEBUG = true
-  if (DEBUG) {
-    console.log('[CreatorCardPreviewShell] Rendering with:', {
-      hasFeaturedItems: Array.isArray(creatorCard.featuredItems),
-      featuredItemsLength: creatorCard.featuredItems?.length,
-      firstItem: creatorCard.featuredItems?.[0],
-    })
-  }
-  
   return (
     <div className="min-w-0">
       {showHeaderButtons && (
