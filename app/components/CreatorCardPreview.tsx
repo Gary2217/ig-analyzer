@@ -415,20 +415,20 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   } = props
 
   // Modal state for IG post preview
-  const [openIgUrl, setOpenIgUrl] = useState<string | null>(null)
+  const [openIg, setOpenIg] = useState<{ url: string; thumb?: string } | null>(null)
   const [openAvatarUrl, setOpenAvatarUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
 
   // Focus modal body when opened for PC wheel scroll
   useEffect(() => {
-    if ((openIgUrl || openAvatarUrl) && modalBodyRef.current) {
+    if ((openIg || openAvatarUrl) && modalBodyRef.current) {
       // Small delay to ensure DOM is ready
       setTimeout(() => {
         modalBodyRef.current?.focus()
       }, 100)
     }
-  }, [openIgUrl, openAvatarUrl])
+  }, [openIg, openAvatarUrl])
 
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
   const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
@@ -1138,7 +1138,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     const thumbnailSrc = itemThumbnail || cachedThumbnail || (directMediaUrl ? `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}` : undefined)
                     
                     return (
-                      <SortablePreviewItem key={item.id} item={item} onItemClick={() => setOpenIgUrl(normalizedUrl)}>
+                      <SortablePreviewItem key={item.id} item={item} onItemClick={() => setOpenIg({ url: normalizedUrl, thumb: thumbnailSrc })}>
                         <div
                           data-preview-item
                           className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors cursor-pointer"
@@ -1367,31 +1367,24 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         </div>
       </div>
 
-      {/* IG Post / Avatar Preview Modal */}
-      {(openIgUrl || openAvatarUrl) && (
+      {/* Avatar Preview Modal */}
+      {openAvatarUrl && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur z-50 flex items-center justify-center p-3 sm:p-6"
-          onClick={() => {
-            setOpenIgUrl(null)
-            setOpenAvatarUrl(null)
-          }}
+          onClick={() => setOpenAvatarUrl(null)}
           onWheelCapture={(e) => e.stopPropagation()}
         >
           <div
             className="w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
               <h3 className="text-sm font-semibold text-white/90 break-words [overflow-wrap:anywhere] min-w-0">
-                {openAvatarUrl ? t("results.mediaKit.about.title") : t("creatorCard.featured.igPreviewTitle")}
+                {t("results.mediaKit.about.title")}
               </h3>
               <button
                 type="button"
-                onClick={() => {
-                  setOpenIgUrl(null)
-                  setOpenAvatarUrl(null)
-                }}
+                onClick={() => setOpenAvatarUrl(null)}
                 className="shrink-0 rounded-full bg-white/10 p-2 hover:bg-white/20 transition-colors"
                 aria-label="Close"
                 style={{ minWidth: "44px", minHeight: "44px" }}
@@ -1399,54 +1392,65 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 <X className="h-4 w-4 text-white/90" />
               </button>
             </div>
+            <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden flex items-center justify-center">
+              <div className="w-full h-full max-h-[80vh] flex items-center justify-center">
+                <img
+                  src={openAvatarUrl}
+                  alt={resolvedDisplayName || "Profile"}
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-            {/* Body with embed - compact non-scrolling layout */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {openAvatarUrl ? (
-                // Avatar preview - simple centered image
-                <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden flex items-center justify-center">
-                  <div className="w-full h-full max-h-[80vh] flex items-center justify-center">
-                    <img
-                      src={openAvatarUrl}
-                      alt={resolvedDisplayName || "Profile"}
-                      className="max-w-full max-h-full object-contain rounded-lg"
-                      referrerPolicy="no-referrer"
-                    />
+      {/* IG Post Preview Modal - Image Only */}
+      {openIg && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur">
+          <div className="mx-auto flex h-full w-full max-w-[520px] flex-col px-3 py-4 sm:px-4">
+            <div className="rounded-2xl border border-white/10 bg-[#0b1220]/80 backdrop-blur">
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="text-sm font-semibold text-white/85">Instagram 貼文預覽</div>
+                <button
+                  type="button"
+                  onClick={() => setOpenIg(null)}
+                  className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* BODY: image-only (no comments area) */}
+              <div className="px-4 pb-4">
+                <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                  <div className="flex items-center justify-center p-2">
+                    {openIg.thumb ? (
+                      <img
+                        src={openIg.thumb}
+                        alt="Instagram post"
+                        className="max-h-[70vh] w-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="py-10 text-center text-sm text-white/50">
+                        Preview unavailable
+                      </div>
+                    )}
                   </div>
                 </div>
-              ) : (
-                // IG embed preview
-                <>
-                  {/* Fixed-height embed viewport - no scroll */}
-                  <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden">
-                    <div 
-                      className="w-full h-full max-h-[70vh] overflow-hidden rounded-lg flex items-center justify-center bg-black/20"
-                    >
-                      <div className="w-full h-full break-words [overflow-wrap:anywhere]">
-                        <IgEmbedPreview url={openIgUrl!} />
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* CTA always visible at bottom - no scrolling needed */}
-                  <div className="shrink-0 border-t border-white/10 bg-slate-900/95 backdrop-blur p-3 sm:p-4">
-                    <a
-                      href={openIgUrl!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors break-words [overflow-wrap:anywhere]"
-                      style={{ minHeight: "44px" }}
-                    >
-                      <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-                      </svg>
-                      <span className="min-w-0">
-                        {t("creatorCard.featured.openOnInstagram")}
-                      </span>
-                    </a>
-                  </div>
-                </>
-              )}
+                <a
+                  href={openIg.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6d28d9] to-[#db2777] px-4 py-3 text-sm font-semibold text-white hover:brightness-110"
+                >
+                  在 Instagram 開啟
+                </a>
+              </div>
             </div>
           </div>
         </div>
