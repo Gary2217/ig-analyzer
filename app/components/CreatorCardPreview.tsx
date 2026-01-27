@@ -416,18 +416,19 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   // Modal state for IG post preview
   const [openIgUrl, setOpenIgUrl] = useState<string | null>(null)
+  const [openAvatarUrl, setOpenAvatarUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
 
   // Focus modal body when opened for PC wheel scroll
   useEffect(() => {
-    if (openIgUrl && modalBodyRef.current) {
+    if ((openIgUrl || openAvatarUrl) && modalBodyRef.current) {
       // Small delay to ensure DOM is ready
       setTimeout(() => {
         modalBodyRef.current?.focus()
       }, 100)
     }
-  }, [openIgUrl])
+  }, [openIgUrl, openAvatarUrl])
 
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
   const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
@@ -862,14 +863,19 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   }
 
   return (
-    <div className="rounded-xl border border-white/8 bg-[#0b1220]/40 backdrop-blur-sm">
-      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 sm:p-4 lg:p-6 min-w-0">
-        <div className="flex flex-col gap-4 min-w-0">
+    <div className="rounded-2xl border border-white/8 bg-[#0b1220]/40 backdrop-blur-sm">
+      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-5 lg:p-8 min-w-0">
+        <div className="flex flex-col gap-5 sm:gap-6 min-w-0">
           {/* Header grid: avatar/name left, bio right */}
-          <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3 sm:gap-4 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-4 sm:gap-5 min-w-0">
             {/* Left: avatar/photo + name/handle */}
             <div className="min-w-0">
-              <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
+              <button
+                type="button"
+                onClick={() => effectivePhotoUrl && setOpenAvatarUrl(effectivePhotoUrl)}
+                className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0 w-full transition-opacity hover:opacity-80 cursor-pointer"
+                disabled={!effectivePhotoUrl}
+              >
                 <div className="relative aspect-[3/4] w-full">
                   {effectivePhotoUrl ? (
                     <Photo key={effectivePhotoUrl} url={effectivePhotoUrl} />
@@ -877,7 +883,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     <div className="h-full w-full flex items-center justify-center text-sm text-white/50">—</div>
                   )}
                 </div>
-              </div>
+              </button>
 
               {photoUploadEnabled ? (
                 <div className="mt-2">
@@ -933,7 +939,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
             {/* Right: bio (only if exists) */}
             {bioText ? (
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 sm:py-4">
                 <div className="text-[10px] tracking-widest font-semibold text-white/55 mb-2">
                   {t("results.mediaKit.about.title")}
                 </div>
@@ -945,7 +951,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           </div>
 
           {showStatsRow ? (
-          <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
+          <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 sm:px-4 sm:py-3 min-w-0">
             <div className="grid grid-cols-3 gap-x-2 divide-x divide-white/10 min-w-0">
               <div className="flex flex-col items-center text-center min-w-0">
                 <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
@@ -1361,11 +1367,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         </div>
       </div>
 
-      {/* IG Post Preview Modal */}
-      {openIgUrl && (
+      {/* IG Post / Avatar Preview Modal */}
+      {(openIgUrl || openAvatarUrl) && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur z-50 flex items-center justify-center p-3 sm:p-6"
-          onClick={() => setOpenIgUrl(null)}
+          onClick={() => {
+            setOpenIgUrl(null)
+            setOpenAvatarUrl(null)
+          }}
           onWheelCapture={(e) => e.stopPropagation()}
         >
           <div
@@ -1375,11 +1384,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             {/* Header */}
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
               <h3 className="text-sm font-semibold text-white/90 break-words [overflow-wrap:anywhere] min-w-0">
-                {t("creatorCard.featured.igPreviewTitle")}
+                {openAvatarUrl ? t("results.mediaKit.about.title") : t("creatorCard.featured.igPreviewTitle")}
               </h3>
               <button
                 type="button"
-                onClick={() => setOpenIgUrl(null)}
+                onClick={() => {
+                  setOpenIgUrl(null)
+                  setOpenAvatarUrl(null)
+                }}
                 className="shrink-0 rounded-full bg-white/10 p-2 hover:bg-white/20 transition-colors"
                 aria-label="Close"
                 style={{ minWidth: "44px", minHeight: "44px" }}
@@ -1390,34 +1402,51 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
             {/* Body with embed - compact non-scrolling layout */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {/* Fixed-height embed viewport - no scroll */}
-              <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden">
-                <div 
-                  className="w-full h-full max-h-[70vh] overflow-hidden rounded-lg flex items-center justify-center bg-black/20"
-                >
-                  <div className="w-full h-full break-words [overflow-wrap:anywhere]">
-                    <IgEmbedPreview url={openIgUrl} />
+              {openAvatarUrl ? (
+                // Avatar preview - simple centered image
+                <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden flex items-center justify-center">
+                  <div className="w-full h-full max-h-[80vh] flex items-center justify-center">
+                    <img
+                      src={openAvatarUrl}
+                      alt={resolvedDisplayName || "Profile"}
+                      className="max-w-full max-h-full object-contain rounded-lg"
+                      referrerPolicy="no-referrer"
+                    />
                   </div>
                 </div>
-              </div>
+              ) : (
+                // IG embed preview
+                <>
+                  {/* Fixed-height embed viewport - no scroll */}
+                  <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden">
+                    <div 
+                      className="w-full h-full max-h-[70vh] overflow-hidden rounded-lg flex items-center justify-center bg-black/20"
+                    >
+                      <div className="w-full h-full break-words [overflow-wrap:anywhere]">
+                        <IgEmbedPreview url={openIgUrl!} />
+                      </div>
+                    </div>
+                  </div>
 
-              {/* CTA always visible at bottom - no scrolling needed */}
-              <div className="shrink-0 border-t border-white/10 bg-slate-900/95 backdrop-blur p-3 sm:p-4">
-                <a
-                  href={openIgUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors break-words [overflow-wrap:anywhere]"
-                  style={{ minHeight: "44px" }}
-                >
-                  <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-                  </svg>
-                  <span className="min-w-0">
-                    {t("creatorCard.featured.openOnInstagram")}
-                  </span>
-                </a>
-              </div>
+                  {/* CTA always visible at bottom - no scrolling needed */}
+                  <div className="shrink-0 border-t border-white/10 bg-slate-900/95 backdrop-blur p-3 sm:p-4">
+                    <a
+                      href={openIgUrl!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors break-words [overflow-wrap:anywhere]"
+                      style={{ minHeight: "44px" }}
+                    >
+                      <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                      </svg>
+                      <span className="min-w-0">
+                        {t("creatorCard.featured.openOnInstagram")}
+                      </span>
+                    </a>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
