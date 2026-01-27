@@ -33,48 +33,54 @@ export function CreatorCardShowcase({
   cardId,
   t,
 }: CreatorCardShowcaseProps) {
-  const [fullCard, setFullCard] = useState<unknown>(null)
-  const [cardLoading, setCardLoading] = useState(false)
+  const [creatorCard, setCreatorCard] = useState<unknown>(null)
+  const [isCardLoading, setIsCardLoading] = useState(false)
 
   // Fetch full creator card data when hasCard is true
   useEffect(() => {
-    if (!hasCard || !isConnected) {
-      setFullCard(null)
-      return
-    }
+    if (!hasCard || !isConnected || isLoading) return
+    if (creatorCard) return
 
-    const fetchCard = async () => {
-      setCardLoading(true)
+    const controller = new AbortController()
+    let cancelled = false
+
+    const fetchCreatorCard = async () => {
       try {
-        const res = await fetch(`/api/creator-card/me?t=${Date.now()}`, {
-          method: "GET",
-          credentials: "include",
+        setIsCardLoading(true)
+
+        const res = await fetch("/api/creator-card/me", {
+          signal: controller.signal,
         })
-        if (!res.ok) {
-          setFullCard(null)
-          return
-        }
+
+        if (!res.ok) return
         const data = await res.json()
-        if (data.ok && data.card) {
-          setFullCard(data.card)
-        } else {
-          setFullCard(null)
+
+        if (!cancelled) {
+          setCreatorCard(data)
         }
-      } catch (error) {
-        console.error("Failed to fetch creator card:", error)
-        setFullCard(null)
+      } catch (err) {
+        if ((err as any)?.name !== "AbortError") {
+          console.error("Failed to fetch creator card", err)
+        }
       } finally {
-        setCardLoading(false)
+        if (!cancelled) {
+          setIsCardLoading(false)
+        }
       }
     }
 
-    fetchCard()
-  }, [hasCard, isConnected])
+    fetchCreatorCard()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [hasCard, isConnected, isLoading, creatorCard])
 
   const editCardUrl = `/${locale}/creator-card`
   const publicCardUrl = cardId ? `/${locale}/creator/${cardId}` : null
 
-  const showLoading = isLoading || cardLoading
+  const showLoading = isLoading || isCardLoading
 
   return (
     <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28 max-w-6xl mx-auto px-4 md:px-6 mt-6">
@@ -197,23 +203,23 @@ export function CreatorCardShowcase({
                 {locale === "zh-TW" ? "建立名片" : "Create Card"}
               </Link>
             </div>
-          ) : fullCard && isRecord(fullCard) ? (
+          ) : creatorCard && isRecord(creatorCard) ? (
             // State 4: Has public card - show full preview using shared component
             <div className="p-4 sm:p-6">
               <CreatorCardPreview
                 t={t}
-                profileImageUrl={typeof fullCard.profileImageUrl === "string" ? fullCard.profileImageUrl : typeof fullCard.profile_image_url === "string" ? fullCard.profile_image_url : null}
-                displayName={typeof fullCard.displayName === "string" ? fullCard.displayName : typeof fullCard.display_name === "string" ? fullCard.display_name : displayName}
-                username={typeof fullCard.handle === "string" ? fullCard.handle : username}
-                aboutText={typeof fullCard.audience === "string" ? fullCard.audience : null}
-                primaryNiche={typeof fullCard.niche === "string" ? fullCard.niche : null}
-                contact={fullCard.contact}
-                featuredItems={Array.isArray(fullCard.featuredItems) ? fullCard.featuredItems : Array.isArray(fullCard.featured_items) ? fullCard.featured_items : []}
-                themeTypes={Array.isArray(fullCard.themeTypes) ? fullCard.themeTypes : Array.isArray(fullCard.theme_types) ? fullCard.theme_types : null}
-                audienceProfiles={Array.isArray(fullCard.audienceProfiles) ? fullCard.audienceProfiles : Array.isArray(fullCard.audience_profiles) ? fullCard.audience_profiles : null}
-                collaborationNiches={Array.isArray(fullCard.collaborationNiches) ? fullCard.collaborationNiches : Array.isArray(fullCard.collaboration_niches) ? fullCard.collaboration_niches : null}
-                deliverables={Array.isArray(fullCard.deliverables) ? fullCard.deliverables : null}
-                pastCollaborations={Array.isArray(fullCard.pastCollaborations) ? fullCard.pastCollaborations : Array.isArray(fullCard.past_collaborations) ? fullCard.past_collaborations : null}
+                profileImageUrl={typeof creatorCard.profileImageUrl === "string" ? creatorCard.profileImageUrl : typeof creatorCard.profile_image_url === "string" ? creatorCard.profile_image_url : null}
+                displayName={typeof creatorCard.displayName === "string" ? creatorCard.displayName : typeof creatorCard.display_name === "string" ? creatorCard.display_name : displayName}
+                username={typeof creatorCard.handle === "string" ? creatorCard.handle : username}
+                aboutText={typeof creatorCard.audience === "string" ? creatorCard.audience : null}
+                primaryNiche={typeof creatorCard.niche === "string" ? creatorCard.niche : null}
+                contact={creatorCard.contact}
+                featuredItems={Array.isArray(creatorCard.featuredItems) ? creatorCard.featuredItems : Array.isArray(creatorCard.featured_items) ? creatorCard.featured_items : []}
+                themeTypes={Array.isArray(creatorCard.themeTypes) ? creatorCard.themeTypes : Array.isArray(creatorCard.theme_types) ? creatorCard.theme_types : null}
+                audienceProfiles={Array.isArray(creatorCard.audienceProfiles) ? creatorCard.audienceProfiles : Array.isArray(creatorCard.audience_profiles) ? creatorCard.audience_profiles : null}
+                collaborationNiches={Array.isArray(creatorCard.collaborationNiches) ? creatorCard.collaborationNiches : Array.isArray(creatorCard.collaboration_niches) ? creatorCard.collaboration_niches : null}
+                deliverables={Array.isArray(creatorCard.deliverables) ? creatorCard.deliverables : null}
+                pastCollaborations={Array.isArray(creatorCard.pastCollaborations) ? creatorCard.pastCollaborations : Array.isArray(creatorCard.past_collaborations) ? creatorCard.past_collaborations : null}
               />
             </div>
           ) : (
