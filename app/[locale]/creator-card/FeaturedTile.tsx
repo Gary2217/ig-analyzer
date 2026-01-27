@@ -90,7 +90,7 @@ export function SortableFeaturedTile(props: {
       <div className="space-y-2">
         <div
           ref={setNodeRef}
-          style={{ transform: CSS.Transform.toString(transform), transition }}
+          style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none' }}
           className={
             "group relative w-full aspect-[3/4] overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors " +
             (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
@@ -191,7 +191,7 @@ export function SortableFeaturedTile(props: {
     return (
       <div
         ref={setNodeRef}
-        style={{ transform: CSS.Transform.toString(transform), transition }}
+        style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none' }}
         className={
           "group relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 " +
           (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
@@ -258,7 +258,12 @@ export function SortableFeaturedTile(props: {
     return (
       <div
         ref={setNodeRef}
-        style={{ transform: CSS.Transform.toString(transform), transition, pointerEvents: isDragging ? 'none' : 'auto' }}
+        style={{ 
+          transform: CSS.Transform.toString(transform), 
+          transition, 
+          pointerEvents: isDragging ? 'none' : 'auto',
+          touchAction: 'none'
+        }}
         className={
           "group relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 " +
           (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +

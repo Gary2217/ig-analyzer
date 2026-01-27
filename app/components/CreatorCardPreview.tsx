@@ -187,35 +187,49 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 function SortablePreviewItem({
   item,
   children,
+  onItemClick,
 }: {
   item: { id: string }
   children: React.ReactNode
+  onItemClick?: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   })
+  const justDraggedAtRef = useRef<number>(0)
+
+  // Update timestamp when drag ends
+  useEffect(() => {
+    if (!isDragging && justDraggedAtRef.current > 0) {
+      justDraggedAtRef.current = Date.now()
+    }
+  }, [isDragging])
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    touchAction: 'none' as const,
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="relative">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="relative"
+      {...attributes}
+      {...listeners}
+      onClick={(e) => {
+        const now = Date.now()
+        if (now - justDraggedAtRef.current < 400) {
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+        onItemClick?.()
+      }}
+    >
       {children}
-      {/* Drag handle button - touch-friendly */}
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        className="absolute top-1 left-1 z-10 p-2 rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition-colors"
-        style={{ minWidth: "44px", minHeight: "44px", touchAction: "none" }}
-        aria-label="Drag to reorder"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical className="h-4 w-4 text-white/70" />
-      </button>
     </div>
   )
 }
@@ -1094,12 +1108,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     const thumbnailSrc = itemThumbnail || cachedThumbnail || (directMediaUrl ? `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}` : undefined)
                     
                     return (
-                      <SortablePreviewItem key={item.id} item={item}>
-                        <button
+                      <SortablePreviewItem key={item.id} item={item} onItemClick={() => setOpenIgUrl(normalizedUrl)}>
+                        <div
                           data-preview-item
-                          type="button"
-                          onClick={() => setOpenIgUrl(normalizedUrl)}
-                          className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
+                          className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors cursor-pointer"
                           style={{ aspectRatio: "4 / 5" }}
                         >
                         {thumbnailSrc && !thumbnailLoadErrors[normalizedUrl] ? (
@@ -1146,7 +1158,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                             </svg>
                           </div>
                         )}
-                        </button>
+                        </div>
                       </SortablePreviewItem>
                     )
                   })
