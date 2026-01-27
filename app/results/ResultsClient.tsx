@@ -32,6 +32,13 @@ import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints
 let __resultsMediaFetchedOnce = false
 let __resultsMeFetchedOnce = false
 
+// Debug helper for Creator Card Preview refresh flow (dev-only)
+const debugCreatorCard = (...args: any[]) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.debug("[CreatorCardPreview]", ...args)
+  }
+}
+
 function toNum(value: unknown): number | undefined {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined
   if (typeof value === "string") {
@@ -2572,10 +2579,16 @@ export default function ResultsClient() {
     return out
   }, [])
 
-  const reloadCreatorCard = useCallback(async () => {
+  const reloadCreatorCard = useCallback(async (refreshKey?: string) => {
+    debugCreatorCard("reloadCreatorCard called", {
+      refreshKey,
+      time: Date.now(),
+    })
+    
     setIsCreatorCardLoading(true)
     try {
-      const res = await fetch(`/api/creator-card/me?t=${Date.now()}`, {
+      const timestamp = refreshKey || Date.now().toString()
+      const res = await fetch(`/api/creator-card/me?t=${timestamp}`, {
         method: "GET",
         cache: "no-store",
         credentials: "include",
@@ -2593,12 +2606,22 @@ export default function ResultsClient() {
 
       setCreatorCard(normalizeCreatorCardForResults(card))
       
-      // Clear sessionStorage flag after successful DB reload
+      debugCreatorCard("reloadCreatorCard success", {
+        refreshKey,
+      })
+      
+      // Clear storage flags after successful DB reload
       if (typeof window !== "undefined") {
         try {
           sessionStorage.removeItem("creatorCard:updated")
+          sessionStorage.removeItem("creatorCardUpdated")
         } catch {
           // Ignore sessionStorage errors
+        }
+        try {
+          localStorage.removeItem("creatorCardUpdated")
+        } catch {
+          // Ignore localStorage errors
         }
       }
     } catch {
@@ -2629,13 +2652,39 @@ export default function ResultsClient() {
   }, [reloadCreatorCard])
 
   useEffect(() => {
+    let lastSeenTimestamp = ""
+    
+    const checkForUpdates = () => {
+      if (typeof window === "undefined") return
+      
+      const storageTimestamp = sessionStorage.getItem("creatorCardUpdated") || localStorage.getItem("creatorCardUpdated") || ""
+      
+      debugCreatorCard("focus/visibility check", {
+        storageTimestamp,
+        lastSeenTimestamp,
+      })
+      
+      // If timestamp changed, trigger refetch with the new timestamp
+      if (storageTimestamp && storageTimestamp !== lastSeenTimestamp) {
+        lastSeenTimestamp = storageTimestamp
+        debugCreatorCard("storage timestamp changed → reload", {
+          storageTimestamp,
+        })
+        void reloadCreatorCard(storageTimestamp)
+      } else {
+        // Otherwise use the regular safe reload (throttled)
+        debugCreatorCard("no timestamp change → safe reload")
+        void safeReloadCreatorCard()
+      }
+    }
+    
     const onFocus = () => {
-      void safeReloadCreatorCard()
+      checkForUpdates()
     }
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        void safeReloadCreatorCard()
+        checkForUpdates()
       }
     }
 
@@ -2646,7 +2695,7 @@ export default function ResultsClient() {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [safeReloadCreatorCard])
+  }, [reloadCreatorCard, safeReloadCreatorCard])
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
@@ -2773,12 +2822,19 @@ export default function ResultsClient() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      // Check for ccUpdated query param or sessionStorage flag
+      // Check for ccUpdated query param or storage timestamp
       const params = new URLSearchParams(window.location.search)
-      const hasCcUpdated = params.has("ccUpdated")
-      const hasSessionFlag = sessionStorage.getItem("creatorCard:updated") === "1"
+      const ccUpdatedParam = params.get("ccUpdated")
+      const storageTimestamp = sessionStorage.getItem("creatorCardUpdated") || localStorage.getItem("creatorCardUpdated")
       
-      if (hasCcUpdated || hasSessionFlag) {
+      debugCreatorCard("hydration check", {
+        ccUpdatedParam,
+        storageTimestamp,
+      })
+      
+      if (ccUpdatedParam || storageTimestamp) {
+        const refreshKey = ccUpdatedParam || storageTimestamp || Date.now().toString()
+        
         // Try to hydrate from localStorage for immediate sync
         let hydrated = false
         try {
@@ -2789,6 +2845,7 @@ export default function ResultsClient() {
             console.log("[CreatorCard Hydration] localStorage data:", {
               hasDraft: !!draftJson,
               updatedAt,
+              refreshKey,
               age: updatedAt ? Date.now() - Number(updatedAt) : null,
             })
           }
@@ -2815,24 +2872,23 @@ export default function ResultsClient() {
           }
         }
         
-        // Clean up flags
-        if (hasSessionFlag) {
-          sessionStorage.removeItem("creatorCard:updated")
-        }
-        
         // Remove ccUpdated query param while preserving hash
-        if (hasCcUpdated) {
+        if (ccUpdatedParam) {
           params.delete("ccUpdated")
           const newSearch = params.toString()
           const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "") + window.location.hash
           window.history.replaceState({}, "", newUrl)
         }
         
-        // Trigger reload to fetch latest from API (non-blocking background refresh)
-        setCreatorCardReload((v) => v + 1)
+        debugCreatorCard("hydration-triggered reload", {
+          refreshKey,
+        })
+        
+        // Trigger reload to fetch latest from API with refreshKey (non-blocking background refresh)
+        void reloadCreatorCard(refreshKey)
       }
     }
-  }, [normalizeCreatorCardForResults])
+  }, [normalizeCreatorCardForResults, reloadCreatorCard])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
