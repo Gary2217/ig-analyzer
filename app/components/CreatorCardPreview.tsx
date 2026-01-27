@@ -865,9 +865,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     <div className="rounded-xl border border-white/8 bg-[#0b1220]/40 backdrop-blur-sm">
       <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 sm:p-4 lg:p-6 min-w-0">
         <div className="flex flex-col gap-4 min-w-0">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 min-w-0 items-stretch">
-          <div className={leftSpanClassName + " min-w-0 h-full flex"}>
-            <div className={"mx-auto w-full " + photoMaxWidthClassName + " h-full flex flex-col"}>
+          {/* Header grid: avatar/name left, bio right */}
+          <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3 sm:gap-4 min-w-0">
+            {/* Left: avatar/photo + name/handle */}
+            <div className="min-w-0">
               <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0">
                 <div className="relative aspect-[3/4] w-full">
                   {effectivePhotoUrl ? (
@@ -929,7 +930,18 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 </div>
               </div>
             </div>
-          </div>
+
+            {/* Right: bio (only if exists) */}
+            {bioText ? (
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+                <div className="text-[10px] tracking-widest font-semibold text-white/55 mb-2">
+                  {t("results.mediaKit.about.title")}
+                </div>
+                <p className="text-sm leading-relaxed text-white/85 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
+                  {bioText}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {showStatsRow ? (
@@ -958,16 +970,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             </div>
           </div>
         ) : null}
-
-          {/* Bio Section - moved here from bottom */}
-          {bioText ? (
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0">
-              <div className="text-[10px] tracking-widest font-semibold text-white/55 mb-2">{t("results.mediaKit.about.title")}</div>
-              <p className="text-sm leading-relaxed text-white/85 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
-                {bioText}
-              </p>
-            </div>
-          ) : null}
 
           <div id="creator-card-highlights" className="min-w-0">
           <div className="min-w-0">
