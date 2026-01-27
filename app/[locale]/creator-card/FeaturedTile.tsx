@@ -57,6 +57,7 @@ export function SortableFeaturedTile(props: {
   const { item, t, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
   const embedRef = useRef<HTMLDivElement>(null)
+  const justDraggedAtRef = useRef<number>(0)
 
   // Load Instagram embed script for IG items
   useEffect(() => {
@@ -247,10 +248,17 @@ export function SortableFeaturedTile(props: {
   if (item.type === "ig") {
     const isValidIgUrl = item.url && (item.url.includes("instagram.com/p/") || item.url.includes("instagram.com/reel/") || item.url.includes("instagram.com/tv/"))
 
+    // Update justDraggedAt when drag ends
+    useEffect(() => {
+      if (!isDragging && justDraggedAtRef.current > 0) {
+        justDraggedAtRef.current = Date.now()
+      }
+    }, [isDragging])
+
     return (
       <div
         ref={setNodeRef}
-        style={{ transform: CSS.Transform.toString(transform), transition }}
+        style={{ transform: CSS.Transform.toString(transform), transition, pointerEvents: isDragging ? 'none' : 'auto' }}
         className={
           "group relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 " +
           (isDragging ? "scale-[1.04] shadow-xl ring-2 ring-white/30 opacity-95" : "hover:border-white/20 hover:bg-white/10") +
@@ -302,6 +310,15 @@ export function SortableFeaturedTile(props: {
               target="_blank"
               rel="noopener noreferrer"
               className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors"
+              style={{ minHeight: "44px" }}
+              onClickCapture={(e) => {
+                const now = Date.now()
+                if (now - justDraggedAtRef.current < 400) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return
+                }
+              }}
               onClick={(e) => e.stopPropagation()}
             >
               <InstagramIcon className="h-4 w-4" />

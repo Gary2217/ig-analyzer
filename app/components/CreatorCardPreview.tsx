@@ -204,17 +204,17 @@ function SortablePreviewItem({
   return (
     <div ref={setNodeRef} style={style} className="relative">
       {children}
-      {/* Drag handle button */}
+      {/* Drag handle button - touch-friendly */}
       <button
         type="button"
         {...attributes}
         {...listeners}
-        className="absolute top-1 left-1 z-10 p-1.5 rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition-colors"
-        style={{ minWidth: "32px", minHeight: "32px", touchAction: "none" }}
+        className="absolute top-1 left-1 z-10 p-2 rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition-colors"
+        style={{ minWidth: "44px", minHeight: "44px", touchAction: "none" }}
         aria-label="Drag to reorder"
         onClick={(e) => e.stopPropagation()}
       >
-        <GripVertical className="h-3 w-3 text-white/70" />
+        <GripVertical className="h-4 w-4 text-white/70" />
       </button>
     </div>
   )
@@ -1349,12 +1349,12 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           onClick={() => setOpenIgUrl(null)}
         >
           <div
-            className="w-[94vw] max-w-[560px] md:max-w-[720px] h-[96vh] sm:h-auto sm:max-h-[94vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto"
+            className="w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
-              <h3 className="text-sm font-semibold text-white/90">
+            <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
+              <h3 className="text-sm font-semibold text-white/90 break-words [overflow-wrap:anywhere] min-w-0">
                 {t("creatorCard.featured.igPreviewTitle")}
               </h3>
               <button
@@ -1368,9 +1368,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               </button>
             </div>
 
-            {/* Body with embed */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 max-h-[82vh] sm:max-h-[86vh]">
-              <div className="w-full mx-auto">
+            {/* Body with embed - scrollable container */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 min-h-0">
+              <div className="w-full mx-auto break-words [overflow-wrap:anywhere]">
                 <IgEmbedPreview url={openIgUrl} />
               </div>
             </div>
