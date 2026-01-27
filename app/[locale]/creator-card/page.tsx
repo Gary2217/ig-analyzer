@@ -152,6 +152,7 @@ type InstagramProfileLite = {
   displayName?: string
   profile_picture_url?: string
   followers_count?: number
+  follows_count?: number
   media_count?: number
 }
 
@@ -2392,20 +2393,33 @@ export default function CreatorCardPage() {
 
   const formatNum = useCallback((n: number | null) => (n === null ? "—" : n.toLocaleString()), [])
 
+  const followers = useMemo(() => {
+    return finiteNumOrNull(igProfile?.followers_count)
+  }, [finiteNumOrNull, igProfile?.followers_count])
+
+  const following = useMemo(() => {
+    return finiteNumOrNull(igProfile?.follows_count)
+  }, [finiteNumOrNull, igProfile?.follows_count])
+
+  const posts = useMemo(() => {
+    return finiteNumOrNull(igProfile?.media_count)
+  }, [finiteNumOrNull, igProfile?.media_count])
+
+  const engagementRate = useMemo(() => {
+    return typeof creatorStats?.engagementRatePct === "number" && Number.isFinite(creatorStats.engagementRatePct) ? creatorStats.engagementRatePct : null
+  }, [creatorStats?.engagementRatePct])
+
   const followersText = useMemo(() => {
-    const followers = finiteNumOrNull(igProfile?.followers_count)
     return typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : null
-  }, [finiteNumOrNull, formatNum, igProfile?.followers_count])
+  }, [followers, formatNum])
 
   const postsText = useMemo(() => {
-    const posts = finiteNumOrNull(igProfile?.media_count)
     return typeof posts === "number" && Number.isFinite(posts) ? formatNum(posts) : null
-  }, [finiteNumOrNull, formatNum, igProfile?.media_count])
+  }, [posts, formatNum])
 
   const engagementRateText = useMemo(() => {
-    const pct = typeof creatorStats?.engagementRatePct === "number" ? creatorStats.engagementRatePct : null
-    return typeof pct === "number" && Number.isFinite(pct) ? `${pct.toFixed(2)}%` : null
-  }, [creatorStats?.engagementRatePct])
+    return typeof engagementRate === "number" && Number.isFinite(engagementRate) ? `${engagementRate.toFixed(2)}%` : null
+  }, [engagementRate])
 
   const loadingSkeleton = (
     <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-4 min-w-0 animate-pulse">
@@ -4261,6 +4275,10 @@ export default function CreatorCardPage() {
                   collaborationNiches={collaborationNiches}
                   deliverables={deliverables}
                   pastCollaborations={pastCollaborations}
+                  followers={followers ?? undefined}
+                  following={following ?? undefined}
+                  posts={posts ?? undefined}
+                  engagementRate={engagementRate ?? undefined}
                   followersText={followersText}
                   postsText={postsText}
                   engagementRateText={engagementRateText}
@@ -4343,6 +4361,10 @@ export default function CreatorCardPage() {
                     collaborationNiches={collaborationNiches}
                     deliverables={deliverables}
                     pastCollaborations={pastCollaborations}
+                    followers={followers ?? undefined}
+                    following={following ?? undefined}
+                    posts={posts ?? undefined}
+                    engagementRate={engagementRate ?? undefined}
                     followersText={followersText}
                     postsText={postsText}
                     engagementRateText={engagementRateText}

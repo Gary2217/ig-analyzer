@@ -323,6 +323,11 @@ export type CreatorCardPreviewProps = {
   deliverables?: string[] | null
   pastCollaborations?: string[] | null
 
+  followers?: number
+  following?: number
+  posts?: number
+  engagementRate?: number
+
   followersText?: string | null
   postsText?: string | null
   avgLikesLabel?: string | null
@@ -406,6 +411,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     collaborationNiches,
     deliverables,
     pastCollaborations,
+    followers,
+    following,
+    posts,
+    engagementRate,
     followersText,
     postsText,
     engagementRateText,
@@ -834,10 +843,15 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const formatsHighlight = highlightClass(highlightTarget === "formats")
   const brandsHighlight = highlightClass(highlightTarget === "brands")
 
-  const hasFollowers = typeof followersText === "string" && followersText.trim().length > 0
-  const hasPosts = typeof postsText === "string" && postsText.trim().length > 0
-  const hasEngagementRate = typeof engagementRateText === "string" && engagementRateText.trim().length > 0
-  const showStatsRow = hasFollowers || hasPosts || hasEngagementRate
+  const hasFollowers = typeof followers === "number" && Number.isFinite(followers)
+  const hasFollowing = typeof following === "number" && Number.isFinite(following)
+  const hasPosts = typeof posts === "number" && Number.isFinite(posts)
+  const hasEngagementRate = typeof engagementRate === "number" && Number.isFinite(engagementRate)
+  const showStatsRow = hasFollowers || hasFollowing || hasPosts || hasEngagementRate
+
+  const hasFollowersText = typeof followersText === "string" && followersText.trim().length > 0
+  const hasPostsText = typeof postsText === "string" && postsText.trim().length > 0
+  const hasEngagementRateText = typeof engagementRateText === "string" && engagementRateText.trim().length > 0
 
   const hasReach = typeof reachText === "string" && reachText.trim().length > 0
   const showKpiGrid = hasReach
@@ -954,27 +968,32 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           </div>
 
           {showStatsRow ? (
-          <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 sm:px-4 sm:py-3 min-w-0">
-            <div className="grid grid-cols-3 gap-x-2 divide-x divide-white/10 min-w-0">
-              <div className="flex flex-col items-center text-center min-w-0">
-                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
-                <div className="mt-0.5 text-[clamp(15px,4.4vw,19px)] font-bold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
-                  {hasFollowers ? followersText : "—"}
-                </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 min-w-0">
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
+              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.followers")}</div>
+              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
+                {hasFollowers ? followers.toLocaleString() : "—"}
               </div>
+            </div>
 
-              <div className="flex flex-col items-center text-center min-w-0">
-                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.posts")}</div>
-                <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
-                  {hasPosts ? postsText : "—"}
-                </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
+              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.following")}</div>
+              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
+                {hasFollowing ? following.toLocaleString() : "—"}
               </div>
+            </div>
 
-              <div className="flex flex-col items-center text-center min-w-0">
-                <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
-                <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
-                  {hasEngagementRate ? engagementRateText : "—"}
-                </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
+              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.posts")}</div>
+              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
+                {hasPosts ? posts.toLocaleString() : "—"}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
+              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
+              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
+                {hasEngagementRate ? `${engagementRate.toFixed(2)}%` : "—"}
               </div>
             </div>
           </div>
