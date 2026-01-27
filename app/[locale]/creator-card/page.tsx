@@ -3351,7 +3351,7 @@ export default function CreatorCardPage() {
                                   <button
                                     type="button"
                                     onClick={() => setIsAddIgOpen(true)}
-                                    className="relative w-full rounded-lg border border-dashed border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 transition-colors overflow-hidden cursor-pointer"
+                                    className="relative w-full rounded-lg bg-slate-950/40 hover:bg-white/5 transition-colors overflow-hidden cursor-pointer"
                                     style={{ aspectRatio: "4 / 5", minHeight: "44px" }}
                                     aria-label={activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
                                   >
