@@ -2323,9 +2323,15 @@ export default function CreatorCardPage() {
           }
         }
         
-        // ALWAYS set flag after save success (even if localStorage failed)
+        // ALWAYS set timestamp after save success (even if localStorage failed)
         // This ensures DB refresh will happen on results page
-        window.sessionStorage.setItem("creatorCard:updated", "1")
+        const ccUpdated = Date.now().toString()
+        try {
+          window.sessionStorage.setItem("creatorCardUpdated", ccUpdated)
+        } catch {}
+        try {
+          window.localStorage.setItem("creatorCardUpdated", ccUpdated)
+        } catch {}
       }
 
       setBaseCard((prev) => ({
@@ -2348,16 +2354,25 @@ export default function CreatorCardPage() {
 
   const handleBack = () => {
     if (returnTo) {
-      // If returning to results after save, add ccUpdated flag and hash
+      // If returning to results after save, add ccUpdated timestamp and preserve hash
       if (returnTo.includes("/results")) {
-        const hasHash = returnTo.includes("#creator-card")
-        const hasQuery = returnTo.includes("?")
-        const separator = hasQuery ? "&" : "?"
-        const updatedUrl = hasHash 
-          ? returnTo.replace("#creator-card", `${separator}ccUpdated=1#creator-card`)
-          : `${returnTo}${separator}ccUpdated=1#creator-card`
-        router.push(updatedUrl)
-        return
+        try {
+          const ccUpdated = typeof window !== "undefined" 
+            ? (window.sessionStorage.getItem("creatorCardUpdated") || window.localStorage.getItem("creatorCardUpdated") || Date.now().toString())
+            : Date.now().toString()
+          
+          // Split by hash to preserve it
+          const [base, hash] = returnTo.split("#")
+          const url = new URL(base, window.location.origin)
+          url.searchParams.set("ccUpdated", ccUpdated)
+          const finalUrl = hash ? `${url.pathname}${url.search}#${hash}` : `${url.pathname}${url.search}`
+          router.push(finalUrl)
+          return
+        } catch {
+          // Fallback to simple approach if URL parsing fails
+          router.push(returnTo)
+          return
+        }
       }
       router.push(returnTo)
       return

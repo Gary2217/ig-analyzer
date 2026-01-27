@@ -66,19 +66,28 @@ export async function GET(request: NextRequest) {
       )
     }
     
+    const initialUrlObj = new URL(thumbnailUrl)
+    
     // Validate URL is from allowed Instagram/FB CDN
     if (!isAllowedImageUrl(thumbnailUrl)) {
-      return NextResponse.json(
-        { error: "URL not from allowed Instagram CDN" },
-        { status: 403 }
-      )
+      const errorPayload: Record<string, unknown> = {
+        error: "URL not from allowed Instagram CDN",
+      }
+      const headers: Record<string, string> = {}
+      if (process.env.NODE_ENV !== "production") {
+        errorPayload.errorReason = "not_https_or_hostname_blocked"
+        errorPayload.initialHostname = initialUrlObj.hostname
+        headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
+          errorReason: "not_https_or_hostname_blocked",
+          initialHostname: initialUrlObj.hostname,
+        })
+      }
+      return NextResponse.json(errorPayload, { status: 403, headers })
     }
     
     // Fetch the image from Instagram CDN with timeout
     const abortController = new AbortController()
     const timeoutId = setTimeout(() => abortController.abort(), 8000)
-    
-    const initialUrlObj = new URL(thumbnailUrl)
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.debug("[ig-thumb] start", { 
@@ -113,13 +122,25 @@ export async function GET(request: NextRequest) {
         finalHostname = finalParsed.hostname.toLowerCase()
       } catch {
         console.error("Failed to parse final response URL")
+        const errorPayload: Record<string, unknown> = {
+          error: "Invalid final response URL",
+        }
+        const headers: Record<string, string> = {
+          "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+        }
+        if (process.env.NODE_ENV !== "production") {
+          errorPayload.errorReason = "invalid_final_url"
+          errorPayload.initialHostname = initialUrlObj.hostname
+          headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
+            errorReason: "invalid_final_url",
+            initialHostname: initialUrlObj.hostname,
+          })
+        }
         return NextResponse.json(
-          { error: "Invalid final response URL" },
+          errorPayload,
           { 
             status: 502,
-            headers: {
-              "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-            },
+            headers,
           }
         )
       }
@@ -132,21 +153,29 @@ export async function GET(request: NextRequest) {
           error: "Final redirect URL not from allowed CDN",
         }
         
+        const headers: Record<string, string> = {
+          "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+        }
+        
         // Add DEV-only diagnostics
         if (process.env.NODE_ENV !== "production") {
+          errorPayload.errorReason = "final_hostname_blocked"
           errorPayload.initialHostname = initialUrlObj.hostname
           errorPayload.finalHostname = finalHostname
           errorPayload.finalUrl = finalUrl
           errorPayload.allowedList = ALLOWED_CDN_HOSTNAMES
+          headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
+            errorReason: "final_hostname_blocked",
+            initialHostname: initialUrlObj.hostname,
+            finalHostname: finalHostname,
+          })
         }
         
         return NextResponse.json(
           errorPayload,
           { 
             status: 502,
-            headers: {
-              "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-            },
+            headers,
           }
         )
       }
@@ -162,13 +191,27 @@ export async function GET(request: NextRequest) {
       
       if (!imageResponse.ok) {
         console.error(`Failed to fetch thumbnail: ${imageResponse.status} ${imageResponse.statusText}`)
+        const errorPayload: Record<string, unknown> = {
+          error: "Failed to fetch thumbnail from Instagram",
+        }
+        const headers: Record<string, string> = {
+          "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+        }
+        if (process.env.NODE_ENV !== "production") {
+          errorPayload.errorReason = "upstream_error"
+          errorPayload.finalStatus = imageResponse.status
+          errorPayload.finalHostname = finalHostname
+          headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
+            errorReason: "upstream_error",
+            initialHostname: initialUrlObj.hostname,
+            finalHostname: finalHostname,
+          })
+        }
         return NextResponse.json(
-          { error: "Failed to fetch thumbnail from Instagram" },
+          errorPayload,
           { 
             status: 502,
-            headers: {
-              "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-            },
+            headers,
           }
         )
       }
@@ -177,13 +220,28 @@ export async function GET(request: NextRequest) {
       const contentType = imageResponse.headers.get("content-type") || ""
       if (!contentType.startsWith("image/")) {
         console.error(`Invalid content type: ${contentType}`)
+        const errorPayload: Record<string, unknown> = {
+          error: "Resource is not an image",
+        }
+        const headers: Record<string, string> = {
+          "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+        }
+        if (process.env.NODE_ENV !== "production") {
+          errorPayload.errorReason = "non_image_content_type"
+          errorPayload.finalContentType = contentType
+          errorPayload.finalHostname = finalHostname
+          headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
+            errorReason: "non_image_content_type",
+            initialHostname: initialUrlObj.hostname,
+            finalHostname: finalHostname,
+            finalContentType: contentType,
+          })
+        }
         return NextResponse.json(
-          { error: "Resource is not an image" },
+          errorPayload,
           { 
             status: 502,
-            headers: {
-              "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-            },
+            headers,
           }
         )
       }
@@ -202,18 +260,32 @@ export async function GET(request: NextRequest) {
       clearTimeout(timeoutId)
       
       let errorMsg = "Failed to fetch thumbnail"
+      let errorReason = "upstream_error"
       if (fetchError instanceof Error && fetchError.name === "AbortError") {
         errorMsg = "Request timeout"
+        errorReason = "timeout"
       }
       
       console.error(`Thumbnail fetch error: ${errorMsg}`, fetchError)
+      const errorPayload: Record<string, unknown> = {
+        error: errorMsg,
+      }
+      const headers: Record<string, string> = {
+        "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+      }
+      if (process.env.NODE_ENV !== "production") {
+        errorPayload.errorReason = errorReason
+        errorPayload.initialHostname = initialUrlObj.hostname
+        headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
+          errorReason: errorReason,
+          initialHostname: initialUrlObj.hostname,
+        })
+      }
       return NextResponse.json(
-        { error: errorMsg },
+        errorPayload,
         { 
           status: 502,
-          headers: {
-            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-          },
+          headers,
         }
       )
     }

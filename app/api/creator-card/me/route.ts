@@ -3,13 +3,20 @@ import { cookies, headers } from "next/headers"
 import { supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null
   return value as Record<string, unknown>
 }
 
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" }
+const JSON_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  "Pragma": "no-cache",
+  "Expires": "0",
+}
 
 function getIsHttps(req: NextRequest, h: Headers) {
   const xfProto = h.get("x-forwarded-proto")?.toLowerCase()
