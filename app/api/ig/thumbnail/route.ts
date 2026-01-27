@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server"
 export const runtime = "nodejs"
 
 // Whitelist of allowed CDN hostnames (for final redirect validation)
+// Includes all Instagram/Facebook CDN patterns commonly used in production
 const ALLOWED_CDN_HOSTNAMES = [
   "cdninstagram.com",
   "fbcdn.net",
+  "fna.fbcdn.net",
 ]
 
 // Regex for Instagram media path: /(p|reel|tv)/{shortcode}/media/

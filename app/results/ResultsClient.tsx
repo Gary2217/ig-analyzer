@@ -250,10 +250,12 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   const FALLBACK_IMG = "/window.svg"
   const [currentSrc, setCurrentSrc] = useState<string>(src && src.length > 0 ? src : FALLBACK_IMG)
   const [broken, setBroken] = useState(false)
+  const fallbackAttemptedRef = useRef(false)
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
       setBroken(false)
+      fallbackAttemptedRef.current = false
       setCurrentSrc(src && src.length > 0 ? src : FALLBACK_IMG)
     })
     return () => cancelAnimationFrame(raf)
@@ -264,6 +266,28 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
     if (!u) return false
     return /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
   }, [currentSrc])
+
+  const handleError = useCallback(() => {
+    // If proxy failed and we haven't tried direct URL yet, try it
+    if (!fallbackAttemptedRef.current && src && src.length > 0) {
+      fallbackAttemptedRef.current = true
+      // Extract original URL from proxy if it's a proxied URL
+      if (currentSrc.includes("/api/ig/thumbnail?url=")) {
+        try {
+          const params = new URLSearchParams(currentSrc.split("?")[1])
+          const originalUrl = params.get("url")
+          if (originalUrl) {
+            setCurrentSrc(originalUrl)
+            return
+          }
+        } catch {
+          // Fall through to broken state
+        }
+      }
+    }
+    // Second failure or no fallback available - mark as broken
+    setBroken(true)
+  }, [currentSrc, src])
 
   if (broken || isVideoUrl) {
     return (
@@ -282,9 +306,7 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => {
-        setBroken(true)
-      }}
+      onError={handleError}
     />
   )
 }
