@@ -237,7 +237,24 @@
       "title": "Creator Card Preview",
       "subtitle": "Brands will see this card",
       "actions": {
-        "complete": "Complete Card Info"
+        "complete": "Complete Card Info",
+        "viewProfile": "View Instagram Profile",
+        "showLess": "Show Less"
+      },
+      "badges": {
+        "pro": "Pro",
+        "connected": "Connected"
+      },
+      "metrics": {
+        "followers": "Followers",
+        "following": "Following",
+        "posts": "Posts",
+        "engagement": "Engagement"
+      },
+      "sections": {
+        "bio": "Bio",
+        "contact": "Contact",
+        "categories": "Categories & Platforms"
       }
     },
     "mediaKit": {
@@ -1818,6 +1835,7 @@
     "topPosts": {
       "title": "Top Performing Posts",
       "description": "These are your strongest posts by engagement. Pro unlocks the why behind performance—timing signals, caption patterns, and repeatable hooks.",
+      "emptyState": "No posts available",
       "proLocked": "Pro locked",
       "chips": {
         "preview": "Preview",

@@ -22,8 +22,8 @@ import { extractIgUserIdFromInsightsId } from "../lib/instagram"
 import { getPostMetrics } from "../lib/postMetrics"
 import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
 import { FollowersStatChips } from "./components/FollowersStatChips"
-import { CreatorCardPreviewCard } from "../components/CreatorCardPreview"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
+import CreatorCardPreviewV2 from "./CreatorCardPreviewV2"
 import { mockAnalysis } from "../[locale]/results/mockData"
 import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints"
 import { PostsDebugPanel } from "./PostsDebugPanel"
@@ -4322,207 +4322,120 @@ export default function ResultsClient() {
   })()
 
   const creatorCardPreviewCard = (
-    <>
-      <Card className={"mt-3 scroll-mt-24 sm:scroll-mt-28 " + CARD_SHELL_HOVER}>
-      <CardHeader className={CARD_HEADER_ROW}>
-        <div className="w-full flex flex-wrap items-start sm:items-center gap-2">
-          <div className="min-w-0">
-            <CardTitle className="text-base sm:text-xl font-bold text-white min-w-0 truncate leading-snug sm:leading-tight">{t("results.creatorCardPreview.title")}</CardTitle>
-            <p className="mt-0 text-[10px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">{t("results.creatorCardPreview.subtitle")}</p>
-          </div>
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-            {(() => {
-              const returnTo = `/${activeLocale}/results#creator-card`
-              return (
-                <div className="shrink-0 flex items-center gap-2">
-                  <Link
-                    href={`/${activeLocale}/creator-card?returnTo=${encodeURIComponent(returnTo)}`}
-                    className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 hover:border-white/20 hover:bg-white/7 transition-colors whitespace-nowrap"
-                  >
-                    {t("results.creatorCardPreview.actions.complete")}
-                  </Link>
-                  <button
-                    type="button"
-                    disabled
-                    className="hidden sm:inline-flex items-center justify-center rounded-full border border-white/10 bg-white/3 px-3 py-2 text-[12px] font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
-                    title={t("results.nextActions.cta.comingSoon")}
-                  >
-                    {t("results.nextActions.cta.exportMediaKit")}
-                  </button>
-                </div>
-              )
-            })()}
-          </div>
-        </div>
-      </CardHeader>
+    <div className="mt-3 scroll-mt-24 sm:scroll-mt-28">
+      <CreatorCardPreviewV2
+        locale={activeLocale}
+        username={displayUsername}
+        displayName={(() => {
+          const fromCard =
+            isRecord(creatorCard) && typeof creatorCard.displayName === "string" && String(creatorCard.displayName).trim()
+              ? String(creatorCard.displayName).trim()
+              : null
+          if (fromCard) return fromCard
 
-      <CardContent className="p-4 lg:p-6">
-        <CreatorCardPreviewCard
-          t={t}
-          useWidePhotoLayout={false}
-          photoUploadEnabled={false}
-          onProfileImageFileChange={undefined}
-          profileImageUrl={(() => {
-            const cardImageUrl = isRecord(creatorCard) && typeof creatorCard.profileImageUrl === "string" 
-              ? String(creatorCard.profileImageUrl).trim() 
-              : ""
-            if (cardImageUrl) return cardImageUrl
-            
-            const igImageUrl = isRecord(igProfile) && typeof igProfile.profile_picture_url === "string"
-              ? String(igProfile.profile_picture_url)
-              : ""
-            return igImageUrl || null
-          })()}
-          displayName={(() => {
-            const fromCard =
-              isRecord(creatorCard) && typeof creatorCard.displayName === "string" && String(creatorCard.displayName).trim()
-                ? String(creatorCard.displayName).trim()
-                : null
-            if (fromCard) return fromCard
+          const fromIg =
+            isRecord(igProfile) && typeof igProfile.name === "string" && String(igProfile.name).trim()
+              ? String(igProfile.name).trim()
+              : null
+          if (fromIg) return fromIg
 
-            const fromIg =
-              isRecord(igProfile) && typeof igProfile.name === "string" && String(igProfile.name).trim()
-                ? String(igProfile.name).trim()
-                : null
-            if (fromIg) return fromIg
+          return displayUsername
+        })()}
+        avatarUrl={(() => {
+          const cardImageUrl = isRecord(creatorCard) && typeof creatorCard.profileImageUrl === "string" 
+            ? String(creatorCard.profileImageUrl).trim() 
+            : ""
+          if (cardImageUrl) return cardImageUrl
+          
+          const igImageUrl = isRecord(igProfile) && typeof igProfile.profile_picture_url === "string"
+            ? String(igProfile.profile_picture_url)
+            : ""
+          return igImageUrl || undefined
+        })()}
+        bio={(() => {
+          const raw = isRecord(creatorCard) && typeof creatorCard.audience === "string" ? String(creatorCard.audience) : ""
+          const s = raw.trim()
+          return s || undefined
+        })()}
+        followers={typeof followers === "number" && Number.isFinite(followers) ? followers : undefined}
+        following={typeof following === "number" && Number.isFinite(following) ? following : undefined}
+        posts={typeof mediaCount === "number" && Number.isFinite(mediaCount) ? mediaCount : undefined}
+        engagementRate={creatorCardEngagementRateText || undefined}
+        contactEmail={(() => {
+          const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
+          const readStrArr = (v: unknown) => (Array.isArray(v) ? v.map(readStr).filter(Boolean) : ([] as string[]))
+          const readStrOrArr = (v: unknown) => {
+            const arr = readStrArr(v)
+            if (arr.length > 0) return arr
+            const s = readStr(v)
+            return s ? [s] : ([] as string[])
+          }
 
-            return displayUsername
-          })()}
-          username={displayUsername}
-          aboutText={(() => {
-            const raw = isRecord(creatorCard) && typeof creatorCard.audience === "string" ? String(creatorCard.audience) : ""
+          const cc = isRecord(creatorCard) ? creatorCard : null
+          if (!cc) return undefined
+
+          const parseContact = (raw: unknown): Record<string, unknown> | null => {
+            if (isRecord(raw)) return raw
+            if (typeof raw !== "string") return null
             const s = raw.trim()
-            return s ? s : null
-          })()}
-          primaryNiche={
-            isRecord(creatorCard) && typeof creatorCard.niche === "string" && String(creatorCard.niche).trim()
-              ? String(creatorCard.niche).trim()
-              : null
+            if (!s) return null
+            try {
+              const parsed: unknown = JSON.parse(s)
+              return isRecord(parsed) ? parsed : null
+            } catch {
+              return null
+            }
           }
-          featuredItems={(() => {
-            if (!isRecord(creatorCard)) return undefined
-            const raw = creatorCard.portfolio
-            if (!Array.isArray(raw)) return undefined
 
-            const out: Array<{ id: string; url: string; brand?: string | null; collabType?: string | null }> = []
-            for (let i = 0; i < raw.length; i++) {
-              const row = raw[i]
-              if (!row || typeof row !== "object") continue
-              const obj = row as Record<string, unknown>
+          const c = parseContact(cc.contact)
 
-              const id = typeof obj.id === "string" && obj.id.trim() ? obj.id.trim() : String(i)
-
-              const urlRaw =
-                typeof obj.url === "string"
-                  ? obj.url
-                  : typeof obj.imageUrl === "string"
-                    ? obj.imageUrl
-                    : typeof obj.image_url === "string"
-                      ? obj.image_url
-                      : ""
-              const url = typeof urlRaw === "string" ? urlRaw.trim() : ""
-
-              const brand = typeof obj.brand === "string" ? obj.brand.trim() : ""
-              const collabTypeRaw =
-                typeof obj.collabType === "string" ? obj.collabType : typeof obj.collabtype === "string" ? obj.collabtype : ""
-              const collabType = typeof collabTypeRaw === "string" ? collabTypeRaw.trim() : ""
-
-              out.push({
-                id,
-                url,
-                brand: brand || null,
-                collabType: collabType || null,
-              })
-            }
-
-            return out
-          })()}
-          contact={(() => {
-            const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
-            const readStrArr = (v: unknown) => (Array.isArray(v) ? v.map(readStr).filter(Boolean) : ([] as string[]))
-            const readStrOrArr = (v: unknown) => {
-              const arr = readStrArr(v)
-              if (arr.length > 0) return arr
-              const s = readStr(v)
-              return s ? [s] : ([] as string[])
-            }
-
-            const cc = isRecord(creatorCard) ? creatorCard : null
-            if (!cc) return null
-
-            const parseContact = (raw: unknown): Record<string, unknown> | null => {
-              if (isRecord(raw)) return raw
-              if (typeof raw !== "string") return null
-              const s = raw.trim()
-              if (!s) return null
-              try {
-                const parsed: unknown = JSON.parse(s)
-                return isRecord(parsed) ? parsed : null
-              } catch {
-                return null
-              }
-            }
-
-            const c = parseContact(cc.contact)
-
-            const pick = (topArr: unknown, topStr: unknown, nestedArr: unknown, nestedStrOrArr: unknown) => {
-              const a = readStrArr(topArr)
-              if (a.length) return a
-              const b = readStr(topStr)
-              if (b) return [b]
-              const d = readStrArr(nestedArr)
-              if (d.length) return d
-              return readStrOrArr(nestedStrOrArr)
-            }
-
-            const finalEmails = pick(cc.emails, cc.contactEmail, c?.emails, c?.email)
-            const finalInstagrams = pick(cc.instagrams, cc.contactInstagram, c?.instagrams, c?.instagram)
-            const finalOthers = pick(cc.others, cc.contactOther, c?.others, c?.other)
-
-            return {
-              email: finalEmails.join(", "),
-              instagram: finalInstagrams.join(", "),
-              other: finalOthers.join(", "),
-            }
-          })()}
-          themeTypes={(() => {
-            if (!isRecord(creatorCard)) return null
-            const val = creatorCard.themeTypes ?? creatorCard.theme_types
-            return Array.isArray(val) ? (val as string[]) : null
-          })()}
-          audienceProfiles={(() => {
-            if (!isRecord(creatorCard)) return null
-            const val = creatorCard.audienceProfiles ?? creatorCard.audience_profiles
-            return Array.isArray(val) ? (val as string[]) : null
-          })()}
-          collaborationNiches={(() => {
-            if (!isRecord(creatorCard)) return null
-            const val = creatorCard.collaborationNiches ?? creatorCard.collaboration_niches
-            return Array.isArray(val) ? val as string[] : null
-          })()}
-          deliverables={(() => {
-            if (!isRecord(creatorCard)) return null
-            const val = creatorCard.deliverables
-            return Array.isArray(val) ? val as string[] : null
-          })()}
-          pastCollaborations={(() => {
-            if (!isRecord(creatorCard)) return null
-            const val = creatorCard.pastCollaborations ?? creatorCard.past_collaborations
-            return Array.isArray(val) ? val as string[] : null
-          })()}
-          followersText={typeof followers === "number" && Number.isFinite(followers) ? formatNum(followers) : null}
-          postsText={typeof mediaCount === "number" && Number.isFinite(mediaCount) ? formatCompact(mediaCount) : null}
-          engagementRateText={creatorCardEngagementRateText}
-          reachText={
-            typeof dailySnapshotTotals?.reach === "number" && Number.isFinite(dailySnapshotTotals.reach)
-              ? formatNum(dailySnapshotTotals.reach)
-              : null
+          const pick = (topArr: unknown, topStr: unknown, nestedArr: unknown, nestedStrOrArr: unknown) => {
+            const a = readStrArr(topArr)
+            if (a.length) return a
+            const b = readStr(topStr)
+            if (b) return [b]
+            const d = readStrArr(nestedArr)
+            if (d.length) return d
+            return readStrOrArr(nestedStrOrArr)
           }
-          highlightSection={null}
-        />
-      </CardContent>
-    </Card>
-    </>
+
+          const finalEmails = pick(cc.emails, cc.contactEmail, c?.emails, c?.email)
+          return finalEmails.join(", ") || undefined
+        })()}
+        nicheTags={(() => {
+          const tags: string[] = []
+          
+          if (isRecord(creatorCard)) {
+            const niche = typeof creatorCard.niche === "string" ? creatorCard.niche.trim() : ""
+            if (niche) tags.push(niche)
+            
+            const collabNiches = creatorCard.collaborationNiches ?? creatorCard.collaboration_niches
+            if (Array.isArray(collabNiches)) {
+              tags.push(...collabNiches.filter(n => typeof n === "string" && n.trim()).map(n => String(n).trim()))
+            }
+          }
+          
+          return tags.length > 0 ? tags : undefined
+        })()}
+        platformTags={(() => {
+          if (!isRecord(creatorCard)) return undefined
+          const deliverables = creatorCard.deliverables
+          if (Array.isArray(deliverables)) {
+            return deliverables.filter(d => typeof d === "string" && d.trim()).map(d => String(d).trim())
+          }
+          return undefined
+        })()}
+        isPro={false}
+        isConnected={isConnected}
+        profileUrl={(() => {
+          if (isRecord(igProfile) && typeof igProfile.username === "string" && igProfile.username.trim()) {
+            return `https://www.instagram.com/${igProfile.username.trim()}/`
+          }
+          return undefined
+        })()}
+        t={t}
+      />
+    </div>
   )
 
   if (derivedGateState === "loading")
