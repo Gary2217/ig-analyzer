@@ -419,16 +419,19 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const [openAvatarUrl, setOpenAvatarUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
+  const igModalBodyRef = useRef<HTMLDivElement>(null)
 
-  // Focus modal body when opened for PC wheel scroll
+  // Reset scroll position when modal opens
   useEffect(() => {
-    if ((openIg || openAvatarUrl) && modalBodyRef.current) {
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-        modalBodyRef.current?.focus()
-      }, 100)
+    if (openIg && igModalBodyRef.current) {
+      // Reset body scroll to top immediately
+      requestAnimationFrame(() => {
+        if (igModalBodyRef.current) {
+          igModalBodyRef.current.scrollTo({ top: 0, left: 0, behavior: "auto" })
+        }
+      })
     }
-  }, [openIg, openAvatarUrl])
+  }, [openIg])
 
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
   const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
@@ -1408,49 +1411,65 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
       {/* IG Post Preview Modal - Image Only */}
       {openIg && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur">
-          <div className="mx-auto flex h-full w-full max-w-[520px] flex-col px-3 py-4 sm:px-4">
-            <div className="rounded-2xl border border-white/10 bg-[#0b1220]/80 backdrop-blur">
-              <div className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="text-sm font-semibold text-white/85">Instagram 貼文預覽</div>
-                <button
-                  type="button"
-                  onClick={() => setOpenIg(null)}
-                  className="h-9 w-9 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
-                  aria-label="Close"
-                >
-                  ×
-                </button>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur flex items-center justify-center p-3 sm:p-4" onClick={() => setOpenIg(null)}>
+          <div 
+            className="w-full max-w-[520px] max-h-[90vh] rounded-2xl border border-white/10 bg-[#0b1220]/80 backdrop-blur flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header - non-scrolling */}
+            <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
+              <div className="text-sm font-semibold text-white/85 min-w-0 break-words [overflow-wrap:anywhere]">
+                {t("creatorCard.featured.igPreviewTitle")}
               </div>
+              <button
+                type="button"
+                onClick={() => setOpenIg(null)}
+                className="h-9 w-9 shrink-0 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                aria-label="Close"
+                style={{ minWidth: "36px", minHeight: "36px" }}
+              >
+                ×
+              </button>
+            </div>
 
-              {/* BODY: image-only (no comments area) */}
-              <div className="px-4 pb-4">
-                <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
-                  <div className="flex items-center justify-center p-2">
-                    {openIg.thumb ? (
-                      <img
-                        src={openIg.thumb}
-                        alt="Instagram post"
-                        className="max-h-[70vh] w-full object-contain"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="py-10 text-center text-sm text-white/50">
-                        Preview unavailable
-                      </div>
-                    )}
-                  </div>
+            {/* Body - scrollable container */}
+            <div 
+              ref={igModalBodyRef}
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4"
+              style={{
+                overflowAnchor: "none",
+                overscrollBehavior: "contain",
+                WebkitOverflowScrolling: "touch"
+              }}
+            >
+              <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                <div className="flex items-center justify-center p-2">
+                  {openIg.thumb ? (
+                    <img
+                      src={openIg.thumb}
+                      alt="Instagram post"
+                      className="max-h-[70vh] w-full object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="py-10 text-center text-sm text-white/50">
+                      Preview unavailable
+                    </div>
+                  )}
                 </div>
-
-                <a
-                  href={openIg.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6d28d9] to-[#db2777] px-4 py-3 text-sm font-semibold text-white hover:brightness-110"
-                >
-                  在 Instagram 開啟
-                </a>
               </div>
+
+              <a
+                href={openIg.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6d28d9] to-[#db2777] px-4 py-3 text-sm font-semibold text-white hover:brightness-110 min-w-0"
+                style={{ minHeight: "44px" }}
+              >
+                <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                  {t("creatorCard.featured.openOnInstagram")}
+                </span>
+              </a>
             </div>
           </div>
         </div>
