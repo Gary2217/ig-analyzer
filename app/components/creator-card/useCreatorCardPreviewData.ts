@@ -49,8 +49,14 @@ function normalizeFeaturedItems(raw: any): any[] {
     .map((it) => {
       if (!isRecord(it)) return null
       const url = pick<string>(it, "url", "permalink", "link")
-      const thumbnailUrl = pick<string>(it, "thumbnailUrl", "thumbnail_url", "thumbUrl", "thumb_url", "imageUrl", "image_url")
+      let thumbnailUrl = pick<string>(it, "thumbnailUrl", "thumbnail_url", "thumbUrl", "thumb_url", "imageUrl", "image_url", "mediaUrl", "media_url")
       const type = pick<string>(it, "type", "mediaType", "media_type") ?? "ig_post"
+      
+      // If no thumbnail but url exists, use fallback endpoint
+      if (!thumbnailUrl && url) {
+        thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
+      }
+      
       if (!url && !thumbnailUrl) return null
       return {
         ...it,
@@ -90,6 +96,16 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
   const audienceProfiles = pick<any[]>(base, "audienceProfiles", "audience_profiles") ?? []
   const pastCollaborations = pick<any[]>(base, "pastCollaborations", "past_collaborations", "brands") ?? []
 
+  // Extract creatorId with support for nested shapes
+  let creatorId = pick<string>(base, "creatorId", "creator_id", "userId", "user_id", "id")
+  if (!creatorId && isRecord(base.creator)) {
+    creatorId = pick<string>(base.creator, "id", "creatorId", "creator_id")
+  }
+  // Coerce to string if needed
+  if (creatorId && typeof creatorId !== "string") {
+    creatorId = String(creatorId)
+  }
+
   return {
     ...base,
     profileImageUrl,
@@ -104,7 +120,7 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
     themeTypes,
     audienceProfiles,
     pastCollaborations,
-    creatorId: pick<string>(base, "creatorId", "creator_id", "userId", "user_id", "id"),
+    creatorId,
     cardId: pick<string>(base, "cardId", "card_id", "id"),
   }
 }
@@ -178,16 +194,15 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
             const json = await statsRes.json()
             if (isRecord(json)) {
               const statsObj = isRecord(json.stats) ? json.stats : json
-              let engRate: number | null = null
               
-              // Prefer engagementRatePct (already percent)
-              if (typeof statsObj.engagementRatePct === "number" && Number.isFinite(statsObj.engagementRatePct)) {
-                engRate = statsObj.engagementRatePct
-              }
-              // Else if engagementRate is ratio, convert to percent
-              else if (typeof statsObj.engagementRate === "number" && Number.isFinite(statsObj.engagementRate)) {
-                engRate = statsObj.engagementRate * 100
-              }
+              // Try all percent field variants (camelCase + snake_case)
+              const pct = finiteNumOrNull(statsObj.engagementRatePct) ?? finiteNumOrNull(statsObj.engagement_rate_pct)
+              
+              // Try all ratio field variants (camelCase + snake_case)
+              const ratio = finiteNumOrNull(statsObj.engagementRate) ?? finiteNumOrNull(statsObj.engagement_rate)
+              
+              // Use percent if available, else convert ratio to percent
+              const engRate = pct ?? (ratio != null ? ratio * 100 : null)
               
               statsData = engRate
             }
