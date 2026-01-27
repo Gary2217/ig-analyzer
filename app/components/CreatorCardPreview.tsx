@@ -934,22 +934,22 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
           {showStatsRow ? (
           <div className="rounded-2xl border border-white/10 bg-black/20 px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-0">
-            <div className="flex items-stretch justify-between divide-x divide-white/10 min-w-0">
-              <div className="flex-1 min-w-0">
+            <div className="grid grid-cols-3 gap-x-2 divide-x divide-white/10 min-w-0">
+              <div className="flex flex-col items-center text-center min-w-0">
                 <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.followers")}</div>
                 <div className="mt-0.5 text-[clamp(15px,4.4vw,19px)] font-bold tabular-nums whitespace-nowrap text-white min-w-0 truncate">
                   {hasFollowers ? followersText : "—"}
                 </div>
               </div>
 
-              <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
+              <div className="flex flex-col items-center text-center min-w-0">
                 <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.stats.posts")}</div>
                 <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
                   {hasPosts ? postsText : "—"}
                 </div>
               </div>
 
-              <div className="flex-1 min-w-0 pl-2.5 sm:pl-3">
+              <div className="flex flex-col items-center text-center min-w-0">
                 <div className="text-[9px] font-semibold text-white/45 whitespace-nowrap">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
                 <div className="mt-0.5 text-[clamp(14px,4.1vw,18px)] font-semibold tabular-nums whitespace-nowrap text-white/90 min-w-0 truncate">
                   {hasEngagementRate ? engagementRateText : "—"}
@@ -958,6 +958,16 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             </div>
           </div>
         ) : null}
+
+          {/* Bio Section - moved here from bottom */}
+          {bioText ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0">
+              <div className="text-[10px] tracking-widest font-semibold text-white/55 mb-2">{t("results.mediaKit.about.title")}</div>
+              <p className="text-sm leading-relaxed text-white/85 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
+                {bioText}
+              </p>
+            </div>
+          ) : null}
 
           <div id="creator-card-highlights" className="min-w-0">
           <div className="min-w-0">
@@ -1247,21 +1257,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 min-w-0 md:min-h-[320px] lg:min-h-[360px] flex flex-col">
-            <div className={"rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 min-w-0 transition-colors " + sectionRing("about")}>
-              <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.about.title")}</div>
-              <div className="mt-1 min-w-0">
-                <Pill
-                  clampLines={3}
-                  title={String(resolvedAboutText ?? "")}
-                  className="break-words whitespace-normal [overflow-wrap:anywhere] text-white/85"
-                  unstyled
-                >
-                  {resolvedAboutText}
-                </Pill>
-              </div>
-            </div>
-
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
               <div className={"min-w-0 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors " + sectionRing("primaryNiche")}>
                 <div className="text-[10px] font-semibold text-white/55">{t("results.mediaKit.about.lines.primaryNiche")}</div>
                 <div className="mt-0.5 min-w-0">
@@ -1390,38 +1386,21 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               </button>
             </div>
 
-            {/* Body with embed - scrollable container */}
-            <div 
-              ref={modalBodyRef}
-              tabIndex={0}
-              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain min-h-0 relative"
-              style={{ 
-                WebkitOverflowScrolling: 'touch',
-                touchAction: 'pan-y',
-                overscrollBehavior: 'contain'
-              }}
-            >
-              <div className="w-full p-3 sm:p-4 md:p-5 pb-20">
-                {/* Fixed-height embed viewport */}
+            {/* Body with embed - compact non-scrolling layout */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {/* Fixed-height embed viewport - no scroll */}
+              <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden">
                 <div 
-                  className="w-full max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
+                  className="w-full h-full max-h-[70vh] overflow-hidden rounded-lg flex items-center justify-center bg-black/20"
                 >
-                  <div className="w-full break-words [overflow-wrap:anywhere]">
+                  <div className="w-full h-full break-words [overflow-wrap:anywhere]">
                     <IgEmbedPreview url={openIgUrl} />
                   </div>
                 </div>
-
-                {/* Helper text about comments */}
-                <div className="w-full mt-3 px-2">
-                  <p className="text-xs text-white/50 text-center break-words [overflow-wrap:anywhere]">
-                    {t("creatorCard.featured.igPreviewCommentsNote")}
-                  </p>
-                </div>
               </div>
 
-              {/* Sticky CTA at bottom */}
-              <div className="sticky bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-white/10 p-3 sm:p-4">
+              {/* CTA always visible at bottom - no scrolling needed */}
+              <div className="shrink-0 border-t border-white/10 bg-slate-900/95 backdrop-blur p-3 sm:p-4">
                 <a
                   href={openIgUrl}
                   target="_blank"
