@@ -247,7 +247,7 @@ function saWriteResultsCache(key: string, payload: ResultsCachePayloadV1) {
   }
 }
 
-function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
+function TopPostThumb({ src, alt, mediaType }: { src?: string; alt: string; mediaType?: string }) {
   const FALLBACK_IMG = "/window.svg"
   const [currentSrc, setCurrentSrc] = useState<string>(src && src.length > 0 ? src : FALLBACK_IMG)
   const [broken, setBroken] = useState(false)
@@ -282,10 +282,18 @@ function TopPostThumb({ src, alt }: { src?: string; alt: string }) {
   }, [src])
 
   const isVideoUrl = useMemo(() => {
+    // Use media_type if available (most reliable)
+    if (mediaType) {
+      const mt = mediaType.toUpperCase()
+      if (mt === "VIDEO" || mt === "REELS" || mt.includes("VIDEO")) {
+        return true
+      }
+    }
+    // Fallback: check if URL ends with .mp4
     const u = typeof currentSrc === "string" ? currentSrc.trim() : ""
     if (!u) return false
-    return /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
-  }, [currentSrc])
+    return /\.mp4(\?|$)/i.test(u)
+  }, [currentSrc, mediaType])
 
   const handleError = useCallback(() => {
     // If proxy failed and we haven't tried direct URL yet, try it
@@ -6453,7 +6461,7 @@ export default function ResultsClient() {
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                <TopPostThumb src={previewUrl || undefined} alt="post preview" />
+                                <TopPostThumb src={previewUrl || undefined} alt="post preview" mediaType={mediaType} />
                               </a>
                             </div>
 
@@ -6646,7 +6654,7 @@ export default function ResultsClient() {
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                <TopPostThumb src={previewUrl || undefined} alt="post preview" />
+                                <TopPostThumb src={previewUrl || undefined} alt="post preview" mediaType={mediaType} />
                               </a>
                             </div>
 
