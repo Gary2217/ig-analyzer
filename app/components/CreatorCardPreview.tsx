@@ -417,6 +417,18 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   // Modal state for IG post preview
   const [openIgUrl, setOpenIgUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
+  const modalBodyRef = useRef<HTMLDivElement>(null)
+
+  // Focus modal body when opened for PC wheel scroll
+  useEffect(() => {
+    if (openIgUrl && modalBodyRef.current) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        modalBodyRef.current?.focus()
+      }, 100)
+    }
+  }, [openIgUrl])
+
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
   const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
   const [previewCarouselIndex, setPreviewCarouselIndex] = useState(0)
@@ -1226,9 +1238,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 <Pill title={String(parsedContact.email || "")}>
                   {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
                 </Pill>
-                <Pill title={String(parsedContact.instagram || "")}>
-                  {parsedContact.instagram ? parsedContact.instagram : t("results.mediaKit.contact.notProvided")}
-                </Pill>
                 <Pill title={String(parsedContact.other || "")}>
                   {parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}
                 </Pill>
@@ -1359,6 +1368,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur z-50 flex items-center justify-center p-3 sm:p-6"
           onClick={() => setOpenIgUrl(null)}
+          onWheelCapture={(e) => e.stopPropagation()}
         >
           <div
             className="w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden"
@@ -1382,14 +1392,16 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
             {/* Body with embed - scrollable container */}
             <div 
-              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain min-h-0"
+              ref={modalBodyRef}
+              tabIndex={0}
+              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain min-h-0 relative"
               style={{ 
                 WebkitOverflowScrolling: 'touch',
                 touchAction: 'pan-y',
                 overscrollBehavior: 'contain'
               }}
             >
-              <div className="w-full space-y-4 p-3 sm:p-4 md:p-5">
+              <div className="w-full p-3 sm:p-4 md:p-5 pb-20">
                 {/* Fixed-height embed viewport */}
                 <div 
                   className="w-full max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg"
@@ -1400,23 +1412,30 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   </div>
                 </div>
 
-                {/* Fallback link to view comments on Instagram */}
-                <div className="w-full pt-2 border-t border-white/10">
-                  <a
-                    href={openIgUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors break-words [overflow-wrap:anywhere]"
-                    style={{ minHeight: "44px" }}
-                  >
-                    <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-                    </svg>
-                    <span className="min-w-0">
-                      {t("creatorCard.featured.openOnInstagram")}
-                    </span>
-                  </a>
+                {/* Helper text about comments */}
+                <div className="w-full mt-3 px-2">
+                  <p className="text-xs text-white/50 text-center break-words [overflow-wrap:anywhere]">
+                    {t("creatorCard.featured.igPreviewCommentsNote")}
+                  </p>
                 </div>
+              </div>
+
+              {/* Sticky CTA at bottom */}
+              <div className="sticky bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-white/10 p-3 sm:p-4">
+                <a
+                  href={openIgUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-semibold text-white/90 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/15 rounded-lg hover:from-purple-500/30 hover:to-pink-500/30 transition-colors break-words [overflow-wrap:anywhere]"
+                  style={{ minHeight: "44px" }}
+                >
+                  <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                  </svg>
+                  <span className="min-w-0">
+                    {t("creatorCard.featured.openOnInstagram")}
+                  </span>
+                </a>
               </div>
             </div>
           </div>
