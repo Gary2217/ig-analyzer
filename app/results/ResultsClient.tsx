@@ -6422,21 +6422,6 @@ export default function ResultsClient() {
             locale={activeLocale}
             username={displayUsername}
             displayName={displayName}
-            avatarUrl={(() => {
-              const cardImageUrl = isRecord(creatorCard) && typeof creatorCard.profileImageUrl === "string" 
-                ? String(creatorCard.profileImageUrl).trim() 
-                : ""
-              if (cardImageUrl) return cardImageUrl
-              
-              const igImageUrl = isRecord(igProfile) && typeof igProfile.profile_picture_url === "string"
-                ? String(igProfile.profile_picture_url)
-                : ""
-              return igImageUrl || undefined
-            })()}
-            followers={typeof followers === "number" && Number.isFinite(followers) ? followers : undefined}
-            following={typeof following === "number" && Number.isFinite(following) ? following : undefined}
-            posts={typeof mediaCount === "number" && Number.isFinite(mediaCount) ? mediaCount : undefined}
-            engagementRate={engagementRatePctFormatted !== "—" ? engagementRatePctFormatted : undefined}
             isConnected={isConnectedInstagram}
             isLoading={isCreatorCardLoading}
             hasCard={isRecord(creatorCard)}
