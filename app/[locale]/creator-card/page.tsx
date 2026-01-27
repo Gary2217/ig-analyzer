@@ -4287,6 +4287,17 @@ export default function CreatorCardPage() {
                   primaryNiche={baseCard?.niche ?? null}
                   contact={previewContact}
                   featuredItems={featuredItems}
+                  onReorderIgIds={(nextIgIds) => {
+                    setFeaturedItems(prev => {
+                      const igMap = new Map(prev.filter(x => x.type === "ig").map(x => [x.id, x]))
+                      const orderedIg = nextIgIds.map(id => igMap.get(id)).filter((x): x is FeaturedItem => x !== undefined)
+                      const nonIg = prev.filter(x => x.type !== "ig")
+                      const next = [...nonIg, ...orderedIg]
+                      persistDraftNow(next)
+                      markDirty()
+                      return next
+                    })
+                  }}
                   featuredImageUrls={featuredItems.map((x) => x.url)}
                   igOEmbedCache={igOEmbedCache}
                   themeTypes={themeTypes}
@@ -4358,6 +4369,17 @@ export default function CreatorCardPage() {
                     primaryNiche={baseCard?.niche ?? null}
                     contact={previewContact}
                     featuredItems={featuredItems}
+                    onReorderIgIds={(nextIgIds) => {
+                      setFeaturedItems(prev => {
+                        const igMap = new Map(prev.filter(x => x.type === "ig").map(x => [x.id, x]))
+                        const orderedIg = nextIgIds.map(id => igMap.get(id)).filter((x): x is FeaturedItem => x !== undefined)
+                        const nonIg = prev.filter(x => x.type !== "ig")
+                        const next = [...nonIg, ...orderedIg]
+                        persistDraftNow(next)
+                        markDirty()
+                        return next
+                      })
+                    }}
                     featuredImageUrls={featuredItems.map((x) => x.url)}
                     igOEmbedCache={igOEmbedCache}
                     themeTypes={themeTypes}

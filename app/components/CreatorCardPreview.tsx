@@ -2,10 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight, Plus, Sparkles, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Sparkles, X, GripVertical } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 // Strict oEmbed types
 type OEmbedStatus = "idle" | "loading" | "success" | "error"
@@ -169,6 +183,43 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
+// Sortable preview item component
+function SortablePreviewItem({
+  item,
+  children,
+}: {
+  item: { id: string }
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      {children}
+      {/* Drag handle button */}
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="absolute top-1 left-1 z-10 p-1.5 rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition-colors"
+        style={{ minWidth: "32px", minHeight: "32px", touchAction: "none" }}
+        aria-label="Drag to reorder"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-3 w-3 text-white/70" />
+      </button>
+    </div>
+  )
+}
+
 function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => string): string {
   const raw = collabType.trim()
   if (!raw) return ""
@@ -247,6 +298,7 @@ export type CreatorCardPreviewProps = {
   contact?: unknown
 
   featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null; caption?: string | null; type?: string | null; title?: string | null; text?: string | null; isAdded?: boolean | null; thumbnailUrl?: string | null }[]
+  onReorderIgIds?: (nextIgIds: string[]) => void
 
   featuredImageUrls?: (string | null)[]
 
@@ -357,6 +409,16 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const previewCarouselRef = useRef<HTMLDivElement>(null)
   const [canScrollPreviewLeft, setCanScrollPreviewLeft] = useState(false)
   const [canScrollPreviewRight, setCanScrollPreviewRight] = useState(false)
+
+  // DnD sensors for drag-reorder
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 150,
+        tolerance: 5,
+      },
+    })
+  )
 
   // Helper to normalize URL (remove trailing slash)
   const normalizeUrl = (url: string) => url ? url.trim().replace(/\/$/, "") : ""
@@ -487,7 +549,32 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   }, [featuredImageUrls, featuredItems])
 
   const featuredCount = featuredTiles.length
-  
+
+  // Build sortable IG items array (only added IG items)
+  const sortableIg = useMemo(() => {
+    return (featuredItems || []).filter(x => x.type === "ig" && x.isAdded === true)
+  }, [featuredItems])
+
+  const sortableIds = useMemo(() => sortableIg.map(x => x.id), [sortableIg])
+
+  // Handle drag end for reordering
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    if (!props.onReorderIgIds) return
+
+    const oldIndex = sortableIds.indexOf(String(active.id))
+    const newIndex = sortableIds.indexOf(String(over.id))
+
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const nextIds = [...sortableIds]
+    const [moved] = nextIds.splice(oldIndex, 1)
+    nextIds.splice(newIndex, 0, moved)
+
+    props.onReorderIgIds(nextIds)
+  }, [sortableIds, props])
+
   // Initialize preview carousel scroll state
   useEffect(() => {
     const el = previewCarouselRef.current
@@ -916,29 +1003,29 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 </svg>
               </button>
             )}
-            <div
-              ref={(el) => {
-                featuredStripRef.current = el
-                previewCarouselRef.current = el
-              }}
-              className="flex gap-4 overflow-x-auto min-w-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-10"
-              onScroll={() => {
-                const el = previewCarouselRef.current
-                if (!el) return
-                setCanScrollPreviewLeft(el.scrollLeft > 2)
-                setCanScrollPreviewRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
-              }}
-            >
-              {featuredCount === 0 ? (
-                <div className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                  <div className="h-full w-full flex items-center justify-center">
-                    <Plus className="h-7 w-7 text-white/25" />
-                  </div>
-                </div>
-              ) : (
-                featuredTiles
-                  .filter(item => isAddedIg(item))
-                  .map((item) => {
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
+                <div
+                  ref={(el) => {
+                    featuredStripRef.current = el
+                    previewCarouselRef.current = el
+                  }}
+                  className="flex gap-4 overflow-x-auto min-w-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-10"
+                  onScroll={() => {
+                    const el = previewCarouselRef.current
+                    if (!el) return
+                    setCanScrollPreviewLeft(el.scrollLeft > 2)
+                    setCanScrollPreviewRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
+                  }}
+                >
+                  {sortableIg.length === 0 ? (
+                    <div className="shrink-0 w-[150px] md:w-[170px] aspect-[3/4] overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                      <div className="h-full w-full flex items-center justify-center">
+                        <Plus className="h-7 w-7 text-white/25" />
+                      </div>
+                    </div>
+                  ) : (
+                    sortableIg.map((item) => {
                     const normalizedUrl = normalizeUrl(item.url)
                     const oembedData = igOEmbedCache[normalizedUrl]
                     const retryKey = retryKeys[normalizedUrl] || 0
@@ -1007,14 +1094,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     const thumbnailSrc = itemThumbnail || cachedThumbnail || (directMediaUrl ? `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}&v=${retryKey}` : undefined)
                     
                     return (
-                      <button
-                        key={item.id}
-                        data-preview-item
-                        type="button"
-                        onClick={() => setOpenIgUrl(normalizedUrl)}
-                        className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
-                        style={{ aspectRatio: "4 / 5" }}
-                      >
+                      <SortablePreviewItem key={item.id} item={item}>
+                        <button
+                          data-preview-item
+                          type="button"
+                          onClick={() => setOpenIgUrl(normalizedUrl)}
+                          className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors"
+                          style={{ aspectRatio: "4 / 5" }}
+                        >
                         {thumbnailSrc && !thumbnailLoadErrors[normalizedUrl] ? (
                           <img
                             key={retryKey}
@@ -1059,18 +1146,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                             </svg>
                           </div>
                         )}
-                      </button>
+                        </button>
+                      </SortablePreviewItem>
                     )
                   })
-              )}
-            </div>
-
-            {canScrollFeaturedRight ? (
-              <div className="pointer-events-none absolute right-0 top-0 h-full w-14 bg-gradient-to-l from-black/55 to-transparent" />
-            ) : null}
-            {canScrollFeaturedLeft ? (
-              <div className="pointer-events-none absolute left-0 top-0 h-full w-10 bg-gradient-to-r from-black/55 to-transparent" />
-            ) : null}
+                  )}
+                </div>
+              </SortableContext>
+            </DndContext>
 
             {featuredCount > 1 && featuredHasOverflow ? (
               <>
@@ -1266,7 +1349,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           onClick={() => setOpenIgUrl(null)}
         >
           <div
-            className="w-full max-w-[420px] h-[96vh] sm:h-auto sm:max-h-[94vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto"
+            className="w-[94vw] max-w-[560px] md:max-w-[720px] h-[96vh] sm:h-auto sm:max-h-[94vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -1286,7 +1369,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             </div>
 
             {/* Body with embed */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 max-h-[82vh] sm:max-h-[86vh]">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-5 max-h-[82vh] sm:max-h-[86vh]">
               <div className="w-full mx-auto">
                 <IgEmbedPreview url={openIgUrl} />
               </div>
