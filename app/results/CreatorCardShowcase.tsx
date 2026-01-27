@@ -18,8 +18,20 @@ interface CreatorCardShowcaseProps {
   t: (key: string) => string
 }
 
+type IgProfile = {
+  followers_count?: number
+  follows_count?: number
+  media_count?: number
+  profile_picture_url?: string
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function finiteNumOrNull(v: unknown): number | null {
+  const n = typeof v === "number" ? v : Number(v)
+  return Number.isFinite(n) ? n : null
 }
 
 export function CreatorCardShowcase({
@@ -34,9 +46,10 @@ export function CreatorCardShowcase({
   t,
 }: CreatorCardShowcaseProps) {
   const [creatorCard, setCreatorCard] = useState<unknown>(null)
+  const [igProfile, setIgProfile] = useState<IgProfile | null>(null)
   const [isCardLoading, setIsCardLoading] = useState(false)
 
-  // Fetch full creator card data when hasCard is true
+  // Fetch creator card and IG profile data in parallel
   useEffect(() => {
     if (!hasCard || !isConnected || isLoading) return
     if (creatorCard) return
@@ -44,23 +57,51 @@ export function CreatorCardShowcase({
     const controller = new AbortController()
     let cancelled = false
 
-    const fetchCreatorCard = async () => {
+    const fetchData = async () => {
       try {
         setIsCardLoading(true)
 
-        const res = await fetch("/api/creator-card/me", {
-          signal: controller.signal,
-        })
+        const [cardRes, igRes] = await Promise.all([
+          fetch("/api/creator-card/me", { signal: controller.signal }),
+          fetch("/api/auth/instagram/me", { signal: controller.signal }),
+        ])
 
-        if (!res.ok) return
-        const data = await res.json()
+        if (cancelled) return
+
+        let cardData = null
+        let igData = null
+
+        if (cardRes.ok) {
+          try {
+            cardData = await cardRes.json()
+          } catch {}
+        }
+
+        if (igRes.ok) {
+          try {
+            const json = await igRes.json()
+            const profile = isRecord(json) && isRecord(json.profile) ? json.profile : isRecord(json) ? json : null
+            if (profile) {
+              const followersCount = finiteNumOrNull(profile.followers_count)
+              const followsCount = finiteNumOrNull(profile.follows_count)
+              const mediaCount = finiteNumOrNull(profile.media_count)
+              igData = {
+                followers_count: followersCount ?? undefined,
+                follows_count: followsCount ?? undefined,
+                media_count: mediaCount ?? undefined,
+                profile_picture_url: typeof profile.profile_picture_url === "string" ? profile.profile_picture_url : undefined,
+              }
+            }
+          } catch {}
+        }
 
         if (!cancelled) {
-          setCreatorCard(data)
+          setCreatorCard(cardData)
+          setIgProfile(igData)
         }
       } catch (err) {
         if ((err as any)?.name !== "AbortError") {
-          console.error("Failed to fetch creator card", err)
+          console.error("Failed to fetch creator card data", err)
         }
       } finally {
         if (!cancelled) {
@@ -69,7 +110,7 @@ export function CreatorCardShowcase({
       }
     }
 
-    fetchCreatorCard()
+    fetchData()
 
     return () => {
       cancelled = true
@@ -81,6 +122,12 @@ export function CreatorCardShowcase({
   const publicCardUrl = cardId ? `/${locale}/creator/${cardId}` : null
 
   const showLoading = isLoading || isCardLoading
+
+  // Compute stats from IG profile
+  const followers = igProfile?.followers_count ?? null
+  const following = igProfile?.follows_count ?? null
+  const posts = igProfile?.media_count ?? null
+  const engagementRate = null // Not available in Results context
 
   return (
     <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28 max-w-6xl mx-auto px-4 md:px-6 mt-6">
@@ -205,23 +252,27 @@ export function CreatorCardShowcase({
             </div>
           ) : creatorCard && isRecord(creatorCard) ? (
             // State 4: Has public card - show full preview using shared component
-            <div className="p-4 sm:p-6">
-              <CreatorCardPreview
-                t={t}
-                profileImageUrl={typeof creatorCard.profileImageUrl === "string" ? creatorCard.profileImageUrl : typeof creatorCard.profile_image_url === "string" ? creatorCard.profile_image_url : null}
-                displayName={typeof creatorCard.displayName === "string" ? creatorCard.displayName : typeof creatorCard.display_name === "string" ? creatorCard.display_name : displayName}
-                username={typeof creatorCard.handle === "string" ? creatorCard.handle : username}
-                aboutText={typeof creatorCard.audience === "string" ? creatorCard.audience : null}
-                primaryNiche={typeof creatorCard.niche === "string" ? creatorCard.niche : null}
-                contact={creatorCard.contact}
-                featuredItems={Array.isArray(creatorCard.featuredItems) ? creatorCard.featuredItems : Array.isArray(creatorCard.featured_items) ? creatorCard.featured_items : []}
-                themeTypes={Array.isArray(creatorCard.themeTypes) ? creatorCard.themeTypes : Array.isArray(creatorCard.theme_types) ? creatorCard.theme_types : null}
-                audienceProfiles={Array.isArray(creatorCard.audienceProfiles) ? creatorCard.audienceProfiles : Array.isArray(creatorCard.audience_profiles) ? creatorCard.audience_profiles : null}
-                collaborationNiches={Array.isArray(creatorCard.collaborationNiches) ? creatorCard.collaborationNiches : Array.isArray(creatorCard.collaboration_niches) ? creatorCard.collaboration_niches : null}
-                deliverables={Array.isArray(creatorCard.deliverables) ? creatorCard.deliverables : null}
-                pastCollaborations={Array.isArray(creatorCard.pastCollaborations) ? creatorCard.pastCollaborations : Array.isArray(creatorCard.past_collaborations) ? creatorCard.past_collaborations : null}
-              />
-            </div>
+            <CreatorCardPreview
+              t={t}
+              className="border-white/10 bg-transparent"
+              headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+              profileImageUrl={typeof creatorCard.profileImageUrl === "string" ? creatorCard.profileImageUrl : typeof creatorCard.profile_image_url === "string" ? creatorCard.profile_image_url : null}
+              displayName={typeof creatorCard.displayName === "string" ? creatorCard.displayName : typeof creatorCard.display_name === "string" ? creatorCard.display_name : displayName}
+              username={typeof creatorCard.handle === "string" ? creatorCard.handle : username}
+              aboutText={typeof creatorCard.audience === "string" ? creatorCard.audience : null}
+              primaryNiche={typeof creatorCard.niche === "string" ? creatorCard.niche : null}
+              contact={creatorCard.contact}
+              featuredItems={Array.isArray(creatorCard.featuredItems) ? creatorCard.featuredItems : Array.isArray(creatorCard.featured_items) ? creatorCard.featured_items : []}
+              themeTypes={Array.isArray(creatorCard.themeTypes) ? creatorCard.themeTypes : Array.isArray(creatorCard.theme_types) ? creatorCard.theme_types : null}
+              audienceProfiles={Array.isArray(creatorCard.audienceProfiles) ? creatorCard.audienceProfiles : Array.isArray(creatorCard.audience_profiles) ? creatorCard.audience_profiles : null}
+              collaborationNiches={Array.isArray(creatorCard.collaborationNiches) ? creatorCard.collaborationNiches : Array.isArray(creatorCard.collaboration_niches) ? creatorCard.collaboration_niches : null}
+              deliverables={Array.isArray(creatorCard.deliverables) ? creatorCard.deliverables : null}
+              pastCollaborations={Array.isArray(creatorCard.pastCollaborations) ? creatorCard.pastCollaborations : Array.isArray(creatorCard.past_collaborations) ? creatorCard.past_collaborations : null}
+              followers={followers ?? undefined}
+              following={following ?? undefined}
+              posts={posts ?? undefined}
+              engagementRate={engagementRate ?? undefined}
+            />
           ) : (
             // Fallback: Card fetch failed
             <div className="flex flex-col items-center justify-center gap-3 py-8 px-4 text-center">
