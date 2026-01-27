@@ -47,6 +47,7 @@ export function CreatorCardShowcase({
 }: CreatorCardShowcaseProps) {
   const [creatorCard, setCreatorCard] = useState<unknown>(null)
   const [igProfile, setIgProfile] = useState<IgProfile | null>(null)
+  const [engagementRatePct, setEngagementRatePct] = useState<number | null>(null)
   const [isCardLoading, setIsCardLoading] = useState(false)
 
   // Fetch creator card and IG profile data in parallel
@@ -61,21 +62,34 @@ export function CreatorCardShowcase({
       try {
         setIsCardLoading(true)
 
-        const [cardRes, igRes] = await Promise.all([
-          fetch("/api/creator-card/me", { signal: controller.signal }),
-          fetch("/api/auth/instagram/me", { signal: controller.signal }),
-        ])
-
+        // First fetch creator card to get creatorId
+        const cardRes = await fetch("/api/creator-card/me", { signal: controller.signal })
         if (cancelled) return
 
         let cardData = null
-        let igData = null
+        let creatorId: string | null = null
 
         if (cardRes.ok) {
           try {
             cardData = await cardRes.json()
+            if (isRecord(cardData)) {
+              creatorId = (typeof cardData.creatorId === "string" ? cardData.creatorId : null) ??
+                         (typeof cardData.userId === "string" ? cardData.userId : null) ??
+                         (typeof cardData.id === "string" ? cardData.id : null)
+            }
           } catch {}
         }
+
+        // Now fetch IG profile and stats in parallel
+        const [igRes, statsRes] = await Promise.all([
+          fetch("/api/auth/instagram/me", { signal: controller.signal }),
+          creatorId ? fetch(`/api/creators/${creatorId}/stats`, { signal: controller.signal }) : Promise.resolve(null),
+        ])
+
+        if (cancelled) return
+
+        let igData = null
+        let statsData = null
 
         if (igRes.ok) {
           try {
@@ -95,9 +109,31 @@ export function CreatorCardShowcase({
           } catch {}
         }
 
+        if (statsRes && statsRes.ok) {
+          try {
+            const json = await statsRes.json()
+            if (isRecord(json)) {
+              const statsObj = isRecord(json.stats) ? json.stats : json
+              let engRate: number | null = null
+              
+              // Prefer engagementRatePct (already percent)
+              if (typeof statsObj.engagementRatePct === "number" && Number.isFinite(statsObj.engagementRatePct)) {
+                engRate = statsObj.engagementRatePct
+              }
+              // Else if engagementRate is ratio, convert to percent
+              else if (typeof statsObj.engagementRate === "number" && Number.isFinite(statsObj.engagementRate)) {
+                engRate = statsObj.engagementRate * 100
+              }
+              
+              statsData = engRate
+            }
+          } catch {}
+        }
+
         if (!cancelled) {
           setCreatorCard(cardData)
           setIgProfile(igData)
+          setEngagementRatePct(statsData)
         }
       } catch (err) {
         if ((err as any)?.name !== "AbortError") {
@@ -123,11 +159,11 @@ export function CreatorCardShowcase({
 
   const showLoading = isLoading || isCardLoading
 
-  // Compute stats from IG profile
+  // Compute stats from IG profile and stats endpoint
   const followers = igProfile?.followers_count ?? null
   const following = igProfile?.follows_count ?? null
   const posts = igProfile?.media_count ?? null
-  const engagementRate = null // Not available in Results context
+  const engagementRate = engagementRatePct
 
   return (
     <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28 max-w-6xl mx-auto px-4 md:px-6 mt-6">
