@@ -89,7 +89,18 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
         other: pick<string>(base, "other", "contactOther", "contact_other"),
       }
 
-  const featuredItems = normalizeFeaturedItems(pick<any>(base, "featuredItems", "featured_items", "featured", "highlights"))
+  // Extract featured items from various possible locations
+  let featuredRaw: any = pick<any>(base, "portfolio", "featured", "featuredItems", "featured_items", "portfolioItems", "portfolio_items", "highlights")
+  
+  // If container is an object with items array, extract it
+  let featuredArray: any[] = []
+  if (Array.isArray(featuredRaw)) {
+    featuredArray = featuredRaw
+  } else if (isRecord(featuredRaw) && Array.isArray(featuredRaw.items)) {
+    featuredArray = featuredRaw.items
+  }
+  
+  const featuredItems = normalizeFeaturedItems(featuredArray)
   const deliverables = pick<any[]>(base, "deliverables", "formats", "formatTypes", "format_types") ?? []
   const collaborationNiches = pick<any[]>(base, "collaborationNiches", "collaboration_niches", "niches") ?? []
   const themeTypes = pick<any[]>(base, "themeTypes", "theme_types", "platforms") ?? []
