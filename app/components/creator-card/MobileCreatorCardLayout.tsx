@@ -169,11 +169,11 @@ export function MobileCreatorCardLayout({
                   <button
                     type="button"
                     onClick={() => scrollToSlide(activeIndex - 1)}
-                    className="pointer-events-auto absolute left-6 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/60 backdrop-blur-sm text-white/90 hover:bg-black/75 transition-all shadow-lg"
+                    className="pointer-events-auto absolute left-2 top-[58%] -translate-y-1/2 z-10 flex items-center justify-center w-9 h-9 p-2 rounded-full bg-black/25 backdrop-blur-sm text-white/60 opacity-30 hover:opacity-70 active:opacity-70 transition-opacity duration-200 shadow-md"
                     style={{ minWidth: '44px', minHeight: '44px' }}
                     aria-label={isZhTW ? "上一張" : "Previous"}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
@@ -182,11 +182,11 @@ export function MobileCreatorCardLayout({
                   <button
                     type="button"
                     onClick={() => scrollToSlide(activeIndex + 1)}
-                    className="pointer-events-auto absolute right-6 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/60 backdrop-blur-sm text-white/90 hover:bg-black/75 transition-all shadow-lg"
+                    className="pointer-events-auto absolute right-2 top-[58%] -translate-y-1/2 z-10 flex items-center justify-center w-9 h-9 p-2 rounded-full bg-black/25 backdrop-blur-sm text-white/60 opacity-30 hover:opacity-70 active:opacity-70 transition-opacity duration-200 shadow-md"
                     style={{ minWidth: '44px', minHeight: '44px' }}
                     aria-label={isZhTW ? "下一張" : "Next"}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
