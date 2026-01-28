@@ -27,7 +27,7 @@ export function CreatorCardShowcase({
   cardId,
   t,
 }: CreatorCardShowcaseProps) {
-  const data = useCreatorCardPreviewData({ enabled: hasCard && isConnected })
+  const data = useCreatorCardPreviewData({ enabled: isConnected })
 
   const editCardUrl = `/${locale}/creator-card`
   const publicCardUrl = cardId ? `/${locale}/creator/${cardId}` : null
