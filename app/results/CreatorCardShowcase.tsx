@@ -96,12 +96,14 @@ export function CreatorCardShowcase({
   }
 
   // Auto-fill featured items from posts if creator card has no manual items
+  const manualItems = data.creatorCard ? getManualFeaturedItems(data.creatorCard) : []
+  const isAutoFilled = manualItems.length === 0 && ((topPosts?.length ?? 0) > 0 || (latestPosts?.length ?? 0) > 0)
+  
   const autoFilledData = {
     ...data,
     creatorCard: data.creatorCard ? {
       ...data.creatorCard,
       featuredItems: (() => {
-        const manualItems = getManualFeaturedItems(data.creatorCard)
         if (manualItems.length > 0) {
           if (process.env.NODE_ENV !== "production") {
             console.debug("[CreatorCardShowcase] Using manual items:", manualItems.length)
@@ -111,6 +113,9 @@ export function CreatorCardShowcase({
         
         // Auto-fill from top posts first, then latest posts
         const allPosts = [...(topPosts || []), ...(latestPosts || [])]
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("[CreatorCardShowcase] Auto-filling from posts:", allPosts.length)
+        }
         return allPosts.slice(0, 6).map((post: any, idx: number) => {
           const mediaType = post?.media_type || post?.mediaType || "IMAGE"
           const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
@@ -173,6 +178,7 @@ export function CreatorCardShowcase({
             data={autoFilledData}
             username={username}
             displayName={displayName}
+            isAutoFilled={isAutoFilled}
           />
         </CardContent>
       </Card>

@@ -26,6 +26,7 @@ type CreatorCardPreviewShellProps = {
   }
   username?: string
   displayName?: string
+  isAutoFilled?: boolean
 }
 
 export function CreatorCardPreviewShell({
@@ -38,6 +39,7 @@ export function CreatorCardPreviewShell({
   data,
   username,
   displayName,
+  isAutoFilled = false,
 }: CreatorCardPreviewShellProps) {
   const { isLoading, hasCard, creatorCard, followers, following, posts, engagementRate } = data
 
@@ -126,38 +128,55 @@ export function CreatorCardPreviewShell({
   return (
     <div className="min-w-0">
       {showHeaderButtons && (
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <Link
-            href={editHref}
-            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500 hover:brightness-110 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-all shadow-lg shadow-purple-500/20 whitespace-nowrap"
-            style={{ minHeight: "44px" }}
-          >
-            {locale === "zh-TW" ? "編輯創作者名片" : "Edit Creator Card"}
-          </Link>
-
-          {publicHref ? (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-white/90 min-w-0 truncate">
+              {locale === "zh-TW" ? "名片預覽" : "Card Preview"}
+            </h3>
+          </div>
+          <div className="flex items-center gap-2 justify-end shrink-0">
             <Link
-              href={publicHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-colors whitespace-nowrap"
+              href={editHref}
+              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500 hover:brightness-110 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-all shadow-lg shadow-purple-500/20 whitespace-nowrap"
               style={{ minHeight: "44px" }}
             >
-              <span>{locale === "zh-TW" ? "查看公開名片" : "View Public Card"}</span>
-              <ExternalLink className="w-3.5 h-3.5" />
+              {locale === "zh-TW" ? "編輯創作者名片" : "Edit Creator Card"}
             </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/3 px-4 py-2 text-xs sm:text-sm font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
-              style={{ minHeight: "44px" }}
-              title={locale === "zh-TW" ? "名片尚未公開" : "Card not public yet"}
-            >
-              <span>{locale === "zh-TW" ? "查看公開名片" : "View Public Card"}</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
+
+            {publicHref ? (
+              <Link
+                href={publicHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition-colors whitespace-nowrap"
+                style={{ minHeight: "44px" }}
+              >
+                <span>{locale === "zh-TW" ? "查看公開名片" : "View Public Card"}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/3 px-4 py-2 text-xs sm:text-sm font-semibold text-white/40 cursor-not-allowed whitespace-nowrap"
+                style={{ minHeight: "44px" }}
+                title={locale === "zh-TW" ? "名片尚未公開" : "Card not public yet"}
+              >
+                <span>{locale === "zh-TW" ? "查看公開名片" : "View Public Card"}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isAutoFilled && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+          <p className="text-xs text-white/60 leading-snug min-w-0">
+            {locale === "zh-TW" 
+              ? "尚未選擇精選貼文，系統暫時自動顯示近期表現較佳的貼文。" 
+              : "No featured posts selected yet — showing top recent posts for now."}
+          </p>
         </div>
       )}
 
