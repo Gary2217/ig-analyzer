@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Plus, Sparkles, X, GripVertical } from "luci
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
+import { MobileCreatorCardLayout } from "./creator-card/MobileCreatorCardLayout"
 import {
   DndContext,
   closestCenter,
@@ -828,7 +829,27 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   return (
     <div className="rounded-2xl border border-white/8 bg-[#0b1220]/40 backdrop-blur-sm">
       <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-5 lg:p-8 min-w-0">
-        <div className="flex flex-col gap-5 sm:gap-6 min-w-0">
+        {/* Mobile Dating-App Style Layout (< sm breakpoint) */}
+        <div className="sm:hidden">
+          <MobileCreatorCardLayout
+            t={t}
+            profileImageUrl={effectivePhotoUrl}
+            displayName={resolvedDisplayName}
+            username={resolvedUsername}
+            aboutText={bioText}
+            primaryNiche={resolvedPrimaryNiche}
+            audienceSummary={audienceSummaryText}
+            collaborationNiches={nicheText}
+            formats={formats.map((id) => ({ id, label: formatLabelMap[id] || id }))}
+            brands={brands}
+            contact={parsedContact}
+            featuredItems={sortableIg}
+            onOpenIg={setOpenIg}
+          />
+        </div>
+
+        {/* Desktop/Tablet Layout (>= sm breakpoint) */}
+        <div className="hidden sm:flex flex-col gap-5 sm:gap-6 min-w-0">
           {/* Header grid: avatar/name left, bio right */}
           <div className="grid grid-cols-1 sm:grid-cols-[minmax(160px,200px)_minmax(0,1fr)] gap-4 sm:gap-5 min-w-0">
             {/* Left: avatar/photo + name/handle */}
