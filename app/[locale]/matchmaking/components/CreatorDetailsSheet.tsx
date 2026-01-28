@@ -484,7 +484,6 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
               }}
             >
               {copy.viewFullProfile}
-              <ExternalLink className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>
