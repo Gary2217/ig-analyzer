@@ -479,8 +479,8 @@ export function CreatorDetailsSheet({ card, locale, isOpen, onClose }: CreatorDe
                 } catch {
                   // Ignore sessionStorage errors
                 }
-                // Navigate to full profile with locale prefix
-                router.push(`/${locale}${card.profileUrl}`)
+                // Navigate to full profile (profileUrl already includes locale prefix)
+                router.push(card.profileUrl)
               }}
             >
               {copy.viewFullProfile}

@@ -44,7 +44,7 @@ function formatFollowerCount(count: number, locale: "zh-TW" | "en"): string {
 
 export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProps) {
   const router = useRouter()
-  const profileHref = useMemo(() => `/${locale}/creator/${card.id}`, [locale, card.id])
+  const profileHref = useMemo(() => card.profileUrl, [card.profileUrl])
 
   const copy = {
     viewCard: locale === "zh-TW" ? "查看名片" : "View Card",
