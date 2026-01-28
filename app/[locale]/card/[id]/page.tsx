@@ -50,6 +50,7 @@ async function fetchCreatorCard(id: string): Promise<FetchResult> {
         id,
         hasServiceRoleKey: false,
         errorType: "env_missing",
+        queryStage: "env_check",
         returnedNull: true,
       }))
       return { data: null, errorType: "env_missing" }
@@ -58,9 +59,10 @@ async function fetchCreatorCard(id: string): Promise<FetchResult> {
     // Use service client to bypass RLS, but enforce is_public=true for safety
     const supabase = createServiceClient()
 
+    // Simplified query - select only essential fields that definitely exist
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_username, display_name, niche, primary_niche, profile_image_url, is_public, about_text, audience, theme_types, audience_profiles, deliverables, collaboration_niches, past_collaborations, portfolio, contact, updated_at")
+      .select("*")
       .eq("id", id)
       .eq("is_public", true)
       .maybeSingle()
@@ -70,8 +72,11 @@ async function fetchCreatorCard(id: string): Promise<FetchResult> {
         route: "public-card",
         id,
         hasServiceRoleKey,
+        queryStage: "base_card",
         errorCode: error.code,
         errorMessage: error.message,
+        errorDetails: error.details,
+        errorHint: error.hint,
         returnedNull: true,
       }))
       return { data: null, errorType: "service_error" }
@@ -82,6 +87,7 @@ async function fetchCreatorCard(id: string): Promise<FetchResult> {
         route: "public-card",
         id,
         hasServiceRoleKey,
+        queryStage: "base_card",
         errorType: "not_found",
         returnedNull: true,
       }))
@@ -94,7 +100,9 @@ async function fetchCreatorCard(id: string): Promise<FetchResult> {
       route: "public-card",
       id,
       hasServiceRoleKey,
+      queryStage: "catch_block",
       errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
       returnedNull: true,
     }))
     return { data: null, errorType: "service_error" }
