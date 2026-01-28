@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation"
 import { createPublicClient } from "@/lib/supabase/server"
 import { PublicCardClient } from "./PublicCardClient"
+import messagesZhTW from "@/messages/zh-TW.json"
+import messagesEn from "@/messages/en.json"
 
 export const dynamic = "force-dynamic"
 
@@ -58,50 +60,63 @@ async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
 function ensureProxiedThumbnail(url: string): string {
   if (!url) return ""
   if (url.startsWith("/api/ig/thumbnail?url=")) return url
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    if (url.includes("instagram.com") || url.includes("cdninstagram.com") || url.includes("fbcdn.net")) {
-      return `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
-    }
+  if (url.startsWith("http")) {
+    return `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
   }
   return url
 }
 
 // Normalize creator card data to match shared component expectations
 function normalizeCreatorCardForPreview(card: CreatorCardData) {
-  // Extract portfolio items and normalize thumbnails
-  let featuredItems: any[] = []
-  if (Array.isArray(card.portfolio)) {
-    featuredItems = card.portfolio
-      .map((item: any) => {
-        if (!item || typeof item !== "object") return null
+  // Extract featured items from portfolio-ish fields (priority order)
+  const candidates = [
+    card.portfolio,
+    (card.portfolio as any)?.items,
+    (card as any).featuredItems,
+    (card as any).featured_items,
+    (card as any).featuredItems?.items,
+    (card as any).featured_items?.items,
+  ]
 
-        // Extract URL from various possible keys
-        const url = item.url || item.permalink || item.link || item.href || item.postUrl || item.post_url
-
-        // Extract raw thumbnail
-        const rawThumb = item.thumbnailUrl || item.thumbnail_url || item.thumbUrl || item.thumb_url || item.imageUrl || item.image_url
-
-        // Determine thumbnail URL
-        let thumbnailUrl: string | undefined
-        if (url) {
-          // IG post: proxy through our endpoint
-          thumbnailUrl = ensureProxiedThumbnail(url)
-        } else if (rawThumb) {
-          // Uploaded item: use direct thumbnail (may need proxy if external)
-          thumbnailUrl = ensureProxiedThumbnail(rawThumb)
-        }
-
-        if (!url && !thumbnailUrl) return null
-
-        return {
-          ...item,
-          url: url || undefined,
-          thumbnailUrl,
-          type: item.type || "ig_post",
-        }
-      })
-      .filter(Boolean)
+  let rawItems: any[] = []
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      rawItems = candidate
+      break
+    }
   }
+
+  const featuredItems = rawItems
+    .map((item: any, idx: number) => {
+      if (!item || typeof item !== "object") return null
+
+      // Extract URL from various possible keys
+      const url = item.url || item.permalink || item.link || item.href || item.postUrl || item.post_url || ""
+
+      // Extract raw thumbnail - avoid .mp4 files
+      let rawThumb = item.thumbnailUrl || item.thumbnail_url || item.media_url || item.mediaUrl || item.thumbUrl || item.thumb_url || item.imageUrl || item.image_url || ""
+      
+      // If rawThumb is .mp4, skip it and try other fields
+      if (rawThumb && /\.mp4(\?|$)/i.test(rawThumb)) {
+        rawThumb = item.thumbnail_url || item.thumbnailUrl || ""
+      }
+
+      // Determine thumbnail URL
+      const proxiedThumb = rawThumb ? ensureProxiedThumbnail(rawThumb) : ""
+
+      if (!url && !proxiedThumb) return null
+
+      return {
+        ...item,
+        id: item.id || `manual-${idx}`,
+        type: "ig",
+        isAdded: true,
+        url: url || undefined,
+        thumbnailUrl: proxiedThumb,
+        thumbnail_url: proxiedThumb,
+      }
+    })
+    .filter(Boolean)
 
   return {
     profileImageUrl: card.profile_image_url,
@@ -132,6 +147,7 @@ export default async function PublicCardPage({ params }: PublicCardPageProps) {
   }
 
   const normalizedCard = normalizeCreatorCardForPreview(card)
+  const messages = locale === "zh-TW" ? messagesZhTW : messagesEn
 
-  return <PublicCardClient locale={locale} card={normalizedCard} />
+  return <PublicCardClient locale={locale} creatorCard={normalizedCard} messages={messages} />
 }
