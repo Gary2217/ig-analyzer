@@ -107,9 +107,14 @@ export function MobileCreatorCardLayout({
           </div>
           
           <div className="relative">
+            <style jsx>{`
+              .carousel-scroller::-webkit-scrollbar {
+                display: none;
+              }
+            `}</style>
             <div
               ref={carouselRef}
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide px-4 min-w-0"
+              className="carousel-scroller flex gap-3 overflow-x-auto snap-x snap-mandatory px-4 min-w-0"
               style={{
                 scrollbarWidth: 'none',
                 msOverflowStyle: 'none',
@@ -121,15 +126,17 @@ export function MobileCreatorCardLayout({
                   key={item.id}
                   type="button"
                   onClick={() => onOpenIg?.({ url: item.url, thumb: item.thumbnailUrl || undefined })}
-                  className="shrink-0 w-[85%] snap-center rounded-2xl border border-white/10 bg-black/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-white/20"
+                  className="shrink-0 w-[85%] snap-center rounded-2xl border border-white/10 bg-black/20 overflow-hidden focus:outline-none focus:ring-2 focus:ring-white/20 relative"
                   style={{ height: '60vh', maxHeight: '520px' }}
                 >
                   {item.thumbnailUrl ? (
-                    <img
+                    <Image
                       src={item.thumbnailUrl}
                       alt="Showcase"
-                      className="w-full h-full object-cover"
-                      loading="lazy"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 85vw, 560px"
+                      unoptimized
                       referrerPolicy="no-referrer"
                     />
                   ) : (
