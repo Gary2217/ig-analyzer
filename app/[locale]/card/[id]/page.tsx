@@ -140,7 +140,11 @@ export default async function PublicCardPage({ params }: PublicCardPageProps) {
   const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
   const id = resolvedParams.id
 
+  console.log("[card-page] Rendering card page for id:", id)
+
   const card = await fetchCreatorCard(id)
+
+  console.log("[card-page] Card fetched:", card ? "SUCCESS" : "NULL - will 404")
 
   if (!card) {
     notFound()
