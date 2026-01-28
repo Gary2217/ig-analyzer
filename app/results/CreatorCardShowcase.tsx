@@ -13,6 +13,8 @@ interface CreatorCardShowcaseProps {
   hasCard: boolean
   isCardPublic: boolean
   cardId?: string
+  topPosts?: any[]
+  latestPosts?: any[]
   t: (key: string) => string
 }
 
@@ -25,12 +27,43 @@ export function CreatorCardShowcase({
   hasCard,
   isCardPublic,
   cardId,
+  topPosts = [],
+  latestPosts = [],
   t,
 }: CreatorCardShowcaseProps) {
   const data = useCreatorCardPreviewData({ enabled: isConnected })
 
   const editCardUrl = `/${locale}/creator-card`
   const publicCardUrl = cardId ? `/${locale}/creator/${cardId}` : null
+
+  // Auto-fill featured items from posts if creator card has no manual items
+  const autoFilledData = {
+    ...data,
+    creatorCard: data.creatorCard ? {
+      ...data.creatorCard,
+      featuredItems: (() => {
+        const manualItems = data.creatorCard?.featuredItems || []
+        if (manualItems.length > 0) return manualItems
+        
+        // Auto-fill from top posts first, then latest posts
+        const allPosts = [...(topPosts || []), ...(latestPosts || [])]
+        return allPosts.slice(0, 6).map((post: any, idx: number) => {
+          const thumbnailUrl = post?.thumbnail_url || post?.thumbnailUrl || post?.media_url || post?.mediaUrl || ""
+          const proxiedUrl = thumbnailUrl && thumbnailUrl.startsWith("http") 
+            ? `/api/ig/thumbnail?url=${encodeURIComponent(thumbnailUrl)}`
+            : thumbnailUrl
+          
+          return {
+            id: post?.id || `auto-${idx}`,
+            url: post?.permalink || "",
+            thumbnailUrl: proxiedUrl,
+            type: "ig_post",
+            mediaType: post?.media_type || post?.mediaType || "IMAGE",
+          }
+        })
+      })(),
+    } : null,
+  }
 
   return (
     <section id="creator-card" className="scroll-mt-24 sm:scroll-mt-28 max-w-6xl mx-auto px-4 md:px-6 mt-6">
@@ -56,7 +89,7 @@ export function CreatorCardShowcase({
             editHref={editCardUrl}
             publicHref={publicCardUrl}
             isConnected={isConnected}
-            data={data}
+            data={autoFilledData}
             username={username}
             displayName={displayName}
           />

@@ -6437,6 +6437,8 @@ export default function ResultsClient() {
             hasCard={isRecord(creatorCard)}
             isCardPublic={isRecord(creatorCard) ? Boolean(creatorCard.isPublic ?? creatorCard.is_public) : false}
             cardId={isRecord(creatorCard) && typeof creatorCard.id === "string" ? creatorCard.id : undefined}
+            topPosts={topPerformingPosts}
+            latestPosts={latestPosts}
             t={t}
           />
 
