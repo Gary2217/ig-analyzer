@@ -86,7 +86,8 @@ export function CreatorCardShowcase({
             thumbnailUrl: proxiedUrl,
             thumbnail_url: proxiedUrl, // Field compatibility for snake_case consumers
             media_url: proxiedUrl, // Some renderers may check this
-            type: "ig_post",
+            type: "ig",
+            isAdded: true, // Required for sortableIg filter in CreatorCardPreview
             mediaType: mediaType,
           }
         })
