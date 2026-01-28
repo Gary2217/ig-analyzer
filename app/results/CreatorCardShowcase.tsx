@@ -36,6 +36,19 @@ export function CreatorCardShowcase({
   const editCardUrl = `/${locale}/creator-card`
   const publicCardUrl = cardId ? `/${locale}/creator/${cardId}` : null
 
+  // Helper: Proxy URL through /api/ig/thumbnail if needed (avoid double-proxy)
+  const ensureProxiedThumbnail = (url: string): string => {
+    if (!url) return ""
+    // Already proxied - return as-is
+    if (url.startsWith("/api/ig/thumbnail?url=")) return url
+    // HTTP(S) URL - proxy it
+    if (url.startsWith("http")) {
+      return `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
+    }
+    // Relative or empty - return as-is
+    return url
+  }
+
   // Auto-fill featured items from posts if creator card has no manual items
   const autoFilledData = {
     ...data,
@@ -48,17 +61,33 @@ export function CreatorCardShowcase({
         // Auto-fill from top posts first, then latest posts
         const allPosts = [...(topPosts || []), ...(latestPosts || [])]
         return allPosts.slice(0, 6).map((post: any, idx: number) => {
-          const thumbnailUrl = post?.thumbnail_url || post?.thumbnailUrl || post?.media_url || post?.mediaUrl || ""
-          const proxiedUrl = thumbnailUrl && thumbnailUrl.startsWith("http") 
-            ? `/api/ig/thumbnail?url=${encodeURIComponent(thumbnailUrl)}`
-            : thumbnailUrl
+          const mediaType = post?.media_type || post?.mediaType || "IMAGE"
+          const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
+          
+          // Extract thumbnail and media URLs
+          const rawThumbUrl = post?.thumbnail_url || post?.thumbnailUrl || ""
+          const rawMediaUrl = post?.media_url || post?.mediaUrl || ""
+          
+          // For videos, prefer thumbnail_url; for images, prefer media_url
+          // Never use .mp4 URLs for <img> tags
+          const isLikelyVideo = (u: string) => /\.mp4(\?|$)/i.test(u)
+          let chosenUrl = ""
+          if (isVideo) {
+            chosenUrl = rawThumbUrl || (isLikelyVideo(rawMediaUrl) ? "" : rawMediaUrl)
+          } else {
+            chosenUrl = (isLikelyVideo(rawMediaUrl) ? rawThumbUrl : rawMediaUrl) || rawThumbUrl
+          }
+          
+          const proxiedUrl = ensureProxiedThumbnail(chosenUrl)
           
           return {
             id: post?.id || `auto-${idx}`,
             url: post?.permalink || "",
             thumbnailUrl: proxiedUrl,
+            thumbnail_url: proxiedUrl, // Field compatibility for snake_case consumers
+            media_url: proxiedUrl, // Some renderers may check this
             type: "ig_post",
-            mediaType: post?.media_type || post?.mediaType || "IMAGE",
+            mediaType: mediaType,
           }
         })
       })(),
