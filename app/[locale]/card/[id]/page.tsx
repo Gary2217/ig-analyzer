@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import { PublicCardClient } from "./PublicCardClient"
+import { PublicCardErrorState } from "./PublicCardErrorState"
 import messagesZhTW from "@/messages/zh-TW.json"
 import messagesEn from "@/messages/en.json"
 
@@ -33,12 +34,25 @@ interface CreatorCardData {
   contact: any
 }
 
-async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
+interface FetchResult {
+  data: CreatorCardData | null
+  errorType?: "env_missing" | "service_error" | "not_found"
+}
+
+async function fetchCreatorCard(id: string): Promise<FetchResult> {
+  const hasServiceRoleKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
+
   try {
     // Check if service role key is available
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("SUPABASE_SERVICE_ROLE_KEY not found in environment")
-      return null
+    if (!hasServiceRoleKey) {
+      console.error(JSON.stringify({
+        route: "public-card",
+        id,
+        hasServiceRoleKey: false,
+        errorType: "env_missing",
+        returnedNull: true,
+      }))
+      return { data: null, errorType: "env_missing" }
     }
 
     // Use service client to bypass RLS, but enforce is_public=true for safety
@@ -52,14 +66,38 @@ async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
       .maybeSingle()
 
     if (error) {
-      console.error("Error fetching creator card:", error)
-      return null
+      console.error(JSON.stringify({
+        route: "public-card",
+        id,
+        hasServiceRoleKey,
+        errorCode: error.code,
+        errorMessage: error.message,
+        returnedNull: true,
+      }))
+      return { data: null, errorType: "service_error" }
     }
 
-    return data
+    if (!data) {
+      console.error(JSON.stringify({
+        route: "public-card",
+        id,
+        hasServiceRoleKey,
+        errorType: "not_found",
+        returnedNull: true,
+      }))
+      return { data: null, errorType: "not_found" }
+    }
+
+    return { data }
   } catch (error) {
-    console.error("Error fetching creator card:", error)
-    return null
+    console.error(JSON.stringify({
+      route: "public-card",
+      id,
+      hasServiceRoleKey,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      returnedNull: true,
+    }))
+    return { data: null, errorType: "service_error" }
   }
 }
 
@@ -147,10 +185,11 @@ export default async function PublicCardPage({ params }: PublicCardPageProps) {
   const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
   const id = resolvedParams.id
 
-  const card = await fetchCreatorCard(id)
+  const { data: card, errorType } = await fetchCreatorCard(id)
 
+  // Show friendly error UI instead of generic 404
   if (!card) {
-    notFound()
+    return <PublicCardErrorState locale={locale} errorType={errorType || "not_found"} />
   }
 
   const normalizedCard = normalizeCreatorCardForPreview(card)
