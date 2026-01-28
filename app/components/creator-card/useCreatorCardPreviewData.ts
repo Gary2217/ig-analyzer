@@ -49,18 +49,31 @@ function normalizeFeaturedItems(raw: any): any[] {
     .map((it) => {
       if (!isRecord(it)) return null
       
-      // Extract URL from various possible keys
+      // Extract URL from various possible keys (for IG posts)
       const url = pick<string>(it, "url", "permalink", "link", "href", "postUrl", "post_url")
-      if (!url) return null
       
-      // ALWAYS proxy thumbnails through our endpoint to avoid domain/CSP issues
-      const thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
+      // Extract raw thumbnail from various possible keys (for uploaded/local items)
+      const rawThumb = pick<string>(it, "thumbnailUrl", "thumbnail_url", "thumbUrl", "thumb_url", "imageUrl", "image_url", "mediaUrl", "media_url")
+      
+      // Determine thumbnail URL based on what's available
+      let thumbnailUrl: string | undefined
+      if (url) {
+        // IG post: proxy through our endpoint to avoid domain/CSP issues
+        thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
+      } else if (rawThumb) {
+        // Uploaded/local item: use direct thumbnail
+        thumbnailUrl = rawThumb
+      }
+      
+      // Keep item if it has either a URL or a thumbnail
+      if (!url && !thumbnailUrl) return null
+      
       const type = pick<string>(it, "type", "mediaType", "media_type") ?? "ig_post"
       
       return {
         ...it,
         type,
-        url,
+        url: url || undefined,
         thumbnailUrl,
       }
     })
