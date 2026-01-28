@@ -5,6 +5,7 @@ import Image from "next/image"
 
 interface MobileCreatorCardLayoutProps {
   t: (key: string) => string
+  locale?: string
   profileImageUrl?: string | null
   displayName?: string | null
   username?: string | null
@@ -27,6 +28,7 @@ interface MobileCreatorCardLayoutProps {
 
 export function MobileCreatorCardLayout({
   t,
+  locale,
   profileImageUrl,
   displayName,
   username,
@@ -40,6 +42,7 @@ export function MobileCreatorCardLayout({
   featuredItems = [],
   onOpenIg,
 }: MobileCreatorCardLayoutProps) {
+  const isZhTW = locale === "zh-TW"
   const [activeIndex, setActiveIndex] = useState(0)
   const carouselRef = useRef<HTMLDivElement>(null)
 
@@ -161,14 +164,14 @@ export function MobileCreatorCardLayout({
 
             {/* Left/Right Hint Arrows */}
             {featuredItems.length > 1 && (
-              <>
+              <div className="absolute inset-0 pointer-events-none">
                 {activeIndex > 0 && (
                   <button
                     type="button"
                     onClick={() => scrollToSlide(activeIndex - 1)}
-                    className="absolute left-6 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/60 backdrop-blur-sm text-white/90 hover:bg-black/75 transition-all shadow-lg"
+                    className="pointer-events-auto absolute left-6 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/60 backdrop-blur-sm text-white/90 hover:bg-black/75 transition-all shadow-lg"
                     style={{ minWidth: '44px', minHeight: '44px' }}
-                    aria-label={t("results.mediaKit.highlights.title").includes("精選") ? "上一張" : "Previous"}
+                    aria-label={isZhTW ? "上一張" : "Previous"}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -179,16 +182,16 @@ export function MobileCreatorCardLayout({
                   <button
                     type="button"
                     onClick={() => scrollToSlide(activeIndex + 1)}
-                    className="absolute right-6 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/60 backdrop-blur-sm text-white/90 hover:bg-black/75 transition-all shadow-lg"
+                    className="pointer-events-auto absolute right-6 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center w-11 h-11 rounded-full bg-black/60 backdrop-blur-sm text-white/90 hover:bg-black/75 transition-all shadow-lg"
                     style={{ minWidth: '44px', minHeight: '44px' }}
-                    aria-label={t("results.mediaKit.highlights.title").includes("精選") ? "下一張" : "Next"}
+                    aria-label={isZhTW ? "下一張" : "Next"}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
                 )}
-              </>
+              </div>
             )}
 
             {/* Pagination Dots */}

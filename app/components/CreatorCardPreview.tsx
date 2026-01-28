@@ -293,6 +293,7 @@ function buildInstagramEmbedSrc(inputUrl: string): string | null {
 
 export type CreatorCardPreviewProps = {
   t: (key: string) => string
+  locale?: string
   className?: string
   id?: string
   headerClassName?: string
@@ -833,6 +834,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         <div className="sm:hidden">
           <MobileCreatorCardLayout
             t={t}
+            locale={props.locale}
             profileImageUrl={effectivePhotoUrl}
             displayName={resolvedDisplayName}
             username={resolvedUsername}
