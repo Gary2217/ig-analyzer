@@ -49,14 +49,65 @@ export function CreatorCardShowcase({
     return url
   }
 
+  // Helper: Extract manual featured items from all possible field variations
+  const getManualFeaturedItems = (creatorCard: any): any[] => {
+    if (!creatorCard) return []
+    
+    // Try all possible field names and nested structures
+    const candidates = [
+      creatorCard.featuredItems,
+      creatorCard.featured_items,
+      creatorCard.featuredItems?.items,
+      creatorCard.featured_items?.items,
+      creatorCard.portfolio,
+      creatorCard.portfolio?.items,
+    ]
+    
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate) && candidate.length > 0) {
+        // Normalize each item to ensure it passes CreatorCardPreview filters
+        return candidate.map((item: any, idx: number) => {
+          const rawThumbUrl = item?.thumbnailUrl || item?.thumbnail_url || item?.media_url || item?.mediaUrl || ""
+          const proxiedUrl = ensureProxiedThumbnail(rawThumbUrl)
+          
+          return {
+            ...item,
+            id: item?.id || `manual-${idx}`,
+            type: item?.type === "ig" ? "ig" : (item?.type || "ig"),
+            isAdded: item?.isAdded === true ? true : (item?.type === "ig" || item?.url ? true : false),
+            thumbnailUrl: proxiedUrl,
+            thumbnail_url: proxiedUrl,
+          }
+        }).filter((item: any) => item.type === "ig" && item.isAdded === true)
+      }
+    }
+    
+    // Dev-only debug: log what we found
+    if (process.env.NODE_ENV !== "production" && creatorCard) {
+      console.debug("[CreatorCardShowcase] Manual featured items check:", {
+        keys: Object.keys(creatorCard),
+        featuredItems: Array.isArray(creatorCard.featuredItems) ? creatorCard.featuredItems.length : "not array",
+        featured_items: Array.isArray(creatorCard.featured_items) ? creatorCard.featured_items.length : "not array",
+        portfolio: Array.isArray(creatorCard.portfolio) ? creatorCard.portfolio.length : (creatorCard.portfolio?.items ? `nested: ${creatorCard.portfolio.items.length}` : "not array"),
+      })
+    }
+    
+    return []
+  }
+
   // Auto-fill featured items from posts if creator card has no manual items
   const autoFilledData = {
     ...data,
     creatorCard: data.creatorCard ? {
       ...data.creatorCard,
       featuredItems: (() => {
-        const manualItems = data.creatorCard?.featuredItems || []
-        if (manualItems.length > 0) return manualItems
+        const manualItems = getManualFeaturedItems(data.creatorCard)
+        if (manualItems.length > 0) {
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[CreatorCardShowcase] Using manual items:", manualItems.length)
+          }
+          return manualItems
+        }
         
         // Auto-fill from top posts first, then latest posts
         const allPosts = [...(topPosts || []), ...(latestPosts || [])]
