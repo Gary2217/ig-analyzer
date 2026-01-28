@@ -4,6 +4,7 @@ import { PublicCardClient } from "./PublicCardClient"
 import messagesZhTW from "@/messages/zh-TW.json"
 import messagesEn from "@/messages/en.json"
 
+export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 interface PublicCardPageProps {
@@ -34,6 +35,12 @@ interface CreatorCardData {
 
 async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
   try {
+    // Check if service role key is available
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("SUPABASE_SERVICE_ROLE_KEY not found in environment")
+      return null
+    }
+
     // Use service client to bypass RLS, but enforce is_public=true for safety
     const supabase = createServiceClient()
 
@@ -140,11 +147,7 @@ export default async function PublicCardPage({ params }: PublicCardPageProps) {
   const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
   const id = resolvedParams.id
 
-  console.log("[card-page] Rendering card page for id:", id)
-
   const card = await fetchCreatorCard(id)
-
-  console.log("[card-page] Card fetched:", card ? "SUCCESS" : "NULL - will 404")
 
   if (!card) {
     notFound()
