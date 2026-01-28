@@ -5888,7 +5888,12 @@ export default function ResultsClient() {
                           const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
                           const pick = isVideoType ? (tu || mu) : (mu || tu)
                           if (pick && isLikelyVideoUrl(pick)) return tu || ""
-                          return pick || ""
+                          const rawUrl = pick || ""
+                          // Proxy through our endpoint to avoid CORS/CSP issues
+                          if (rawUrl && rawUrl.startsWith("http")) {
+                            return `/api/ig/thumbnail?url=${encodeURIComponent(rawUrl)}`
+                          }
+                          return rawUrl
                         })()
 
                         if (__DEV__ && !previewUrl) {
@@ -6095,7 +6100,12 @@ export default function ResultsClient() {
                         const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
                         const pick = isVideoType ? (tu || mu) : (mu || tu)
                         if (pick && isLikelyVideoUrl(pick)) return tu || ""
-                        return pick || ""
+                        const rawUrl = pick || ""
+                        // Proxy through our endpoint to avoid CORS/CSP issues
+                        if (rawUrl && rawUrl.startsWith("http")) {
+                          return `/api/ig/thumbnail?url=${encodeURIComponent(rawUrl)}`
+                        }
+                        return rawUrl
                       })()
 
                       const analyzeHref = permalink
