@@ -2675,10 +2675,6 @@ export default function ResultsClient() {
     const pastCollabsRaw = out.pastCollaborations ?? out.past_collaborations ?? []
     out.pastCollaborations = Array.isArray(pastCollabsRaw) ? pastCollabsRaw : []
 
-    const portfolioRaw: any = out.portfolio
-    const featuredItemsRaw = out.featuredItems ?? out.featured_items ?? (isRecord(portfolioRaw) ? portfolioRaw.items : null) ?? portfolioRaw ?? []
-    out.featuredItems = Array.isArray(featuredItemsRaw) ? featuredItemsRaw : []
-    
     out.portfolio = Array.isArray(out.portfolio) ? out.portfolio : []
 
     if (typeof out.contact === "string") {
