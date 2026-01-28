@@ -6,6 +6,9 @@ import { createPublicClient } from "@/lib/supabase/server"
 import { CollabAutoScroll } from "./CollabAutoScroll"
 import { PortfolioCarousel } from "./PortfolioCarousel"
 import { TopRightActions } from "@/app/components/TopRightActions"
+import { PublicCreatorCardClient } from "./PublicCreatorCardClient"
+import messagesZhTW from "@/messages/zh-TW.json"
+import messagesEn from "@/messages/en.json"
 
 interface CreatorProfilePageProps {
   params: Promise<{
@@ -17,10 +20,13 @@ interface CreatorProfilePageProps {
 interface CreatorCardData {
   id: string
   ig_username: string | null
+  display_name: string | null
   niche: string | null
+  primary_niche: string | null
   profile_image_url: string | null
   updated_at: string | null
   is_public: boolean
+  about_text: string | null
   audience: string | null
   theme_types: string[] | null
   audience_profiles: string[] | null
@@ -28,6 +34,7 @@ interface CreatorCardData {
   collaboration_niches: string[] | null
   past_collaborations: string[] | null
   portfolio: unknown[] | null
+  contact: any
 }
 
 async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
@@ -36,7 +43,7 @@ async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
 
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_username, niche, profile_image_url, updated_at, is_public, audience, theme_types, audience_profiles, deliverables, collaboration_niches, past_collaborations, portfolio")
+      .select("id, ig_username, display_name, niche, primary_niche, profile_image_url, updated_at, is_public, about_text, audience, theme_types, audience_profiles, deliverables, collaboration_niches, past_collaborations, portfolio, contact")
       .eq("id", id)
       .eq("is_public", true)
       .maybeSingle()
@@ -50,6 +57,82 @@ async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
   } catch (error) {
     console.error("Error fetching creator card:", error)
     return null
+  }
+}
+
+// Helper: Proxy URL through /api/ig/thumbnail if needed (avoid double-proxy)
+function ensureProxiedThumbnail(url: string): string {
+  if (!url) return ""
+  if (url.startsWith("/api/ig/thumbnail?url=")) return url
+  if (url.startsWith("http")) {
+    return `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
+  }
+  return url
+}
+
+// Normalize creator card data for shared preview component
+function normalizeCreatorCardForPreview(cardData: CreatorCardData): any {
+  // Extract featured items from multiple possible sources
+  const extractFeaturedItems = (raw: any): any[] => {
+    const candidates = [
+      raw.featuredItems,
+      raw.featured_items,
+      raw.featuredItems?.items,
+      raw.featured_items?.items,
+      raw.portfolio,
+      raw.portfolio?.items,
+    ]
+
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate) && candidate.length > 0) {
+        return candidate.map((item: any, idx: number) => {
+          const rawUrl = item?.url || item?.permalink || item?.link || ""
+          const rawThumbUrl = item?.thumbnailUrl || item?.thumbnail_url || item?.thumbnail || item?.media_url || item?.mediaUrl || item?.imageUrl || item?.image_url || ""
+          const mediaType = item?.media_type || item?.mediaType || "IMAGE"
+          const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
+          
+          // For videos, never use .mp4 URLs
+          const isLikelyVideo = (u: string) => /\.mp4(\?|$)/i.test(u)
+          let chosenUrl = ""
+          if (isVideo) {
+            chosenUrl = rawThumbUrl || (isLikelyVideo(rawUrl) ? "" : rawUrl)
+          } else {
+            chosenUrl = (isLikelyVideo(rawUrl) ? rawThumbUrl : rawUrl) || rawThumbUrl
+          }
+          
+          const proxiedUrl = ensureProxiedThumbnail(chosenUrl)
+          
+          return {
+            id: item?.id || `featured-${idx}`,
+            url: rawUrl,
+            thumbnailUrl: proxiedUrl,
+            thumbnail_url: proxiedUrl,
+            media_url: proxiedUrl,
+            type: "ig",
+            isAdded: true,
+            mediaType: mediaType,
+          }
+        }).filter((item: any) => item.type === "ig" && item.isAdded === true)
+      }
+    }
+    return []
+  }
+
+  const featuredItems = extractFeaturedItems(cardData)
+
+  return {
+    profileImageUrl: cardData.profile_image_url,
+    displayName: cardData.display_name || cardData.ig_username || cardData.id,
+    username: cardData.ig_username,
+    aboutText: cardData.about_text || cardData.audience,
+    primaryNiche: cardData.primary_niche || cardData.niche,
+    contact: cardData.contact,
+    featuredItems: featuredItems,
+    themeTypes: cardData.theme_types,
+    audienceProfiles: cardData.audience_profiles,
+    collaborationNiches: cardData.collaboration_niches,
+    deliverables: cardData.deliverables,
+    pastCollaborations: cardData.past_collaborations,
   }
 }
 
@@ -151,9 +234,21 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
     )
   }
 
-  const displayName = cardData.ig_username || cardData.id
+  const displayName = cardData.display_name || cardData.ig_username || cardData.id
   const category = cardData.niche || (locale === "zh-TW" ? "創作者" : "Creator")
   const isCollab = tab === "collab"
+
+  // Normalize creator card for shared preview component
+  const normalizedCreatorCard = normalizeCreatorCardForPreview(cardData)
+
+  // Get translations for client component
+  const messages = locale === "zh-TW" ? messagesZhTW : messagesEn
+  const translations = Object.entries(messages).reduce((acc, [key, value]) => {
+    if (typeof value === "string") {
+      acc[key] = value
+    }
+    return acc
+  }, {} as Record<string, string>)
 
   // Safe portfolio normalization
   const portfolioItems = (() => {
@@ -274,6 +369,13 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
             {copy.title}
           </h1>
         </div>
+
+        {/* Shared Creator Card Preview */}
+        <PublicCreatorCardClient
+          locale={locale}
+          creatorCard={normalizedCreatorCard}
+          translations={translations}
+        />
 
         {/* Card Header Section */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 max-w-2xl mx-auto mb-6">
