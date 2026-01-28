@@ -277,6 +277,7 @@
       },
       "stats": {
         "followers": "粉絲",
+        "following": "關注數",
         "posts": "貼文數"
       },
       "kpis": {

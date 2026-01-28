@@ -793,8 +793,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const hasFollowers = typeof followers === "number" && Number.isFinite(followers)
   const hasFollowing = typeof following === "number" && Number.isFinite(following)
   const hasPosts = typeof posts === "number" && Number.isFinite(posts)
-  const hasEngagementRate = typeof engagementRate === "number" && Number.isFinite(engagementRate)
-  const showStatsRow = hasFollowers || hasFollowing || hasPosts || hasEngagementRate
+  const showStatsRow = hasFollowers || hasFollowing || hasPosts
 
   const hasFollowersText = typeof followersText === "string" && followersText.trim().length > 0
   const hasPostsText = typeof postsText === "string" && postsText.trim().length > 0
@@ -915,7 +914,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           </div>
 
           {showStatsRow ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 min-w-0">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 min-w-0">
             <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
               <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.followers")}</div>
               <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
@@ -934,13 +933,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.posts")}</div>
               <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
                 {hasPosts ? posts.toLocaleString() : "—"}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
-              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.kpis.labels.engagementRate")}</div>
-              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
-                {hasEngagementRate ? `${engagementRate.toFixed(2)}%` : "—"}
               </div>
             </div>
           </div>
@@ -1239,14 +1231,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 min-w-0">
               {(
                 [
-                  hasEngagementRate
-                    ? {
-                        k: "engagementRate" as const,
-                        label: t("results.mediaKit.kpis.labels.engagementRate"),
-                        value: engagementRateText,
-                        isNumeric: true,
-                      }
-                    : null,
                   hasReach
                     ? {
                         k: "avgReach" as const,
