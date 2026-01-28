@@ -241,14 +241,8 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
   // Normalize creator card for shared preview component
   const normalizedCreatorCard = normalizeCreatorCardForPreview(cardData)
 
-  // Get translations for client component
+  // Get full messages object for client component (supports nested keys)
   const messages = locale === "zh-TW" ? messagesZhTW : messagesEn
-  const translations = Object.entries(messages).reduce((acc, [key, value]) => {
-    if (typeof value === "string") {
-      acc[key] = value
-    }
-    return acc
-  }, {} as Record<string, string>)
 
   // Safe portfolio normalization
   const portfolioItems = (() => {
@@ -374,7 +368,7 @@ export default async function CreatorProfilePage({ params, searchParams }: Creat
         <PublicCreatorCardClient
           locale={locale}
           creatorCard={normalizedCreatorCard}
-          translations={translations}
+          messages={messages}
         />
 
         {/* Card Header Section */}

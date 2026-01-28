@@ -5,11 +5,25 @@ import { CreatorCardPreview } from "@/app/components/CreatorCardPreview"
 interface PublicCreatorCardClientProps {
   locale: string
   creatorCard: any
-  translations: Record<string, string>
+  messages: any
 }
 
-export function PublicCreatorCardClient({ locale, creatorCard, translations }: PublicCreatorCardClientProps) {
-  const t = (key: string) => translations[key] || key
+export function PublicCreatorCardClient({ locale, creatorCard, messages }: PublicCreatorCardClientProps) {
+  // Dot-path resolver for nested translation keys
+  const t = (key: string): string => {
+    const keys = key.split(".")
+    let current: any = messages
+    
+    for (const k of keys) {
+      if (current && typeof current === "object" && k in current) {
+        current = current[k]
+      } else {
+        return key // Fallback to key if not found
+      }
+    }
+    
+    return typeof current === "string" ? current : key
+  }
   
   return (
     <div className="max-w-4xl mx-auto mb-6">
