@@ -36,7 +36,7 @@ async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
   try {
     const supabase = createPublicClient()
 
-    // Lookup by id only (matchmaking always passes id)
+    // Query #1: Intended public query (with is_public filter)
     const { data, error } = await supabase
       .from("creator_cards")
       .select("id, ig_username, display_name, niche, primary_niche, profile_image_url, is_public, about_text, audience, theme_types, audience_profiles, deliverables, collaboration_niches, past_collaborations, portfolio, contact")
@@ -44,14 +44,32 @@ async function fetchCreatorCard(id: string): Promise<CreatorCardData | null> {
       .eq("is_public", true)
       .maybeSingle()
 
+    // Query #2: Diagnostic query (without is_public filter to check if row exists)
+    const { data: diagnosticData, error: diagnosticError } = await supabase
+      .from("creator_cards")
+      .select("id, is_public, updated_at")
+      .eq("id", id)
+      .maybeSingle()
+
+    // Diagnostic logging (server-side only)
+    console.log("[card-route-diagnostic]", {
+      id,
+      query1_success: !!data,
+      query1_error: error?.message || null,
+      query2_exists: !!diagnosticData,
+      query2_is_public: diagnosticData?.is_public ?? null,
+      query2_updated_at: diagnosticData?.updated_at ?? null,
+      query2_error: diagnosticError?.message || null,
+    })
+
     if (error) {
-      console.error("Error fetching creator card:", error)
+      console.error("[card-route] Query #1 error:", error)
       return null
     }
 
     return data
   } catch (error) {
-    console.error("Error fetching creator card:", error)
+    console.error("[card-route] Unexpected error:", error)
     return null
   }
 }
