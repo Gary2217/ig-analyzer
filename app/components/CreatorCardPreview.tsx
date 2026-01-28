@@ -554,7 +554,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     (typeof parsedContact.other === "string" && parsedContact.other.trim().length > 0)
 
   const featuredTiles = useMemo(() => {
-    const rawItems = Array.isArray(featuredItems) ? featuredItems : []
+    // Robust fallback: try multiple possible sources for featured items
+    // This ensures Results page works even if API returns snake_case or nested structures
+    const rawItems = Array.isArray(featuredItems) 
+      ? featuredItems 
+      : Array.isArray((featuredItems as any)?.items)
+        ? (featuredItems as any).items
+        : []
+    
     const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; title?: string; text?: string; isAdded?: boolean; thumbnailUrl?: string }> = []
 
     if (rawItems.length > 0) {
