@@ -25,17 +25,19 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
       return []
     }
 
-    // Map DB fields to CreatorCard type
-    return (data || []).map((card) => ({
-      id: card.id,
-      displayName: card.ig_username,
-      avatarUrl: card.profile_image_url || "",
-      category: card.niche || "Creator",
-      followerCount: 0,
-      engagementRate: null,
-      isVerified: false,
-      profileUrl: `${localePrefix}/creator/${card.ig_username}`,
-    }))
+    // Map DB fields to CreatorCard type with defensive checks
+    return (data || [])
+      .filter((card) => card.id) // Only include cards with valid id
+      .map((card) => ({
+        id: card.id,
+        displayName: card.ig_username || card.id,
+        avatarUrl: card.profile_image_url || "",
+        category: card.niche || "Creator",
+        followerCount: 0,
+        engagementRate: null,
+        isVerified: false,
+        profileUrl: `${localePrefix}/card/${card.id}`,
+      }))
   } catch (error) {
     console.error("Error fetching creator cards:", error)
     return []
