@@ -297,8 +297,8 @@
         "noData": "No data"
       },
       "highlights": {
-        "title": "Showcase",
-        "subtitle": "Portfolio / collaborations / top posts",
+        "title": "Post Showcase",
+        "subtitle": "Portfolio / Case Studies / Top Posts",
         "empty": "No items yet",
         "emptyHint": "Add your first item to help brands understand you faster",
         "count": "{count} items",

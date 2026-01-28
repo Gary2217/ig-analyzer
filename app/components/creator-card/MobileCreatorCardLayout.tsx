@@ -110,9 +110,12 @@ export function MobileCreatorCardLayout({
       {/* Personal Showcase Carousel - Full Width */}
       {featuredItems.length > 0 && (
         <div className="min-w-0 -mx-4">
-          <div className="px-4 mb-2">
+          <div className="px-4 mb-2 flex flex-wrap items-baseline gap-2 min-w-0">
             <div className="text-xs font-semibold text-white/70">
               {t("results.mediaKit.highlights.title")}
+            </div>
+            <div className="text-[10px] text-white/45 break-words min-w-0">
+              {t("results.mediaKit.highlights.subtitle")}
             </div>
           </div>
           
