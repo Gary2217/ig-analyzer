@@ -12,6 +12,7 @@ export default function AppHeader({ locale }: { locale: string }) {
   const router = useRouter()
   const isMatchmaking = pathname?.includes("/matchmaking")
   const isCreatorCard = pathname?.includes("/creator-card")
+  const isPublicCard = pathname?.includes("/card/")
   
   const isZh = locale === "zh-TW"
   const copy = isZh
@@ -37,6 +38,27 @@ export default function AppHeader({ locale }: { locale: string }) {
       // Normal navigation without flag
       router.push(`/${locale}/results#creator-card`)
     }
+  }
+
+  const handleBackFromPublicCard = () => {
+    if (typeof window === "undefined") return
+    
+    // Try browser history back first
+    const hasHistory = window.history.length > 1
+    if (hasHistory) {
+      // Check if we can go back meaningfully
+      const referrer = document.referrer
+      const currentOrigin = window.location.origin
+      
+      // If referrer is from same origin and not the same page, go back
+      if (referrer && referrer.startsWith(currentOrigin) && !referrer.includes(pathname || "")) {
+        router.back()
+        return
+      }
+    }
+    
+    // Fallback to locale home
+    router.push(`/${locale}`)
   }
 
   return (
@@ -69,6 +91,17 @@ export default function AppHeader({ locale }: { locale: string }) {
                     <span className="sr-only sm:hidden">{copy.browseCreators}</span>
                   </Link>
                 </>
+              )}
+              {isPublicCard && (
+                <button 
+                  onClick={handleBackFromPublicCard} 
+                  className={BUTTON_BASE_CLASSES}
+                  aria-label={copy.back}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">{copy.back}</span>
+                  <span className="sr-only sm:hidden">{copy.back}</span>
+                </button>
               )}
               <LocaleSwitcher />
             </div>

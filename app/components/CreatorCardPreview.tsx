@@ -830,9 +830,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
       <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-5 lg:p-8 min-w-0">
         <div className="flex flex-col gap-5 sm:gap-6 min-w-0">
           {/* Header grid: avatar/name left, bio right */}
-          <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-4 sm:gap-5 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(160px,200px)_minmax(0,1fr)] gap-4 sm:gap-5 min-w-0">
             {/* Left: avatar/photo + name/handle */}
-            <div className="min-w-0">
+            <div className="min-w-0 sm:min-w-[160px]">
               <button
                 type="button"
                 onClick={() => effectivePhotoUrl && setOpenAvatarUrl(effectivePhotoUrl)}
@@ -902,7 +902,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
             {/* Right: bio (only if exists) */}
             {bioText ? (
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 sm:py-4">
+              <div className="min-w-0 w-full sm:max-w-[560px] rounded-2xl border border-white/10 bg-black/20 px-4 py-3 sm:py-4 overflow-hidden">
                 <div className="text-[10px] tracking-widest font-semibold text-white/55 mb-2">
                   {t("results.mediaKit.about.title")}
                 </div>
