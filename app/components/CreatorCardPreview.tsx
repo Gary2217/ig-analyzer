@@ -1406,7 +1406,7 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="p-4 lg:p-6">
+      <CardContent className="p-3 sm:p-4 lg:p-6">
         <CreatorCardPreviewCard {...props} />
       </CardContent>
     </Card>

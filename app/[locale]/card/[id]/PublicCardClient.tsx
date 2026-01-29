@@ -44,14 +44,14 @@ export function PublicCardClient({ locale, creatorCard, messages }: PublicCardCl
   const t = (key: string) => resolveDotPath(messages, key)
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 py-3 sm:py-10">
+    <div className="min-h-screen px-4 sm:px-6 py-2 sm:py-10">
       <div className="max-w-4xl mx-auto min-w-0">
         <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
           <CreatorCardPreview
             t={t}
             locale={locale}
             className="border-0 bg-transparent"
-            headerClassName="px-4 py-2 sm:px-6 sm:py-4 border-b border-white/10"
+            headerClassName="px-4 py-1.5 sm:px-6 sm:py-4 border-b border-white/10"
             profileImageUrl={creatorCard.profileImageUrl}
             displayName={creatorCard.displayName}
             username={creatorCard.username}
