@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
 import { MobileCreatorCardLayout } from "./creator-card/MobileCreatorCardLayout"
 import { normalizeIgThumbnailUrlOrNull } from "./creator-card/useCreatorCardPreviewData"
+import type { OEmbedState } from "./creator-card/igOEmbedTypes"
 import {
   DndContext,
   closestCenter,
@@ -22,100 +23,6 @@ import {
   useSortable,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-
-// Strict oEmbed types
-type OEmbedStatus = "idle" | "loading" | "success" | "error"
-
-type OEmbedSuccess = {
-  ok: true
-  data?: {
-    thumbnail_url?: string
-    thumbnail_width?: number
-    thumbnail_height?: number
-    title?: string
-    author_name?: string
-    provider_name?: string
-  }
-  [k: string]: any
-}
-
-type OEmbedError = {
-  ok: false
-  error?: { status?: number; message?: string } | any
-  [k: string]: any
-}
-
-type OEmbedResponse = OEmbedSuccess | OEmbedError
-
-type OEmbedState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "success"; data: OEmbedResponse }
-  | { status: "error"; errorMessage?: string; httpStatus?: number }
-  | { status: "rate_limited"; retryAtMs: number; errorMessage?: string }
-
-// Strict fetch helper: NEVER returns null, always returns explicit ok/error shape
-async function fetchOEmbedStrict(url: string): Promise<OEmbedResponse> {
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000)
-    
-    const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(url)}`, {
-      method: "GET",
-      signal: controller.signal,
-      cache: "no-store",
-      headers: { "cache-control": "no-cache", pragma: "no-cache" },
-    })
-    
-    clearTimeout(timeoutId)
-
-    let json: any = null
-    try {
-      json = await res.json()
-    } catch {
-      // JSON parse failed
-    }
-
-    // If HTTP is not ok => treat as error
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: {
-          status: res.status,
-          message: json?.error?.message ?? "Failed to load Instagram preview",
-        },
-      } as OEmbedError
-    }
-
-    // If API returns ok:false => treat as error
-    if (json?.ok === false) {
-      return json as OEmbedError
-    }
-
-    // Otherwise success
-    return (json ?? { ok: true }) as OEmbedSuccess
-  } catch (e: any) {
-    // Network error, timeout, etc.
-    return {
-      ok: false,
-      error: {
-        status: 0,
-        message: e?.message ?? "Network error",
-      },
-    } as OEmbedError
-  }
-}
-
-// Safe fetch helper for non-oEmbed calls: never throws, returns null on any failure
-async function safeFetchJson<T = any>(input: RequestInfo | URL, init?: RequestInit): Promise<T | null> {
-  try {
-    const res = await fetch(input, init)
-    if (!res.ok) return null
-    return (await res.json()) as T
-  } catch {
-    return null
-  }
-}
 
 // Instagram embed preview component (reused from editor)
 function IgEmbedPreview({ url }: { url: string }) {
@@ -194,7 +101,7 @@ function SortablePreviewItem({
 }: {
   item: { id: string }
   children: React.ReactNode
-  onItemClick?: () => void
+  onItemClick?: (e: React.MouseEvent) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -229,7 +136,9 @@ function SortablePreviewItem({
           e.stopPropagation()
           return
         }
-        onItemClick?.()
+        // Prevent any default navigation/jump behavior when used inside interactive containers
+        e.preventDefault()
+        onItemClick?.(e)
       }}
     >
       {children}
@@ -433,6 +342,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
   const igModalBodyRef = useRef<HTMLDivElement>(null)
+  const pageScrollYRef = useRef<number>(0)
 
   // Reset scroll position and caption state when modal opens
   useEffect(() => {
@@ -445,6 +355,48 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
       })
     }
   }, [openIg])
+
+  // Lock background scroll + preserve scroll position while ANY modal is open
+  useEffect(() => {
+    const isOpen = Boolean(openIg || openAvatarUrl)
+    if (!isOpen) return
+    if (typeof window === "undefined") return
+
+    const body = document.body
+    const prevOverflow = body.style.overflow
+    const prevPosition = body.style.position
+    const prevTop = body.style.top
+    const prevLeft = body.style.left
+    const prevRight = body.style.right
+    const prevWidth = body.style.width
+
+    const y = window.scrollY || 0
+    pageScrollYRef.current = y
+
+    // iOS-safe: fixed body lock prevents jump when overlays open
+    body.style.overflow = "hidden"
+    body.style.position = "fixed"
+    body.style.top = `-${y}px`
+    body.style.left = "0"
+    body.style.right = "0"
+    body.style.width = "100%"
+
+    // If anything tried to scroll, restore immediately
+    window.requestAnimationFrame(() => {
+      window.scrollTo(0, y)
+    })
+
+    return () => {
+      const restoreY = pageScrollYRef.current
+      body.style.overflow = prevOverflow
+      body.style.position = prevPosition
+      body.style.top = prevTop
+      body.style.left = prevLeft
+      body.style.right = prevRight
+      body.style.width = prevWidth
+      window.scrollTo(0, restoreY)
+    }
+  }, [openAvatarUrl, openIg])
 
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
   const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
@@ -1067,7 +1019,18 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     const isVideo = item.mediaType === "video" || item.mediaType === "reel"
                     
                     return (
-                      <SortablePreviewItem key={item.id} item={item} onItemClick={() => setOpenIg({ url: normalizedUrl, thumb: thumbnailSrc, caption })}>
+                      <SortablePreviewItem
+                        key={item.id}
+                        item={item}
+                        onItemClick={(e) => {
+                          e.preventDefault()
+                          setOpenIg({ url: normalizedUrl, thumb: thumbnailSrc, caption })
+                          // Restore scroll if the tap caused any repositioning
+                          window.requestAnimationFrame(() => {
+                            window.scrollTo(0, pageScrollYRef.current || 0)
+                          })
+                        }}
+                      >
                         <div
                           data-preview-item
                           className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors cursor-pointer"

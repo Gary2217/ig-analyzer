@@ -18,11 +18,11 @@ export default function AppHeader({ locale }: { locale: string }) {
   const copy = isZh
     ? {
         back: "返回",
-        browseCreators: "瀏覽創作者名片",
+        opportunities: "合作機會",
       }
     : {
         back: "Back",
-        browseCreators: "Browse Creator Cards",
+        opportunities: "Opportunities",
       }
 
   const handleBackToResults = () => {
@@ -85,10 +85,16 @@ export default function AppHeader({ locale }: { locale: string }) {
                     <span className="hidden sm:inline">{copy.back}</span>
                     <span className="sr-only sm:hidden">{copy.back}</span>
                   </button>
-                  <Link href={`/${locale}/matchmaking`} className={BUTTON_BASE_CLASSES}>
+                  <Link
+                    href={`/${locale}/matchmaking`}
+                    className={BUTTON_BASE_CLASSES}
+                    aria-label={copy.opportunities}
+                  >
                     <Eye className="w-4 h-4" />
-                    <span className="hidden sm:inline">{copy.browseCreators}</span>
-                    <span className="sr-only sm:hidden">{copy.browseCreators}</span>
+                    <span className="hidden sm:inline">{copy.opportunities}</span>
+                    <span className="sm:hidden text-[10px] text-white/75 max-w-[92px] truncate">
+                      {copy.opportunities}
+                    </span>
                   </Link>
                 </>
               )}
