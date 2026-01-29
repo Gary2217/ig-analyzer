@@ -2686,18 +2686,23 @@
       "added": "Added",
       "emptyIg": "No Instagram posts added yet",
       "igPreviewTitle": "Instagram Post Preview",
-      "caption": "Caption",
-      "noCaption": "No caption available for this post",
       "tapToView": "Tap to view full post",
       "loadingThumbnail": "Loading preview...",
       "thumbnailError": "Failed to load preview. Please retry.",
       "retry": "Retry",
       "previewUnavailable": "Preview unavailable",
       "hints": {
-        "emptyState": "Brands usually look here first. Add 3–5 best posts.",
         "dragToReorder": "Drag to reorder",
         "mobileDragHint": "Long-press and drag to reorder items"
       }
+    },
+    "postModal": {
+      "title": "Instagram Post",
+      "captionTitle": "Caption",
+      "noCaption": "No caption available for this post",
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "openOnInstagram": "Open on Instagram"
     },
     "completion": {
       "title": "Profile Completion",

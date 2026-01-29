@@ -2665,8 +2665,6 @@
       "added": "已新增",
       "emptyIg": "尚未新增 Instagram 貼文",
       "igPreviewTitle": "Instagram 貼文預覽",
-      "caption": "貼文內容",
-      "noCaption": "此貼文沒有可顯示的文字內容",
       "tapToView": "點擊查看完整貼文",
       "loadingThumbnail": "載入預覽中...",
       "thumbnailError": "無法載入預覽，請重試",
@@ -2677,6 +2675,14 @@
         "dragToReorder": "拖曳以重新排序",
         "mobileDragHint": "長按並拖曳以重新排序項目"
       }
+    },
+    "postModal": {
+      "title": "Instagram 貼文",
+      "captionTitle": "貼文內容",
+      "noCaption": "此貼文沒有可顯示的文字內容",
+      "showMore": "顯示更多",
+      "showLess": "收起",
+      "openOnInstagram": "在 Instagram 開啟"
     },
     "completion": {
       "title": "完成度",

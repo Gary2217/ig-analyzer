@@ -427,20 +427,22 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   // Modal state for IG post preview
   const [openIg, setOpenIg] = useState<{ url: string; thumb?: string; caption?: string | null } | null>(null)
+  const [captionExpanded, setCaptionExpanded] = useState(false)
   const [openAvatarUrl, setOpenAvatarUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
   const igModalBodyRef = useRef<HTMLDivElement>(null)
 
-  // Reset scroll position when modal opens
+  // Reset scroll position and caption state when modal opens
   useEffect(() => {
     if (openIg && igModalBodyRef.current) {
       // Reset body scroll to top immediately
       requestAnimationFrame(() => {
         if (igModalBodyRef.current) {
-          igModalBodyRef.current.scrollTo({ top: 0, left: 0, behavior: "auto" })
+          igModalBodyRef.current.scrollTop = 0
         }
       })
+      setCaptionExpanded(false)
     }
   }, [openIg])
 
@@ -1323,22 +1325,22 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         </div>
       )}
 
-      {/* IG Post Preview Modal - Image Only */}
+      {/* IG Post Preview Modal - Improved Caption Readability */}
       {openIg && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur flex items-center justify-center p-3 sm:p-4" onClick={() => setOpenIg(null)}>
           <div 
-            className="w-full max-w-[520px] max-h-[90vh] rounded-2xl border border-white/10 bg-[#0b1220]/80 backdrop-blur flex flex-col overflow-hidden"
+            className="w-full max-w-[520px] max-h-[80vh] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - non-scrolling */}
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
               <div className="text-sm font-semibold text-white/85 min-w-0 break-words [overflow-wrap:anywhere]">
-                {t("creatorCard.featured.igPreviewTitle")}
+                {t("creatorCard.postModal.title")}
               </div>
               <button
                 type="button"
                 onClick={() => setOpenIg(null)}
-                className="h-9 w-9 shrink-0 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="h-9 w-9 shrink-0 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 transition-colors"
                 aria-label="Close"
                 style={{ minWidth: "36px", minHeight: "36px" }}
               >
@@ -1349,59 +1351,79 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             {/* Body - scrollable container */}
             <div 
               ref={igModalBodyRef}
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4"
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               style={{
                 overflowAnchor: "none",
                 overscrollBehavior: "contain",
                 WebkitOverflowScrolling: "touch"
               }}
             >
-              <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
-                <div className="flex items-center justify-center p-2">
-                  {openIg.thumb ? (
-                    <img
-                      src={openIg.thumb}
-                      alt="Instagram post"
-                      className="max-h-[70vh] w-full object-contain"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="py-10 text-center text-sm text-white/50">
-                      Preview unavailable
-                    </div>
-                  )}
+              {/* Image Section */}
+              <div className="px-4 pt-4">
+                <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                  <div className="flex items-center justify-center p-2">
+                    {openIg.thumb ? (
+                      <img
+                        src={openIg.thumb}
+                        alt="Instagram post"
+                        className="max-h-[50vh] w-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="py-10 text-center text-sm text-white/50">
+                        Preview unavailable
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Caption Section */}
               {openIg.caption !== undefined && (
-                <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                  <div className="text-xs font-semibold text-white/60 mb-2">
-                    {t("creatorCard.featured.caption")}
+                <div className="px-4 py-3">
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <div className="text-xs font-semibold text-white/60 mb-2">
+                      {t("creatorCard.postModal.captionTitle")}
+                    </div>
+                    {openIg.caption ? (
+                      <div>
+                        <div className={`text-sm text-white/85 whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed ${!captionExpanded ? 'line-clamp-6' : ''}`}>
+                          {openIg.caption}
+                        </div>
+                        {openIg.caption.length > 200 && (
+                          <button
+                            type="button"
+                            onClick={() => setCaptionExpanded(!captionExpanded)}
+                            className="mt-2 text-xs text-purple-400 hover:text-purple-300 font-medium transition-colors"
+                            style={{ minHeight: "24px" }}
+                          >
+                            {captionExpanded ? t("creatorCard.postModal.showLess") : t("creatorCard.postModal.showMore")}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-white/50 italic">
+                        {t("creatorCard.postModal.noCaption")}
+                      </div>
+                    )}
                   </div>
-                  {openIg.caption ? (
-                    <div className="text-sm text-white/85 whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed max-h-[200px] overflow-y-auto">
-                      {openIg.caption}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-white/50 italic">
-                      {t("creatorCard.featured.noCaption")}
-                    </div>
-                  )}
                 </div>
               )}
 
-              <a
-                href={openIg.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6d28d9] to-[#db2777] px-4 py-3 text-sm font-semibold text-white hover:brightness-110 min-w-0"
-                style={{ minHeight: "44px" }}
-              >
-                <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-                  {t("creatorCard.featured.openOnInstagram")}
-                </span>
-              </a>
+              {/* Open on Instagram Button */}
+              <div className="px-4 pb-4">
+                <a
+                  href={openIg.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6d28d9] to-[#db2777] px-4 py-3 text-sm font-semibold text-white hover:brightness-110 transition-all min-w-0"
+                  style={{ minHeight: "44px" }}
+                >
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                    {t("creatorCard.postModal.openOnInstagram")}
+                  </span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
