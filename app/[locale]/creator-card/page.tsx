@@ -56,6 +56,10 @@ type OEmbedState =
   | { status: "loading" }
   | { status: "success"; data: OEmbedResponse }
   | { status: "error"; errorMessage?: string; httpStatus?: number }
+  | { status: "rate_limited"; retryAtMs: number; errorMessage?: string }
+
+// UI-only oEmbed cooldown to avoid repeated 429 spam (per URL)
+const igOEmbedCooldownUntilMs = new Map<string, number>()
 
 // Helper to extract shortcode and build direct media URL
 function buildInstagramDirectMediaUrl(url: string): string | null {
@@ -577,6 +581,16 @@ function SortableFeaturedTile(props: {
     // Fetch oEmbed data for thumbnail using strict fetch
     const fetchOEmbed = useCallback(async () => {
       if (!isValidIgUrl || !normalizedUrl) return
+
+      const cooldownUntil = igOEmbedCooldownUntilMs.get(normalizedUrl) ?? 0
+      if (cooldownUntil > Date.now()) {
+        props.onIgOEmbedFetch(normalizedUrl, {
+          status: "rate_limited",
+          retryAtMs: cooldownUntil,
+          errorMessage: "Rate limited",
+        })
+        return
+      }
       
       // Set loading state
       props.onIgOEmbedFetch(normalizedUrl, {
@@ -587,24 +601,29 @@ function SortableFeaturedTile(props: {
         const response = await fetchOEmbedStrict(normalizedUrl)
         
         if (response.ok === false) {
+          const httpStatus = response.error?.status
+          if (httpStatus === 429) {
+            const retryAtMs = Date.now() + 15 * 60 * 1000
+            igOEmbedCooldownUntilMs.set(normalizedUrl, retryAtMs)
+            props.onIgOEmbedFetch(normalizedUrl, {
+              status: "rate_limited",
+              retryAtMs,
+              errorMessage: response.error?.message ?? "Rate limited",
+            })
+            return
+          }
           // Error response
           props.onIgOEmbedFetch(normalizedUrl, {
             status: "error",
-            httpStatus: response.error?.status,
+            httpStatus,
             errorMessage: response.error?.message ?? "Preview unavailable",
           })
-          if (process.env.NODE_ENV !== "production") {
-            console.error("[IG oEmbed Error]", { url: normalizedUrl, error: response.error })
-          }
         } else {
           // Success response
           props.onIgOEmbedFetch(normalizedUrl, {
             status: "success",
             data: response,
           })
-          if (process.env.NODE_ENV !== "production") {
-            console.log("[IG oEmbed Success]", { url: normalizedUrl, thumbnail: response.data?.thumbnail_url })
-          }
         }
       } catch (e: any) {
         // Should not happen with fetchOEmbedStrict, but handle just in case
@@ -612,9 +631,6 @@ function SortableFeaturedTile(props: {
           status: "error",
           errorMessage: e?.message ?? "Network error",
         })
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[IG oEmbed Exception]", { url: normalizedUrl, error: e })
-        }
       }
     }, [normalizedUrl, isValidIgUrl, props])
     
@@ -624,7 +640,7 @@ function SortableFeaturedTile(props: {
 
       // If we already have success/error for this URL, don't refetch automatically
       const st = props.igOEmbedCache[normalizedUrl]?.status
-      if (st === "success" || st === "error" || st === "loading") return
+      if (st === "success" || st === "error" || st === "rate_limited" || st === "loading") return
 
       if (debounceRef.current) window.clearTimeout(debounceRef.current)
       debounceRef.current = window.setTimeout(() => {
@@ -695,23 +711,6 @@ function SortableFeaturedTile(props: {
           </>
         )}
 
-        {/* Dev diagnostics */}
-        {process.env.NODE_ENV !== "production" && isValidIgUrl && (() => {
-          const thumbnailUrl = oembedData?.status === "success" && oembedData.data.ok === true 
-            ? (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url)
-            : undefined
-          const errorMsg = oembedData?.status === "error" ? oembedData.errorMessage : undefined
-          console.log("[IG Tile Render]", {
-            url: normalizedUrl,
-            status: oembedData?.status,
-            hasThumbnail: !!thumbnailUrl,
-            thumbnailLoadError,
-            error: errorMsg,
-            source: oembedData?.status === "success" ? oembedData.data.source : undefined,
-          })
-          return null
-        })()}
-
         {/* Show loading skeleton while fetching oEmbed */}
         {normalizedUrl && isValidIgUrl && oembedData?.status === "loading" ? (
           <a
@@ -726,6 +725,27 @@ function SortableFeaturedTile(props: {
               <div className="h-12 w-12 rounded-full bg-white/10" />
               <div className="h-3 w-24 rounded bg-white/10" />
             </div>
+          </a>
+        ) : normalizedUrl && isValidIgUrl && oembedData?.status === "rate_limited" ? (
+          <a
+            href={normalizedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 p-6 text-center"
+            style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            <span className="text-xs leading-tight text-white/70 break-words">
+              {activeLocale === "zh-TW"
+                ? "暫時無法載入預覽，請點擊在 Instagram 開啟"
+                : "Preview temporarily unavailable. Open in Instagram."}
+            </span>
+            <span className="text-[11px] leading-tight text-white/40 break-words">
+              {t("results.mediaKit.featured.tapToOpen")}
+            </span>
           </a>
         ) : normalizedUrl && isValidIgUrl && oembedData?.status === "error" ? (
           <a
@@ -766,9 +786,6 @@ function SortableFeaturedTile(props: {
                 decoding="async"
                 onError={() => {
                   setThumbnailLoadError(true)
-                  if (process.env.NODE_ENV !== "production") {
-                    console.error("[IG Thumbnail Load Failed]", { url: normalizedUrl, thumbnailUrl: item.thumbnailUrl || (oembedData?.status === "success" ? oembedData.data.thumbnailUrl : undefined) })
-                  }
                 }}
               />
             ) : (
