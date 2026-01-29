@@ -3452,7 +3452,7 @@ export default function CreatorCardPage() {
                                   {pendingIg && pendingIg.status !== "added" && (
                                     <button
                                       type="button"
-                                      onClick={() => {
+                                      onClick={async () => {
                                         // Normalize and validate URL
                                         const urlToAdd = pendingIg?.url || newIgUrl.trim()
                                         if (!urlToAdd) return
@@ -3469,55 +3469,65 @@ export default function CreatorCardPage() {
                                           const existingUrl = item.url.trim().replace(/\/$/, "")
                                           return existingUrl === normalizedUrl
                                         })
-                                        
+
                                         if (isDuplicate) {
                                           showToast(activeLocale === "zh-TW" ? "已新增過這則貼文" : "This post is already added")
                                           return
                                         }
-                                        
-                                        // Ensure cache entry exists before adding (preserve thumbnail)
-                                        if (pendingIg?.oembed?.thumbnailUrl && !igOEmbedCache[normalizedUrl]) {
+
+                                        // IMPORTANT: resolve preview FIRST, then store thumbnailUrl/mediaType in the item
+                                        let thumbnailUrl: string | undefined
+                                        let mediaType: FeaturedItem["mediaType"] | undefined
+                                        try {
+                                          const preview = await resolveIgPreview(normalizedUrl)
+                                          thumbnailUrl = preview.thumbnailUrl || undefined
+                                          mediaType = (preview.mediaType || undefined) as FeaturedItem["mediaType"] | undefined
+
+                                          // Write-through cache on success
                                           setIgOEmbedCache(prev => ({
                                             ...prev,
                                             [normalizedUrl]: {
                                               status: "success",
-                                              data: pendingIg.oembed
-                                            }
+                                              data: {
+                                                ok: true,
+                                                thumbnailUrl,
+                                                mediaType,
+                                              } as any,
+                                            },
                                           }))
+                                        } catch {
+                                          // Proceed without thumbnail; left-side card should show fallback
                                         }
-                                        
-                                        // Extract thumbnailUrl and mediaType from pendingIg or cache
-                                        const thumbnailUrl = pendingIg?.oembed?.thumbnailUrl || 
-                                          (igOEmbedCache[normalizedUrl]?.status === "success" && igOEmbedCache[normalizedUrl].data.ok === true
-                                            ? (igOEmbedCache[normalizedUrl].data.thumbnailUrl || igOEmbedCache[normalizedUrl].data.data?.thumbnail_url)
-                                            : undefined)
-                                        
-                                        const mediaType = pendingIg?.oembed?.mediaType || 
-                                          (igOEmbedCache[normalizedUrl]?.status === "success" && igOEmbedCache[normalizedUrl].data.ok === true
-                                            ? igOEmbedCache[normalizedUrl].data.mediaType
-                                            : undefined)
-                                        
-                                        // Add new item with functional setState
+
+                                        // Add new item
                                         const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                        const newItem = { id, type: "ig" as const, url: normalizedUrl, brand: "", collabType: "", caption: "", isAdded: true, thumbnailUrl, mediaType }
-                                        
+                                        const newItem: FeaturedItem = {
+                                          id,
+                                          type: "ig",
+                                          url: normalizedUrl,
+                                          brand: "",
+                                          collabType: "",
+                                          caption: "",
+                                          isAdded: true,
+                                          thumbnailUrl,
+                                          mediaType,
+                                        }
+
                                         setFeaturedItems(prev => {
                                           const nextItems = [newItem, ...prev]
-                                          // Persist immediately to localStorage
                                           persistDraftNow(nextItems)
                                           return nextItems
                                         })
-                                        
-                                        // Show "Added" state (keep pendingIg to preserve thumbnail in "added" state)
-                                        setPendingIg({ ...pendingIg, status: "added" })
+
+                                        setPendingIg({ ...pendingIg, status: "added", oembed: { ...(pendingIg as any)?.oembed, thumbnailUrl, mediaType } })
                                         markDirty()
-                                        
+
                                         // Reset after delay
                                         setTimeout(() => {
                                           setPendingIg(null)
                                           setNewIgUrl("")
                                         }, 1500)
-                                        
+
                                         // Scroll to show newly added item
                                         setTimeout(() => {
                                           const el = featuredCarouselRef.current
