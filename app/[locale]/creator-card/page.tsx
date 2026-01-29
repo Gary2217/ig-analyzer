@@ -471,6 +471,7 @@ function buildInstagramEmbedSrc(inputUrl: string): string | null {
 function SortableFeaturedTile(props: {
   item: FeaturedItem
   t: (key: string) => string
+  activeLocale: "zh-TW" | "en"
   onReplace: (id: string) => void
   onRemove: (id: string) => void
   onEdit: (id: string) => void
@@ -483,9 +484,8 @@ function SortableFeaturedTile(props: {
   setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
   markDirty: () => void
   suppressClick: boolean
-  activeLocale: "zh-TW" | "en"
 }) {
-  const { item, t, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
+  const { item, t, activeLocale, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
 
   const itemType = item.type || "media"
