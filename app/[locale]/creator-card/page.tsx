@@ -1250,6 +1250,13 @@ export default function CreatorCardPage() {
   useEffect(() => {
     set__overlayMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      const first = featuredItems?.[0]
+      console.log("[C props] first.url=", first?.url, "first.thumb=", first?.thumbnailUrl)
+    }
+  }, [featuredItems])
   
   // Initialize featured carousel scroll state
   useEffect(() => {
@@ -3208,7 +3215,7 @@ export default function CreatorCardPage() {
                       {/* Inline URL input row - only when isAddIgOpen === true */}
                       {isAddIgOpen && (
                         <div className="mb-3 p-3 rounded-xl border border-white/10 bg-white/5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                             <input
                               type="url"
                               value={newIgUrl}
@@ -3269,7 +3276,7 @@ export default function CreatorCardPage() {
                                 }, 400)
                               }}
                               placeholder={t("creatorCard.featured.igUrl")}
-                              className="flex-1 px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
+                              className="w-full sm:flex-1 px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none min-w-0"
                               style={{ minHeight: "44px" }}
                             />
                             <button
@@ -3281,6 +3288,7 @@ export default function CreatorCardPage() {
                               }}
                               className="shrink-0 p-2 rounded-lg hover:bg-white/10 transition-colors"
                               aria-label="Close"
+                              style={{ minWidth: "44px", minHeight: "44px" }}
                             >
                               <X className="h-4 w-4 text-white/60" />
                             </button>
@@ -3513,8 +3521,18 @@ export default function CreatorCardPage() {
                                           mediaType,
                                         }
 
+                                        if (process.env.NODE_ENV !== "production") {
+                                          console.log("[A add] url=", newItem.url, "thumb=", newItem.thumbnailUrl, "type=", newItem.mediaType)
+                                        }
+
                                         setFeaturedItems(prev => {
                                           const nextItems = [newItem, ...prev]
+
+                                          if (process.env.NODE_ENV !== "production") {
+                                            const first = nextItems?.[0]
+                                            console.log("[B state] first.url=", first?.url, "first.thumb=", first?.thumbnailUrl)
+                                          }
+
                                           persistDraftNow(nextItems)
                                           return nextItems
                                         })
