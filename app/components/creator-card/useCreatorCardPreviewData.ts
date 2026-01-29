@@ -54,15 +54,21 @@ function normalizeFeaturedItems(raw: any): any[] {
       
       // Extract raw thumbnail from various possible keys (for uploaded/local items)
       const rawThumb = pick<string>(it, "thumbnailUrl", "thumbnail_url", "thumbUrl", "thumb_url", "imageUrl", "image_url", "mediaUrl", "media_url")
+      const explicitNullThumb = (it as any).thumbnailUrl === null || (it as any).thumbnail_url === null
       
       // Determine thumbnail URL based on what's available
-      let thumbnailUrl: string | undefined
-      if (url) {
-        // IG post: proxy through our endpoint to avoid domain/CSP issues
-        thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(url)}`
-      } else if (rawThumb) {
-        // Uploaded/local item: use direct thumbnail
-        thumbnailUrl = rawThumb
+      let thumbnailUrl: string | null = null
+      const cleanedRawThumb = typeof rawThumb === "string" ? rawThumb.trim() : ""
+
+      if (explicitNullThumb) {
+        // Explicitly opted-out / failed preview: do not resurrect.
+        thumbnailUrl = null
+      } else if (cleanedRawThumb.startsWith("/api/ig/thumbnail?url=")) {
+        // Keep valid proxy thumbnail exactly.
+        thumbnailUrl = cleanedRawThumb
+      } else {
+        // Any other value is considered invalid for IG thumbnails.
+        thumbnailUrl = null
       }
       
       // Keep item if it has either a URL or a thumbnail

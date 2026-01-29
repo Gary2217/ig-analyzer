@@ -305,8 +305,13 @@ type FeaturedItem = {
   title?: string
   text?: string
   isAdded?: boolean
-  thumbnailUrl?: string
+  thumbnailUrl?: string | null
 }
+
+const isValidIgThumbnailProxyUrl = (v: unknown): v is string =>
+  typeof v === "string" && v.startsWith("/api/ig/thumbnail?url=")
+
+const normalizeIgThumbnailUrlOrNull = (v: unknown): string | null => (isValidIgThumbnailProxyUrl(v) ? v : null)
 
 function IgEmbedPreview({ url }: { url: string }) {
   const embedRef = useRef<HTMLDivElement>(null)
@@ -1250,13 +1255,6 @@ export default function CreatorCardPage() {
   useEffect(() => {
     set__overlayMounted(true)
   }, [])
-
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "production") {
-      const first = featuredItems?.[0]
-      console.log("[C props] first.url=", first?.url, "first.thumb=", first?.thumbnailUrl)
-    }
-  }, [featuredItems])
   
   // Initialize featured carousel scroll state
   useEffect(() => {
@@ -1539,7 +1537,7 @@ export default function CreatorCardPage() {
       for (const it of items) {
         if (!it || it.type !== "ig") continue
         const url = typeof it.url === "string" ? it.url.trim().replace(/\/$/, "") : ""
-        const thumb = typeof it.thumbnailUrl === "string" ? it.thumbnailUrl : ""
+        const thumb = normalizeIgThumbnailUrlOrNull((it as any).thumbnailUrl)
         if (url && thumb) map[url] = thumb
       }
       return map
@@ -1972,7 +1970,7 @@ export default function CreatorCardPage() {
         caption: item.caption || "",
         title: item.title || "",
         text: item.text || "",
-        thumbnailUrl: item.thumbnailUrl || undefined,
+        thumbnailUrl: item.type === "ig" ? normalizeIgThumbnailUrlOrNull(item.thumbnailUrl) : (typeof item.thumbnailUrl === "string" ? item.thumbnailUrl : null),
       }))
       
       setFeaturedItems(restoredItems)
@@ -2135,7 +2133,7 @@ export default function CreatorCardPage() {
               type: "ig",
               url: x.url || "",
               caption: x.caption || "",
-              thumbnailUrl: x.thumbnailUrl || undefined,
+              thumbnailUrl: x.thumbnailUrl ?? null,
               order: idx,
             }
           }
@@ -2166,7 +2164,7 @@ export default function CreatorCardPage() {
               type: "ig",
               url: x.url || "",
               caption: x.caption || "",
-              thumbnailUrl: x.thumbnailUrl || undefined,
+              thumbnailUrl: x.thumbnailUrl ?? null,
               order: idx,
             }
           }
@@ -3215,7 +3213,7 @@ export default function CreatorCardPage() {
                       {/* Inline URL input row - only when isAddIgOpen === true */}
                       {isAddIgOpen && (
                         <div className="mb-3 p-3 rounded-xl border border-white/10 bg-white/5">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+                          <div className="flex items-center gap-2">
                             <input
                               type="url"
                               value={newIgUrl}
@@ -3276,7 +3274,7 @@ export default function CreatorCardPage() {
                                 }, 400)
                               }}
                               placeholder={t("creatorCard.featured.igUrl")}
-                              className="w-full sm:flex-1 px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none min-w-0"
+                              className="flex-1 px-3 py-2 text-sm bg-slate-950/40 border border-white/10 rounded-lg text-slate-100 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-white/20 focus:outline-none"
                               style={{ minHeight: "44px" }}
                             />
                             <button
@@ -3288,7 +3286,6 @@ export default function CreatorCardPage() {
                               }}
                               className="shrink-0 p-2 rounded-lg hover:bg-white/10 transition-colors"
                               aria-label="Close"
-                              style={{ minWidth: "44px", minHeight: "44px" }}
                             >
                               <X className="h-4 w-4 text-white/60" />
                             </button>
@@ -3484,11 +3481,11 @@ export default function CreatorCardPage() {
                                         }
 
                                         // IMPORTANT: resolve preview FIRST, then store thumbnailUrl/mediaType in the item
-                                        let thumbnailUrl: string | undefined
+                                        let thumbnailUrl: string | null = null
                                         let mediaType: FeaturedItem["mediaType"] | undefined
                                         try {
                                           const preview = await resolveIgPreview(normalizedUrl)
-                                          thumbnailUrl = preview.thumbnailUrl || undefined
+                                          thumbnailUrl = normalizeIgThumbnailUrlOrNull(preview.thumbnailUrl)
                                           mediaType = (preview.mediaType || undefined) as FeaturedItem["mediaType"] | undefined
 
                                           // Write-through cache on success
@@ -3498,7 +3495,7 @@ export default function CreatorCardPage() {
                                               status: "success",
                                               data: {
                                                 ok: true,
-                                                thumbnailUrl,
+                                                thumbnailUrl: thumbnailUrl ?? undefined,
                                                 mediaType,
                                               } as any,
                                             },
@@ -3521,18 +3518,8 @@ export default function CreatorCardPage() {
                                           mediaType,
                                         }
 
-                                        if (process.env.NODE_ENV !== "production") {
-                                          console.log("[A add] url=", newItem.url, "thumb=", newItem.thumbnailUrl, "type=", newItem.mediaType)
-                                        }
-
                                         setFeaturedItems(prev => {
                                           const nextItems = [newItem, ...prev]
-
-                                          if (process.env.NODE_ENV !== "production") {
-                                            const first = nextItems?.[0]
-                                            console.log("[B state] first.url=", first?.url, "first.thumb=", first?.thumbnailUrl)
-                                          }
-
                                           persistDraftNow(nextItems)
                                           return nextItems
                                         })
