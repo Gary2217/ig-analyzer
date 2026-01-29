@@ -18,11 +18,11 @@ export default function AppHeader({ locale }: { locale: string }) {
   const copy = isZh
     ? {
         back: "返回",
-        opportunities: "合作機會",
+        opportunities: "名片展示區",
       }
     : {
         back: "Back",
-        opportunities: "Opportunities",
+        opportunities: "Card showcase",
       }
 
   const handleBackToResults = () => {
