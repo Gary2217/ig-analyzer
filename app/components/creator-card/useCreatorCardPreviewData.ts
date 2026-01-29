@@ -70,8 +70,10 @@ function normalizeFeaturedItems(raw: any): any[] {
       // Determine thumbnail URL based on what's available
       const thumbnailUrl = explicitNullThumb ? null : normalizeIgThumbnailUrlOrNull(rawThumb)
       
-      // Keep item if it has either a URL or a thumbnail
-      if (!url && !thumbnailUrl) return null
+      // Presence rule:
+      // - IG items must be kept as long as they have a URL, regardless of thumbnail validity.
+      // - thumbnailUrl controls rendering only.
+      if (!url) return null
       
       const type = pick<string>(it, "type", "media_type") ?? "ig_post"
       const caption = pick<string>(it, "caption")

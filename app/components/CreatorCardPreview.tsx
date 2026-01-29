@@ -600,9 +600,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   const featuredCount = featuredTiles.length
 
-  // Build sortable IG items array (only added IG items)
+  // Build sortable IG items array (presence depends only on type + url)
   const sortableIg = useMemo(() => {
-    return (featuredItems || []).filter(x => x.type === "ig" && x.isAdded === true)
+    return (featuredItems || []).filter((x) => x?.type === "ig" && Boolean(normalizeUrl(x.url)))
   }, [featuredItems])
 
   const sortableIds = useMemo(() => sortableIg.map(x => x.id), [sortableIg])
