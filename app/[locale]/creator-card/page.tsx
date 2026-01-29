@@ -3118,17 +3118,6 @@ export default function CreatorCardPage() {
                   key: "featured",
                   titleZh: "精選貼文",
                   titleEn: "Featured",
-                  headerAction: () => (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddIgOpen(v => !v)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-md border border-white/15 bg-white/5 hover:bg-white/10 transition-colors"
-                      style={{ pointerEvents: 'auto' }}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>{t("creatorCard.featured.addPost")}</span>
-                    </button>
-                  ),
                   render: () => (
                     <>
                       {/* Legacy file input - hidden, no longer used for IG-only featured */}
@@ -3474,19 +3463,12 @@ export default function CreatorCardPage() {
                             >
                               {/* Persistent Add Placeholder Tile - always first */}
                               <div data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
-                                <div className="relative w-full min-h-[200px] p-4 rounded-lg border border-white/10 bg-white/5 shadow-sm transition-colors space-y-3 hover:border-white/20 hover:bg-white/10">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Plus className="h-4 w-4 text-white/60" />
-                                    <span className="text-xs font-semibold text-white/60 break-words [overflow-wrap:anywhere]">
-                                      {activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
-                                    </span>
-                                  </div>
-                                  
+                                <div className="group relative w-full p-4 rounded-xl border border-white/10 bg-white/5 shadow-sm transition-colors space-y-4 hover:border-white/20 hover:bg-white/10">
                                   <button
                                     type="button"
                                     onClick={() => setIsAddIgOpen(true)}
-                                    className="relative w-full rounded-lg bg-slate-950/40 hover:bg-white/5 transition-colors overflow-hidden cursor-pointer"
-                                    style={{ aspectRatio: "4 / 5", minHeight: "44px" }}
+                                    className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer"
+                                    style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px", pointerEvents: 'auto' }}
                                     aria-label={activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
                                   >
                                     {pendingIg?.status === "loading" ? (
@@ -3535,9 +3517,9 @@ export default function CreatorCardPage() {
                                         <Plus className="h-6 w-6 text-white/30 mt-2" />
                                       </div>
                                     ) : (
-                                      <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                                      <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-center px-6">
                                         <Plus className="h-10 w-10 text-white/30" />
-                                        <div className="text-xs font-medium text-white/50">
+                                        <div className="text-xs font-semibold text-white/70">
                                           {activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
                                         </div>
                                       </div>
