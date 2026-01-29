@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Plus, Sparkles, X, GripVertical } from "luci
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
 import { MobileCreatorCardLayout } from "./creator-card/MobileCreatorCardLayout"
+import { normalizeIgThumbnailUrlOrNull } from "./creator-card/useCreatorCardPreviewData"
 import {
   DndContext,
   closestCenter,
@@ -564,7 +565,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         ? (featuredItems as any).items
         : []
     
-    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; mediaType?: "image" | "video" | "reel" | "unknown"; title?: string; text?: string; isAdded?: boolean; thumbnailUrl?: string }> = []
+    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; mediaType?: "image" | "video" | "reel" | "unknown"; title?: string; text?: string; isAdded?: boolean; thumbnailUrl?: string | null }> = []
 
     if (rawItems.length > 0) {
       for (const item of rawItems) {
@@ -580,7 +581,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           title: typeof item?.title === "string" ? item.title.trim() : undefined,
           text: typeof item?.text === "string" ? item.text.trim() : undefined,
           isAdded: typeof item?.isAdded === "boolean" ? item.isAdded : undefined,
-          thumbnailUrl: typeof item?.thumbnailUrl === "string" ? item.thumbnailUrl.trim() : undefined,
+          thumbnailUrl: item?.type === "ig" ? normalizeIgThumbnailUrlOrNull(item?.thumbnailUrl) : (typeof item?.thumbnailUrl === "string" ? item.thumbnailUrl.trim() : null),
         })
       }
       return out
@@ -1060,7 +1061,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     
                     // Use pre-computed thumbnailUrl from item (set by normalizeFeaturedItems in hook)
                     // This is already set to /api/ig/thumbnail?url=... for IG posts or direct URL for uploaded items
-                    const thumbnailSrc = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl : undefined
+                    const thumbnailSrc = normalizeIgThumbnailUrlOrNull(item.thumbnailUrl) ?? undefined
                     const caption = typeof item.caption === "string" ? item.caption : null
                     const isVideo = item.mediaType === "video" || item.mediaType === "reel"
                     
@@ -1083,9 +1084,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                               decoding="async"
                               onError={() => {
                                 setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: true }))
-                                if (process.env.NODE_ENV !== "production") {
-                                  console.error("[Preview IG Thumbnail Load Failed]", { url: normalizedUrl, thumbnailSrc })
-                                }
                               }}
                             />
                             {isVideo && (
@@ -1373,9 +1371,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               <div className="px-4 pt-4">
                 <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
                   <div className="flex items-center justify-center p-2">
-                    {openIg.thumb ? (
+                    {normalizeIgThumbnailUrlOrNull(openIg.thumb) ? (
                       <img
-                        src={openIg.thumb}
+                        src={normalizeIgThumbnailUrlOrNull(openIg.thumb) as string}
                         alt="Instagram post"
                         className="max-h-[50vh] w-full object-contain"
                         referrerPolicy="no-referrer"

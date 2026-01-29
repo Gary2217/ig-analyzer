@@ -43,6 +43,17 @@ function pick<T = any>(obj: any, ...keys: string[]): T | undefined {
   return undefined
 }
 
+export function isValidIgThumbnailProxyUrl(v: unknown): v is string {
+  return typeof v === "string" && v.startsWith("/api/ig/thumbnail?url=")
+}
+
+export function normalizeIgThumbnailUrlOrNull(v: unknown): string | null {
+  if (typeof v !== "string") return null
+  const s = v.trim()
+  if (!s) return null
+  return isValidIgThumbnailProxyUrl(s) ? s : null
+}
+
 function normalizeFeaturedItems(raw: any): any[] {
   const arr = Array.isArray(raw) ? raw : []
   return arr
@@ -57,19 +68,7 @@ function normalizeFeaturedItems(raw: any): any[] {
       const explicitNullThumb = (it as any).thumbnailUrl === null || (it as any).thumbnail_url === null
       
       // Determine thumbnail URL based on what's available
-      let thumbnailUrl: string | null = null
-      const cleanedRawThumb = typeof rawThumb === "string" ? rawThumb.trim() : ""
-
-      if (explicitNullThumb) {
-        // Explicitly opted-out / failed preview: do not resurrect.
-        thumbnailUrl = null
-      } else if (cleanedRawThumb.startsWith("/api/ig/thumbnail?url=")) {
-        // Keep valid proxy thumbnail exactly.
-        thumbnailUrl = cleanedRawThumb
-      } else {
-        // Any other value is considered invalid for IG thumbnails.
-        thumbnailUrl = null
-      }
+      const thumbnailUrl = explicitNullThumb ? null : normalizeIgThumbnailUrlOrNull(rawThumb)
       
       // Keep item if it has either a URL or a thumbnail
       if (!url && !thumbnailUrl) return null

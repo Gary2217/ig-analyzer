@@ -20,7 +20,7 @@ import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
-import { useCreatorCardPreviewData } from "../../components/creator-card/useCreatorCardPreviewData"
+import { normalizeIgThumbnailUrlOrNull, useCreatorCardPreviewData } from "../../components/creator-card/useCreatorCardPreviewData"
 import { CreatorCardPreviewShell } from "../../components/creator-card/CreatorCardPreviewShell"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 
@@ -307,11 +307,6 @@ type FeaturedItem = {
   isAdded?: boolean
   thumbnailUrl?: string | null
 }
-
-const isValidIgThumbnailProxyUrl = (v: unknown): v is string =>
-  typeof v === "string" && v.startsWith("/api/ig/thumbnail?url=")
-
-const normalizeIgThumbnailUrlOrNull = (v: unknown): string | null => (isValidIgThumbnailProxyUrl(v) ? v : null)
 
 function IgEmbedPreview({ url }: { url: string }) {
   const embedRef = useRef<HTMLDivElement>(null)
