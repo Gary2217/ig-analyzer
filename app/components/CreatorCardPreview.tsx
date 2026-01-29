@@ -1397,10 +1397,10 @@ export function CreatorCardPreview(props: CreatorCardPreviewProps) {
   return (
     <Card id={id} className={"min-w-0 " + (className ?? "")}>
       <CardHeader className={headerClassName}>
-        <div className="w-full flex flex-wrap items-start sm:items-center gap-2">
+        <div className="w-full flex flex-wrap items-center gap-2">
           <div className="min-w-0">
             <CardTitle className="text-base sm:text-xl font-bold text-white min-w-0 truncate leading-snug sm:leading-tight">{t("results.creatorCardPreview.title")}</CardTitle>
-            <p className="mt-0 text-[10px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">{t("results.creatorCardPreview.subtitle")}</p>
+            <p className="mt-0.5 text-[10px] sm:text-sm text-slate-400 leading-snug min-w-0 truncate">{t("results.creatorCardPreview.subtitle")}</p>
           </div>
           {actions ? <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{actions}</div> : null}
         </div>
