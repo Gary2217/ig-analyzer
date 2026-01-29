@@ -57,20 +57,69 @@ type OEmbedState =
   | { status: "success"; data: OEmbedResponse }
   | { status: "error"; errorMessage?: string; httpStatus?: number }
 
-// Resolve IG preview: fetches oEmbed data with thumbnailUrl and mediaType
-async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: string | null; mediaType: string | null }> {
-  const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, {
-    method: "GET",
-    headers: { "Accept": "application/json" },
-    cache: "no-store",
-  })
-  if (!res.ok) throw new Error(`oembed_failed_${res.status}`)
-  const data = await res.json()
-  // Expect: { ok: true, thumbnailUrl, mediaType, ... }
-  return {
-    thumbnailUrl: typeof data.thumbnailUrl === "string" ? data.thumbnailUrl : null,
-    mediaType: typeof data.mediaType === "string" ? data.mediaType : null,
+// Helper to extract shortcode and build direct media URL
+function buildInstagramDirectMediaUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const parts = parsed.pathname.split("/").filter(Boolean)
+    const kind = parts[0]
+    const shortcode = parts[1]
+    if (!shortcode) return null
+    return `https://www.instagram.com/${kind}/${shortcode}/media/?size=l`
+  } catch {
+    return null
   }
+}
+
+// Resolve IG preview: fetches thumbnail FIRST (critical path), then optionally tries oEmbed (non-blocking)
+async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: string | null; mediaType: string | null }> {
+  // 1) Always try direct media URL first (critical path for thumbnail)
+  const directMediaUrl = buildInstagramDirectMediaUrl(normalizedUrl)
+  let thumbnailUrl: string | null = null
+  let mediaType: string | null = null
+
+  if (directMediaUrl) {
+    try {
+      // Verify the direct media URL is accessible
+      const thumbRes = await fetch(directMediaUrl, { method: "HEAD" })
+      if (thumbRes.ok) {
+        thumbnailUrl = directMediaUrl
+        // Infer mediaType from URL path
+        if (normalizedUrl.includes("/reel/")) {
+          mediaType = "reel"
+        } else if (normalizedUrl.includes("/tv/")) {
+          mediaType = "video"
+        } else {
+          mediaType = "image"
+        }
+      }
+    } catch {
+      // Ignore thumbnail fetch errors, will try oEmbed fallback
+    }
+  }
+
+  // 2) Try oEmbed as optional enhancement (non-blocking)
+  // Only if thumbnail failed or to get more accurate mediaType
+  if (!thumbnailUrl) {
+    try {
+      const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, {
+        method: "GET",
+        headers: { "Accept": "application/json" },
+        cache: "no-store",
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.ok && data.thumbnailUrl) {
+          thumbnailUrl = data.thumbnailUrl
+          mediaType = data.mediaType || mediaType
+        }
+      }
+    } catch {
+      // Ignore oEmbed errors - thumbnail is what matters
+    }
+  }
+
+  return { thumbnailUrl, mediaType }
 }
 
 // Strict fetch helper: NEVER returns null, always returns explicit ok/error shape
@@ -409,15 +458,6 @@ function extractInstagramShortcode(inputUrl: string): { kind: string; code: stri
   } catch {
     return null
   }
-}
-
-// Helper to generate direct Instagram media URL (no oEmbed required)
-function buildInstagramDirectMediaUrl(inputUrl: string): string | null {
-  const extracted = extractInstagramShortcode(inputUrl)
-  if (!extracted) return null
-  
-  // Direct media URL format: https://www.instagram.com/p/{code}/media/?size=l
-  return `https://www.instagram.com/${extracted.kind}/${extracted.code}/media/?size=l`
 }
 
 // Helper to build Instagram embed iframe src (used only for modal)
