@@ -3464,6 +3464,10 @@ export default function CreatorCardPage() {
                               {/* Persistent Add Placeholder Tile - always first */}
                               <div data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
                                 <div className="group relative w-full p-4 rounded-xl border border-white/10 bg-white/5 shadow-sm transition-colors space-y-4 hover:border-white/20 hover:bg-white/10">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold text-white/60">{t("creatorCard.featured.igItem")}</span>
+                                    <div className="shrink-0 w-[22px] h-[22px]" aria-hidden="true" />
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={() => setIsAddIgOpen(true)}
@@ -3525,12 +3529,13 @@ export default function CreatorCardPage() {
                                       </div>
                                     )}
                                   </button>
-                                  
-                                  {/* Add button below preview tile */}
-                                  {pendingIg && pendingIg.status !== "added" && (
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
+
+                                  <div>
+                                    {/* Add button below preview tile */}
+                                    {pendingIg && pendingIg.status !== "added" ? (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
                                         // Normalize and validate URL
                                         const urlToAdd = pendingIg?.url || newIgUrl.trim()
                                         if (!urlToAdd) return
@@ -3615,16 +3620,21 @@ export default function CreatorCardPage() {
                                             items[1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
                                           }
                                         }, 100)
-                                      }}
-                                      disabled={pendingIg.status === "loading" || !newIgUrl.trim()}
-                                      className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                      style={{ minHeight: "44px" }}
-                                    >
-                                      {pendingIg.status === "loading" 
-                                        ? (activeLocale === "zh-TW" ? "載入中..." : "Loading...") 
-                                        : (activeLocale === "zh-TW" ? "新增" : "Add")}
-                                    </button>
-                                  )}
+                                        }}
+                                        disabled={pendingIg.status === "loading" || !newIgUrl.trim()}
+                                        className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        style={{ minHeight: "44px" }}
+                                      >
+                                        {pendingIg.status === "loading" 
+                                          ? (activeLocale === "zh-TW" ? "載入中..." : "Loading...") 
+                                          : (activeLocale === "zh-TW" ? "新增" : "Add")}
+                                      </button>
+                                    ) : (
+                                      <div className="text-xs font-semibold text-emerald-400/80 opacity-0 select-none" aria-hidden="true">
+                                        ✓ {activeLocale === "zh-TW" ? "已新增" : "Added"}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
 
