@@ -68,8 +68,9 @@ function normalizeFeaturedItems(raw: any): any[] {
       // Keep item if it has either a URL or a thumbnail
       if (!url && !thumbnailUrl) return null
       
-      const type = pick<string>(it, "type", "mediaType", "media_type") ?? "ig_post"
+      const type = pick<string>(it, "type", "media_type") ?? "ig_post"
       const caption = pick<string>(it, "caption")
+      const mediaType = pick<string>(it, "mediaType", "media_type")
       
       return {
         ...it,
@@ -77,6 +78,7 @@ function normalizeFeaturedItems(raw: any): any[] {
         url: url || undefined,
         thumbnailUrl,
         caption: caption || null,
+        mediaType: mediaType || null,
       }
     })
     .filter(Boolean) as any[]

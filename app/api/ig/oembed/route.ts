@@ -5,6 +5,7 @@ export const runtime = "nodejs"
 type OEmbedSuccessResponse = {
   ok: true
   thumbnailUrl: string
+  mediaType: "image" | "video" | "reel" | "unknown"
   title?: string
   source: "oembed" | "og"
   data: {
@@ -13,6 +14,7 @@ type OEmbedSuccessResponse = {
     thumbnail_height: number
     author_name: string
     provider_name: string
+    type?: string
   }
 }
 
@@ -25,6 +27,26 @@ type OEmbedErrorResponse = {
 }
 
 type OEmbedResponse = OEmbedSuccessResponse | OEmbedErrorResponse
+
+// Helper function to detect media type from URL and oEmbed data
+function detectMediaType(url: string, oembedType?: string): "image" | "video" | "reel" | "unknown" {
+  // Check URL path for /reel/
+  if (url.includes("/reel/")) {
+    return "reel"
+  }
+  
+  // Check oEmbed type field
+  if (oembedType === "video") {
+    return "video"
+  }
+  
+  // Default to image for /p/ posts
+  if (url.includes("/p/")) {
+    return "image"
+  }
+  
+  return "unknown"
+}
 
 // Helper function to scrape og:image from Instagram post HTML
 async function scrapeOgImage(url: string): Promise<{ thumbnailUrl: string; title?: string } | null> {
@@ -127,6 +149,7 @@ export async function GET(request: NextRequest) {
         const successResponse: OEmbedSuccessResponse = {
           ok: true,
           thumbnailUrl: ogData.thumbnailUrl,
+          mediaType: detectMediaType(url),
           title: ogData.title,
           source: "og",
           data: {
@@ -179,6 +202,7 @@ export async function GET(request: NextRequest) {
         const successResponse: OEmbedSuccessResponse = {
           ok: true,
           thumbnailUrl: ogData.thumbnailUrl,
+          mediaType: detectMediaType(url),
           title: ogData.title,
           source: "og",
           data: {
@@ -228,6 +252,7 @@ export async function GET(request: NextRequest) {
     const successResponse: OEmbedSuccessResponse = {
       ok: true,
       thumbnailUrl: data.thumbnail_url,
+      mediaType: detectMediaType(url, data.type),
       title: data.author_name,
       source: "oembed",
       data: {
@@ -236,6 +261,7 @@ export async function GET(request: NextRequest) {
         thumbnail_height: data.thumbnail_height || 640,
         author_name: data.author_name || "",
         provider_name: data.provider_name || "Instagram",
+        type: data.type,
       },
     }
 

@@ -313,7 +313,7 @@ export type CreatorCardPreviewProps = {
 
   contact?: unknown
 
-  featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null; caption?: string | null; type?: string | null; title?: string | null; text?: string | null; isAdded?: boolean | null; thumbnailUrl?: string | null }[]
+  featuredItems?: { id: string; url: string; brand?: string | null; collabType?: string | null; caption?: string | null; type?: string | null; mediaType?: "image" | "video" | "reel" | "unknown" | null; title?: string | null; text?: string | null; isAdded?: boolean | null; thumbnailUrl?: string | null }[]
   onReorderIgIds?: (nextIgIds: string[]) => void
 
   featuredImageUrls?: (string | null)[]
@@ -566,7 +566,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         ? (featuredItems as any).items
         : []
     
-    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; title?: string; text?: string; isAdded?: boolean; thumbnailUrl?: string }> = []
+    const out: Array<{ id: string; url: string; brand: string; collabType: string; caption?: string; type?: string; mediaType?: "image" | "video" | "reel" | "unknown"; title?: string; text?: string; isAdded?: boolean; thumbnailUrl?: string }> = []
 
     if (rawItems.length > 0) {
       for (const item of rawItems) {
@@ -578,6 +578,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           collabType: typeof item?.collabType === "string" ? item.collabType.trim() : "",
           caption: typeof item?.caption === "string" ? item.caption.trim() : undefined,
           type: typeof item?.type === "string" ? item.type.trim() : undefined,
+          mediaType: typeof item?.mediaType === "string" && ["image", "video", "reel", "unknown"].includes(item.mediaType) ? item.mediaType as "image" | "video" | "reel" | "unknown" : undefined,
           title: typeof item?.title === "string" ? item.title.trim() : undefined,
           text: typeof item?.text === "string" ? item.text.trim() : undefined,
           isAdded: typeof item?.isAdded === "boolean" ? item.isAdded : undefined,
@@ -1063,6 +1064,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     // This is already set to /api/ig/thumbnail?url=... for IG posts or direct URL for uploaded items
                     const thumbnailSrc = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl : undefined
                     const caption = typeof item.caption === "string" ? item.caption : null
+                    const isVideo = item.mediaType === "video" || item.mediaType === "reel"
                     
                     return (
                       <SortablePreviewItem key={item.id} item={item} onItemClick={() => setOpenIg({ url: normalizedUrl, thumb: thumbnailSrc, caption })}>
@@ -1072,21 +1074,32 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                           style={{ aspectRatio: "4 / 5" }}
                         >
                         {thumbnailSrc && !thumbnailLoadErrors[normalizedUrl] ? (
-                          <img
-                            key={retryKey}
-                            src={thumbnailSrc}
-                            alt="Instagram post"
-                            className="w-full h-full object-cover block"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            decoding="async"
-                            onError={() => {
-                              setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: true }))
-                              if (process.env.NODE_ENV !== "production") {
-                                console.error("[Preview IG Thumbnail Load Failed]", { url: normalizedUrl, thumbnailSrc })
-                              }
-                            }}
-                          />
+                          <>
+                            <img
+                              key={retryKey}
+                              src={thumbnailSrc}
+                              alt="Instagram post"
+                              className="w-full h-full object-cover block"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              decoding="async"
+                              onError={() => {
+                                setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: true }))
+                                if (process.env.NODE_ENV !== "production") {
+                                  console.error("[Preview IG Thumbnail Load Failed]", { url: normalizedUrl, thumbnailSrc })
+                                }
+                              }}
+                            />
+                            {isVideo && (
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                  </svg>
+                                </div>
+                              </div>
+                            )}
+                          </>
                         ) : thumbnailSrc && thumbnailLoadErrors[normalizedUrl] ? (
                           <div className="relative w-full h-full flex flex-col items-center justify-center gap-2 p-2">
                             <button

@@ -21,6 +21,7 @@ interface MobileCreatorCardLayoutProps {
     url: string
     thumbnailUrl?: string | null
     caption?: string | null
+    mediaType?: "image" | "video" | "reel" | "unknown" | null
     brand?: string | null
     collabType?: string | null
   }>
@@ -145,15 +146,26 @@ export function MobileCreatorCardLayout({
                 >
                   <div className="w-full h-full rounded-2xl border border-white/10 bg-black/20 overflow-hidden relative">
                     {item.thumbnailUrl ? (
-                      <Image
-                        src={item.thumbnailUrl}
-                        alt="Showcase"
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 100vw, 560px"
-                        unoptimized
-                        referrerPolicy="no-referrer"
-                      />
+                      <>
+                        <Image
+                          src={item.thumbnailUrl}
+                          alt="Showcase"
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 100vw, 560px"
+                          unoptimized
+                          referrerPolicy="no-referrer"
+                        />
+                        {(item.mediaType === "video" || item.mediaType === "reel") && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                              <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white/30">
                         <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
