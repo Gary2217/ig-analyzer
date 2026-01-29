@@ -427,7 +427,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   // Modal state for IG post preview
   const [openIg, setOpenIg] = useState<{ url: string; thumb?: string; caption?: string | null } | null>(null)
-  const [captionExpanded, setCaptionExpanded] = useState(false)
   const [openAvatarUrl, setOpenAvatarUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
@@ -442,7 +441,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           igModalBodyRef.current.scrollTop = 0
         }
       })
-      setCaptionExpanded(false)
     }
   }, [openIg])
 
@@ -1391,37 +1389,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 </div>
               </div>
 
-              {/* Caption Section */}
-              {openIg.caption !== undefined && (
-                <div className="px-4 py-3">
-                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                    <div className="text-xs font-semibold text-white/60 mb-2">
-                      {t("creatorCard.postModal.captionTitle")}
-                    </div>
-                    {openIg.caption ? (
-                      <div>
-                        <div className={`text-sm text-white/85 whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed ${!captionExpanded ? 'line-clamp-6' : ''}`}>
-                          {openIg.caption}
-                        </div>
-                        {openIg.caption.length > 200 && (
-                          <button
-                            type="button"
-                            onClick={() => setCaptionExpanded(!captionExpanded)}
-                            className="mt-2 text-xs text-purple-400 hover:text-purple-300 font-medium transition-colors"
-                            style={{ minHeight: "24px" }}
-                          >
-                            {captionExpanded ? t("creatorCard.postModal.showLess") : t("creatorCard.postModal.showMore")}
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-white/50 italic">
-                        {t("creatorCard.postModal.noCaption")}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              <p className="px-4 pt-3 text-xs text-white/60 leading-snug">
+                完整貼文內容與留言請於 Instagram 查看
+              </p>
 
               {/* Open on Instagram Button */}
               <div className="px-4 pb-4">
