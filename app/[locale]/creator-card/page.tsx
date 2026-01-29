@@ -569,9 +569,6 @@ function SortableFeaturedTile(props: {
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
     
-    // Generate direct media URL (always available, no oEmbed required)
-    const directMediaUrl = isValidIgUrl ? buildInstagramDirectMediaUrl(normalizedUrl) : null
-    
     // Reset thumbnail error when URL changes
     useEffect(() => {
       setThumbnailLoadError(false)

@@ -52,6 +52,7 @@ type OEmbedState =
   | { status: "loading" }
   | { status: "success"; data: OEmbedResponse }
   | { status: "error"; errorMessage?: string; httpStatus?: number }
+  | { status: "rate_limited"; retryAtMs: number; errorMessage?: string }
 
 // Strict fetch helper: NEVER returns null, always returns explicit ok/error shape
 async function fetchOEmbedStrict(url: string): Promise<OEmbedResponse> {
