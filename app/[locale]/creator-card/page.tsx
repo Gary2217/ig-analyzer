@@ -57,6 +57,22 @@ type OEmbedState =
   | { status: "success"; data: OEmbedResponse }
   | { status: "error"; errorMessage?: string; httpStatus?: number }
 
+// Resolve IG preview: fetches oEmbed data with thumbnailUrl and mediaType
+async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: string | null; mediaType: string | null }> {
+  const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, {
+    method: "GET",
+    headers: { "Accept": "application/json" },
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`oembed_failed_${res.status}`)
+  const data = await res.json()
+  // Expect: { ok: true, thumbnailUrl, mediaType, ... }
+  return {
+    thumbnailUrl: typeof data.thumbnailUrl === "string" ? data.thumbnailUrl : null,
+    mediaType: typeof data.mediaType === "string" ? data.mediaType : null,
+  }
+}
+
 // Strict fetch helper: NEVER returns null, always returns explicit ok/error shape
 async function fetchOEmbedStrict(url: string): Promise<OEmbedResponse> {
   try {
@@ -241,6 +257,7 @@ type FeaturedItem = {
   uploadStatus?: "idle" | "uploading" | "failed"
   caption?: string
   type?: "media" | "text" | "ig"
+  mediaType?: "image" | "video" | "reel" | "unknown"
   title?: string
   text?: string
   isAdded?: boolean
@@ -329,6 +346,47 @@ declare global {
       }
     }
   }
+}
+
+// URL normalizer: ensures consistent, canonical Instagram URLs
+function normalizeInstagramUrl(raw: string): string | null {
+  const input = (raw || "").trim()
+  if (!input) return null
+
+  // Fix protocol-relative URLs: //www.instagram.com/...
+  let fixed = input.startsWith("//") ? `https:${input}` : input
+
+  // If scheme missing, force https
+  if (!/^https?:\/\//i.test(fixed)) fixed = `https://${fixed}` 
+
+  let url: URL
+  try {
+    url = new URL(fixed)
+  } catch {
+    return null
+  }
+
+  // Accept instagram.com only (including subdomains)
+  const host = url.hostname.replace(/^www\./i, "")
+  if (!host.endsWith("instagram.com")) return null
+
+  // Normalize host to www.instagram.com
+  url.hostname = "www.instagram.com"
+
+  // Remove query/hash (e.g. ?hl=zh-tw)
+  url.search = ""
+  url.hash = ""
+
+  // Keep only canonical paths we support
+  // /p/{shortcode}/, /reel/{shortcode}/, /tv/{shortcode}/
+  const parts = url.pathname.split("/").filter(Boolean)
+  const kind = parts[0]
+  const shortcode = parts[1]
+  const allowed = new Set(["p", "reel", "tv"])
+  if (!allowed.has(kind) || !shortcode) return null
+
+  url.pathname = `/${kind}/${shortcode}/` 
+  return url.toString()
 }
 
 // Helper to extract Instagram shortcode from URL
@@ -3135,65 +3193,42 @@ export default function CreatorCardPage() {
                                     return
                                   }
                                   
-                                  const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(trimmed)
-                                  if (!isValidIg) {
+                                  // Normalize URL using utility function
+                                  const normalized = normalizeInstagramUrl(trimmed)
+                                  if (!normalized) {
                                     setPendingIg(null)
                                     return
                                   }
                                   
-                                  // Normalize URL
-                                  const normalized = trimmed.replace(/\/$/, "")
                                   setPendingIg({ url: normalized, status: "loading" })
                                   
                                   try {
-                                    // Try oEmbed first
-                                    const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalized)}`)
-                                    const data = await res.json()
+                                    // Resolve oEmbed preview (thumbnailUrl + mediaType)
+                                    const preview = await resolveIgPreview(normalized)
                                     
-                                    if (res.ok && data.ok && data.thumbnailUrl) {
-                                      setPendingIg({ url: normalized, status: "success", oembed: data })
-                                      // Write-through cache on oEmbed success
-                                      setIgOEmbedCache(prev => ({
-                                        ...prev,
-                                        [normalized]: {
-                                          status: "success",
-                                          data: data
-                                        }
-                                      }))
-                                      return
-                                    }
+                                    setPendingIg({ 
+                                      url: normalized, 
+                                      status: "success", 
+                                      oembed: { 
+                                        thumbnailUrl: preview.thumbnailUrl || undefined, 
+                                        mediaType: preview.mediaType || undefined,
+                                        ok: true 
+                                      } 
+                                    })
                                     
-                                    // Fallback: try /media/ path for direct thumbnail
-                                    const mediaUrl = normalized + "/media/"
-                                    const thumbnailUrl = `/api/ig/thumbnail?url=${encodeURIComponent(mediaUrl)}`
-                                    
-                                    // Test if thumbnail endpoint works
-                                    const thumbRes = await fetch(thumbnailUrl, { method: 'HEAD' })
-                                    if (thumbRes.ok) {
-                                      const fallbackData: OEmbedSuccess = { 
-                                        ok: true, 
-                                        thumbnailUrl: thumbnailUrl,
-                                        source: "og"
-                                      }
-                                      setPendingIg({ 
-                                        url: normalized, 
+                                    // Write-through cache on oEmbed success
+                                    setIgOEmbedCache(prev => ({
+                                      ...prev,
+                                      [normalized]: { 
                                         status: "success", 
-                                        oembed: fallbackData
-                                      })
-                                      // Write-through cache on fallback success
-                                      setIgOEmbedCache(prev => ({
-                                        ...prev,
-                                        [normalized]: {
-                                          status: "success",
-                                          data: fallbackData
-                                        }
-                                      }))
-                                      return
-                                    }
-                                    
-                                    // Last resort: error state but allow adding
-                                    setPendingIg({ url: normalized, status: "error" })
-                                  } catch (err) {
+                                        data: { 
+                                          ok: true, 
+                                          thumbnailUrl: preview.thumbnailUrl || undefined, 
+                                          mediaType: preview.mediaType || undefined 
+                                        } as OEmbedSuccess
+                                      }
+                                    }))
+                                  } catch (e) {
                                     setPendingIg({ url: normalized, status: "error" })
                                   }
                                 }, 400)
@@ -3387,14 +3422,11 @@ export default function CreatorCardPage() {
                                         const urlToAdd = pendingIg?.url || newIgUrl.trim()
                                         if (!urlToAdd) return
                                         
-                                        const isValidIg = /instagram\.com\/(p|reel|tv)\//.test(urlToAdd)
-                                        if (!isValidIg) {
+                                        const normalizedUrl = normalizeInstagramUrl(urlToAdd)
+                                        if (!normalizedUrl) {
                                           showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
                                           return
                                         }
-                                        
-                                        // Normalize URL for duplicate detection
-                                        const normalizedUrl = urlToAdd.trim().replace(/\/$/, "")
                                         
                                         // Check for duplicates
                                         const isDuplicate = featuredItems.some(item => {
@@ -3419,15 +3451,20 @@ export default function CreatorCardPage() {
                                           }))
                                         }
                                         
-                                        // Extract thumbnailUrl from pendingIg or cache
+                                        // Extract thumbnailUrl and mediaType from pendingIg or cache
                                         const thumbnailUrl = pendingIg?.oembed?.thumbnailUrl || 
                                           (igOEmbedCache[normalizedUrl]?.status === "success" && igOEmbedCache[normalizedUrl].data.ok === true
                                             ? (igOEmbedCache[normalizedUrl].data.thumbnailUrl || igOEmbedCache[normalizedUrl].data.data?.thumbnail_url)
                                             : undefined)
                                         
+                                        const mediaType = pendingIg?.oembed?.mediaType || 
+                                          (igOEmbedCache[normalizedUrl]?.status === "success" && igOEmbedCache[normalizedUrl].data.ok === true
+                                            ? igOEmbedCache[normalizedUrl].data.mediaType
+                                            : undefined)
+                                        
                                         // Add new item with functional setState
                                         const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                        const newItem = { id, type: "ig" as const, url: normalizedUrl, brand: "", collabType: "", caption: "", isAdded: true, thumbnailUrl }
+                                        const newItem = { id, type: "ig" as const, url: normalizedUrl, brand: "", collabType: "", caption: "", isAdded: true, thumbnailUrl, mediaType }
                                         
                                         setFeaturedItems(prev => {
                                           const nextItems = [newItem, ...prev]
