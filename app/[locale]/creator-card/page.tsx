@@ -453,6 +453,8 @@ function SortableFeaturedTile(props: {
   onIgThumbnailClick?: (url: string) => void
   igOEmbedCache: Record<string, OEmbedState>
   onIgOEmbedFetch: (url: string, data: OEmbedState) => void
+  runIgOEmbedLimited: (task: () => Promise<void>) => Promise<void>
+  stopIgOEmbedRef: React.MutableRefObject<boolean>
   setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
   markDirty: () => void
   suppressClick: boolean
@@ -538,6 +540,8 @@ function SortableFeaturedTile(props: {
     const isValidIgUrl = normalizedUrl && (normalizedUrl.includes("instagram.com/p/") || normalizedUrl.includes("instagram.com/reel/") || normalizedUrl.includes("instagram.com/tv/"))
     const isAdded = item.isAdded ?? false
     const oembedData = props.igOEmbedCache[normalizedUrl]
+    const persistedThumb = normalizeIgThumbnailUrlOrNull(item.thumbnailUrl)
+    const hasPersistedThumb = Boolean(persistedThumb)
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
     
@@ -550,6 +554,8 @@ function SortableFeaturedTile(props: {
     // Fetch oEmbed data for thumbnail using strict fetch
     const fetchOEmbed = useCallback(async () => {
       if (!isValidIgUrl || !normalizedUrl) return
+      if (props.stopIgOEmbedRef.current) return
+      if (hasPersistedThumb) return
       
       // Set loading state
       props.onIgOEmbedFetch(normalizedUrl, {
@@ -557,31 +563,35 @@ function SortableFeaturedTile(props: {
       })
       
       try {
-        const response = await fetchOEmbedStrict(normalizedUrl)
+        await props.runIgOEmbedLimited(async () => {
+          if (props.stopIgOEmbedRef.current) return
+          const response = await fetchOEmbedStrict(normalizedUrl)
         
-        if (response.ok === false) {
-          const httpStatus = response.error?.status
-          if (httpStatus === 429) {
+          if (response.ok === false) {
+            const httpStatus = response.error?.status
+            if (httpStatus === 429) {
+              props.stopIgOEmbedRef.current = true
+              props.onIgOEmbedFetch(normalizedUrl, {
+                status: "rate_limited",
+                retryAtMs: Date.now(),
+                errorMessage: response.error?.message ?? "Rate limited",
+              })
+              return
+            }
+            // Error response
             props.onIgOEmbedFetch(normalizedUrl, {
-              status: "rate_limited",
-              retryAtMs: Date.now(),
-              errorMessage: response.error?.message ?? "Rate limited",
+              status: "error",
+              httpStatus,
+              errorMessage: response.error?.message ?? "Preview unavailable",
             })
-            return
+          } else {
+            // Success response
+            props.onIgOEmbedFetch(normalizedUrl, {
+              status: "success",
+              data: response,
+            })
           }
-          // Error response
-          props.onIgOEmbedFetch(normalizedUrl, {
-            status: "error",
-            httpStatus,
-            errorMessage: response.error?.message ?? "Preview unavailable",
-          })
-        } else {
-          // Success response
-          props.onIgOEmbedFetch(normalizedUrl, {
-            status: "success",
-            data: response,
-          })
-        }
+        })
       } catch (e: any) {
         // Should not happen with fetchOEmbedStrict, but handle just in case
         props.onIgOEmbedFetch(normalizedUrl, {
@@ -589,11 +599,13 @@ function SortableFeaturedTile(props: {
           errorMessage: e?.message ?? "Network error",
         })
       }
-    }, [normalizedUrl, isValidIgUrl, props])
+    }, [normalizedUrl, isValidIgUrl, props, hasPersistedThumb])
     
     useEffect(() => {
       if (!normalizedUrl) return
       if (!isValidIgUrl) return
+      if (props.stopIgOEmbedRef.current) return
+      if (hasPersistedThumb) return
 
       // If we already have success/error for this URL, don't refetch automatically
       const st = props.igOEmbedCache[normalizedUrl]?.status
@@ -699,7 +711,7 @@ function SortableFeaturedTile(props: {
               {t("results.mediaKit.featured.tapToOpen")}
             </span>
           </a>
-        ) : normalizedUrl && isValidIgUrl && (item.thumbnailUrl || (oembedData?.status === "success" && oembedData.data.ok === true && (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url))) ? (
+        ) : normalizedUrl && isValidIgUrl && (persistedThumb || (oembedData?.status === "success" && oembedData.data.ok === true && (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url))) ? (
           <a
             href={normalizedUrl}
             target="_blank"
@@ -711,7 +723,7 @@ function SortableFeaturedTile(props: {
             {!thumbnailLoadError ? (
               <img
                 key={retryKey}
-                src={item.thumbnailUrl || (oembedData?.status === "success" ? (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url) : undefined) || ""}
+                src={persistedThumb || (oembedData?.status === "success" ? (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url) : undefined) || ""}
                 alt="Instagram post thumbnail"
                 className="w-full h-full object-cover block"
                 loading="lazy"
@@ -1195,6 +1207,39 @@ export default function CreatorCardPage() {
   const [editingFeaturedCollabTypeCustom, setEditingFeaturedCollabTypeCustom] = useState("")
   const [igModalUrl, setIgModalUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>({})
+
+  const stopIgOEmbedRef = useRef(false)
+  const igOEmbedInFlightRef = useRef(0)
+  const igOEmbedQueueRef = useRef<Array<() => void>>([])
+  const runIgOEmbedLimited = useCallback(async (task: () => Promise<void>) => {
+    if (stopIgOEmbedRef.current) return
+
+    return await new Promise<void>((resolve, reject) => {
+      const run = () => {
+        if (stopIgOEmbedRef.current) {
+          resolve()
+          return
+        }
+
+        igOEmbedInFlightRef.current += 1
+        task()
+          .then(resolve)
+          .catch(reject)
+          .finally(() => {
+            igOEmbedInFlightRef.current -= 1
+            const next = igOEmbedQueueRef.current.shift()
+            if (next) next()
+          })
+      }
+
+      if (igOEmbedInFlightRef.current < 2) {
+        run()
+        return
+      }
+
+      igOEmbedQueueRef.current.push(run)
+    })
+  }, [])
 
   const [__overlayMounted, set__overlayMounted] = useState(false)
   useEffect(() => {
@@ -3544,6 +3589,8 @@ export default function CreatorCardPage() {
                                     onIgOEmbedFetch={(url, data) => {
                                       setIgOEmbedCache((prev) => ({ ...prev, [url]: data }))
                                     }}
+                                    runIgOEmbedLimited={runIgOEmbedLimited}
+                                    stopIgOEmbedRef={stopIgOEmbedRef}
                                     setFeaturedItems={setFeaturedItems}
                                     markDirty={markDirty}
                                   />

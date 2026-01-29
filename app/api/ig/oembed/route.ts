@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
+const OEMBED_CACHE_TTL_MS = 12 * 60 * 60 * 1000
+
+type CacheEntry = {
+  value: OEmbedSuccessResponse
+  expiresAtMs: number
+}
+
+const oembedCache = new Map<string, CacheEntry>()
+
 type OEmbedSuccessResponse = {
   ok: true
   thumbnailUrl: string
@@ -119,6 +128,20 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  const cacheKey = url.trim().replace(/\/$/, "")
+  const now = Date.now()
+  const cached = oembedCache.get(cacheKey)
+  const hasFreshCache = Boolean(cached && cached.expiresAtMs > now)
+  if (hasFreshCache && cached) {
+    return NextResponse.json(cached.value, {
+      status: 200,
+      headers: {
+        "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400",
+        "X-IG-OEMBED-CACHE": "hit",
+      },
+    })
+  }
+
   try {
     // Fetch from Instagram oEmbed API server-side with timeout
     const oembedUrl = `https://www.instagram.com/oembed/?url=${encodeURIComponent(url)}&omitscript=true`
@@ -140,10 +163,16 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error")
-      console.error(`Instagram oEmbed API error: ${response.status} - ${errorText}`)
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.error(`Instagram oEmbed API error: ${response.status} - ${errorText}`)
+      }
       
       // Try og:image fallback
-      console.log("Attempting og:image fallback...")
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.log("Attempting og:image fallback...")
+      }
       const ogData = await scrapeOgImage(url)
       if (ogData) {
         const successResponse: OEmbedSuccessResponse = {
@@ -160,9 +189,24 @@ export async function GET(request: NextRequest) {
             provider_name: "Instagram",
           },
         }
+
+        oembedCache.set(cacheKey, { value: successResponse, expiresAtMs: now + OEMBED_CACHE_TTL_MS })
         return NextResponse.json(successResponse, {
           headers: {
             "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400",
+            "X-IG-OEMBED-CACHE": "miss",
+          },
+        })
+      }
+
+      // stale-if-error: if we have any cached success (even expired), serve it on 429/5xx
+      if (cached && (response.status === 429 || response.status >= 500)) {
+        return NextResponse.json(cached.value, {
+          status: 200,
+          headers: {
+            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            "X-IG-OEMBED-CACHE": "stale",
+            "X-IG-OEMBED-UPSTREAM-STATUS": String(response.status),
           },
         })
       }
@@ -185,8 +229,8 @@ export async function GET(request: NextRequest) {
             message: userMessage,
           },
         } as OEmbedErrorResponse,
-        { 
-          status: 502,
+        {
+          status: response.status,
           headers: {
             "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
           },
@@ -196,7 +240,10 @@ export async function GET(request: NextRequest) {
 
     // If response is not JSON (e.g., HTML error page), try og:image fallback
     if (!isJson) {
-      console.warn("Instagram oEmbed returned non-JSON response (likely HTML), attempting og:image fallback...")
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.warn("Instagram oEmbed returned non-JSON response (likely HTML), attempting og:image fallback...")
+      }
       const ogData = await scrapeOgImage(url)
       if (ogData) {
         const successResponse: OEmbedSuccessResponse = {
@@ -213,9 +260,24 @@ export async function GET(request: NextRequest) {
             provider_name: "Instagram",
           },
         }
+
+        oembedCache.set(cacheKey, { value: successResponse, expiresAtMs: now + OEMBED_CACHE_TTL_MS })
         return NextResponse.json(successResponse, {
           headers: {
             "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400",
+            "X-IG-OEMBED-CACHE": "miss",
+          },
+        })
+      }
+
+      // stale-if-error: if we have any cached success (even expired), serve it on 5xx
+      if (cached) {
+        return NextResponse.json(cached.value, {
+          status: 200,
+          headers: {
+            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            "X-IG-OEMBED-CACHE": "stale",
+            "X-IG-OEMBED-UPSTREAM-STATUS": "non_json",
           },
         })
       }
@@ -265,19 +327,36 @@ export async function GET(request: NextRequest) {
       },
     }
 
+    oembedCache.set(cacheKey, { value: successResponse, expiresAtMs: now + OEMBED_CACHE_TTL_MS })
+
     return NextResponse.json(successResponse, {
       headers: {
         "Cache-Control": "s-maxage=86400, stale-while-revalidate=604800",
+        "X-IG-OEMBED-CACHE": "miss",
       },
     })
   } catch (error) {
-    console.error("Failed to fetch Instagram oEmbed:", error)
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.error("Failed to fetch Instagram oEmbed:", error)
+    }
     
     // Handle timeout/abort errors
     const isTimeout = error instanceof Error && (error.name === "AbortError" || error.message.includes("aborted"))
     const userMessage = isTimeout 
       ? "Request timed out. The post may be slow to load."
       : error instanceof Error ? error.message : "Failed to fetch Instagram data"
+
+    if (cached) {
+      return NextResponse.json(cached.value, {
+        status: 200,
+        headers: {
+          "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+          "X-IG-OEMBED-CACHE": "stale",
+          "X-IG-OEMBED-UPSTREAM-STATUS": isTimeout ? "timeout" : "error",
+        },
+      })
+    }
     
     return NextResponse.json(
       {
