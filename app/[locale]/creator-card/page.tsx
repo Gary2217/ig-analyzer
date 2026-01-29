@@ -73,19 +73,18 @@ function buildInstagramDirectMediaUrl(url: string): string | null {
 
 // Resolve IG preview: uses direct media URL + /api/ig/thumbnail proxy as critical path, oEmbed optional for accuracy
 async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: string | null; mediaType: string | null }> {
-  // 1) Critical path: direct media URL through your own thumbnail proxy (stable / controllable)
   const directMediaUrl = buildInstagramDirectMediaUrl(normalizedUrl)
+
   if (directMediaUrl) {
+    const proxyThumbUrl = `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}` 
     try {
-      const tRes = await fetch(`/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}`, {
-        cache: "no-store",
-      })
+      const tRes = await fetch(proxyThumbUrl, { cache: "no-store" })
       if (tRes.ok) {
-        const mediaType =
+        const inferredType =
           normalizedUrl.includes("/reel/") ? "reel" :
           normalizedUrl.includes("/tv/") ? "video" : "image"
 
-        // Try oEmbed optionally to improve accuracy, but DO NOT block
+        // Optional: improve mediaType via oEmbed, non-blocking
         let oembedType: string | null = null
         try {
           const oRes = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, { cache: "no-store" })
@@ -96,8 +95,9 @@ async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: 
         } catch {}
 
         return {
-          thumbnailUrl: directMediaUrl,
-          mediaType: oembedType ?? mediaType,
+          // IMPORTANT: return the PROXY URL for UI rendering
+          thumbnailUrl: proxyThumbUrl,
+          mediaType: oembedType ?? inferredType,
         }
       }
     } catch {
@@ -105,7 +105,7 @@ async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: 
     }
   }
 
-  // 2) Optional: oEmbed fallback (still can be blocked)
+  // Fallback: oEmbed (may be blocked)
   try {
     const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, { cache: "no-store" })
     if (res.ok) {
