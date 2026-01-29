@@ -20,10 +20,11 @@ interface MobileCreatorCardLayoutProps {
     id: string
     url: string
     thumbnailUrl?: string | null
+    caption?: string | null
     brand?: string | null
     collabType?: string | null
   }>
-  onOpenIg?: (item: { url: string; thumb?: string }) => void
+  onOpenIg?: (item: { url: string; thumb?: string; caption?: string | null }) => void
 }
 
 export function MobileCreatorCardLayout({
@@ -138,7 +139,7 @@ export function MobileCreatorCardLayout({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => onOpenIg?.({ url: item.url, thumb: item.thumbnailUrl || undefined })}
+                  onClick={() => onOpenIg?.({ url: item.url, thumb: item.thumbnailUrl || undefined, caption: item.caption })}
                   className="shrink-0 w-full snap-start overflow-hidden focus:outline-none focus:ring-2 focus:ring-white/20 relative px-4"
                   style={{ height: '60vh', maxHeight: '520px' }}
                 >

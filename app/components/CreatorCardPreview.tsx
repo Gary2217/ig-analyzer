@@ -426,7 +426,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   } = props
 
   // Modal state for IG post preview
-  const [openIg, setOpenIg] = useState<{ url: string; thumb?: string } | null>(null)
+  const [openIg, setOpenIg] = useState<{ url: string; thumb?: string; caption?: string | null } | null>(null)
   const [openAvatarUrl, setOpenAvatarUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
@@ -1060,9 +1060,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     // Use pre-computed thumbnailUrl from item (set by normalizeFeaturedItems in hook)
                     // This is already set to /api/ig/thumbnail?url=... for IG posts or direct URL for uploaded items
                     const thumbnailSrc = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl : undefined
+                    const caption = typeof item.caption === "string" ? item.caption : null
                     
                     return (
-                      <SortablePreviewItem key={item.id} item={item} onItemClick={() => setOpenIg({ url: normalizedUrl, thumb: thumbnailSrc })}>
+                      <SortablePreviewItem key={item.id} item={item} onItemClick={() => setOpenIg({ url: normalizedUrl, thumb: thumbnailSrc, caption })}>
                         <div
                           data-preview-item
                           className="relative shrink-0 w-[120px] md:w-[140px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 hover:bg-white/10 hover:border-white/20 transition-colors cursor-pointer"
@@ -1371,6 +1372,24 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   )}
                 </div>
               </div>
+
+              {/* Caption Section */}
+              {openIg.caption !== undefined && (
+                <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs font-semibold text-white/60 mb-2">
+                    {t("creatorCard.featured.caption")}
+                  </div>
+                  {openIg.caption ? (
+                    <div className="text-sm text-white/85 whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed max-h-[200px] overflow-y-auto">
+                      {openIg.caption}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-white/50 italic">
+                      {t("creatorCard.featured.noCaption")}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <a
                 href={openIg.url}
