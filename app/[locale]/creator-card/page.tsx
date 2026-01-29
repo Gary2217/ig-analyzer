@@ -544,29 +544,94 @@ function SortableFeaturedTile(props: {
     const hasPersistedThumb = Boolean(persistedThumb)
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
-    
+    const [manualRetryStatus, setManualRetryStatus] = useState<"idle" | "loading" | "rate_limited" | "error">("idle")
+
     // Reset thumbnail error when URL changes
     useEffect(() => {
       setThumbnailLoadError(false)
       setRetryKey(0)
+      setManualRetryStatus("idle")
     }, [normalizedUrl])
-    
+
+    const manualRetryThumb = useCallback(async () => {
+      if (!isValidIgUrl || !normalizedUrl) return
+      if (hasPersistedThumb && !thumbnailLoadError) return
+      if (props.stopIgOEmbedRef.current) return
+
+      setManualRetryStatus("loading")
+      try {
+        await props.runIgOEmbedLimited(async () => {
+          if (props.stopIgOEmbedRef.current) return
+
+          const response = await fetchOEmbedStrict(normalizedUrl)
+          if (response.ok === false) {
+            const httpStatus = response.error?.status
+            if (httpStatus === 429) {
+              props.stopIgOEmbedRef.current = true
+              props.onIgOEmbedFetch(normalizedUrl, {
+                status: "rate_limited",
+                retryAtMs: Date.now(),
+                errorMessage: response.error?.message ?? "Rate limited",
+              })
+              setManualRetryStatus("rate_limited")
+              return
+            }
+
+            props.onIgOEmbedFetch(normalizedUrl, {
+              status: "error",
+              httpStatus,
+              errorMessage: response.error?.message ?? "Preview unavailable",
+            })
+            setManualRetryStatus("error")
+            return
+          }
+
+          const anyData = response as any
+          const rawThumb =
+            (typeof anyData.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ?? 
+            (typeof anyData.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null)
+          const proxyThumbUrl = rawThumb ? `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}` : null
+          const nextThumb = normalizeIgThumbnailUrlOrNull(proxyThumbUrl)
+          const mediaType = (anyData.mediaType as FeaturedItem["mediaType"] | undefined) ?? undefined
+
+          setFeaturedItems((prev) =>
+            prev.map((x) => (x.id === item.id ? { ...x, thumbnailUrl: nextThumb, mediaType: mediaType ?? x.mediaType } : x))
+          )
+          markDirty()
+
+          props.onIgOEmbedFetch(normalizedUrl, {
+            status: "success",
+            data: response,
+          })
+          setThumbnailLoadError(false)
+          setRetryKey((prev) => prev + 1)
+          setManualRetryStatus("idle")
+        })
+      } catch (e: any) {
+        props.onIgOEmbedFetch(normalizedUrl, {
+          status: "error",
+          errorMessage: e?.message ?? "Network error",
+        })
+        setManualRetryStatus("error")
+      }
+    }, [hasPersistedThumb, isValidIgUrl, item.id, markDirty, normalizedUrl, props, setFeaturedItems, thumbnailLoadError])
+
     // Fetch oEmbed data for thumbnail using strict fetch
     const fetchOEmbed = useCallback(async () => {
       if (!isValidIgUrl || !normalizedUrl) return
       if (props.stopIgOEmbedRef.current) return
       if (hasPersistedThumb) return
-      
+
       // Set loading state
       props.onIgOEmbedFetch(normalizedUrl, {
         status: "loading",
       })
-      
+
       try {
         await props.runIgOEmbedLimited(async () => {
           if (props.stopIgOEmbedRef.current) return
           const response = await fetchOEmbedStrict(normalizedUrl)
-        
+
           if (response.ok === false) {
             const httpStatus = response.error?.status
             if (httpStatus === 429) {
@@ -600,7 +665,7 @@ function SortableFeaturedTile(props: {
         })
       }
     }, [normalizedUrl, isValidIgUrl, props, hasPersistedThumb])
-    
+
     useEffect(() => {
       if (!normalizedUrl) return
       if (!isValidIgUrl) return
@@ -615,7 +680,7 @@ function SortableFeaturedTile(props: {
       attemptedRef.current.add(normalizedUrl)
       fetchOEmbed()
     }, [normalizedUrl, isValidIgUrl, fetchOEmbed])
-    
+
     return (
       <div
         ref={setNodeRef}
@@ -662,7 +727,7 @@ function SortableFeaturedTile(props: {
                 onPointerDown={(e) => e.stopPropagation()}
               />
             </div>
-            
+
             <a
               href="https://www.instagram.com/"
               target="_blank"
@@ -711,6 +776,42 @@ function SortableFeaturedTile(props: {
               {t("results.mediaKit.featured.tapToOpen")}
             </span>
           </a>
+        ) : normalizedUrl && isValidIgUrl && (!hasPersistedThumb || thumbnailLoadError) && !props.stopIgOEmbedRef.current ? (
+          <div className="pt-1">
+            <div className="min-h-[44px] flex flex-col gap-2">
+              <button
+                type="button"
+                className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 hover:border-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ minHeight: "44px" }}
+                disabled={manualRetryStatus === "loading"}
+                onPointerDownCapture={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  manualRetryThumb()
+                }}
+              >
+                {manualRetryStatus === "loading" ? (activeLocale === "zh-TW" ? "抓取中…" : "Retrying…") : "重新抓縮圖 / Retry thumbnail"}
+              </button>
+
+              {manualRetryStatus === "rate_limited" ? (
+                <div className="text-[11px] leading-tight text-white/60">
+                  {activeLocale === "zh-TW"
+                    ? "Instagram 暫時限制請求，已顯示現有內容"
+                    : "Instagram rate-limited; showing existing content"}
+                </div>
+              ) : null}
+
+              {manualRetryStatus === "error" ? (
+                <div className="text-[11px] leading-tight text-white/60">
+                  {activeLocale === "zh-TW" ? "暫時無法抓取縮圖" : "Thumbnail unavailable"}
+                </div>
+              ) : null}
+            </div>
+          </div>
         ) : normalizedUrl && isValidIgUrl && (persistedThumb || (oembedData?.status === "success" && oembedData.data.ok === true && (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url))) ? (
           <a
             href={normalizedUrl}
@@ -765,7 +866,7 @@ function SortableFeaturedTile(props: {
             href={normalizedUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block relative w-full rounded-xl border border-white/10 bg-slate-800/50 hover:border-white/20 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 p-6"
+            className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 p-6 text-center"
             style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           >

@@ -37,6 +37,11 @@ type OEmbedErrorResponse = {
 
 type OEmbedResponse = OEmbedSuccessResponse | OEmbedErrorResponse
 
+function isHtmlishBody(body: string): boolean {
+  const s = body.trim().slice(0, 500).toLowerCase()
+  return s.includes("<html") || s.includes("<!doctype") || s.includes("<head")
+}
+
 // Helper function to detect media type from URL and oEmbed data
 function detectMediaType(url: string, oembedType?: string): "image" | "video" | "reel" | "unknown" {
   // Check URL path for /reel/
@@ -238,7 +243,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // If response is not JSON (e.g., HTML error page), try og:image fallback
+    // If response is not JSON (e.g., HTML/login wall), try og:image fallback first;
+    // if that fails, treat as rate-limited so the client can stop further requests.
     if (!isJson) {
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
@@ -281,20 +287,89 @@ export async function GET(request: NextRequest) {
           },
         })
       }
-      
+
       return NextResponse.json(
         {
           ok: false,
           error: {
-            status: 500,
-            message: "Instagram returned HTML instead of JSON and og:image fallback failed",
+            status: 429,
+            message: "Rate limit exceeded. Please try again later.",
           },
         } as OEmbedErrorResponse,
-        { status: 500 }
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            "X-IG-OEMBED-UPSTREAM-STATUS": "non_json",
+          },
+        }
       )
     }
 
-    const data = await response.json()
+    const bodyText = await response.text()
+    if (isHtmlishBody(bodyText)) {
+      // stale-if-error: if we have any cached success (even expired), serve it on upstream blocks
+      if (cached) {
+        return NextResponse.json(cached.value, {
+          status: 200,
+          headers: {
+            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            "X-IG-OEMBED-CACHE": "stale",
+            "X-IG-OEMBED-UPSTREAM-STATUS": "html_body",
+          },
+        })
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            status: 429,
+            message: "Rate limit exceeded. Please try again later.",
+          },
+        } as OEmbedErrorResponse,
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            "X-IG-OEMBED-UPSTREAM-STATUS": "html_body",
+          },
+        }
+      )
+    }
+
+    let data: any = null
+    try {
+      data = JSON.parse(bodyText)
+    } catch {
+      if (cached) {
+        return NextResponse.json(cached.value, {
+          status: 200,
+          headers: {
+            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            "X-IG-OEMBED-CACHE": "stale",
+            "X-IG-OEMBED-UPSTREAM-STATUS": "json_parse_failed",
+          },
+        })
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            status: 429,
+            message: "Rate limit exceeded. Please try again later.",
+          },
+        } as OEmbedErrorResponse,
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
+            "X-IG-OEMBED-UPSTREAM-STATUS": "json_parse_failed",
+          },
+        }
+      )
+    }
 
     // Validate response data
     if (!data.thumbnail_url) {
