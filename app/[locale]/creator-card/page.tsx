@@ -71,55 +71,50 @@ function buildInstagramDirectMediaUrl(url: string): string | null {
   }
 }
 
-// Resolve IG preview: fetches thumbnail FIRST (critical path), then optionally tries oEmbed (non-blocking)
+// Resolve IG preview: uses direct media URL + /api/ig/thumbnail proxy as critical path, oEmbed optional for accuracy
 async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: string | null; mediaType: string | null }> {
-  // 1) Always try direct media URL first (critical path for thumbnail)
+  // 1) Critical path: direct media URL through your own thumbnail proxy (stable / controllable)
   const directMediaUrl = buildInstagramDirectMediaUrl(normalizedUrl)
-  let thumbnailUrl: string | null = null
-  let mediaType: string | null = null
-
   if (directMediaUrl) {
     try {
-      // Verify the direct media URL is accessible
-      const thumbRes = await fetch(directMediaUrl, { method: "HEAD" })
-      if (thumbRes.ok) {
-        thumbnailUrl = directMediaUrl
-        // Infer mediaType from URL path
-        if (normalizedUrl.includes("/reel/")) {
-          mediaType = "reel"
-        } else if (normalizedUrl.includes("/tv/")) {
-          mediaType = "video"
-        } else {
-          mediaType = "image"
-        }
-      }
-    } catch {
-      // Ignore thumbnail fetch errors, will try oEmbed fallback
-    }
-  }
-
-  // 2) Try oEmbed as optional enhancement (non-blocking)
-  // Only if thumbnail failed or to get more accurate mediaType
-  if (!thumbnailUrl) {
-    try {
-      const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, {
-        method: "GET",
-        headers: { "Accept": "application/json" },
+      const tRes = await fetch(`/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}`, {
         cache: "no-store",
       })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.ok && data.thumbnailUrl) {
-          thumbnailUrl = data.thumbnailUrl
-          mediaType = data.mediaType || mediaType
+      if (tRes.ok) {
+        const mediaType =
+          normalizedUrl.includes("/reel/") ? "reel" :
+          normalizedUrl.includes("/tv/") ? "video" : "image"
+
+        // Try oEmbed optionally to improve accuracy, but DO NOT block
+        let oembedType: string | null = null
+        try {
+          const oRes = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, { cache: "no-store" })
+          if (oRes.ok) {
+            const oData = await oRes.json()
+            oembedType = oData.mediaType ?? null
+          }
+        } catch {}
+
+        return {
+          thumbnailUrl: directMediaUrl,
+          mediaType: oembedType ?? mediaType,
         }
       }
     } catch {
-      // Ignore oEmbed errors - thumbnail is what matters
+      // ignore and continue
     }
   }
 
-  return { thumbnailUrl, mediaType }
+  // 2) Optional: oEmbed fallback (still can be blocked)
+  try {
+    const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, { cache: "no-store" })
+    if (res.ok) {
+      const data = await res.json()
+      return { thumbnailUrl: data.thumbnailUrl ?? null, mediaType: data.mediaType ?? null }
+    }
+  } catch {}
+
+  return { thumbnailUrl: null, mediaType: null }
 }
 
 // Strict fetch helper: NEVER returns null, always returns explicit ok/error shape
