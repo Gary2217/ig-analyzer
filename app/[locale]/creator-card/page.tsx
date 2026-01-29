@@ -23,43 +23,9 @@ import { useInstagramMe } from "../../lib/useInstagramMe"
 import { normalizeIgThumbnailUrlOrNull, useCreatorCardPreviewData } from "../../components/creator-card/useCreatorCardPreviewData"
 import { CreatorCardPreviewShell } from "../../components/creator-card/CreatorCardPreviewShell"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
+import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "../../components/creator-card/igOEmbedTypes"
 
-// Strict oEmbed types
-type OEmbedStatus = "idle" | "loading" | "success" | "error"
-
-type OEmbedSuccess = {
-  ok: true
-  thumbnailUrl?: string
-  title?: string
-  source?: "oembed" | "og"
-  data?: {
-    thumbnail_url?: string
-    thumbnail_width?: number
-    thumbnail_height?: number
-    title?: string
-    author_name?: string
-    provider_name?: string
-  }
-  [k: string]: any
-}
-
-type OEmbedError = {
-  ok: false
-  error?: { status?: number; message?: string } | any
-  [k: string]: any
-}
-
-type OEmbedResponse = OEmbedSuccess | OEmbedError
-
-type OEmbedState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "success"; data: OEmbedResponse }
-  | { status: "error"; errorMessage?: string; httpStatus?: number }
-  | { status: "rate_limited"; retryAtMs: number; errorMessage?: string }
-
-// UI-only oEmbed cooldown to avoid repeated 429 spam (per URL)
-const igOEmbedCooldownUntilMs = new Map<string, number>()
+// Strict oEmbed types live in a shared module (see igOEmbedTypes.ts)
 
 // Helper to extract shortcode and build direct media URL
 function buildInstagramDirectMediaUrl(url: string): string | null {
@@ -88,13 +54,13 @@ async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: 
           normalizedUrl.includes("/reel/") ? "reel" :
           normalizedUrl.includes("/tv/") ? "video" : "image"
 
-        // Optional: improve mediaType via oEmbed, non-blocking
+        // Optional: improve mediaType via oEmbed, best-effort
         let oembedType: string | null = null
         try {
-          const oRes = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, { cache: "no-store" })
-          if (oRes.ok) {
-            const oData = await oRes.json()
-            oembedType = oData.mediaType ?? null
+          const oData = await fetchOEmbedStrict(normalizedUrl)
+          if (oData.ok === true) {
+            const anyData = oData as any
+            oembedType = (anyData.mediaType as string | undefined) ?? null
           }
         } catch {}
 
@@ -109,12 +75,18 @@ async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: 
     }
   }
 
-  // Fallback: oEmbed (may be blocked)
+  // Fallback: oEmbed (best-effort) => proxy the returned thumbnail URL for UI rendering
   try {
-    const res = await fetch(`/api/ig/oembed?url=${encodeURIComponent(normalizedUrl)}`, { cache: "no-store" })
-    if (res.ok) {
-      const data = await res.json()
-      return { thumbnailUrl: data.thumbnailUrl ?? null, mediaType: data.mediaType ?? null }
+    const data = await fetchOEmbedStrict(normalizedUrl)
+    if (data.ok === true) {
+      const anyData = data as any
+      const rawThumb =
+        (typeof anyData.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ??
+        (typeof anyData.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null)
+
+      const proxyThumbUrl = rawThumb ? `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}` : null
+      const mediaType = (anyData.mediaType as string | undefined) ?? null
+      return { thumbnailUrl: proxyThumbUrl, mediaType }
     }
   } catch {}
 
@@ -487,6 +459,7 @@ function SortableFeaturedTile(props: {
 }) {
   const { item, t, activeLocale, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
+  const attemptedRef = useRef<Set<string>>(new Set())
 
   const itemType = item.type || "media"
 
@@ -565,7 +538,6 @@ function SortableFeaturedTile(props: {
     const isValidIgUrl = normalizedUrl && (normalizedUrl.includes("instagram.com/p/") || normalizedUrl.includes("instagram.com/reel/") || normalizedUrl.includes("instagram.com/tv/"))
     const isAdded = item.isAdded ?? false
     const oembedData = props.igOEmbedCache[normalizedUrl]
-    const debounceRef = useRef<number | null>(null)
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
     
@@ -578,16 +550,6 @@ function SortableFeaturedTile(props: {
     // Fetch oEmbed data for thumbnail using strict fetch
     const fetchOEmbed = useCallback(async () => {
       if (!isValidIgUrl || !normalizedUrl) return
-
-      const cooldownUntil = igOEmbedCooldownUntilMs.get(normalizedUrl) ?? 0
-      if (cooldownUntil > Date.now()) {
-        props.onIgOEmbedFetch(normalizedUrl, {
-          status: "rate_limited",
-          retryAtMs: cooldownUntil,
-          errorMessage: "Rate limited",
-        })
-        return
-      }
       
       // Set loading state
       props.onIgOEmbedFetch(normalizedUrl, {
@@ -600,11 +562,9 @@ function SortableFeaturedTile(props: {
         if (response.ok === false) {
           const httpStatus = response.error?.status
           if (httpStatus === 429) {
-            const retryAtMs = Date.now() + 15 * 60 * 1000
-            igOEmbedCooldownUntilMs.set(normalizedUrl, retryAtMs)
             props.onIgOEmbedFetch(normalizedUrl, {
               status: "rate_limited",
-              retryAtMs,
+              retryAtMs: Date.now(),
               errorMessage: response.error?.message ?? "Rate limited",
             })
             return
@@ -639,14 +599,9 @@ function SortableFeaturedTile(props: {
       const st = props.igOEmbedCache[normalizedUrl]?.status
       if (st === "success" || st === "error" || st === "rate_limited" || st === "loading") return
 
-      if (debounceRef.current) window.clearTimeout(debounceRef.current)
-      debounceRef.current = window.setTimeout(() => {
-        fetchOEmbed()
-      }, 600)
-
-      return () => {
-        if (debounceRef.current) window.clearTimeout(debounceRef.current)
-      }
+      if (attemptedRef.current.has(normalizedUrl)) return
+      attemptedRef.current.add(normalizedUrl)
+      fetchOEmbed()
     }, [normalizedUrl, isValidIgUrl, fetchOEmbed])
     
     return (
@@ -723,7 +678,7 @@ function SortableFeaturedTile(props: {
               <div className="h-3 w-24 rounded bg-white/10" />
             </div>
           </a>
-        ) : normalizedUrl && isValidIgUrl && oembedData?.status === "rate_limited" ? (
+        ) : normalizedUrl && isValidIgUrl && (oembedData?.status === "error" || oembedData?.status === "rate_limited") ? (
           <a
             href={normalizedUrl}
             target="_blank"
@@ -737,27 +692,8 @@ function SortableFeaturedTile(props: {
             </svg>
             <span className="text-xs leading-tight text-white/70 break-words">
               {activeLocale === "zh-TW"
-                ? "暫時無法載入預覽，請點擊在 Instagram 開啟"
-                : "Preview temporarily unavailable. Open in Instagram."}
-            </span>
-            <span className="text-[11px] leading-tight text-white/40 break-words">
-              {t("results.mediaKit.featured.tapToOpen")}
-            </span>
-          </a>
-        ) : normalizedUrl && isValidIgUrl && oembedData?.status === "error" ? (
-          <a
-            href={normalizedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 p-6 text-center"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-            <span className="text-xs leading-tight text-white/60 break-words">
-              {t("results.mediaKit.featured.previewUnavailable")}
+                ? "無法載入預覽，點擊在 Instagram 開啟"
+                : "Preview unavailable. Open on Instagram."}
             </span>
             <span className="text-[11px] leading-tight text-white/40 break-words">
               {t("results.mediaKit.featured.tapToOpen")}
