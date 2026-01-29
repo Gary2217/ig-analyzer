@@ -21,7 +21,8 @@ import { extractLocaleFromPathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { useInstagramMe } from "../../lib/useInstagramMe"
 import { normalizeIgThumbnailUrlOrNull, useCreatorCardPreviewData } from "../../components/creator-card/useCreatorCardPreviewData"
-import { CreatorCardPreviewShell } from "../../components/creator-card/CreatorCardPreviewShell"
+import { CreatorCardPreviewShell } from "@/app/components/creator-card/CreatorCardPreviewShell"
+import { CardMobilePreviewShell } from "@/app/components/creator-card/CardMobilePreviewShell"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "../../components/creator-card/igOEmbedTypes"
 
@@ -4483,54 +4484,56 @@ export default function CreatorCardPage() {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-4 pb-6 pt-3">
-                  <CreatorCardPreview
-                    t={t}
-                    className="border-white/10 bg-transparent"
-                    headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
-                    useWidePhotoLayout={false}
-                    photoUploadEnabled={false}
-                    onProfileImageFileChange={undefined}
-                    username={displayUsername || null}
-                    profileImageUrl={(() => {
-                      const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
-                      const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                      const u = (u1 || u2).trim()
-                      return u ? u : null
-                    })()}
-                    displayName={displayName}
-                    aboutText={baseCard?.audience ?? null}
-                    primaryNiche={baseCard?.niche ?? null}
-                    contact={previewContact}
-                    featuredItems={featuredItems}
-                    onReorderIgIds={(nextIgIds) => {
-                      setFeaturedItems(prev => {
-                        const igMap = new Map(prev.filter(x => x.type === "ig").map(x => [x.id, x]))
-                        const orderedIg = nextIgIds.map(id => igMap.get(id)).filter((x): x is FeaturedItem => x !== undefined)
-                        const nonIg = prev.filter(x => x.type !== "ig")
-                        const next = [...nonIg, ...orderedIg]
-                        persistDraftNow(next)
-                        markDirty()
-                        return next
-                      })
-                    }}
-                    featuredImageUrls={featuredItems.map((x) => x.url)}
-                    igOEmbedCache={igOEmbedCache}
-                    themeTypes={themeTypes}
-                    audienceProfiles={audienceProfiles}
-                    collaborationNiches={collaborationNiches}
-                    deliverables={deliverables}
-                    pastCollaborations={pastCollaborations}
-                    followers={followers ?? undefined}
-                    following={following ?? undefined}
-                    posts={posts ?? undefined}
-                    engagementRate={engagementRate ?? undefined}
-                    followersText={followersText}
-                    postsText={postsText}
-                    engagementRateText={engagementRateText}
-                    highlightTarget={null}
-                    highlightSection={null}
-                  />
+                <div className="flex-1 overflow-y-auto pb-6 pt-3">
+                  <CardMobilePreviewShell mode="embedded">
+                    <CreatorCardPreview
+                      t={t}
+                      className="border-white/10 bg-transparent"
+                      headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+                      useWidePhotoLayout={false}
+                      photoUploadEnabled={false}
+                      onProfileImageFileChange={undefined}
+                      username={displayUsername || null}
+                      profileImageUrl={(() => {
+                        const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
+                        const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+                        const u = (u1 || u2).trim()
+                        return u ? u : null
+                      })()}
+                      displayName={displayName}
+                      aboutText={baseCard?.audience ?? null}
+                      primaryNiche={baseCard?.niche ?? null}
+                      contact={previewContact}
+                      featuredItems={featuredItems}
+                      onReorderIgIds={(nextIgIds) => {
+                        setFeaturedItems(prev => {
+                          const igMap = new Map(prev.filter(x => x.type === "ig").map(x => [x.id, x]))
+                          const orderedIg = nextIgIds.map(id => igMap.get(id)).filter((x): x is FeaturedItem => x !== undefined)
+                          const nonIg = prev.filter(x => x.type !== "ig")
+                          const next = [...nonIg, ...orderedIg]
+                          persistDraftNow(next)
+                          markDirty()
+                          return next
+                        })
+                      }}
+                      featuredImageUrls={featuredItems.map((x) => x.url)}
+                      igOEmbedCache={igOEmbedCache}
+                      themeTypes={themeTypes}
+                      audienceProfiles={audienceProfiles}
+                      collaborationNiches={collaborationNiches}
+                      deliverables={deliverables}
+                      pastCollaborations={pastCollaborations}
+                      followers={followers ?? undefined}
+                      following={following ?? undefined}
+                      posts={posts ?? undefined}
+                      engagementRate={engagementRate ?? undefined}
+                      followersText={followersText}
+                      postsText={postsText}
+                      engagementRateText={engagementRateText}
+                      highlightTarget={null}
+                      highlightSection={null}
+                    />
+                  </CardMobilePreviewShell>
                 </div>
               </div>
             </div>,
