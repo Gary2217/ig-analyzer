@@ -17,6 +17,20 @@ function formatER(er?: number) {
   return `${v.toFixed(1)}%`
 }
 
+function deriveFormatKeysFromDeliverables(input?: string[]) {
+  const d = Array.isArray(input) ? input : []
+  const set = new Set<"reels" | "posts" | "stories" | "other">()
+  for (const raw of d) {
+    const id = String(raw || "").trim().toLowerCase()
+    if (!id) continue
+    if (id === "reels") set.add("reels")
+    else if (id === "posts") set.add("posts")
+    else if (id === "stories") set.add("stories")
+    else set.add("other")
+  }
+  return Array.from(set)
+}
+
 export function CreatorCard({
   creator,
   locale,
@@ -32,9 +46,23 @@ export function CreatorCard({
 }) {
   const copy = getCopy(locale)
   const mm = copy.matchmaking
+  const isEmpty = Boolean(creator.isDemo)
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
-  const platformChips = allPlatforms.slice(0, 3)
-  const platformOverflow = Math.max(0, allPlatforms.length - platformChips.length)
+  const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
+
+  const typeLabel = (t: string) => {
+    if (t === "short_video") return mm.typeShortVideo
+    if (t === "long_video") return mm.typeLongVideo
+    if (t === "ugc") return mm.typeUGC
+    if (t === "live") return mm.typeLive
+    if (t === "review_unboxing") return mm.typeReviewUnboxing
+    if (t === "event") return mm.typeEvent
+    if (t === "reels") return mm.formatReels
+    if (t === "posts") return mm.formatPosts
+    if (t === "stories") return mm.formatStories
+    if (t === "other") return mm.typeOther
+    return t
+  }
 
   const platformLabel = (p: string) => {
     if (p === "instagram") return mm.platformInstagram
@@ -43,6 +71,14 @@ export function CreatorCard({
     if (p === "facebook") return mm.platformFacebook
     return p
   }
+
+  const primaryType = (creator.collabTypes ?? [])[0]
+  const primaryFormat = deliverableFormats[0]
+  const topChips: Array<{ key: string; label: string }> = []
+  if (allPlatforms[0]) topChips.push({ key: allPlatforms[0], label: platformLabel(allPlatforms[0]) })
+  if (primaryType) topChips.push({ key: primaryType, label: typeLabel(primaryType) })
+  else if (primaryFormat) topChips.push({ key: primaryFormat, label: typeLabel(primaryFormat) })
+  const displayChips = topChips.slice(0, 2)
 
   return (
     <div
@@ -53,14 +89,35 @@ export function CreatorCard({
       <button
         type="button"
         onClick={onToggleFav}
-        className="absolute right-3 top-3 z-10 shrink-0 h-9 px-3 rounded-full border border-white/10 bg-black/40 text-xs text-white/90 hover:bg-black/55 backdrop-blur"
-        aria-label={isFav ? copy.common.saved : copy.common.save}
-        title={isFav ? copy.common.saved : copy.common.save}
+        className={`absolute right-3 top-3 z-10 grid place-items-center h-9 w-9 rounded-full border border-white/10 bg-black/40 text-sm text-white/90 hover:bg-black/55 backdrop-blur transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 ${
+          isEmpty ? "pointer-events-none opacity-0" : ""
+        }`}
+        aria-label={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
+        title={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
       >
-        {isFav ? `★ ${copy.common.saved}` : `☆ ${copy.common.save}`}
+        {isFav ? "★" : "☆"}
       </button>
 
-      <Link href={creator.href} className="block">
+      {isEmpty ? (
+        <div className="block">
+          <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
+            <div className="h-full w-full bg-gradient-to-br from-white/10 to-white/5" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+          </div>
+
+          <div className="p-3 sm:p-4 min-w-0">
+            <div className="h-4 w-40 max-w-full rounded bg-white/10" />
+            <div className="mt-2 h-3 w-28 max-w-full rounded bg-white/10" />
+
+            <div className="mt-3 rounded-xl bg-white/5 border border-white/10 px-3 py-3">
+              <div className="text-xs text-white/50 truncate">{mm.profileNotSet}</div>
+              <div className="mt-2 h-6 w-24 rounded bg-white/10" />
+              <div className="mt-2 h-4 w-16 rounded bg-white/10" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <Link href={creator.href} className="block">
         <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
           {creator.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -77,60 +134,47 @@ export function CreatorCard({
         </div>
 
         <div className="p-3 sm:p-4 min-w-0">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="text-sm sm:text-[15px] font-semibold text-white/90 truncate min-w-0">
-                {creator.name}
-              </div>
-              {isMyCard ? (
-                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-200/90 whitespace-nowrap">
-                  {mm.myCardBadge}
-                </span>
-              ) : null}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-sm sm:text-[15px] font-semibold text-white/90 truncate min-w-0">
+              {creator.name}
             </div>
-            <div className="mt-0.5 text-xs text-white/55 truncate min-w-0 [overflow-wrap:anywhere]">
-              {creator.handle ? `@${creator.handle}` : ""}
-            </div>
+            {isMyCard ? (
+              <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-200/90 whitespace-nowrap">
+                {mm.myCardBadge}
+              </span>
+            ) : null}
           </div>
 
+          <div className="mt-0.5 text-xs text-white/55 truncate min-w-0 [overflow-wrap:anywhere]">{creator.handle ? `@${creator.handle}` : ""}</div>
+
           <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
-            {platformChips.length ? (
-              <>
-                {platformChips.map((p) => (
-                  <span
-                    key={p}
-                    className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
-                  >
-                    {platformLabel(p)}
-                  </span>
-                ))}
-                {platformOverflow ? (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/60 tabular-nums whitespace-nowrap">
-                    +{platformOverflow}
-                  </span>
-                ) : null}
-              </>
+            {displayChips.length ? (
+              displayChips.map((c) => (
+                <span
+                  key={c.key}
+                  className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
+                >
+                  {c.label}
+                </span>
+              ))
             ) : (
               <span className="text-[11px] text-white/40">{mm.noTopics}</span>
             )}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-white/70">
-            <div className="rounded-xl bg-white/5 border border-white/10 px-2.5 py-2 min-w-0">
-              <div className="text-white/40 text-[11px] truncate">{mm.followersLabel}</div>
-              <div className="font-medium text-white/90 tabular-nums whitespace-nowrap">
-                {formatNumber(creator.stats?.followers)}
-              </div>
+          <div className="mt-3 rounded-xl bg-white/5 border border-white/10 px-3 py-3 min-w-0">
+            <div className="text-[11px] text-white/45 truncate">{mm.followersLabel}</div>
+            <div className="mt-1 text-[clamp(20px,4.5vw,28px)] leading-none font-semibold text-white/95 tabular-nums whitespace-nowrap">
+              {formatNumber(creator.stats?.followers)}
             </div>
-            <div className="rounded-xl bg-white/5 border border-white/10 px-2.5 py-2 min-w-0">
-              <div className="text-white/40 text-[11px] truncate">{mm.engagementLabel}</div>
-              <div className="font-medium text-white/90 tabular-nums whitespace-nowrap">
-                {formatER(creator.stats?.engagementRate)}
-              </div>
+            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-white/65 min-w-0">
+              <span className="truncate">{mm.engagementLabel}</span>
+              <span className="tabular-nums whitespace-nowrap shrink-0">{formatER(creator.stats?.engagementRate)}</span>
             </div>
           </div>
         </div>
-      </Link>
+        </Link>
+      )}
     </div>
   )
 }

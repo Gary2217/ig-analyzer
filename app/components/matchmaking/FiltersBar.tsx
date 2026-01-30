@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { BudgetRange, Platform, TypeKey } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
@@ -21,8 +21,9 @@ type Props = {
   onCustomBudget: (v: string) => void
   onClearCustomBudget: () => void
 
-  type: TypeKey | "any"
-  onType: (v: TypeKey | "any") => void
+  selectedTypes: TypeKey[]
+  onToggleType: (t: TypeKey) => void
+  onClearTypes: () => void
   typeOptions: Array<{ value: TypeKey | "any"; label: string }>
 
   sort: "followers_desc" | "er_desc"
@@ -37,6 +38,7 @@ type Props = {
 export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const budgetOptions: Array<{ value: BudgetRange; label: string }> = useMemo(
     () => [
@@ -49,6 +51,212 @@ export function FiltersBar(props: Props) {
       { value: "60000_plus", label: "60,000+" },
     ],
     [mm]
+  )
+
+  const chipOptions = useMemo(
+    () => props.typeOptions.filter((o) => o.value !== "any") as Array<{ value: TypeKey; label: string }>,
+    [props.typeOptions]
+  )
+
+  const filtersContentDesktop = (
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+        <input
+          value={props.search}
+          onChange={(e) => props.onSearch(e.target.value)}
+          placeholder={copy.common.searchPlaceholder}
+          className="col-span-2 lg:col-span-2 h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30 min-w-0"
+        />
+
+        <select
+          value={props.platform}
+          onChange={(e) => props.onPlatform(e.target.value as any)}
+          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+        >
+          {props.platformOptions.map((o) => (
+            <option key={o.value} value={o.value} className="bg-slate-900">
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={props.budget}
+          onChange={(e) => props.onBudget(e.target.value as any)}
+          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+        >
+          {budgetOptions.map((o) => (
+            <option key={o.value} value={o.value} className="bg-slate-900">
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={props.sort}
+          onChange={(e) => props.onSort(e.target.value as any)}
+          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+        >
+          <option value="followers_desc" className="bg-slate-900">
+            {mm.sortFollowersDesc}
+          </option>
+          <option value="er_desc" className="bg-slate-900">
+            {mm.sortErDesc}
+          </option>
+        </select>
+      </div>
+
+      <div className="mt-2 flex items-start justify-between gap-2">
+        <div className="flex flex-wrap gap-2 min-w-0">
+          {chipOptions.map((o) => {
+            const active = props.selectedTypes.includes(o.value)
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => props.onToggleType(o.value)}
+                className={`h-9 px-3 rounded-full border text-xs whitespace-nowrap max-w-full truncate ${
+                  active
+                    ? "bg-white/15 border-white/25 text-white/90"
+                    : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
+                }`}
+              >
+                {o.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {props.selectedTypes.length ? (
+          <button
+            type="button"
+            onClick={props.onClearTypes}
+            className="shrink-0 h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10"
+          >
+            {copy.common.all}
+          </button>
+        ) : null}
+      </div>
+
+      {props.budget === "custom" ? (
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+          <input
+            inputMode="numeric"
+            value={props.customBudget}
+            onChange={(e) => {
+              const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
+              props.onCustomBudget(next)
+            }}
+            placeholder={mm.budgetCustomPlaceholder}
+            className="h-11 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+          />
+          <button
+            type="button"
+            onClick={props.onClearCustomBudget}
+            className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
+          >
+            {mm.budgetClearCustom}
+          </button>
+        </div>
+      ) : null}
+    </>
+  )
+
+  const filtersContentMobile = (
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={props.platform}
+          onChange={(e) => props.onPlatform(e.target.value as any)}
+          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+        >
+          {props.platformOptions.map((o) => (
+            <option key={o.value} value={o.value} className="bg-slate-900">
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={props.budget}
+          onChange={(e) => props.onBudget(e.target.value as any)}
+          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+        >
+          {budgetOptions.map((o) => (
+            <option key={o.value} value={o.value} className="bg-slate-900">
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={props.sort}
+          onChange={(e) => props.onSort(e.target.value as any)}
+          className="col-span-2 h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+        >
+          <option value="followers_desc" className="bg-slate-900">
+            {mm.sortFollowersDesc}
+          </option>
+          <option value="er_desc" className="bg-slate-900">
+            {mm.sortErDesc}
+          </option>
+        </select>
+      </div>
+
+      <div className="mt-2 flex items-start justify-between gap-2">
+        <div className="flex flex-wrap gap-2 min-w-0">
+          {chipOptions.map((o) => {
+            const active = props.selectedTypes.includes(o.value)
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => props.onToggleType(o.value)}
+                className={`h-9 px-3 rounded-full border text-xs whitespace-nowrap max-w-full truncate ${
+                  active
+                    ? "bg-white/15 border-white/25 text-white/90"
+                    : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
+                }`}
+              >
+                {o.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {props.selectedTypes.length ? (
+          <button
+            type="button"
+            onClick={props.onClearTypes}
+            className="shrink-0 h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10"
+          >
+            {copy.common.all}
+          </button>
+        ) : null}
+      </div>
+
+      {props.budget === "custom" ? (
+        <div className="mt-2 grid grid-cols-1 gap-2">
+          <input
+            inputMode="numeric"
+            value={props.customBudget}
+            onChange={(e) => {
+              const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
+              props.onCustomBudget(next)
+            }}
+            placeholder={mm.budgetCustomPlaceholder}
+            className="h-11 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+          />
+          <button
+            type="button"
+            onClick={props.onClearCustomBudget}
+            className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
+          >
+            {mm.budgetClearCustom}
+          </button>
+        </div>
+      ) : null}
+    </>
   )
 
   return (
@@ -77,85 +285,25 @@ export function FiltersBar(props: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+        {/* Mobile: compact header */}
+        <div className="sm:hidden grid grid-cols-[1fr_auto] gap-2">
           <input
             value={props.search}
             onChange={(e) => props.onSearch(e.target.value)}
             placeholder={copy.common.searchPlaceholder}
-            className="col-span-2 lg:col-span-2 h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30 min-w-0"
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30 min-w-0"
           />
-
-          <select
-            value={props.platform}
-            onChange={(e) => props.onPlatform(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 whitespace-nowrap"
           >
-            {props.platformOptions.map((o) => (
-              <option key={o.value} value={o.value} className="bg-slate-900">
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={props.type}
-            onChange={(e) => props.onType(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-          >
-            {props.typeOptions.map((o) => (
-              <option key={o.value} value={o.value} className="bg-slate-900">
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={props.budget}
-            onChange={(e) => props.onBudget(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-          >
-            {budgetOptions.map((o) => (
-              <option key={o.value} value={o.value} className="bg-slate-900">
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={props.sort}
-            onChange={(e) => props.onSort(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-          >
-            <option value="followers_desc" className="bg-slate-900">
-              {mm.sortFollowersDesc}
-            </option>
-            <option value="er_desc" className="bg-slate-900">
-              {mm.sortErDesc}
-            </option>
-          </select>
+            {mm.filtersButton}
+          </button>
         </div>
 
-        {props.budget === "custom" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-            <input
-              inputMode="numeric"
-              value={props.customBudget}
-              onChange={(e) => {
-                const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
-                props.onCustomBudget(next)
-              }}
-              placeholder={mm.budgetCustomPlaceholder}
-              className="h-11 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
-            />
-            <button
-              type="button"
-              onClick={props.onClearCustomBudget}
-              className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
-            >
-              {mm.budgetClearCustom}
-            </button>
-          </div>
-        ) : null}
+        <div className="hidden sm:block">{filtersContentDesktop}</div>
+        {mobileOpen ? <div className="sm:hidden">{filtersContentMobile}</div> : null}
       </div>
     </div>
   )

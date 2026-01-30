@@ -45,4 +45,5 @@ export type CreatorCardData = {
   budgetMax?: number
   stats?: CreatorStats
   href: string
+  isDemo?: boolean
 }

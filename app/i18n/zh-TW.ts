@@ -54,6 +54,11 @@ export const zhTW: CopyDictionary = {
     myCardBadge: "我的名片",
     myCardFirstToggle: "我的名片置頂",
 
+    filtersButton: "篩選",
+    profileNotSet: "尚未設定名片",
+    favoriteAddAria: "收藏創作者",
+    favoriteRemoveAria: "取消收藏",
+
     noTopics: "尚無標籤",
     viewDetails: "點擊查看 →",
 

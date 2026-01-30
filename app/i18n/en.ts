@@ -54,6 +54,11 @@ export const en: CopyDictionary = {
     myCardBadge: "My Card",
     myCardFirstToggle: "My card first",
 
+    filtersButton: "Filters",
+    profileNotSet: "Profile not set",
+    favoriteAddAria: "Save creator",
+    favoriteRemoveAria: "Unsave creator",
+
     noTopics: "No topics",
     viewDetails: "Click to view details →",
 

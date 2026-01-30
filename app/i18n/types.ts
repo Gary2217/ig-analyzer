@@ -52,6 +52,11 @@ export type CopyDictionary = {
     myCardBadge: string
     myCardFirstToggle: string
 
+    filtersButton: string
+    profileNotSet: string
+    favoriteAddAria: string
+    favoriteRemoveAria: string
+
     noTopics: string
     viewDetails: string
 
