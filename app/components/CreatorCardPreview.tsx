@@ -1358,7 +1358,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur z-50 flex items-center justify-center p-3 sm:p-6"
           onClick={() => setOpenAvatarUrl(null)}
-          onWheelCapture={(e) => e.stopPropagation()}
         >
           <div
             data-scroll-allow="true"
@@ -1379,12 +1378,13 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 <X className="h-4 w-4 text-white/90" />
               </button>
             </div>
-            <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-hidden flex items-center justify-center">
-              <div className="w-full h-full max-h-[80vh] flex items-center justify-center">
+            <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y flex items-center justify-center">
+              <div className="w-full h-full max-h-[80vh] flex items-center justify-center touch-pan-y">
                 <img
                   src={openAvatarUrl}
                   alt={resolvedDisplayName || "Profile"}
-                  className="max-w-full max-h-full object-contain rounded-lg"
+                  draggable={false}
+                  className="max-w-full max-h-full object-contain rounded-lg touch-pan-y pointer-events-none select-none"
                   referrerPolicy="no-referrer"
                 />
               </div>
@@ -1437,13 +1437,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             >
               {/* Image Section */}
               <div className="px-4 pt-4">
-                <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden touch-pan-y">
                   <div className="flex items-center justify-center p-2">
                     {normalizeIgThumbnailUrlOrNull(openIg.thumb) ? (
                       <img
                         src={normalizeIgThumbnailUrlOrNull(openIg.thumb) as string}
                         alt="Instagram post"
-                        className="max-h-[50vh] w-full object-contain"
+                        draggable={false}
+                        className="max-h-[50vh] w-full object-contain touch-pan-y pointer-events-none select-none"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
