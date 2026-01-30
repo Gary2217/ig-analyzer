@@ -154,7 +154,7 @@
       "subtitle": "選擇你能提供的合作內容形式。",
       "options": {
         "reels": "Reels／短影片",
-        "posts": "貼文",
+        "posts": "Instagram",
         "stories": "限時動態",
         "live": "直播",
         "ugc": "UGC",
@@ -164,7 +164,7 @@
         "affiliate": "聯盟行銷",
         "tiktok": "TikTok",
         "youtube": "YouTube",
-        "fbPost": "FB貼文",
+        "fbPost": "Facebook",
         "other": "其他"
       },
       "otherPlaceholder": "請輸入其他合作形式",

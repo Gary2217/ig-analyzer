@@ -154,7 +154,7 @@
       "subtitle": "Select the content formats you can deliver.",
       "options": {
         "reels": "Reels",
-        "posts": "Posts",
+        "posts": "Instagram",
         "stories": "Stories",
         "live": "Live",
         "ugc": "UGC",
@@ -164,7 +164,7 @@
         "affiliate": "Affiliate",
         "tiktok": "TikTok",
         "youtube": "YouTube",
-        "fbPost": "FB Post",
+        "fbPost": "Facebook",
         "other": "Other"
       },
       "otherPlaceholder": "Enter other collaboration format",
