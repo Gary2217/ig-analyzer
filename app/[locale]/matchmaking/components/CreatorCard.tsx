@@ -108,23 +108,23 @@ export function CreatorCard({ card, locale }: CreatorCardProps) {
         <div className="grid grid-cols-2 gap-2 text-[11px] text-white/70 tabular-nums min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <Users className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
-            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.followersShort}</span>
-            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{followersText}</span>
+            <span className="text-white/55 min-w-0 truncate">{copy.followersShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{followersText}</span>
           </div>
           <div className="flex items-center gap-2 min-w-0">
             <Heart className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
-            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.likesShort}</span>
-            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{likesText}</span>
+            <span className="text-white/55 min-w-0 truncate">{copy.likesShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{likesText}</span>
           </div>
           <div className="flex items-center gap-2 min-w-0">
             <MessageCircle className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
-            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.commentsShort}</span>
-            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{commentsText}</span>
+            <span className="text-white/55 min-w-0 truncate">{copy.commentsShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{commentsText}</span>
           </div>
           <div className="flex items-center gap-2 min-w-0">
             <Percent className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
-            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.erShort}</span>
-            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{erText}</span>
+            <span className="text-white/55 min-w-0 truncate">{copy.erShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{erText}</span>
           </div>
         </div>
       </div>

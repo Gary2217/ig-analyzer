@@ -343,67 +343,97 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const modalBodyRef = useRef<HTMLDivElement>(null)
   const igModalBodyRef = useRef<HTMLDivElement>(null)
   const pageScrollYRef = useRef<number>(0)
+  const bodyLockRef = useRef<{
+    locked: boolean
+    prevOverflow: string
+    prevPosition: string
+    prevTop: string
+    prevLeft: string
+    prevRight: string
+    prevWidth: string
+    restoreY: number
+  } | null>(null)
 
-  // Reset scroll position and caption state when modal opens
+  function unlockBodyScroll() {
+    if (typeof window === "undefined") return
+    const state = bodyLockRef.current
+    if (!state?.locked) return
+
+    const body = document.body
+    body.style.overflow = state.prevOverflow
+    body.style.position = state.prevPosition
+    body.style.top = state.prevTop
+    body.style.left = state.prevLeft
+    body.style.right = state.prevRight
+    body.style.width = state.prevWidth
+
+    bodyLockRef.current = null
+    window.scrollTo(0, state.restoreY)
+  }
+
+  // Reset scroll position when IG modal opens
   useEffect(() => {
-    if (openIg && igModalBodyRef.current) {
-      // Reset body scroll to top immediately
-      requestAnimationFrame(() => {
-        if (igModalBodyRef.current) {
-          igModalBodyRef.current.scrollTop = 0
-        }
-      })
-    }
+    if (!openIg || !igModalBodyRef.current) return
+    requestAnimationFrame(() => {
+      if (igModalBodyRef.current) {
+        igModalBodyRef.current.scrollTop = 0
+      }
+    })
   }, [openIg])
 
   // Lock background scroll + preserve scroll position while ANY modal is open
   useEffect(() => {
     const isOpen = Boolean(openIg || openAvatarUrl)
-    if (!isOpen) return
     if (typeof window === "undefined") return
 
-    const body = document.body
-    const prevOverflow = body.style.overflow
-    const prevPosition = body.style.position
-    const prevTop = body.style.top
-    const prevLeft = body.style.left
-    const prevRight = body.style.right
-    const prevWidth = body.style.width
+    if (isOpen) {
+      if (bodyLockRef.current?.locked) return
 
-    const y = window.scrollY || 0
-    pageScrollYRef.current = y
+      const body = document.body
+      const y = window.scrollY || 0
+      pageScrollYRef.current = y
 
-    // iOS-safe: fixed body lock prevents jump when overlays open
-    body.style.overflow = "hidden"
-    body.style.position = "fixed"
-    body.style.top = `-${y}px`
-    body.style.left = "0"
-    body.style.right = "0"
-    body.style.width = "100%"
+      bodyLockRef.current = {
+        locked: true,
+        prevOverflow: body.style.overflow,
+        prevPosition: body.style.position,
+        prevTop: body.style.top,
+        prevLeft: body.style.left,
+        prevRight: body.style.right,
+        prevWidth: body.style.width,
+        restoreY: y,
+      }
 
-    // If anything tried to scroll, restore immediately
-    window.requestAnimationFrame(() => {
-      window.scrollTo(0, y)
-    })
+      // iOS-safe: fixed body lock prevents jump when overlays open
+      body.style.overflow = "hidden"
+      body.style.position = "fixed"
+      body.style.top = `-${y}px`
+      body.style.left = "0"
+      body.style.right = "0"
+      body.style.width = "100%"
 
-    return () => {
-      const restoreY = pageScrollYRef.current
-      body.style.overflow = prevOverflow
-      body.style.position = prevPosition
-      body.style.top = prevTop
-      body.style.left = prevLeft
-      body.style.right = prevRight
-      body.style.width = prevWidth
-      window.scrollTo(0, restoreY)
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, y)
+      })
+      return
     }
+
+    unlockBodyScroll()
   }, [openAvatarUrl, openIg])
+
+  // Safety: restore scroll on unmount (prevents "stuck page" if navigating while modal open)
+  useEffect(() => {
+    return () => {
+      unlockBodyScroll()
+    }
+  }, [])
+
+  const previewCarouselRef = useRef<HTMLDivElement | null>(null)
+  const [canScrollPreviewLeft, setCanScrollPreviewLeft] = useState(false)
+  const [canScrollPreviewRight, setCanScrollPreviewRight] = useState(false)
 
   const [thumbnailLoadErrors, setThumbnailLoadErrors] = useState<Record<string, boolean>>({})
   const [retryKeys, setRetryKeys] = useState<Record<string, number>>({})
-  const [previewCarouselIndex, setPreviewCarouselIndex] = useState(0)
-  const previewCarouselRef = useRef<HTMLDivElement>(null)
-  const [canScrollPreviewLeft, setCanScrollPreviewLeft] = useState(false)
-  const [canScrollPreviewRight, setCanScrollPreviewRight] = useState(false)
 
   // DnD sensors for drag-reorder
   const sensors = useSensors(
@@ -1047,7 +1077,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                               referrerPolicy="no-referrer"
                               decoding="async"
                               onError={() => {
-                                setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: true }))
+                                setThumbnailLoadErrors((prev: Record<string, boolean>) => ({ ...prev, [normalizedUrl]: true }))
                               }}
                             />
                             {isVideo && (
@@ -1066,8 +1096,8 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setThumbnailLoadErrors(prev => ({ ...prev, [normalizedUrl]: false }))
-                                setRetryKeys(prev => ({ ...prev, [normalizedUrl]: (prev[normalizedUrl] || 0) + 1 }))
+                                setThumbnailLoadErrors((prev: Record<string, boolean>) => ({ ...prev, [normalizedUrl]: false }))
+                                setRetryKeys((prev: Record<string, number>) => ({ ...prev, [normalizedUrl]: (prev[normalizedUrl] || 0) + 1 }))
                               }}
                               className="absolute top-1 right-1 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                               style={{ minWidth: "44px", minHeight: "44px" }}

@@ -147,16 +147,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const copy = locale === "zh-TW"
     ? {
         heading: "瀏覽創作者名片，開啟合作機會",
-        comingSoon: "即將推出",
-        description:
-          "我們正在建立一個公開的創作者名片展示平台。品牌與創作者將能在此探索合作機會。",
         placeholderLabel: "創作者名片",
       }
     : {
         heading: "Browse creator cards and collaborate",
-        comingSoon: "Coming Soon",
-        description:
-          "We're building a public creator card showcase. Brands and creators will be able to discover collaboration opportunities here.",
         placeholderLabel: "Creator Card",
       }
 
@@ -233,16 +227,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight max-w-3xl mx-auto text-balance">
             {copy.heading}
           </h1>
-        </div>
-
-        {/* Coming Soon Notice */}
-        <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-6 text-center max-w-2xl mx-auto">
-          <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-200 border border-amber-400/20 mb-3">
-            {copy.comingSoon}
-          </div>
-          <p className="text-sm text-white/60 leading-relaxed">
-            {copy.description}
-          </p>
         </div>
 
         {/* Creator Cards with Search/Filter */}
