@@ -9,6 +9,19 @@ export type CollabType =
   | "event"
   | "other"
 
+export type FormatKey =
+  | "reels"
+  | "posts"
+  | "stories"
+  | "ugc"
+  | "live"
+  | "youtube"
+  | "tiktok"
+  | "facebook"
+  | "review_unboxing"
+  | "event"
+  | "other"
+
 export type BudgetRange =
   | "any"
   | "0_5000"

@@ -21,6 +21,20 @@ export type CopyDictionary = {
     platformYouTube: string
     platformFacebook: string
 
+    formatLabel: string
+    allFormats: string
+    formatReels: string
+    formatPosts: string
+    formatStories: string
+    formatUGC: string
+    formatLive: string
+    formatYouTube: string
+    formatTikTok: string
+    formatFacebook: string
+    formatReviewUnboxing: string
+    formatEvent: string
+    formatOther: string
+
     sortRecommended: string
     sortNewest: string
     sortName: string

@@ -12,6 +12,7 @@ import type {
   BudgetRange,
   CollabType,
   CreatorCardData,
+  FormatKey,
   Platform,
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
@@ -129,6 +130,30 @@ function derivePlatformsFromDeliverables(input?: string[]): Platform[] {
   return Array.from(set)
 }
 
+function deriveFormatKeysFromDeliverables(input?: string[]): FormatKey[] {
+  const d = Array.isArray(input) ? input : []
+  const set = new Set<FormatKey>()
+
+  for (const raw of d) {
+    const id = String(raw || "").trim().toLowerCase()
+    if (!id) continue
+
+    if (id === "reels") set.add("reels")
+    else if (id === "posts") set.add("posts")
+    else if (id === "stories") set.add("stories")
+    else if (id === "ugc") set.add("ugc")
+    else if (id === "live") set.add("live")
+    else if (id === "youtube") set.add("youtube")
+    else if (id === "tiktok") set.add("tiktok")
+    else if (id === "fb_post" || id === "fb" || id === "facebook") set.add("facebook")
+    else if (id === "unboxing") set.add("review_unboxing")
+    else if (id === "event") set.add("event")
+    else set.add("other")
+  }
+
+  return Array.from(set)
+}
+
 function buildDemoCreators({
   locale,
   existingIds,
@@ -191,6 +216,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [platform, setPlatform] = useState<Platform | "any">("any")
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [collab, setCollab] = useState<CollabType | "any">("any")
+  const [format, setFormat] = useState<FormatKey | "any">("any")
 
   useEffect(() => {
     setCards(initialCards)
@@ -306,6 +332,14 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     })
   }, [cardsWithDemos])
 
+  const creatorFormatsById = useMemo(() => {
+    const map = new Map<string, FormatKey[]>()
+    creators.forEach((c) => {
+      map.set(c.id, deriveFormatKeysFromDeliverables(c.deliverables))
+    })
+    return map
+  }, [creators])
+
   const platformOptions = useMemo(() => {
     const mm = uiCopy.matchmaking
     const present = new Set<Platform>()
@@ -326,6 +360,48 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       ...order.filter((p) => present.has(p)).map((p) => ({ value: p, label: labelFor(p) })),
     ]
   }, [creators, uiCopy.matchmaking])
+
+  const formatOptions = useMemo(() => {
+    const mm = uiCopy.matchmaking
+    const present = new Set<FormatKey>()
+
+    creators.forEach((c) => {
+      ;(creatorFormatsById.get(c.id) ?? []).forEach((k) => present.add(k))
+    })
+
+    const order: FormatKey[] = [
+      "reels",
+      "posts",
+      "stories",
+      "ugc",
+      "live",
+      "youtube",
+      "tiktok",
+      "facebook",
+      "review_unboxing",
+      "event",
+      "other",
+    ]
+
+    const labelFor = (k: FormatKey) => {
+      if (k === "reels") return mm.formatReels
+      if (k === "posts") return mm.formatPosts
+      if (k === "stories") return mm.formatStories
+      if (k === "ugc") return mm.formatUGC
+      if (k === "live") return mm.formatLive
+      if (k === "youtube") return mm.formatYouTube
+      if (k === "tiktok") return mm.formatTikTok
+      if (k === "facebook") return mm.formatFacebook
+      if (k === "review_unboxing") return mm.formatReviewUnboxing
+      if (k === "event") return mm.formatEvent
+      return mm.formatOther
+    }
+
+    return [
+      { value: "any" as const, label: mm.allFormats },
+      ...order.filter((k) => present.has(k)).map((k) => ({ value: k, label: labelFor(k) })),
+    ]
+  }, [creators, creatorFormatsById, uiCopy.matchmaking])
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -358,6 +434,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return (types ?? []).includes(c)
   }
 
+  function formatMatch(f: FormatKey | "any", creatorId: string) {
+    if (f === "any") return true
+    return (creatorFormatsById.get(creatorId) ?? []).includes(f)
+  }
+
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase()
 
@@ -368,7 +449,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const okPlatform = platformMatch(platform, c.platforms)
       const okBudget = budgetMatch(budget, c.budgetMin, c.budgetMax)
       const okCollab = collabMatch(collab, c.collabTypes)
-      return okQ && okCat && okPlatform && okBudget && okCollab
+      const okFormat = formatMatch(format, c.id)
+      return okQ && okCat && okPlatform && okBudget && okCollab && okFormat
     })
 
     if (sort === "name") {
@@ -382,7 +464,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     return out
-  }, [creators, q, category, sort, platform, budget, collab])
+  }, [creators, q, category, sort, platform, budget, collab, format, creatorFormatsById])
 
   const favoritesList = useMemo(
     () => creators.filter((c) => fav.favoriteIds.has(c.id)),
@@ -399,6 +481,9 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           platform={platform}
           onPlatform={setPlatform}
           platformOptions={platformOptions}
+          format={format}
+          onFormat={setFormat}
+          formatOptions={formatOptions}
           budget={budget}
           onBudget={setBudget}
           collab={collab}

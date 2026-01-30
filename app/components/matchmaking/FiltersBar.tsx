@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import type { BudgetRange, CollabType, Platform } from "./types"
+import type { BudgetRange, CollabType, FormatKey, Platform } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
 type Props = {
@@ -13,6 +13,10 @@ type Props = {
   onPlatform: (v: Platform | "any") => void
 
   platformOptions: Array<{ value: Platform | "any"; label: string }>
+
+  format: FormatKey | "any"
+  onFormat: (v: FormatKey | "any") => void
+  formatOptions: Array<{ value: FormatKey | "any"; label: string }>
 
   budget: BudgetRange
   onBudget: (v: BudgetRange) => void
@@ -75,7 +79,7 @@ export function FiltersBar(props: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-7 gap-2">
           <input
             value={props.search}
             onChange={(e) => props.onSearch(e.target.value)}
@@ -113,6 +117,18 @@ export function FiltersBar(props: Props) {
             className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
           >
             {collabOptions.map((o) => (
+              <option key={o.value} value={o.value} className="bg-slate-900">
+                {o.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={props.format}
+            onChange={(e) => props.onFormat(e.target.value as any)}
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+          >
+            {props.formatOptions.map((o) => (
               <option key={o.value} value={o.value} className="bg-slate-900">
                 {o.label}
               </option>
