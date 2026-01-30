@@ -42,6 +42,12 @@ export const zhTW: CopyDictionary = {
     budgetCustomPlaceholder: "輸入金額",
     budgetClearCustom: "清除",
 
+    budgetRange0_5000: "≤ 5,000",
+    budgetRange5000_10000: "5,000–10,000",
+    budgetRange10000_30000: "10,000–30,000",
+    budgetRange30000_60000: "30,000–60,000",
+    budgetRange60000_plus: "60,000+",
+
     sortFollowersDesc: "粉絲數（高→低）",
     sortErDesc: "互動率（高→低）",
 
@@ -58,6 +64,9 @@ export const zhTW: CopyDictionary = {
     profileNotSet: "尚未設定名片",
     favoriteAddAria: "收藏創作者",
     favoriteRemoveAria: "取消收藏",
+
+    showMoreChips: (n: number) => `+${n} 更多`,
+    showLessChips: "收合",
 
     noTopics: "尚無標籤",
     viewDetails: "點擊查看 →",

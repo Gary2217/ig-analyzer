@@ -32,23 +32,26 @@ type Props = {
   myCardFirst: boolean
   onMyCardFirst: (v: boolean) => void
 
+  favoritesCount: number
+  onOpenFavorites: () => void
+
   total: number
 }
 
 export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [chipsExpanded, setChipsExpanded] = useState(false)
 
   const budgetOptions: Array<{ value: BudgetRange; label: string }> = useMemo(
     () => [
-      { value: "any", label: mm.budgetLabel },
+      { value: "any", label: mm.anyBudget },
       { value: "custom", label: mm.budgetOtherAmount },
-      { value: "0_5000", label: "≤ 5,000" },
-      { value: "5000_10000", label: "5,000–10,000" },
-      { value: "10000_30000", label: "10,000–30,000" },
-      { value: "30000_60000", label: "30,000–60,000" },
-      { value: "60000_plus", label: "60,000+" },
+      { value: "0_5000", label: mm.budgetRange0_5000 },
+      { value: "5000_10000", label: mm.budgetRange5000_10000 },
+      { value: "10000_30000", label: mm.budgetRange10000_30000 },
+      { value: "30000_60000", label: mm.budgetRange30000_60000 },
+      { value: "60000_plus", label: mm.budgetRange60000_plus },
     ],
     [mm]
   )
@@ -58,252 +61,166 @@ export function FiltersBar(props: Props) {
     [props.typeOptions]
   )
 
-  const filtersContentDesktop = (
-    <>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
-        <input
-          value={props.search}
-          onChange={(e) => props.onSearch(e.target.value)}
-          placeholder={copy.common.searchPlaceholder}
-          className="col-span-2 lg:col-span-2 h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30 min-w-0"
-        />
-
-        <select
-          value={props.platform}
-          onChange={(e) => props.onPlatform(e.target.value as any)}
-          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-        >
-          {props.platformOptions.map((o) => (
-            <option key={o.value} value={o.value} className="bg-slate-900">
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={props.budget}
-          onChange={(e) => props.onBudget(e.target.value as any)}
-          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-        >
-          {budgetOptions.map((o) => (
-            <option key={o.value} value={o.value} className="bg-slate-900">
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={props.sort}
-          onChange={(e) => props.onSort(e.target.value as any)}
-          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-        >
-          <option value="followers_desc" className="bg-slate-900">
-            {mm.sortFollowersDesc}
-          </option>
-          <option value="er_desc" className="bg-slate-900">
-            {mm.sortErDesc}
-          </option>
-        </select>
-      </div>
-
-      <div className="mt-2 flex items-start justify-between gap-2">
-        <div className="flex flex-wrap gap-2 min-w-0">
-          {chipOptions.map((o) => {
-            const active = props.selectedTypes.includes(o.value)
-            return (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => props.onToggleType(o.value)}
-                className={`h-9 px-3 rounded-full border text-xs whitespace-nowrap max-w-full truncate ${
-                  active
-                    ? "bg-white/15 border-white/25 text-white/90"
-                    : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
-                }`}
-              >
-                {o.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {props.selectedTypes.length ? (
-          <button
-            type="button"
-            onClick={props.onClearTypes}
-            className="shrink-0 h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10"
-          >
-            {copy.common.all}
-          </button>
-        ) : null}
-      </div>
-
-      {props.budget === "custom" ? (
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-          <input
-            inputMode="numeric"
-            value={props.customBudget}
-            onChange={(e) => {
-              const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
-              props.onCustomBudget(next)
-            }}
-            placeholder={mm.budgetCustomPlaceholder}
-            className="h-11 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
-          />
-          <button
-            type="button"
-            onClick={props.onClearCustomBudget}
-            className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
-          >
-            {mm.budgetClearCustom}
-          </button>
-        </div>
-      ) : null}
-    </>
-  )
-
-  const filtersContentMobile = (
-    <>
-      <div className="grid grid-cols-2 gap-2">
-        <select
-          value={props.platform}
-          onChange={(e) => props.onPlatform(e.target.value as any)}
-          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-        >
-          {props.platformOptions.map((o) => (
-            <option key={o.value} value={o.value} className="bg-slate-900">
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={props.budget}
-          onChange={(e) => props.onBudget(e.target.value as any)}
-          className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-        >
-          {budgetOptions.map((o) => (
-            <option key={o.value} value={o.value} className="bg-slate-900">
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={props.sort}
-          onChange={(e) => props.onSort(e.target.value as any)}
-          className="col-span-2 h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-        >
-          <option value="followers_desc" className="bg-slate-900">
-            {mm.sortFollowersDesc}
-          </option>
-          <option value="er_desc" className="bg-slate-900">
-            {mm.sortErDesc}
-          </option>
-        </select>
-      </div>
-
-      <div className="mt-2 flex items-start justify-between gap-2">
-        <div className="flex flex-wrap gap-2 min-w-0">
-          {chipOptions.map((o) => {
-            const active = props.selectedTypes.includes(o.value)
-            return (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => props.onToggleType(o.value)}
-                className={`h-9 px-3 rounded-full border text-xs whitespace-nowrap max-w-full truncate ${
-                  active
-                    ? "bg-white/15 border-white/25 text-white/90"
-                    : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
-                }`}
-              >
-                {o.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {props.selectedTypes.length ? (
-          <button
-            type="button"
-            onClick={props.onClearTypes}
-            className="shrink-0 h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10"
-          >
-            {copy.common.all}
-          </button>
-        ) : null}
-      </div>
-
-      {props.budget === "custom" ? (
-        <div className="mt-2 grid grid-cols-1 gap-2">
-          <input
-            inputMode="numeric"
-            value={props.customBudget}
-            onChange={(e) => {
-              const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
-              props.onCustomBudget(next)
-            }}
-            placeholder={mm.budgetCustomPlaceholder}
-            className="h-11 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
-          />
-          <button
-            type="button"
-            onClick={props.onClearCustomBudget}
-            className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
-          >
-            {mm.budgetClearCustom}
-          </button>
-        </div>
-      ) : null}
-    </>
-  )
+  const chipsCollapsedCount = 6
+  const visibleChips = chipsExpanded ? chipOptions : chipOptions.slice(0, chipsCollapsedCount)
+  const hiddenCount = Math.max(0, chipOptions.length - visibleChips.length)
 
   return (
     <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
       <div className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-white/90">{mm.title}</h1>
-            <p className="text-xs sm:text-sm text-white/50">
-              {mm.description}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <label className="inline-flex items-center gap-2 text-xs sm:text-sm text-white/70 whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={props.myCardFirst}
-                onChange={(e) => props.onMyCardFirst(e.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-white/5"
-              />
-              <span className="min-w-0 truncate">{mm.myCardFirstToggle}</span>
-            </label>
-            <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
-              {mm.totalCreators(props.total)}
+        <div>
+          <h1 className="text-lg sm:text-xl font-semibold text-white/90">{mm.title}</h1>
+          <p className="text-xs sm:text-sm text-white/50">{mm.description}</p>
+        </div>
+
+        <div className="sticky top-[52px] sm:top-[72px] z-40 -mx-3 sm:mx-0 px-3 sm:px-0">
+          <div className="rounded-2xl border border-white/10 bg-[#0b1220]/75 backdrop-blur-md">
+            <div className="p-3 sm:p-4">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <input
+                  value={props.search}
+                  onChange={(e) => props.onSearch(e.target.value)}
+                  placeholder={copy.common.searchPlaceholder}
+                  className="h-11 flex-1 min-w-[160px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+                />
+
+                <select
+                  value={props.platform}
+                  onChange={(e) => props.onPlatform(e.target.value as any)}
+                  className="h-11 min-w-[140px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                >
+                  {props.platformOptions.map((o) => (
+                    <option key={o.value} value={o.value} className="bg-slate-900">
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={props.budget}
+                  onChange={(e) => props.onBudget(e.target.value as any)}
+                  className="h-11 min-w-[140px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                >
+                  {budgetOptions.map((o) => (
+                    <option key={o.value} value={o.value} className="bg-slate-900">
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={props.sort}
+                  onChange={(e) => props.onSort(e.target.value as any)}
+                  className="h-11 min-w-[180px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                >
+                  <option value="followers_desc" className="bg-slate-900">
+                    {mm.sortFollowersDesc}
+                  </option>
+                  <option value="er_desc" className="bg-slate-900">
+                    {mm.sortErDesc}
+                  </option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={props.onOpenFavorites}
+                  className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 whitespace-nowrap"
+                >
+                  {copy.common.favorites} ({props.favoritesCount})
+                </button>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <label className="inline-flex items-center gap-2 text-xs sm:text-sm text-white/70 whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={props.myCardFirst}
+                      onChange={(e) => props.onMyCardFirst(e.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-white/5"
+                    />
+                    <span className="min-w-0 truncate">{mm.myCardFirstToggle}</span>
+                  </label>
+                  <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
+                    {mm.totalCreators(props.total)}
+                  </div>
+                </div>
+
+                {props.selectedTypes.length ? (
+                  <button
+                    type="button"
+                    onClick={props.onClearTypes}
+                    className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 whitespace-nowrap"
+                  >
+                    {copy.common.all}
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-2 min-w-0">
+                {visibleChips.map((o) => {
+                  const active = props.selectedTypes.includes(o.value)
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => props.onToggleType(o.value)}
+                      className={`h-11 px-3 rounded-full border text-sm whitespace-nowrap max-w-full truncate ${
+                        active
+                          ? "bg-white/15 border-white/25 text-white/90"
+                          : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  )
+                })}
+
+                {!chipsExpanded && hiddenCount ? (
+                  <button
+                    type="button"
+                    onClick={() => setChipsExpanded(true)}
+                    className="h-11 px-3 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 whitespace-nowrap"
+                  >
+                    {mm.showMoreChips(hiddenCount)}
+                  </button>
+                ) : null}
+
+                {chipsExpanded && chipOptions.length > chipsCollapsedCount ? (
+                  <button
+                    type="button"
+                    onClick={() => setChipsExpanded(false)}
+                    className="h-11 px-3 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 whitespace-nowrap"
+                  >
+                    {mm.showLessChips}
+                  </button>
+                ) : null}
+              </div>
+
+              {props.budget === "custom" ? (
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                  <input
+                    inputMode="numeric"
+                    value={props.customBudget}
+                    onChange={(e) => {
+                      const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
+                      props.onCustomBudget(next)
+                    }}
+                    placeholder={mm.budgetCustomPlaceholder}
+                    className="h-11 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={props.onClearCustomBudget}
+                    className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
+                  >
+                    {mm.budgetClearCustom}
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
-
-        {/* Mobile: compact header */}
-        <div className="sm:hidden grid grid-cols-[1fr_auto] gap-2">
-          <input
-            value={props.search}
-            onChange={(e) => props.onSearch(e.target.value)}
-            placeholder={copy.common.searchPlaceholder}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30 min-w-0"
-          />
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 whitespace-nowrap"
-          >
-            {mm.filtersButton}
-          </button>
-        </div>
-
-        <div className="hidden sm:block">{filtersContentDesktop}</div>
-        {mobileOpen ? <div className="sm:hidden">{filtersContentMobile}</div> : null}
       </div>
     </div>
   )

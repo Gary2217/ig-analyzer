@@ -40,6 +40,12 @@ export type CopyDictionary = {
     budgetCustomPlaceholder: string
     budgetClearCustom: string
 
+    budgetRange0_5000: string
+    budgetRange5000_10000: string
+    budgetRange10000_30000: string
+    budgetRange30000_60000: string
+    budgetRange60000_plus: string
+
     sortFollowersDesc: string
     sortErDesc: string
 
@@ -56,6 +62,9 @@ export type CopyDictionary = {
     profileNotSet: string
     favoriteAddAria: string
     favoriteRemoveAria: string
+
+    showMoreChips: (n: number) => string
+    showLessChips: string
 
     noTopics: string
     viewDetails: string

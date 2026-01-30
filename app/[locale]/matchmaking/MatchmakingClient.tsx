@@ -190,17 +190,14 @@ function buildDemoCreators({
     const er = clampNumber(1.2 + rand() * 6.2, 0.6, 9.9)
     const avgLikes = Math.round((followers * er) / 100 * (0.82 + rand() * 0.22))
     const avgComments = Math.round(avgLikes * (0.03 + rand() * 0.06))
-
-    const name = locale === "zh-TW" ? `示意創作者 ${i + 1}` : `Demo Creator ${i + 1}`
-    const username = locale === "zh-TW" ? `demo_${(h % 10_000).toString().padStart(4, "0")}` : `demo_${(h % 10_000).toString().padStart(4, "0")}`
     const id = `demo_${h.toString(16)}`
     if (existingIds.has(id)) continue
 
     out.push({
       id,
-      displayName: name,
-      avatarUrl: svgAvatarDataUrl(seed, name),
-      category: locale === "zh-TW" ? "示意" : "Demo",
+      displayName: "",
+      avatarUrl: "",
+      category: "",
       followerCount: followers,
       avgLikes,
       avgComments,
@@ -358,7 +355,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     const TARGET_TOTAL = 12
     const existingIds = new Set(cards.map((c) => c.id))
     const realCards = cards.filter((c) => !c.isDemo)
-    const missing = Math.max(0, TARGET_TOTAL - realCards.length)
+    const missing = Math.min(3, Math.max(0, TARGET_TOTAL - realCards.length))
     const demos = missing > 0 ? buildDemoCreators({ locale, existingIds, count: missing, seedBase: "matchmaking" }) : []
     return [...realCards, ...demos]
   }, [cards, locale])
@@ -578,18 +575,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           onSort={(v) => setSort(v === "er_desc" ? "er_desc" : "followers_desc")}
           myCardFirst={myCardFirst}
           onMyCardFirst={setMyCardFirst}
+          favoritesCount={fav.count}
+          onOpenFavorites={() => setFavOpen(true)}
           total={filtered.length}
         />
-
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-3 flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => setFavOpen(true)}
-            className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10"
-          >
-            {uiCopy.common.favorites} ({fav.count})
-          </button>
-        </div>
 
         <CreatorGrid>
           {pinned.map((c) => (

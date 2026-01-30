@@ -42,6 +42,12 @@ export const en: CopyDictionary = {
     budgetCustomPlaceholder: "Enter amount",
     budgetClearCustom: "Clear",
 
+    budgetRange0_5000: "≤ 5,000",
+    budgetRange5000_10000: "5,000–10,000",
+    budgetRange10000_30000: "10,000–30,000",
+    budgetRange30000_60000: "30,000–60,000",
+    budgetRange60000_plus: "60,000+",
+
     sortFollowersDesc: "Followers (High)",
     sortErDesc: "Engagement Rate (High)",
 
@@ -58,6 +64,9 @@ export const en: CopyDictionary = {
     profileNotSet: "Profile not set",
     favoriteAddAria: "Save creator",
     favoriteRemoveAria: "Unsave creator",
+
+    showMoreChips: (n: number) => `+${n} more`,
+    showLessChips: "Show less",
 
     noTopics: "No topics",
     viewDetails: "Click to view details →",
