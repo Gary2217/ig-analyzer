@@ -30,7 +30,17 @@ export function CreatorCard({
 }) {
   const copy = getCopy(locale)
   const mm = copy.matchmaking
-  const topics = (creator.topics ?? []).slice(0, 3)
+  const allPlatforms = (creator.platforms ?? []).filter(Boolean)
+  const platformChips = allPlatforms.slice(0, 3)
+  const platformOverflow = Math.max(0, allPlatforms.length - platformChips.length)
+
+  const platformLabel = (p: string) => {
+    if (p === "instagram") return mm.platformInstagram
+    if (p === "tiktok") return mm.platformTikTok
+    if (p === "youtube") return mm.platformYouTube
+    if (p === "facebook") return mm.platformFacebook
+    return p
+  }
 
   return (
     <div className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden">
@@ -71,15 +81,22 @@ export function CreatorCard({
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
-            {topics.length ? (
-              topics.map((t) => (
-                <span
-                  key={t}
-                  className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate"
-                >
-                  {t}
-                </span>
-              ))
+            {platformChips.length ? (
+              <>
+                {platformChips.map((p) => (
+                  <span
+                    key={p}
+                    className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
+                  >
+                    {platformLabel(p)}
+                  </span>
+                ))}
+                {platformOverflow ? (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/60 tabular-nums whitespace-nowrap">
+                    +{platformOverflow}
+                  </span>
+                ) : null}
+              </>
             ) : (
               <span className="text-[11px] text-white/40">{mm.noTopics}</span>
             )}
@@ -99,8 +116,6 @@ export function CreatorCard({
               </div>
             </div>
           </div>
-
-          <div className="mt-3 text-xs text-white/50">{mm.viewDetails}</div>
         </div>
       </Link>
     </div>

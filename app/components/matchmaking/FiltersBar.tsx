@@ -12,6 +12,8 @@ type Props = {
   platform: Platform | "any"
   onPlatform: (v: Platform | "any") => void
 
+  platformOptions: Array<{ value: Platform | "any"; label: string }>
+
   budget: BudgetRange
   onBudget: (v: BudgetRange) => void
 
@@ -31,17 +33,6 @@ type Props = {
 export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
-
-  const platformOptions: Array<{ value: Platform | "any"; label: string }> = useMemo(
-    () => [
-      { value: "any", label: mm.allPlatforms },
-      { value: "instagram", label: mm.platformInstagram },
-      { value: "tiktok", label: mm.platformTikTok },
-      { value: "youtube", label: mm.platformYouTube },
-      { value: "facebook", label: mm.platformFacebook },
-    ],
-    [mm]
-  )
 
   const budgetOptions: Array<{ value: BudgetRange; label: string }> = useMemo(
     () => [
@@ -97,7 +88,7 @@ export function FiltersBar(props: Props) {
             onChange={(e) => props.onPlatform(e.target.value as any)}
             className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
           >
-            {platformOptions.map((o) => (
+            {props.platformOptions.map((o) => (
               <option key={o.value} value={o.value} className="bg-slate-900">
                 {o.label}
               </option>

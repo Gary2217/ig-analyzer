@@ -31,6 +31,7 @@ export type CreatorCardData = {
   topics?: string[]
   platforms?: Platform[]
   collabTypes?: CollabType[]
+  deliverables?: string[]
   budgetMin?: number
   budgetMax?: number
   stats?: CreatorStats

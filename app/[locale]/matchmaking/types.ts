@@ -3,6 +3,7 @@ export interface CreatorCard {
   displayName: string
   avatarUrl: string
   category: string
+  deliverables?: string[]
   followerCount: number
   avgLikes?: number | null
   avgComments?: number | null

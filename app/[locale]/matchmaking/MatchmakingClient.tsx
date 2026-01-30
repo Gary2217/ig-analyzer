@@ -101,6 +101,34 @@ function roundTo2(n: number) {
   return Math.round(n * 100) / 100
 }
 
+function derivePlatformsFromDeliverables(input?: string[]): Platform[] {
+  const d = Array.isArray(input) ? input : []
+  const set = new Set<Platform>()
+
+  for (const raw of d) {
+    const id = String(raw || "").trim().toLowerCase()
+    if (!id) continue
+    if (id === "tiktok") set.add("tiktok")
+    else if (id === "youtube") set.add("youtube")
+    else if (id === "fb_post" || id === "fb" || id === "facebook") set.add("facebook")
+    else if (
+      id === "posts" ||
+      id === "reels" ||
+      id === "stories" ||
+      id === "live" ||
+      id === "ugc" ||
+      id === "unboxing" ||
+      id === "giveaway" ||
+      id === "event" ||
+      id === "affiliate"
+    ) {
+      set.add("instagram")
+    }
+  }
+
+  return Array.from(set)
+}
+
 function buildDemoCreators({
   locale,
   existingIds,
@@ -258,14 +286,17 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const creators: CreatorCardData[] = useMemo(() => {
     return cardsWithDemos.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
+      const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
+      const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       return {
         id: c.id,
         name: c.displayName,
         handle: c.displayName ? c.displayName.replace(/^@/, "") : undefined,
         avatarUrl: c.avatarUrl,
         topics,
-        platforms: ["instagram"],
+        platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
         collabTypes: ["other"],
+        deliverables,
         stats: {
           followers: c.followerCount,
           engagementRate: typeof c.engagementRate === "number" ? c.engagementRate : undefined,
@@ -274,6 +305,27 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       }
     })
   }, [cardsWithDemos])
+
+  const platformOptions = useMemo(() => {
+    const mm = uiCopy.matchmaking
+    const present = new Set<Platform>()
+    creators.forEach((c) => {
+      ;(c.platforms ?? []).forEach((p) => present.add(p))
+    })
+
+    const order: Platform[] = ["instagram", "facebook", "youtube", "tiktok"]
+    const labelFor = (p: Platform) => {
+      if (p === "instagram") return mm.platformInstagram
+      if (p === "tiktok") return mm.platformTikTok
+      if (p === "youtube") return mm.platformYouTube
+      return mm.platformFacebook
+    }
+
+    return [
+      { value: "any" as const, label: mm.allPlatforms },
+      ...order.filter((p) => present.has(p)).map((p) => ({ value: p, label: labelFor(p) })),
+    ]
+  }, [creators, uiCopy.matchmaking])
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -346,6 +398,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           onSearch={setQ}
           platform={platform}
           onPlatform={setPlatform}
+          platformOptions={platformOptions}
           budget={budget}
           onBudget={setBudget}
           collab={collab}
