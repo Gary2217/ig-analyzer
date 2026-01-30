@@ -1,10 +1,18 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { CreatorCardBrowser } from "./components/CreatorCardBrowser"
-import { CreatorDetailsSheet } from "./components/CreatorDetailsSheet"
-import { AuthGateModal } from "./components/AuthGateModal"
-import { useAuthNavigation } from "@/app/lib/useAuthNavigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { FiltersBar } from "@/app/components/matchmaking/FiltersBar"
+import { CreatorGrid } from "@/app/components/matchmaking/CreatorGrid"
+import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmaking/CreatorCard"
+import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
+import { useFavorites } from "@/app/components/matchmaking/useFavorites"
+import type {
+  BudgetRange,
+  CollabType,
+  CreatorCardData,
+  Platform,
+} from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
 
 interface MatchmakingClientProps {
@@ -139,14 +147,19 @@ function buildDemoCreators({
 }
 
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
-  const { isAuthenticated, navigateToProtected } = useAuthNavigation()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const fav = useFavorites()
+  const [favOpen, setFavOpen] = useState(false)
 
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
 
-  // State for sheet and modal
-  const [selectedCard, setSelectedCard] = useState<CreatorCard | null>(null)
-  const [isSheetOpen, setIsSheetOpen] = useState(false)
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [q, setQ] = useState("")
+  const [category, setCategory] = useState("all")
+  const [sort, setSort] = useState("recommended")
+  const [platform, setPlatform] = useState<Platform | "any">("any")
+  const [budget, setBudget] = useState<BudgetRange>("any")
+  const [collab, setCollab] = useState<CollabType | "any">("any")
 
   const copy = locale === "zh-TW"
     ? {
@@ -161,6 +174,38 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   useEffect(() => {
     setCards(initialCards)
   }, [initialCards])
+
+  // Initialize from URL query params on first client render
+  useEffect(() => {
+    const qp = searchParams
+    const nextQ = (qp.get("q") ?? "").slice(0, 120)
+    const nextCategory = qp.get("category") ?? "all"
+    const nextSort = qp.get("sort") ?? "recommended"
+    const nextPlatform = (qp.get("platform") ?? "any") as Platform | "any"
+    const nextBudget = (qp.get("budget") ?? "any") as BudgetRange
+    const nextCollab = (qp.get("collab") ?? "any") as CollabType | "any"
+
+    setQ(nextQ)
+    setCategory(nextCategory)
+    setSort(nextSort)
+    setPlatform(nextPlatform)
+    setBudget(nextBudget)
+    setCollab(nextCollab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Sync state -> URL
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (q.trim()) params.set("q", q.trim())
+    if (category && category !== "all") params.set("category", category)
+    if (sort && sort !== "recommended") params.set("sort", sort)
+    if (platform !== "any") params.set("platform", platform)
+    if (budget !== "any") params.set("budget", budget)
+    if (collab !== "any") params.set("collab", collab)
+    const qs = params.toString()
+    router.replace(qs ? `?${qs}` : "?", { scroll: false })
+  }, [q, category, sort, platform, budget, collab, router])
 
   useEffect(() => {
     let cancelled = false
@@ -217,61 +262,138 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return [...realCards, ...demos]
   }, [cards, locale])
 
+  const creators: CreatorCardData[] = useMemo(() => {
+    return cardsWithDemos.map((c) => {
+      const topics = (c.category ? [c.category] : []).filter(Boolean)
+      return {
+        id: c.id,
+        name: c.displayName,
+        handle: c.displayName ? c.displayName.replace(/^@/, "") : undefined,
+        avatarUrl: c.avatarUrl,
+        topics,
+        platforms: ["instagram"],
+        collabTypes: ["other"],
+        stats: {
+          followers: c.followerCount,
+          engagementRate: typeof c.engagementRate === "number" ? c.engagementRate : undefined,
+        },
+        href: c.isDemo ? "#" : c.profileUrl,
+      }
+    })
+  }, [cardsWithDemos])
+
+  const categories = useMemo(() => {
+    const set = new Set<string>()
+    creators.forEach((c) => {
+      const t = (c.topics?.[0] ?? "").trim()
+      if (t) set.add(t)
+    })
+    return ["all", ...Array.from(set).sort()]
+  }, [creators])
+
+  function budgetMatch(range: BudgetRange, min?: number, max?: number) {
+    if (range === "any") return true
+    const hi = typeof max === "number" ? max : typeof min === "number" ? min : null
+    if (hi == null) return true
+    if (range === "0_5000") return hi <= 5000
+    if (range === "5000_10000") return hi >= 5000 && hi <= 10000
+    if (range === "10000_30000") return hi >= 10000 && hi <= 30000
+    if (range === "30000_60000") return hi >= 30000 && hi <= 60000
+    if (range === "60000_plus") return hi >= 60000
+    return true
+  }
+
+  function platformMatch(p: Platform | "any", ps?: Platform[]) {
+    if (p === "any") return true
+    return (ps ?? []).includes(p)
+  }
+
+  function collabMatch(c: CollabType | "any", types?: CollabType[]) {
+    if (c === "any") return true
+    return (types ?? []).includes(c)
+  }
+
+  const filtered = useMemo(() => {
+    const qq = q.trim().toLowerCase()
+
+    let out = creators.filter((c) => {
+      const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")}`.toLowerCase()
+      const okQ = !qq || hay.includes(qq)
+      const okCat = category === "all" || (c.topics?.[0] ?? "") === category
+      const okPlatform = platformMatch(platform, c.platforms)
+      const okBudget = budgetMatch(budget, c.budgetMin, c.budgetMax)
+      const okCollab = collabMatch(collab, c.collabTypes)
+      return okQ && okCat && okPlatform && okBudget && okCollab
+    })
+
+    if (sort === "name") {
+      out = [...out].sort((a, b) => a.name.localeCompare(b.name))
+    } else if (sort === "followers_desc") {
+      out = [...out].sort((a, b) => (b.stats?.followers ?? -1) - (a.stats?.followers ?? -1))
+    } else if (sort === "er_desc") {
+      out = [...out].sort((a, b) => (b.stats?.engagementRate ?? -1) - (a.stats?.engagementRate ?? -1))
+    } else {
+      out = [...out]
+    }
+
+    return out
+  }, [creators, q, category, sort, platform, budget, collab])
+
+  const favoritesList = useMemo(
+    () => creators.filter((c) => fav.favoriteIds.has(c.id)),
+    [creators, fav.favoriteIds]
+  )
+
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
-      <div className="w-full max-w-6xl mx-auto px-4 py-8 sm:py-12">
-        {/* Header */}
-        <div className="text-center mb-8 sm:mb-12">
-          <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight max-w-3xl mx-auto text-balance">
-            {copy.heading}
-          </h1>
+      <div className="pt-8">
+        <FiltersBar
+          search={q}
+          onSearch={setQ}
+          platform={platform}
+          onPlatform={setPlatform}
+          budget={budget}
+          onBudget={setBudget}
+          collab={collab}
+          onCollab={setCollab}
+          category={category}
+          categoryOptions={categories}
+          onCategory={(v) => {
+            if (v === "all" || categories.includes(v)) setCategory(v)
+            else setCategory("all")
+          }}
+          sort={sort}
+          onSort={setSort}
+          total={filtered.length}
+        />
+
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-3 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setFavOpen(true)}
+            className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10"
+          >
+            Saved ({fav.count})
+          </button>
         </div>
 
-        {/* Creator Cards with Search/Filter */}
-        <CreatorCardBrowser
-          cards={cardsWithDemos}
-          locale={locale}
-        />
-
-        {/* Footer Note - only show if using real data */}
-        {cardsWithDemos.length > 0 && (
-          <div className="mt-12 text-center">
-            <p className="text-xs text-white/40">
-              {locale === "zh-TW"
-                ? `顯示 ${cardsWithDemos.length} 位創作者`
-                : `Showing ${cardsWithDemos.length} creators`}
-            </p>
-          </div>
-        )}
+        <CreatorGrid>
+          {filtered.map((c) => (
+            <MatchmakingCreatorCard
+              key={c.id}
+              creator={c}
+              isFav={fav.isFav(c.id)}
+              onToggleFav={() => fav.toggleFav(c.id)}
+            />
+          ))}
+        </CreatorGrid>
       </div>
 
-      {/* Details Sheet */}
-      {selectedCard && (
-        <CreatorDetailsSheet
-          card={selectedCard}
-          locale={locale}
-          isOpen={isSheetOpen}
-          onClose={() => {
-            setIsSheetOpen(false)
-            setSelectedCard(null)
-          }}
-        />
-      )}
-
-      {/* Auth Gate Modal */}
-      <AuthGateModal
-        locale={locale}
-        isOpen={isAuthModalOpen}
-        onClose={() => {
-          setIsAuthModalOpen(false)
-          setSelectedCard(null)
-        }}
-        onLogin={() => {
-          // Navigate to OAuth with return URL
-          if (selectedCard) {
-            navigateToProtected(`${selectedCard.profileUrl}`)
-          }
-        }}
+      <FavoritesDrawer
+        open={favOpen}
+        onClose={() => setFavOpen(false)}
+        favorites={favoritesList}
+        onClearAll={fav.clearAll}
       />
     </div>
   )
