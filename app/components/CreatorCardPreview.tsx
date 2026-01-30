@@ -49,9 +49,14 @@ function isIOSDevice() {
   return iOS || iPadOS
 }
 
-function eventTargetAllowsScroll(target: EventTarget | null) {
-  if (!target || typeof window === "undefined") return false
-  return target instanceof Element && Boolean(target.closest('[data-scroll-allow="true"]'))
+function isInsideAllowed(e: Event) {
+  const path = (e as any).composedPath?.() ?? []
+  for (const n of path) {
+    if (n instanceof Element && n.closest?.('[data-scroll-allow="true"]')) return true
+  }
+
+  const t = e.target
+  return t instanceof Element && Boolean(t.closest('[data-scroll-allow="true"]'))
 }
 
 function lockBodyScroll(): number {
@@ -77,7 +82,7 @@ function lockBodyScroll(): number {
 
     // Event gating: keep background locked, but allow scroll inside modal regions.
     const guard = (e: Event) => {
-      if (eventTargetAllowsScroll(e.target)) return
+      if (isInsideAllowed(e)) return
       e.preventDefault()
     }
     window.addEventListener("wheel", guard, { passive: false })
@@ -1357,7 +1362,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         >
           <div
             data-scroll-allow="true"
-            className="w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden"
+            className="w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden touch-pan-y"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
