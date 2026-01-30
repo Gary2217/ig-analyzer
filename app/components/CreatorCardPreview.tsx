@@ -27,6 +27,8 @@ import { CSS } from "@dnd-kit/utilities"
 let __bodyScrollLockState:
   | {
       tokens: Set<number>
+      isIOS: boolean
+      prevHtmlOverflow: string
       prevOverflow: string
       prevPosition: string
       prevTop: string
@@ -34,18 +36,36 @@ let __bodyScrollLockState:
       prevRight: string
       prevWidth: string
       scrollY: number
+      removeEventGuards?: () => void
     }
   | undefined
 let __bodyScrollLockNextToken = 1
 
+function isIOSDevice() {
+  if (typeof navigator === "undefined") return false
+  const ua = navigator.userAgent || ""
+  const iOS = /iP(hone|ad|od)/.test(ua)
+  const iPadOS = navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1
+  return iOS || iPadOS
+}
+
+function eventTargetAllowsScroll(target: EventTarget | null) {
+  if (!target || typeof window === "undefined") return false
+  return target instanceof Element && Boolean(target.closest('[data-scroll-allow="true"]'))
+}
+
 function lockBodyScroll(): number {
   if (typeof window === "undefined") return -1
   const body = document.body
+  const html = document.documentElement
 
   if (!__bodyScrollLockState) {
     const y = window.scrollY || 0
+    const isIOS = isIOSDevice()
     __bodyScrollLockState = {
       tokens: new Set<number>(),
+      isIOS,
+      prevHtmlOverflow: html.style.overflow,
       prevOverflow: body.style.overflow,
       prevPosition: body.style.position,
       prevTop: body.style.top,
@@ -55,16 +75,36 @@ function lockBodyScroll(): number {
       scrollY: y,
     }
 
-    body.style.overflow = "hidden"
-    body.style.position = "fixed"
-    body.style.top = `-${y}px`
-    body.style.left = "0"
-    body.style.right = "0"
-    body.style.width = "100%"
+    // Event gating: keep background locked, but allow scroll inside modal regions.
+    const guard = (e: Event) => {
+      if (eventTargetAllowsScroll(e.target)) return
+      e.preventDefault()
+    }
+    window.addEventListener("wheel", guard, { passive: false })
+    window.addEventListener("touchmove", guard, { passive: false })
+    __bodyScrollLockState.removeEventGuards = () => {
+      window.removeEventListener("wheel", guard as any)
+      window.removeEventListener("touchmove", guard as any)
+    }
 
-    window.requestAnimationFrame(() => {
-      window.scrollTo(0, y)
-    })
+    // iOS pinch-zoom safe strategy: avoid body fixed which can freeze modal scroll.
+    // Use html overflow lock + event gating instead.
+    html.style.overflow = "hidden"
+
+    if (!isIOS) {
+      body.style.overflow = "hidden"
+      body.style.position = "fixed"
+      body.style.top = `-${y}px`
+      body.style.left = "0"
+      body.style.right = "0"
+      body.style.width = "100%"
+
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, y)
+      })
+    } else {
+      body.style.overflow = "hidden"
+    }
   }
 
   const token = __bodyScrollLockNextToken++
@@ -82,6 +122,11 @@ function unlockBodyScroll(token: number | null) {
   if (state.tokens.size > 0) return
 
   const body = document.body
+  const html = document.documentElement
+
+  state.removeEventGuards?.()
+  html.style.overflow = state.prevHtmlOverflow
+
   body.style.overflow = state.prevOverflow
   body.style.position = state.prevPosition
   body.style.top = state.prevTop
@@ -90,7 +135,9 @@ function unlockBodyScroll(token: number | null) {
   body.style.width = state.prevWidth
 
   __bodyScrollLockState = undefined
-  window.scrollTo(0, state.scrollY)
+  if (!state.isIOS) {
+    window.scrollTo(0, state.scrollY)
+  }
 }
 
 // Instagram embed preview component (reused from editor)
@@ -1309,6 +1356,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           onWheelCapture={(e) => e.stopPropagation()}
         >
           <div
+            data-scroll-allow="true"
             className="w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
