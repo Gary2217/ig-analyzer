@@ -7,6 +7,7 @@ import { CreatorGrid } from "@/app/components/matchmaking/CreatorGrid"
 import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmaking/CreatorCard"
 import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
 import { useFavorites } from "@/app/components/matchmaking/useFavorites"
+import { getCopy, type Locale } from "@/app/i18n"
 import type {
   BudgetRange,
   CollabType,
@@ -16,7 +17,7 @@ import type {
 import type { CreatorCard } from "./types"
 
 interface MatchmakingClientProps {
-  locale: "zh-TW" | "en"
+  locale: Locale
   initialCards: CreatorCard[]
 }
 
@@ -152,6 +153,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
 
+  const uiCopy = useMemo(() => getCopy(locale), [locale])
+
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
 
   const [q, setQ] = useState("")
@@ -160,16 +163,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [platform, setPlatform] = useState<Platform | "any">("any")
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [collab, setCollab] = useState<CollabType | "any">("any")
-
-  const copy = locale === "zh-TW"
-    ? {
-        heading: "瀏覽創作者名片，開啟合作機會",
-        placeholderLabel: "創作者名片",
-      }
-    : {
-        heading: "Browse creator cards and collaborate",
-        placeholderLabel: "Creator Card",
-      }
 
   useEffect(() => {
     setCards(initialCards)
@@ -348,6 +341,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     <div className="min-h-[calc(100dvh-220px)] w-full">
       <div className="pt-8">
         <FiltersBar
+          locale={locale}
           search={q}
           onSearch={setQ}
           platform={platform}
@@ -373,7 +367,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             onClick={() => setFavOpen(true)}
             className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10"
           >
-            Saved ({fav.count})
+            {uiCopy.common.favorites} ({fav.count})
           </button>
         </div>
 
@@ -382,6 +376,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             <MatchmakingCreatorCard
               key={c.id}
               creator={c}
+              locale={locale}
               isFav={fav.isFav(c.id)}
               onToggleFav={() => fav.toggleFav(c.id)}
             />
@@ -390,6 +385,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       </div>
 
       <FavoritesDrawer
+        locale={locale}
         open={favOpen}
         onClose={() => setFavOpen(false)}
         favorites={favoritesList}
