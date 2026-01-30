@@ -377,6 +377,7 @@ const Pill = ({ children, clampLines = 1, title, className, unstyled }: PillProp
 export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const {
     t,
+    locale,
     useWidePhotoLayout,
     photoUploadEnabled,
     onProfileImageFileChange,
@@ -404,6 +405,8 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     highlightTarget,
     highlightSection,
   } = props
+
+  const normalizedLocale = locale === "zh-TW" ? "zh-TW" : "en"
 
   // Modal state for IG post preview
   const [openIg, setOpenIg] = useState<{ url: string; thumb?: string; caption?: string | null } | null>(null)
@@ -1339,9 +1342,16 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
       {/* IG Post Preview Modal - Improved Caption Readability */}
       {openIg && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur flex items-center justify-center p-3 sm:p-4" onClick={() => setOpenIg(null)}>
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur flex items-center justify-center p-3 sm:p-4"
+          onClick={() => setOpenIg(null)}
+          style={{
+            paddingTop: "max(12px, env(safe-area-inset-top))",
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+          }}
+        >
           <div 
-            className="w-full max-w-[520px] max-h-[80vh] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col overflow-hidden"
+            className="w-[min(92vw,560px)] max-h-[90dvh] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - non-scrolling */}
@@ -1352,9 +1362,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               <button
                 type="button"
                 onClick={() => setOpenIg(null)}
-                className="h-9 w-9 shrink-0 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 transition-colors"
+                className="shrink-0 rounded-full border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 transition-colors"
                 aria-label="Close"
-                style={{ minWidth: "36px", minHeight: "36px" }}
+                style={{ minWidth: "44px", minHeight: "44px" }}
               >
                 ×
               </button>
@@ -1363,11 +1373,13 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             {/* Body - scrollable container */}
             <div 
               ref={igModalBodyRef}
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+              data-scroll-allow="true"
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y"
               style={{
                 overflowAnchor: "none",
                 overscrollBehavior: "contain",
-                WebkitOverflowScrolling: "touch"
+                WebkitOverflowScrolling: "touch",
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)",
               }}
             >
               {/* Image Section */}
@@ -1390,8 +1402,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 </div>
               </div>
 
-              <p className="px-4 pt-3 text-xs text-white/60 leading-snug">
-                完整貼文內容與留言請於 Instagram 查看
+              <p className="px-4 pt-3 text-xs text-white/60 leading-snug break-words [overflow-wrap:anywhere]">
+                {normalizedLocale === "zh-TW"
+                  ? "完整貼文內容與留言請於 Instagram 查看"
+                  : "View the full post content and comments on Instagram"}
               </p>
 
               {/* Open on Instagram Button */}
