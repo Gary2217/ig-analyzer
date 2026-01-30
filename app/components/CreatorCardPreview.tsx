@@ -1361,7 +1361,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         >
           <div
             data-scroll-allow="true"
-            className="w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90vh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden touch-pan-y"
+            className="no-scrollbar w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90dvh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-y-auto overscroll-contain touch-pan-y"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
@@ -1378,8 +1378,8 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 <X className="h-4 w-4 text-white/90" />
               </button>
             </div>
-            <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-5 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y flex items-center justify-center">
-              <div className="w-full h-full max-h-[80vh] flex items-center justify-center touch-pan-y">
+            <div className="p-3 sm:p-4 md:p-5 overflow-x-hidden touch-pan-y flex items-center justify-center">
+              <div className="w-full h-full max-h-[80dvh] flex items-center justify-center touch-pan-y">
                 <img
                   src={openAvatarUrl}
                   alt={resolvedDisplayName || "Profile"}
@@ -1404,11 +1404,13 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           }}
         >
           <div 
-            className="w-[min(92vw,560px)] max-h-[90dvh] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col overflow-hidden"
+            ref={igModalBodyRef}
+            data-scroll-allow="true"
+            className="no-scrollbar w-[min(92vw,560px)] max-h-[90dvh] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col overflow-y-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - non-scrolling */}
-            <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10 bg-[#0b1220]/95 backdrop-blur">
               <div className="text-sm font-semibold text-white/85 min-w-0 break-words [overflow-wrap:anywhere]">
                 {t("creatorCard.postModal.title")}
               </div>
@@ -1423,16 +1425,13 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               </button>
             </div>
 
-            {/* Body - scrollable container */}
-            <div 
-              ref={igModalBodyRef}
-              data-scroll-allow="true"
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y"
+            {/* Body */}
+            <div
+              className="overflow-x-hidden touch-pan-y"
               style={{
                 overflowAnchor: "none",
-                overscrollBehavior: "contain",
-                WebkitOverflowScrolling: "touch",
                 paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)",
+                WebkitOverflowScrolling: "touch",
               }}
             >
               {/* Image Section */}

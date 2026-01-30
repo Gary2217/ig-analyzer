@@ -200,6 +200,14 @@
   filter: blur(9px);
 }
 
+ .no-scrollbar {
+   scrollbar-width: none;
+   -ms-overflow-style: none;
+ }
+ .no-scrollbar::-webkit-scrollbar {
+   display: none;
+ }
+
 .analytics-bg::after {
   display: none;
 }
