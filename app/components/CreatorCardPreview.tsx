@@ -27,16 +27,15 @@ import { CSS } from "@dnd-kit/utilities"
 let __bodyScrollLockState:
   | {
       tokens: Set<number>
-      isIOS: boolean
-      prevHtmlOverflow: string
       prevOverflow: string
       prevPosition: string
       prevTop: string
       prevLeft: string
       prevRight: string
       prevWidth: string
+      prevHtmlOverflow: string
       scrollY: number
-      removeEventGuards?: () => void
+      isIOS: boolean
     }
   | undefined
 let __bodyScrollLockNextToken = 1
@@ -49,16 +48,6 @@ function isIOSDevice() {
   return iOS || iPadOS
 }
 
-function isInsideAllowed(e: Event) {
-  const path = (e as any).composedPath?.() ?? []
-  for (const n of path) {
-    if (n instanceof Element && n.closest?.('[data-scroll-allow="true"]')) return true
-  }
-
-  const t = e.target
-  return t instanceof Element && Boolean(t.closest('[data-scroll-allow="true"]'))
-}
-
 function lockBodyScroll(): number {
   if (typeof window === "undefined") return -1
   const body = document.body
@@ -69,31 +58,19 @@ function lockBodyScroll(): number {
     const isIOS = isIOSDevice()
     __bodyScrollLockState = {
       tokens: new Set<number>(),
-      isIOS,
-      prevHtmlOverflow: html.style.overflow,
       prevOverflow: body.style.overflow,
       prevPosition: body.style.position,
       prevTop: body.style.top,
       prevLeft: body.style.left,
       prevRight: body.style.right,
       prevWidth: body.style.width,
+      prevHtmlOverflow: html.style.overflow,
       scrollY: y,
-    }
-
-    // Event gating: keep background locked, but allow scroll inside modal regions.
-    const guard = (e: Event) => {
-      if (isInsideAllowed(e)) return
-      e.preventDefault()
-    }
-    window.addEventListener("wheel", guard, { passive: false })
-    window.addEventListener("touchmove", guard, { passive: false })
-    __bodyScrollLockState.removeEventGuards = () => {
-      window.removeEventListener("wheel", guard as any)
-      window.removeEventListener("touchmove", guard as any)
+      isIOS,
     }
 
     // iOS pinch-zoom safe strategy: avoid body fixed which can freeze modal scroll.
-    // Use html overflow lock + event gating instead.
+    // Use html overflow lock instead.
     html.style.overflow = "hidden"
 
     if (!isIOS) {
@@ -119,17 +96,15 @@ function lockBodyScroll(): number {
 
 function unlockBodyScroll(token: number | null) {
   if (typeof window === "undefined") return
-  if (!token || token < 0) return
-  const state = __bodyScrollLockState
-  if (!state) return
+  if (!token) return
+  if (!__bodyScrollLockState) return
 
+  const state = __bodyScrollLockState
   state.tokens.delete(token)
   if (state.tokens.size > 0) return
 
   const body = document.body
   const html = document.documentElement
-
-  state.removeEventGuards?.()
   html.style.overflow = state.prevHtmlOverflow
 
   body.style.overflow = state.prevOverflow
