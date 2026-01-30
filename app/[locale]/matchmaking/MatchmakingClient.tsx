@@ -230,6 +230,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
   const [typeKey, setTypeKey] = useState<TypeKey | "any">("any")
+  const [myCardFirst, setMyCardFirst] = useState(true)
+  const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
 
   useEffect(() => {
     setCards(initialCards)
@@ -311,8 +313,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const meRes = await fetch("/api/creator-card/me", { method: "GET", cache: "no-store" })
         const meJson = (await meRes.json().catch(() => null)) as any
         const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
-        const ownerCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
-        if (!ownerIgUserId || !ownerCardId) return
+        const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
+        if (!ownerIgUserId || !meCardId) return
+
+        if (!cancelled) setOwnerCardId(meCardId)
 
         const statsRes = await fetch(`/api/creators/${encodeURIComponent(ownerIgUserId)}/stats`, {
           method: "GET",
@@ -330,7 +334,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         if (cancelled) return
         setCards((prev) =>
           prev.map((c) =>
-            c.id === ownerCardId
+            c.id === meCardId
               ? {
                   ...c,
                   followerCount: followers ?? c.followerCount,
@@ -523,6 +527,14 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return out
   }, [creators, q, sort, platform, budget, customBudget, typeKey, creatorFormatsById])
 
+  const pinned = useMemo(() => {
+    if (!myCardFirst || !ownerCardId) return filtered
+    const mine = filtered.find((c) => c.id === ownerCardId)
+    if (!mine) return filtered
+    const others = filtered.filter((c) => c.id !== ownerCardId)
+    return [mine, ...others]
+  }, [filtered, myCardFirst, ownerCardId])
+
   const favoritesList = useMemo(
     () => creators.filter((c) => fav.favoriteIds.has(c.id)),
     [creators, fav.favoriteIds]
@@ -554,6 +566,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           typeOptions={typeOptions}
           sort={sort}
           onSort={(v) => setSort(v === "er_desc" ? "er_desc" : "followers_desc")}
+          myCardFirst={myCardFirst}
+          onMyCardFirst={setMyCardFirst}
           total={filtered.length}
         />
 
@@ -568,13 +582,14 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         </div>
 
         <CreatorGrid>
-          {filtered.map((c) => (
+          {pinned.map((c) => (
             <MatchmakingCreatorCard
               key={c.id}
               creator={c}
               locale={locale}
               isFav={fav.isFav(c.id)}
               onToggleFav={() => fav.toggleFav(c.id)}
+              isMyCard={Boolean(ownerCardId && c.id === ownerCardId)}
             />
           ))}
         </CreatorGrid>

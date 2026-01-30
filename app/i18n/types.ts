@@ -49,6 +49,9 @@ export type CopyDictionary = {
     sortFollowers: string
     sortEngagement: string
 
+    myCardBadge: string
+    myCardFirstToggle: string
+
     noTopics: string
     viewDetails: string
 

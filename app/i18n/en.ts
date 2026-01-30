@@ -51,6 +51,9 @@ export const en: CopyDictionary = {
     sortFollowers: "Followers (High)",
     sortEngagement: "Engagement Rate (High)",
 
+    myCardBadge: "My Card",
+    myCardFirstToggle: "My card first",
+
     noTopics: "No topics",
     viewDetails: "Click to view details →",
 

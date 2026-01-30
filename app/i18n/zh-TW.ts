@@ -51,6 +51,9 @@ export const zhTW: CopyDictionary = {
     sortFollowers: "粉絲數（高→低）",
     sortEngagement: "互動率（高→低）",
 
+    myCardBadge: "我的名片",
+    myCardFirstToggle: "我的名片置頂",
+
     noTopics: "尚無標籤",
     viewDetails: "點擊查看 →",
 

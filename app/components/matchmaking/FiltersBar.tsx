@@ -28,6 +28,9 @@ type Props = {
   sort: "followers_desc" | "er_desc"
   onSort: (v: "followers_desc" | "er_desc") => void
 
+  myCardFirst: boolean
+  onMyCardFirst: (v: boolean) => void
+
   total: number
 }
 
@@ -58,8 +61,19 @@ export function FiltersBar(props: Props) {
               {mm.description}
             </p>
           </div>
-          <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
-            {mm.totalCreators(props.total)}
+          <div className="flex items-center gap-3 shrink-0">
+            <label className="inline-flex items-center gap-2 text-xs sm:text-sm text-white/70 whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={props.myCardFirst}
+                onChange={(e) => props.onMyCardFirst(e.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-white/5"
+              />
+              <span className="min-w-0 truncate">{mm.myCardFirstToggle}</span>
+            </label>
+            <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
+              {mm.totalCreators(props.total)}
+            </div>
           </div>
         </div>
 

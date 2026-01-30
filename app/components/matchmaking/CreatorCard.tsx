@@ -22,11 +22,13 @@ export function CreatorCard({
   locale,
   isFav,
   onToggleFav,
+  isMyCard,
 }: {
   creator: CreatorCardData
   locale: Locale
   isFav: boolean
   onToggleFav: () => void
+  isMyCard?: boolean
 }) {
   const copy = getCopy(locale)
   const mm = copy.matchmaking
@@ -43,7 +45,11 @@ export function CreatorCard({
   }
 
   return (
-    <div className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden">
+    <div
+      className={`group relative rounded-2xl border bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden ${
+        isMyCard ? "border-sky-400/40 ring-1 ring-sky-400/30" : "border-white/10"
+      }`}
+    >
       <button
         type="button"
         onClick={onToggleFav}
@@ -72,8 +78,15 @@ export function CreatorCard({
 
         <div className="p-3 sm:p-4 min-w-0">
           <div className="min-w-0">
-            <div className="text-sm sm:text-[15px] font-semibold text-white/90 truncate min-w-0">
-              {creator.name}
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="text-sm sm:text-[15px] font-semibold text-white/90 truncate min-w-0">
+                {creator.name}
+              </div>
+              {isMyCard ? (
+                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-200/90 whitespace-nowrap">
+                  {mm.myCardBadge}
+                </span>
+              ) : null}
             </div>
             <div className="mt-0.5 text-xs text-white/55 truncate min-w-0 [overflow-wrap:anywhere]">
               {creator.handle ? `@${creator.handle}` : ""}
