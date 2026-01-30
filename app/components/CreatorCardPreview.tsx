@@ -24,6 +24,75 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
+let __bodyScrollLockState:
+  | {
+      tokens: Set<number>
+      prevOverflow: string
+      prevPosition: string
+      prevTop: string
+      prevLeft: string
+      prevRight: string
+      prevWidth: string
+      scrollY: number
+    }
+  | undefined
+let __bodyScrollLockNextToken = 1
+
+function lockBodyScroll(): number {
+  if (typeof window === "undefined") return -1
+  const body = document.body
+
+  if (!__bodyScrollLockState) {
+    const y = window.scrollY || 0
+    __bodyScrollLockState = {
+      tokens: new Set<number>(),
+      prevOverflow: body.style.overflow,
+      prevPosition: body.style.position,
+      prevTop: body.style.top,
+      prevLeft: body.style.left,
+      prevRight: body.style.right,
+      prevWidth: body.style.width,
+      scrollY: y,
+    }
+
+    body.style.overflow = "hidden"
+    body.style.position = "fixed"
+    body.style.top = `-${y}px`
+    body.style.left = "0"
+    body.style.right = "0"
+    body.style.width = "100%"
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo(0, y)
+    })
+  }
+
+  const token = __bodyScrollLockNextToken++
+  __bodyScrollLockState.tokens.add(token)
+  return token
+}
+
+function unlockBodyScroll(token: number | null) {
+  if (typeof window === "undefined") return
+  if (!token || token < 0) return
+  const state = __bodyScrollLockState
+  if (!state) return
+
+  state.tokens.delete(token)
+  if (state.tokens.size > 0) return
+
+  const body = document.body
+  body.style.overflow = state.prevOverflow
+  body.style.position = state.prevPosition
+  body.style.top = state.prevTop
+  body.style.left = state.prevLeft
+  body.style.right = state.prevRight
+  body.style.width = state.prevWidth
+
+  __bodyScrollLockState = undefined
+  window.scrollTo(0, state.scrollY)
+}
+
 // Instagram embed preview component (reused from editor)
 function IgEmbedPreview({ url }: { url: string }) {
   const embedRef = useRef<HTMLDivElement>(null)
@@ -342,34 +411,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
   const igModalBodyRef = useRef<HTMLDivElement>(null)
-  const pageScrollYRef = useRef<number>(0)
-  const bodyLockRef = useRef<{
-    locked: boolean
-    prevOverflow: string
-    prevPosition: string
-    prevTop: string
-    prevLeft: string
-    prevRight: string
-    prevWidth: string
-    restoreY: number
-  } | null>(null)
-
-  function unlockBodyScroll() {
-    if (typeof window === "undefined") return
-    const state = bodyLockRef.current
-    if (!state?.locked) return
-
-    const body = document.body
-    body.style.overflow = state.prevOverflow
-    body.style.position = state.prevPosition
-    body.style.top = state.prevTop
-    body.style.left = state.prevLeft
-    body.style.right = state.prevRight
-    body.style.width = state.prevWidth
-
-    bodyLockRef.current = null
-    window.scrollTo(0, state.restoreY)
-  }
+  const scrollLockTokenRef = useRef<number | null>(null)
 
   // Reset scroll position when IG modal opens
   useEffect(() => {
@@ -381,52 +423,23 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     })
   }, [openIg])
 
-  // Lock background scroll + preserve scroll position while ANY modal is open
   useEffect(() => {
     const isOpen = Boolean(openIg || openAvatarUrl)
-    if (typeof window === "undefined") return
-
-    if (isOpen) {
-      if (bodyLockRef.current?.locked) return
-
-      const body = document.body
-      const y = window.scrollY || 0
-      pageScrollYRef.current = y
-
-      bodyLockRef.current = {
-        locked: true,
-        prevOverflow: body.style.overflow,
-        prevPosition: body.style.position,
-        prevTop: body.style.top,
-        prevLeft: body.style.left,
-        prevRight: body.style.right,
-        prevWidth: body.style.width,
-        restoreY: y,
-      }
-
-      // iOS-safe: fixed body lock prevents jump when overlays open
-      body.style.overflow = "hidden"
-      body.style.position = "fixed"
-      body.style.top = `-${y}px`
-      body.style.left = "0"
-      body.style.right = "0"
-      body.style.width = "100%"
-
-      window.requestAnimationFrame(() => {
-        window.scrollTo(0, y)
-      })
+    if (!isOpen) {
+      unlockBodyScroll(scrollLockTokenRef.current)
+      scrollLockTokenRef.current = null
       return
     }
 
-    unlockBodyScroll()
-  }, [openAvatarUrl, openIg])
-
-  // Safety: restore scroll on unmount (prevents "stuck page" if navigating while modal open)
-  useEffect(() => {
-    return () => {
-      unlockBodyScroll()
+    if (scrollLockTokenRef.current == null) {
+      scrollLockTokenRef.current = lockBodyScroll()
     }
-  }, [])
+
+    return () => {
+      unlockBodyScroll(scrollLockTokenRef.current)
+      scrollLockTokenRef.current = null
+    }
+  }, [openAvatarUrl, openIg])
 
   const previewCarouselRef = useRef<HTMLDivElement | null>(null)
   const [canScrollPreviewLeft, setCanScrollPreviewLeft] = useState(false)

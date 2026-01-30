@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, Heart, MessageCircle, Percent, Users } from "lucide-react"
+import { CheckCircle2, Percent, Users } from "lucide-react"
 import { CreatorCard as CreatorCardType } from "../types"
 
 interface CreatorCardProps {
@@ -40,6 +40,13 @@ function formatCompactNumber(n: number, locale: "zh-TW" | "en"): string {
   return String(Math.round(v))
 }
 
+function formatErPct(value: number) {
+  // max 2 decimals, trim trailing .0 / .00
+  const rounded = Math.round(value * 100) / 100
+  const s = rounded.toFixed(2)
+  return s.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")
+}
+
 export function CreatorCard({ card, locale }: CreatorCardProps) {
   const router = useRouter()
   const profileHref = useMemo(() => card.profileUrl, [card.profileUrl])
@@ -49,24 +56,17 @@ export function CreatorCard({ card, locale }: CreatorCardProps) {
     verified: locale === "zh-TW" ? "已驗證" : "Verified",
     demo: locale === "zh-TW" ? "示意" : "Demo",
     followersShort: locale === "zh-TW" ? "追蹤" : "Followers",
-    likesShort: locale === "zh-TW" ? "讚" : "Avg likes",
-    commentsShort: locale === "zh-TW" ? "留言" : "Avg comments",
-    erShort: locale === "zh-TW" ? "互動" : "Eng.",
-    erNA: locale === "zh-TW" ? "未提供" : "N/A",
+    erShort: locale === "zh-TW" ? "互動率" : "ER",
     viewDisabled: locale === "zh-TW" ? "示意卡" : "Demo card",
   }
 
   const translatedCategory = translateCategory(card.category, locale)
 
   const followersText = formatCompactNumber(card.followerCount, locale)
-  const likesText =
-    typeof card.avgLikes === "number" && Number.isFinite(card.avgLikes) ? formatCompactNumber(card.avgLikes, locale) : "—"
-  const commentsText =
-    typeof card.avgComments === "number" && Number.isFinite(card.avgComments) ? formatCompactNumber(card.avgComments, locale) : "—"
   const erText =
     typeof card.engagementRate === "number" && Number.isFinite(card.engagementRate)
-      ? `${card.engagementRate}%`
-      : copy.erNA
+      ? `${formatErPct(card.engagementRate)}%`
+      : null
 
   const cardContent = (
     <>
@@ -111,21 +111,15 @@ export function CreatorCard({ card, locale }: CreatorCardProps) {
             <span className="text-white/55 min-w-0 truncate">{copy.followersShort}</span>
             <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{followersText}</span>
           </div>
-          <div className="flex items-center gap-2 min-w-0">
-            <Heart className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
-            <span className="text-white/55 min-w-0 truncate">{copy.likesShort}</span>
-            <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{likesText}</span>
-          </div>
-          <div className="flex items-center gap-2 min-w-0">
-            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
-            <span className="text-white/55 min-w-0 truncate">{copy.commentsShort}</span>
-            <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{commentsText}</span>
-          </div>
-          <div className="flex items-center gap-2 min-w-0">
-            <Percent className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
-            <span className="text-white/55 min-w-0 truncate">{copy.erShort}</span>
-            <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{erText}</span>
-          </div>
+          {erText ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <Percent className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
+              <span className="text-white/55 min-w-0 truncate">{copy.erShort}</span>
+              <span className="ml-auto text-white/85 whitespace-nowrap shrink-0">{erText}</span>
+            </div>
+          ) : (
+            <div className="hidden sm:block" />
+          )}
         </div>
       </div>
     </>

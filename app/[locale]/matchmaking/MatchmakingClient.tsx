@@ -88,6 +88,10 @@ function computeEngagementRatePct(input: {
   return clampNumber(Math.round(pct * 100) / 100, 0, 99)
 }
 
+function roundTo2(n: number) {
+  return Math.round(n * 100) / 100
+}
+
 function buildDemoCreators({
   locale,
   existingIds,
@@ -177,14 +181,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const stats = statsJson?.ok === true ? statsJson?.stats : null
 
         const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
-        const avgLikes = typeof stats?.avgLikes === "number" && Number.isFinite(stats.avgLikes) ? Math.round(stats.avgLikes) : null
-        const avgComments = typeof stats?.avgComments === "number" && Number.isFinite(stats.avgComments) ? Math.round(stats.avgComments) : null
-        const engagementRate = computeEngagementRatePct({
-          engagementRatePct: typeof stats?.engagementRatePct === "number" ? stats.engagementRatePct : null,
-          followers,
-          avgLikes,
-          avgComments,
-        })
+        const engagementRate =
+          typeof stats?.engagementRatePct === "number" && Number.isFinite(stats.engagementRatePct)
+            ? clampNumber(roundTo2(stats.engagementRatePct), 0, 99)
+            : null
 
         if (cancelled) return
         setCards((prev) =>
@@ -193,8 +193,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
               ? {
                   ...c,
                   followerCount: followers ?? c.followerCount,
-                  avgLikes,
-                  avgComments,
                   engagementRate,
                 }
               : c
