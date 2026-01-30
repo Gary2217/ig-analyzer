@@ -14,6 +14,7 @@ import type {
   CreatorCardData,
   FormatKey,
   Platform,
+  TypeKey,
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
 
@@ -224,12 +225,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
 
   const [q, setQ] = useState("")
-  const [category, setCategory] = useState("all")
-  const [sort, setSort] = useState("recommended")
+  const [sort, setSort] = useState<"followers_desc" | "er_desc">("followers_desc")
   const [platform, setPlatform] = useState<Platform | "any">("any")
   const [budget, setBudget] = useState<BudgetRange>("any")
-  const [collab, setCollab] = useState<CollabType | "any">("any")
-  const [format, setFormat] = useState<FormatKey | "any">("any")
+  const [customBudget, setCustomBudget] = useState<string>("")
+  const [typeKey, setTypeKey] = useState<TypeKey | "any">("any")
 
   useEffect(() => {
     setCards(initialCards)
@@ -239,18 +239,41 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   useEffect(() => {
     const qp = searchParams
     const nextQ = (qp.get("q") ?? "").slice(0, 120)
-    const nextCategory = qp.get("category") ?? "all"
-    const nextSort = qp.get("sort") ?? "recommended"
     const nextPlatform = (qp.get("platform") ?? "any") as Platform | "any"
     const nextBudget = (qp.get("budget") ?? "any") as BudgetRange
     const nextCollab = (qp.get("collab") ?? "any") as CollabType | "any"
+    const nextSort = (qp.get("sort") ?? "followers_desc") as any
 
     setQ(nextQ)
-    setCategory(nextCategory)
-    setSort(nextSort)
     setPlatform(nextPlatform)
     setBudget(nextBudget)
-    setCollab(nextCollab)
+
+    if (nextSort === "er_desc") setSort("er_desc")
+    else setSort("followers_desc")
+
+    // Keep URL compatibility: only initialize Type from collab param if it matches known collab values.
+    const isKnownCollab: boolean =
+      nextCollab === "short_video" ||
+      nextCollab === "long_video" ||
+      nextCollab === "ugc" ||
+      nextCollab === "live" ||
+      nextCollab === "review_unboxing" ||
+      nextCollab === "event" ||
+      nextCollab === "other"
+    setTypeKey(isKnownCollab ? nextCollab : "any")
+
+    // If budget param is not one of the known presets, fall back to any.
+    const isKnownBudget: boolean =
+      nextBudget === "any" ||
+      nextBudget === "0_5000" ||
+      nextBudget === "5000_10000" ||
+      nextBudget === "10000_30000" ||
+      nextBudget === "30000_60000" ||
+      nextBudget === "60000_plus"
+    setBudget(isKnownBudget ? nextBudget : "any")
+    setCustomBudget("")
+
+    setPlatform(nextPlatform)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -258,14 +281,27 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   useEffect(() => {
     const params = new URLSearchParams()
     if (q.trim()) params.set("q", q.trim())
-    if (category && category !== "all") params.set("category", category)
-    if (sort && sort !== "recommended") params.set("sort", sort)
+    if (sort && sort !== "followers_desc") params.set("sort", sort)
     if (platform !== "any") params.set("platform", platform)
-    if (budget !== "any") params.set("budget", budget)
-    if (collab !== "any") params.set("collab", collab)
+    // Do not introduce new URL values. Only persist known preset budgets.
+    if (budget !== "any" && budget !== "custom") params.set("budget", budget)
+
+    // Only persist collab-type selections to the existing "collab" param.
+    const collabValue: CollabType | null =
+      typeKey === "short_video" ||
+      typeKey === "long_video" ||
+      typeKey === "ugc" ||
+      typeKey === "live" ||
+      typeKey === "review_unboxing" ||
+      typeKey === "event" ||
+      typeKey === "other"
+        ? typeKey
+        : null
+    if (collabValue) params.set("collab", collabValue)
+
     const qs = params.toString()
     router.replace(qs ? `?${qs}` : "?", { scroll: false })
-  }, [q, category, sort, platform, budget, collab, router])
+  }, [q, sort, platform, budget, typeKey, router])
 
   useEffect(() => {
     let cancelled = false
@@ -375,38 +411,31 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     ]
   }, [creators, uiCopy.matchmaking])
 
-  const formatOptions = useMemo(() => {
+  const typeOptions = useMemo(() => {
     const mm = uiCopy.matchmaking
-    const present = new Set<FormatKey>()
-
-    creators.forEach((c) => {
-      ;(creatorFormatsById.get(c.id) ?? []).forEach((k) => present.add(k))
-    })
-
-    const order: FormatKey[] = ["reels", "posts", "stories", "other"]
-
-    const labelFor = (k: FormatKey) => {
-      if (k === "reels") return mm.formatReels
-      if (k === "posts") return mm.formatPosts
-      if (k === "stories") return mm.formatStories
-      return mm.formatOther
-    }
-
-    return [
-      { value: "any" as const, label: mm.allFormats },
-      ...order.filter((k) => present.has(k)).map((k) => ({ value: k, label: labelFor(k) })),
-    ]
-  }, [creators, creatorFormatsById, uiCopy.matchmaking])
-
-  const collabOptions = useMemo(() => {
-    const mm = uiCopy.matchmaking
-    const present = new Set<CollabType>()
+    const present = new Set<TypeKey>()
     creators.forEach((c) => {
       ;(c.collabTypes ?? []).forEach((t) => present.add(t))
+      ;(creatorFormatsById.get(c.id) ?? []).forEach((f) => present.add(f))
     })
 
-    const order: CollabType[] = ["short_video", "long_video", "ugc", "live", "review_unboxing", "event", "other"]
-    const labelFor = (t: CollabType) => {
+    const order: TypeKey[] = [
+      "reels",
+      "posts",
+      "stories",
+      "short_video",
+      "long_video",
+      "ugc",
+      "live",
+      "review_unboxing",
+      "event",
+      "other",
+    ]
+
+    const labelFor = (t: TypeKey) => {
+      if (t === "reels") return mm.formatReels
+      if (t === "posts") return mm.formatPosts
+      if (t === "stories") return mm.formatStories
       if (t === "short_video") return mm.typeShortVideo
       if (t === "long_video") return mm.typeLongVideo
       if (t === "ugc") return mm.typeUGC
@@ -420,16 +449,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       { value: "any" as const, label: mm.allTypes },
       ...order.filter((t) => present.has(t)).map((t) => ({ value: t, label: labelFor(t) })),
     ]
-  }, [creators, uiCopy.matchmaking])
-
-  const categories = useMemo(() => {
-    const set = new Set<string>()
-    creators.forEach((c) => {
-      const t = (c.topics?.[0] ?? "").trim()
-      if (t) set.add(t)
-    })
-    return ["all", ...Array.from(set).sort()]
-  }, [creators])
+  }, [creators, creatorFormatsById, uiCopy.matchmaking])
 
   function budgetMatch(range: BudgetRange, min?: number, max?: number) {
     if (range === "any") return true
@@ -453,9 +473,22 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return (types ?? []).includes(c)
   }
 
-  function formatMatch(f: FormatKey | "any", creatorId: string) {
-    if (f === "any") return true
-    return (creatorFormatsById.get(creatorId) ?? []).includes(f)
+  function typeMatch(t: TypeKey | "any", creatorId: string, types?: CollabType[]) {
+    if (t === "any") return true
+    if (t === "reels" || t === "posts" || t === "stories" || t === "other") {
+      return (creatorFormatsById.get(creatorId) ?? []).includes(t)
+    }
+    return (types ?? []).includes(t)
+  }
+
+  function budgetMatchCustom(amount: number, min?: number, max?: number) {
+    if (!Number.isFinite(amount)) return true
+    const hasMin = typeof min === "number" && Number.isFinite(min)
+    const hasMax = typeof max === "number" && Number.isFinite(max)
+    if (hasMin && hasMax) return amount >= (min as number) && amount <= (max as number)
+    if (hasMin) return amount >= (min as number)
+    if (hasMax) return amount <= (max as number)
+    return true
   }
 
   const filtered = useMemo(() => {
@@ -464,17 +497,22 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     let out = creators.filter((c) => {
       const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")}`.toLowerCase()
       const okQ = !qq || hay.includes(qq)
-      const okCat = category === "all" || (c.topics?.[0] ?? "") === category
       const okPlatform = platformMatch(platform, c.platforms)
-      const okBudget = budgetMatch(budget, c.budgetMin, c.budgetMax)
-      const okCollab = collabMatch(collab, c.collabTypes)
-      const okFormat = formatMatch(format, c.id)
-      return okQ && okCat && okPlatform && okBudget && okCollab && okFormat
+
+      const okType = typeMatch(typeKey, c.id, c.collabTypes)
+
+      let okBudget = true
+      if (budget === "custom") {
+        const amt = Number(customBudget)
+        okBudget = customBudget.trim() ? budgetMatchCustom(amt, c.budgetMin, c.budgetMax) : true
+      } else {
+        okBudget = budgetMatch(budget, c.budgetMin, c.budgetMax)
+      }
+
+      return okQ && okPlatform && okType && okBudget
     })
 
-    if (sort === "name") {
-      out = [...out].sort((a, b) => a.name.localeCompare(b.name))
-    } else if (sort === "followers_desc") {
+    if (sort === "followers_desc") {
       out = [...out].sort((a, b) => (b.stats?.followers ?? -1) - (a.stats?.followers ?? -1))
     } else if (sort === "er_desc") {
       out = [...out].sort((a, b) => (b.stats?.engagementRate ?? -1) - (a.stats?.engagementRate ?? -1))
@@ -483,7 +521,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     return out
-  }, [creators, q, category, sort, platform, budget, collab, format, creatorFormatsById])
+  }, [creators, q, sort, platform, budget, customBudget, typeKey, creatorFormatsById])
 
   const favoritesList = useMemo(
     () => creators.filter((c) => fav.favoriteIds.has(c.id)),
@@ -500,22 +538,22 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           platform={platform}
           onPlatform={setPlatform}
           platformOptions={platformOptions}
-          format={format}
-          onFormat={setFormat}
-          formatOptions={formatOptions}
           budget={budget}
-          onBudget={setBudget}
-          collab={collab}
-          onCollab={setCollab}
-          collabOptions={collabOptions}
-          category={category}
-          categoryOptions={categories}
-          onCategory={(v) => {
-            if (v === "all" || categories.includes(v)) setCategory(v)
-            else setCategory("all")
+          onBudget={(v) => {
+            setBudget(v)
+            if (v !== "custom") setCustomBudget("")
           }}
+          customBudget={customBudget}
+          onCustomBudget={setCustomBudget}
+          onClearCustomBudget={() => {
+            setBudget("any")
+            setCustomBudget("")
+          }}
+          type={typeKey}
+          onType={setTypeKey}
+          typeOptions={typeOptions}
           sort={sort}
-          onSort={setSort}
+          onSort={(v) => setSort(v === "er_desc" ? "er_desc" : "followers_desc")}
           total={filtered.length}
         />
 

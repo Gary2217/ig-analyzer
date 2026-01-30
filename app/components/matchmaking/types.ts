@@ -15,8 +15,11 @@ export type FormatKey =
   | "stories"
   | "other"
 
+export type TypeKey = CollabType | FormatKey
+
 export type BudgetRange =
   | "any"
+  | "custom"
   | "0_5000"
   | "5000_10000"
   | "10000_30000"

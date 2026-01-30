@@ -23,18 +23,9 @@ export const en: CopyDictionary = {
     platformYouTube: "YouTube",
     platformFacebook: "Facebook",
 
-    formatLabel: "Format",
-    allFormats: "All formats",
     formatReels: "Reels / Short video",
     formatPosts: "Post",
     formatStories: "Story",
-    formatUGC: "UGC",
-    formatLive: "Live",
-    formatYouTube: "YouTube",
-    formatTikTok: "TikTok",
-    formatFacebook: "Facebook",
-    formatReviewUnboxing: "Review / Unboxing",
-    formatEvent: "Event",
     formatOther: "Other",
 
     advancedFilters: "Advanced",
@@ -45,6 +36,14 @@ export const en: CopyDictionary = {
     typeReviewUnboxing: "Review / Unboxing",
     typeEvent: "Event",
     typeOther: "Other",
+
+    budgetLabel: "Budget",
+    budgetOtherAmount: "Other amount…",
+    budgetCustomPlaceholder: "Enter amount",
+    budgetClearCustom: "Clear",
+
+    sortFollowersDesc: "Followers (High)",
+    sortErDesc: "Engagement Rate (High)",
 
     sortRecommended: "Recommended",
     sortNewest: "Newest",

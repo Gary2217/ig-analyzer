@@ -23,18 +23,9 @@ export const zhTW: CopyDictionary = {
     platformYouTube: "YouTube",
     platformFacebook: "Facebook",
 
-    formatLabel: "內容形式",
-    allFormats: "全部形式",
     formatReels: "Reels / 短影音",
     formatPosts: "貼文",
     formatStories: "限時動態",
-    formatUGC: "UGC",
-    formatLive: "直播",
-    formatYouTube: "YouTube",
-    formatTikTok: "TikTok",
-    formatFacebook: "Facebook",
-    formatReviewUnboxing: "開箱 / 評測",
-    formatEvent: "活動",
     formatOther: "其他",
 
     advancedFilters: "更多篩選",
@@ -45,6 +36,14 @@ export const zhTW: CopyDictionary = {
     typeReviewUnboxing: "開箱 / 評測",
     typeEvent: "活動",
     typeOther: "其他",
+
+    budgetLabel: "預算",
+    budgetOtherAmount: "其他金額…",
+    budgetCustomPlaceholder: "輸入金額",
+    budgetClearCustom: "清除",
+
+    sortFollowersDesc: "粉絲數（高→低）",
+    sortErDesc: "互動率（高→低）",
 
     sortRecommended: "推薦",
     sortNewest: "最新",

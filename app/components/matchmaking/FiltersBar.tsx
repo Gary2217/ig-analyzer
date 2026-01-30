@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import type { BudgetRange, CollabType, FormatKey, Platform } from "./types"
+import { useMemo } from "react"
+import type { BudgetRange, Platform, TypeKey } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
 type Props = {
@@ -14,23 +14,19 @@ type Props = {
 
   platformOptions: Array<{ value: Platform | "any"; label: string }>
 
-  format: FormatKey | "any"
-  onFormat: (v: FormatKey | "any") => void
-  formatOptions: Array<{ value: FormatKey | "any"; label: string }>
-
   budget: BudgetRange
   onBudget: (v: BudgetRange) => void
 
-  collab: CollabType | "any"
-  onCollab: (v: CollabType | "any") => void
-  collabOptions: Array<{ value: CollabType | "any"; label: string }>
+  customBudget: string
+  onCustomBudget: (v: string) => void
+  onClearCustomBudget: () => void
 
-  category: string
-  categoryOptions: string[]
-  onCategory: (v: string) => void
+  type: TypeKey | "any"
+  onType: (v: TypeKey | "any") => void
+  typeOptions: Array<{ value: TypeKey | "any"; label: string }>
 
-  sort: string
-  onSort: (v: string) => void
+  sort: "followers_desc" | "er_desc"
+  onSort: (v: "followers_desc" | "er_desc") => void
 
   total: number
 }
@@ -39,11 +35,10 @@ export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
 
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-
   const budgetOptions: Array<{ value: BudgetRange; label: string }> = useMemo(
     () => [
-      { value: "any", label: mm.anyBudget },
+      { value: "any", label: mm.budgetLabel },
+      { value: "custom", label: mm.budgetOtherAmount },
       { value: "0_5000", label: "≤ 5,000" },
       { value: "5000_10000", label: "5,000–10,000" },
       { value: "10000_30000", label: "10,000–30,000" },
@@ -89,6 +84,18 @@ export function FiltersBar(props: Props) {
           </select>
 
           <select
+            value={props.type}
+            onChange={(e) => props.onType(e.target.value as any)}
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+          >
+            {props.typeOptions.map((o) => (
+              <option key={o.value} value={o.value} className="bg-slate-900">
+                {o.label}
+              </option>
+            ))}
+          </select>
+
+          <select
             value={props.budget}
             onChange={(e) => props.onBudget(e.target.value as any)}
             className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
@@ -101,73 +108,40 @@ export function FiltersBar(props: Props) {
           </select>
 
           <select
-            value={props.format}
-            onChange={(e) => props.onFormat(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-          >
-            {props.formatOptions.map((o) => (
-              <option key={o.value} value={o.value} className="bg-slate-900">
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={() => setAdvancedOpen((v) => !v)}
-            className="col-span-2 lg:hidden h-11 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
-          >
-            {mm.advancedFilters}
-          </button>
-        </div>
-
-        <div className={`${advancedOpen ? "grid" : "hidden"} grid-cols-2 gap-2 lg:grid lg:grid-cols-5`}>
-          <select
-            value={props.collab}
-            onChange={(e) => props.onCollab(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-          >
-            {props.collabOptions.map((o) => (
-              <option key={o.value} value={o.value} className="bg-slate-900">
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          <select
             value={props.sort}
-            onChange={(e) => props.onSort(e.target.value)}
+            onChange={(e) => props.onSort(e.target.value as any)}
             className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
           >
-            <option value="recommended" className="bg-slate-900">
-              {mm.sortRecommended}
-            </option>
-            <option value="newest" className="bg-slate-900">
-              {mm.sortNewest}
-            </option>
-            <option value="name" className="bg-slate-900">
-              {mm.sortName}
-            </option>
             <option value="followers_desc" className="bg-slate-900">
-              {mm.sortFollowers}
+              {mm.sortFollowersDesc}
             </option>
             <option value="er_desc" className="bg-slate-900">
-              {mm.sortEngagement}
+              {mm.sortErDesc}
             </option>
           </select>
-
-          <select
-            value={props.category}
-            onChange={(e) => props.onCategory(e.target.value)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
-          >
-            {(props.categoryOptions?.length ? props.categoryOptions : ["all"]).map((c) => (
-              <option key={c} value={c} className="bg-slate-900">
-                {c === "all" ? mm.allCategories : c}
-              </option>
-            ))}
-          </select>
         </div>
+
+        {props.budget === "custom" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+            <input
+              inputMode="numeric"
+              value={props.customBudget}
+              onChange={(e) => {
+                const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
+                props.onCustomBudget(next)
+              }}
+              placeholder={mm.budgetCustomPlaceholder}
+              className="h-11 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+            />
+            <button
+              type="button"
+              onClick={props.onClearCustomBudget}
+              className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
+            >
+              {mm.budgetClearCustom}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )
