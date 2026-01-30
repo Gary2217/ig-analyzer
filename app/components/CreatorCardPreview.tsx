@@ -441,7 +441,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
   const igModalBodyRef = useRef<HTMLDivElement>(null)
-  const scrollLockTokenRef = useRef<number | null>(null)
 
   // Reset scroll position when IG modal opens
   useEffect(() => {
@@ -452,24 +451,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
       }
     })
   }, [openIg])
-
-  useEffect(() => {
-    const isOpen = Boolean(openIg || openAvatarUrl)
-    if (!isOpen) {
-      unlockBodyScroll(scrollLockTokenRef.current)
-      scrollLockTokenRef.current = null
-      return
-    }
-
-    if (scrollLockTokenRef.current == null) {
-      scrollLockTokenRef.current = lockBodyScroll()
-    }
-
-    return () => {
-      unlockBodyScroll(scrollLockTokenRef.current)
-      scrollLockTokenRef.current = null
-    }
-  }, [openAvatarUrl, openIg])
 
   const previewCarouselRef = useRef<HTMLDivElement | null>(null)
   const [canScrollPreviewLeft, setCanScrollPreviewLeft] = useState(false)
@@ -1335,8 +1316,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           onClick={() => setOpenAvatarUrl(null)}
         >
           <div
-            data-scroll-allow="true"
-            className="relative w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90dvh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col min-h-0 mx-auto overflow-y-auto overflow-x-hidden overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden touch-pan-y"
+            className="relative w-[94vw] max-w-[560px] md:max-w-[720px] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-hidden touch-pan-y"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
@@ -1359,7 +1339,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   src={openAvatarUrl}
                   alt={resolvedDisplayName || "Profile"}
                   draggable={false}
-                  className="max-w-full max-h-full object-contain rounded-lg touch-pan-y select-none"
+                  className="max-w-full max-h-[80vh] object-contain rounded-lg touch-pan-y select-none"
                   referrerPolicy="no-referrer"
                 />
               </div>
@@ -1380,8 +1360,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         >
           <div 
             ref={igModalBodyRef}
-            data-scroll-allow="true"
-            className="relative w-[min(92vw,560px)] max-h-[90dvh] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="relative w-[min(92vw,560px)] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header - non-scrolling */}
@@ -1418,7 +1397,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                         src={normalizeIgThumbnailUrlOrNull(openIg.thumb) as string}
                         alt="Instagram post"
                         draggable={false}
-                        className="w-full object-contain touch-pan-y select-none"
+                        className="w-full max-h-[75dvh] object-contain touch-pan-y select-none"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
