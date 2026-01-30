@@ -4,7 +4,10 @@ export interface CreatorCard {
   avatarUrl: string
   category: string
   followerCount: number
+  avgLikes?: number | null
+  avgComments?: number | null
   engagementRate: number | null
   isVerified: boolean
   profileUrl: string
+  isDemo?: boolean
 }

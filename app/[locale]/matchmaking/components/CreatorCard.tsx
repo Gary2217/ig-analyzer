@@ -4,15 +4,12 @@ import Image from "next/image"
 import Link from "next/link"
 import { useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2 } from "lucide-react"
+import { CheckCircle2, Heart, MessageCircle, Percent, Users } from "lucide-react"
 import { CreatorCard as CreatorCardType } from "../types"
-import { CardClickBehavior } from "../cardClickConfig"
 
 interface CreatorCardProps {
   card: CreatorCardType
   locale: "zh-TW" | "en"
-  behavior: CardClickBehavior
-  onClick?: (id: string) => void
 }
 
 const categoryTranslations: Record<string, { "zh-TW": string; en: string }> = {
@@ -30,36 +27,46 @@ function translateCategory(category: string, locale: "zh-TW" | "en"): string {
   return categoryTranslations[category]?.[locale] || category
 }
 
-function formatFollowerCount(count: number, locale: "zh-TW" | "en"): string {
-  if (count >= 1000000) {
-    const millions = (count / 1000000).toFixed(1)
-    return locale === "zh-TW" ? `${millions}M 追蹤者` : `${millions}M followers`
+function formatCompactNumber(n: number, locale: "zh-TW" | "en"): string {
+  const v = typeof n === "number" && Number.isFinite(n) ? n : 0
+  if (v >= 1_000_000) {
+    const x = (v / 1_000_000).toFixed(v >= 10_000_000 ? 0 : 1)
+    return locale === "zh-TW" ? `${x}M` : `${x}M`
   }
-  if (count >= 1000) {
-    const thousands = (count / 1000).toFixed(1)
-    return locale === "zh-TW" ? `${thousands}K 追蹤者` : `${thousands}K followers`
+  if (v >= 1_000) {
+    const x = (v / 1_000).toFixed(v >= 10_000 ? 0 : 1)
+    return locale === "zh-TW" ? `${x}K` : `${x}K`
   }
-  return locale === "zh-TW" ? `${count} 追蹤者` : `${count} followers`
+  return String(Math.round(v))
 }
 
-export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProps) {
+export function CreatorCard({ card, locale }: CreatorCardProps) {
   const router = useRouter()
   const profileHref = useMemo(() => card.profileUrl, [card.profileUrl])
 
   const copy = {
     viewCard: locale === "zh-TW" ? "查看名片" : "View Card",
     verified: locale === "zh-TW" ? "已驗證" : "Verified",
+    demo: locale === "zh-TW" ? "示意" : "Demo",
+    followersShort: locale === "zh-TW" ? "追蹤" : "Followers",
+    likesShort: locale === "zh-TW" ? "讚" : "Avg likes",
+    commentsShort: locale === "zh-TW" ? "留言" : "Avg comments",
+    erShort: locale === "zh-TW" ? "互動" : "Eng.",
+    erNA: locale === "zh-TW" ? "未提供" : "N/A",
+    viewDisabled: locale === "zh-TW" ? "示意卡" : "Demo card",
   }
 
   const translatedCategory = translateCategory(card.category, locale)
-  const engagementText =
-    card.engagementRate !== null
-      ? locale === "zh-TW"
-        ? `互動率 ${card.engagementRate}%`
-        : `${card.engagementRate}% engagement`
-      : locale === "zh-TW"
-      ? "互動率未提供"
-      : "Engagement N/A"
+
+  const followersText = formatCompactNumber(card.followerCount, locale)
+  const likesText =
+    typeof card.avgLikes === "number" && Number.isFinite(card.avgLikes) ? formatCompactNumber(card.avgLikes, locale) : "—"
+  const commentsText =
+    typeof card.avgComments === "number" && Number.isFinite(card.avgComments) ? formatCompactNumber(card.avgComments, locale) : "—"
+  const erText =
+    typeof card.engagementRate === "number" && Number.isFinite(card.engagementRate)
+      ? `${card.engagementRate}%`
+      : copy.erNA
 
   const cardContent = (
     <>
@@ -72,10 +79,18 @@ export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProp
           className="object-cover transition-transform group-hover:scale-105"
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
         />
+
+        {card.isDemo ? (
+          <div className="absolute left-3 top-3">
+            <span className="inline-flex items-center rounded-full border border-white/15 bg-black/40 px-2 py-1 text-[10px] font-semibold text-white/80 backdrop-blur">
+              {copy.demo}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 min-w-0">
         {/* Name + Verified Badge */}
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="text-base font-semibold text-white truncate flex-1 min-w-0">
@@ -90,16 +105,34 @@ export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProp
         <p className="text-sm text-white/60 truncate">{translatedCategory}</p>
 
         {/* Metrics */}
-        <div className="flex items-center gap-3 text-xs text-white/50 tabular-nums">
-          <span className="truncate">{formatFollowerCount(card.followerCount, locale)}</span>
-          <span className="text-white/30">•</span>
-          <span className="truncate">{engagementText}</span>
+        <div className="grid grid-cols-2 gap-2 text-[11px] text-white/70 tabular-nums min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Users className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
+            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.followersShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{followersText}</span>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Heart className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
+            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.likesShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{likesText}</span>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
+            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.commentsShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{commentsText}</span>
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Percent className="h-3.5 w-3.5 shrink-0 text-white/45" aria-hidden="true" />
+            <span className="text-white/55 whitespace-nowrap shrink-0">{copy.erShort}</span>
+            <span className="ml-auto text-white/85 whitespace-nowrap truncate">{erText}</span>
+          </div>
         </div>
       </div>
     </>
   )
 
   const handleCardClick = () => {
+    if (card.isDemo) return
     router.push(profileHref)
   }
 
@@ -117,13 +150,24 @@ export function CreatorCard({ card, locale, behavior, onClick }: CreatorCardProp
 
       {/* Single CTA button */}
       <div className="px-4 pb-4">
-        <Link
-          href={profileHref}
-          className="w-full inline-flex items-center justify-center rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white/90 hover:bg-white/15 transition-colors border border-white/10 hover:border-white/20"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {copy.viewCard}
-        </Link>
+        {card.isDemo ? (
+          <div
+            className="w-full inline-flex items-center justify-center rounded-xl bg-white/5 px-4 py-2.5 text-sm font-medium text-white/45 border border-white/10"
+            aria-label={copy.viewDisabled}
+            style={{ minHeight: "44px" }}
+          >
+            {copy.viewDisabled}
+          </div>
+        ) : (
+          <Link
+            href={profileHref}
+            className="w-full inline-flex items-center justify-center rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white/90 hover:bg-white/15 transition-colors border border-white/10 hover:border-white/20"
+            onClick={(e) => e.stopPropagation()}
+            style={{ minHeight: "44px" }}
+          >
+            {copy.viewCard}
+          </Link>
+        )}
       </div>
     </div>
   )

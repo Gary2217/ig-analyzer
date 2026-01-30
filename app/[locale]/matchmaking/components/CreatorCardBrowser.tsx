@@ -3,20 +3,15 @@
 import { useMemo, useState } from "react"
 import { CreatorCardList } from "./CreatorCardList"
 import type { CreatorCard } from "../types"
-import type { CardClickBehavior } from "../cardClickConfig"
 
 interface CreatorCardBrowserProps {
   cards: CreatorCard[]
   locale: "zh-TW" | "en"
-  behavior: CardClickBehavior
-  onCardClick?: (id: string) => void
 }
 
 export function CreatorCardBrowser({
   cards,
   locale,
-  behavior,
-  onCardClick,
 }: CreatorCardBrowserProps) {
   const [q, setQ] = useState("")
   const [niche, setNiche] = useState("all")
@@ -105,12 +100,7 @@ export function CreatorCardBrowser({
       </div>
 
       <div className="mt-6">
-        <CreatorCardList
-          cards={filtered}
-          locale={locale}
-          behavior={behavior}
-          onCardClick={onCardClick}
-        />
+        <CreatorCardList cards={filtered} locale={locale} />
       </div>
     </div>
   )
