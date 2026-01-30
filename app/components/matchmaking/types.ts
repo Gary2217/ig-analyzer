@@ -13,13 +13,6 @@ export type FormatKey =
   | "reels"
   | "posts"
   | "stories"
-  | "ugc"
-  | "live"
-  | "youtube"
-  | "tiktok"
-  | "facebook"
-  | "review_unboxing"
-  | "event"
   | "other"
 
 export type BudgetRange =

@@ -141,13 +141,26 @@ function deriveFormatKeysFromDeliverables(input?: string[]): FormatKey[] {
     if (id === "reels") set.add("reels")
     else if (id === "posts") set.add("posts")
     else if (id === "stories") set.add("stories")
-    else if (id === "ugc") set.add("ugc")
+    else set.add("other")
+  }
+
+  return Array.from(set)
+}
+
+function deriveCollabTypesFromDeliverables(input?: string[]): CollabType[] {
+  const d = Array.isArray(input) ? input : []
+  const set = new Set<CollabType>()
+
+  for (const raw of d) {
+    const id = String(raw || "").trim().toLowerCase()
+    if (!id) continue
+
+    if (id === "ugc") set.add("ugc")
     else if (id === "live") set.add("live")
-    else if (id === "youtube") set.add("youtube")
-    else if (id === "tiktok") set.add("tiktok")
-    else if (id === "fb_post" || id === "fb" || id === "facebook") set.add("facebook")
     else if (id === "unboxing") set.add("review_unboxing")
     else if (id === "event") set.add("event")
+    else if (id === "youtube") set.add("long_video")
+    else if (id === "tiktok" || id === "reels" || id === "stories") set.add("short_video")
     else set.add("other")
   }
 
@@ -314,6 +327,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
+      const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
       return {
         id: c.id,
         name: c.displayName,
@@ -321,7 +335,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         avatarUrl: c.avatarUrl,
         topics,
         platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
-        collabTypes: ["other"],
+        collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
         deliverables,
         stats: {
           followers: c.followerCount,
@@ -369,31 +383,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       ;(creatorFormatsById.get(c.id) ?? []).forEach((k) => present.add(k))
     })
 
-    const order: FormatKey[] = [
-      "reels",
-      "posts",
-      "stories",
-      "ugc",
-      "live",
-      "youtube",
-      "tiktok",
-      "facebook",
-      "review_unboxing",
-      "event",
-      "other",
-    ]
+    const order: FormatKey[] = ["reels", "posts", "stories", "other"]
 
     const labelFor = (k: FormatKey) => {
       if (k === "reels") return mm.formatReels
       if (k === "posts") return mm.formatPosts
       if (k === "stories") return mm.formatStories
-      if (k === "ugc") return mm.formatUGC
-      if (k === "live") return mm.formatLive
-      if (k === "youtube") return mm.formatYouTube
-      if (k === "tiktok") return mm.formatTikTok
-      if (k === "facebook") return mm.formatFacebook
-      if (k === "review_unboxing") return mm.formatReviewUnboxing
-      if (k === "event") return mm.formatEvent
       return mm.formatOther
     }
 
@@ -402,6 +397,30 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       ...order.filter((k) => present.has(k)).map((k) => ({ value: k, label: labelFor(k) })),
     ]
   }, [creators, creatorFormatsById, uiCopy.matchmaking])
+
+  const collabOptions = useMemo(() => {
+    const mm = uiCopy.matchmaking
+    const present = new Set<CollabType>()
+    creators.forEach((c) => {
+      ;(c.collabTypes ?? []).forEach((t) => present.add(t))
+    })
+
+    const order: CollabType[] = ["short_video", "long_video", "ugc", "live", "review_unboxing", "event", "other"]
+    const labelFor = (t: CollabType) => {
+      if (t === "short_video") return mm.typeShortVideo
+      if (t === "long_video") return mm.typeLongVideo
+      if (t === "ugc") return mm.typeUGC
+      if (t === "live") return mm.typeLive
+      if (t === "review_unboxing") return mm.typeReviewUnboxing
+      if (t === "event") return mm.typeEvent
+      return mm.typeOther
+    }
+
+    return [
+      { value: "any" as const, label: mm.allTypes },
+      ...order.filter((t) => present.has(t)).map((t) => ({ value: t, label: labelFor(t) })),
+    ]
+  }, [creators, uiCopy.matchmaking])
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -488,6 +507,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           onBudget={setBudget}
           collab={collab}
           onCollab={setCollab}
+          collabOptions={collabOptions}
           category={category}
           categoryOptions={categories}
           onCategory={(v) => {

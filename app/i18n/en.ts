@@ -37,6 +37,15 @@ export const en: CopyDictionary = {
     formatEvent: "Event",
     formatOther: "Other",
 
+    advancedFilters: "Advanced",
+    typeShortVideo: "Short video",
+    typeLongVideo: "Long video",
+    typeUGC: "UGC",
+    typeLive: "Live",
+    typeReviewUnboxing: "Review / Unboxing",
+    typeEvent: "Event",
+    typeOther: "Other",
+
     sortRecommended: "Recommended",
     sortNewest: "Newest",
     sortName: "Name A–Z",

@@ -35,6 +35,15 @@ export type CopyDictionary = {
     formatEvent: string
     formatOther: string
 
+    advancedFilters: string
+    typeShortVideo: string
+    typeLongVideo: string
+    typeUGC: string
+    typeLive: string
+    typeReviewUnboxing: string
+    typeEvent: string
+    typeOther: string
+
     sortRecommended: string
     sortNewest: string
     sortName: string

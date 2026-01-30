@@ -37,6 +37,15 @@ export const zhTW: CopyDictionary = {
     formatEvent: "活動",
     formatOther: "其他",
 
+    advancedFilters: "更多篩選",
+    typeShortVideo: "短影音",
+    typeLongVideo: "長影音",
+    typeUGC: "UGC",
+    typeLive: "直播",
+    typeReviewUnboxing: "開箱 / 評測",
+    typeEvent: "活動",
+    typeOther: "其他",
+
     sortRecommended: "推薦",
     sortNewest: "最新",
     sortName: "名稱 A–Z",

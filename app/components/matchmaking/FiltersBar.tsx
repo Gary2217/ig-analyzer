@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { BudgetRange, CollabType, FormatKey, Platform } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
@@ -23,6 +23,7 @@ type Props = {
 
   collab: CollabType | "any"
   onCollab: (v: CollabType | "any") => void
+  collabOptions: Array<{ value: CollabType | "any"; label: string }>
 
   category: string
   categoryOptions: string[]
@@ -38,6 +39,8 @@ export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
 
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+
   const budgetOptions: Array<{ value: BudgetRange; label: string }> = useMemo(
     () => [
       { value: "any", label: mm.anyBudget },
@@ -48,20 +51,6 @@ export function FiltersBar(props: Props) {
       { value: "60000_plus", label: "60,000+" },
     ],
     [mm]
-  )
-
-  const collabOptions: Array<{ value: CollabType | "any"; label: string }> = useMemo(
-    () => [
-      { value: "any", label: mm.allTypes },
-      { value: "short_video", label: props.locale === "zh-TW" ? "短影音" : "Short Video" },
-      { value: "long_video", label: props.locale === "zh-TW" ? "長影音" : "Long Video" },
-      { value: "live", label: props.locale === "zh-TW" ? "直播" : "Live" },
-      { value: "ugc", label: "UGC" },
-      { value: "review_unboxing", label: props.locale === "zh-TW" ? "開箱 / 評測" : "Review/Unboxing" },
-      { value: "event", label: props.locale === "zh-TW" ? "活動" : "Event" },
-      { value: "other", label: props.locale === "zh-TW" ? "其他" : "Other" },
-    ],
-    [mm, props.locale]
   )
 
   return (
@@ -79,18 +68,18 @@ export function FiltersBar(props: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-7 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
           <input
             value={props.search}
             onChange={(e) => props.onSearch(e.target.value)}
             placeholder={copy.common.searchPlaceholder}
-            className="col-span-2 lg:col-span-2 h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+            className="col-span-2 lg:col-span-2 h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30 min-w-0"
           />
 
           <select
             value={props.platform}
             onChange={(e) => props.onPlatform(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
           >
             {props.platformOptions.map((o) => (
               <option key={o.value} value={o.value} className="bg-slate-900">
@@ -102,7 +91,7 @@ export function FiltersBar(props: Props) {
           <select
             value={props.budget}
             onChange={(e) => props.onBudget(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
           >
             {budgetOptions.map((o) => (
               <option key={o.value} value={o.value} className="bg-slate-900">
@@ -112,21 +101,9 @@ export function FiltersBar(props: Props) {
           </select>
 
           <select
-            value={props.collab}
-            onChange={(e) => props.onCollab(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
-          >
-            {collabOptions.map((o) => (
-              <option key={o.value} value={o.value} className="bg-slate-900">
-                {o.label}
-              </option>
-            ))}
-          </select>
-
-          <select
             value={props.format}
             onChange={(e) => props.onFormat(e.target.value as any)}
-            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
           >
             {props.formatOptions.map((o) => (
               <option key={o.value} value={o.value} className="bg-slate-900">
@@ -135,41 +112,61 @@ export function FiltersBar(props: Props) {
             ))}
           </select>
 
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              value={props.category}
-              onChange={(e) => props.onCategory(e.target.value)}
-              className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
-            >
-              {(props.categoryOptions?.length ? props.categoryOptions : ["all"]).map((c) => (
-                <option key={c} value={c} className="bg-slate-900">
-                  {c === "all" ? mm.allCategories : c}
-                </option>
-              ))}
-            </select>
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((v) => !v)}
+            className="col-span-2 lg:hidden h-11 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
+          >
+            {mm.advancedFilters}
+          </button>
+        </div>
 
-            <select
-              value={props.sort}
-              onChange={(e) => props.onSort(e.target.value)}
-              className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
-            >
-              <option value="recommended" className="bg-slate-900">
-                {mm.sortRecommended}
+        <div className={`${advancedOpen ? "grid" : "hidden"} grid-cols-2 gap-2 lg:grid lg:grid-cols-5`}>
+          <select
+            value={props.collab}
+            onChange={(e) => props.onCollab(e.target.value as any)}
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+          >
+            {props.collabOptions.map((o) => (
+              <option key={o.value} value={o.value} className="bg-slate-900">
+                {o.label}
               </option>
-              <option value="newest" className="bg-slate-900">
-                {mm.sortNewest}
+            ))}
+          </select>
+
+          <select
+            value={props.sort}
+            onChange={(e) => props.onSort(e.target.value)}
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+          >
+            <option value="recommended" className="bg-slate-900">
+              {mm.sortRecommended}
+            </option>
+            <option value="newest" className="bg-slate-900">
+              {mm.sortNewest}
+            </option>
+            <option value="name" className="bg-slate-900">
+              {mm.sortName}
+            </option>
+            <option value="followers_desc" className="bg-slate-900">
+              {mm.sortFollowers}
+            </option>
+            <option value="er_desc" className="bg-slate-900">
+              {mm.sortEngagement}
+            </option>
+          </select>
+
+          <select
+            value={props.category}
+            onChange={(e) => props.onCategory(e.target.value)}
+            className="h-11 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 min-w-0"
+          >
+            {(props.categoryOptions?.length ? props.categoryOptions : ["all"]).map((c) => (
+              <option key={c} value={c} className="bg-slate-900">
+                {c === "all" ? mm.allCategories : c}
               </option>
-              <option value="name" className="bg-slate-900">
-                {mm.sortName}
-              </option>
-              <option value="followers_desc" className="bg-slate-900">
-                {mm.sortFollowers}
-              </option>
-              <option value="er_desc" className="bg-slate-900">
-                {mm.sortEngagement}
-              </option>
-            </select>
-          </div>
+            ))}
+          </select>
         </div>
       </div>
     </div>
