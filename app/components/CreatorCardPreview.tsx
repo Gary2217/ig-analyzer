@@ -1068,10 +1068,6 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                         onItemClick={(e) => {
                           e.preventDefault()
                           setOpenIg({ url: normalizedUrl, thumb: thumbnailSrc, caption })
-                          // Restore scroll if the tap caused any repositioning
-                          window.requestAnimationFrame(() => {
-                            window.scrollTo(0, pageScrollYRef.current || 0)
-                          })
                         }}
                       >
                         <div
