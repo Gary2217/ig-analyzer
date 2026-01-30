@@ -466,6 +466,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>(props.igOEmbedCache || {})
   const modalBodyRef = useRef<HTMLDivElement>(null)
   const igModalBodyRef = useRef<HTMLDivElement>(null)
+  const avatarModalPanelRef = useRef<HTMLDivElement>(null)
   const scrollLockTokenRef = useRef<number | null>(null)
 
   // Reset scroll position when IG modal opens
@@ -495,6 +496,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
       scrollLockTokenRef.current = null
     }
   }, [openAvatarUrl, openIg])
+
+  const forwardWheelToPanel = useCallback((e: React.WheelEvent, el: HTMLDivElement | null) => {
+    if (!el) return
+    if (el.scrollHeight <= el.clientHeight) return
+    el.scrollTop += e.deltaY
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
 
   const previewCarouselRef = useRef<HTMLDivElement | null>(null)
   const [canScrollPreviewLeft, setCanScrollPreviewLeft] = useState(false)
@@ -1360,9 +1369,11 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
           onClick={() => setOpenAvatarUrl(null)}
         >
           <div
+            ref={avatarModalPanelRef}
             data-scroll-allow="true"
             className="no-scrollbar w-[94vw] max-w-[560px] md:max-w-[720px] max-h-[90dvh] rounded-2xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl flex flex-col mx-auto overflow-y-auto overscroll-contain touch-pan-y"
             onClick={(e) => e.stopPropagation()}
+            onWheelCapture={(e) => forwardWheelToPanel(e, avatarModalPanelRef.current)}
           >
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10">
               <h3 className="text-sm font-semibold text-white/90 break-words [overflow-wrap:anywhere] min-w-0">
@@ -1408,6 +1419,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             data-scroll-allow="true"
             className="no-scrollbar w-[min(92vw,560px)] max-h-[90dvh] rounded-2xl border border-white/10 bg-[#0b1220]/95 backdrop-blur flex flex-col overflow-y-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
+            onWheelCapture={(e) => forwardWheelToPanel(e, igModalBodyRef.current)}
           >
             {/* Header - non-scrolling */}
             <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 border-b border-white/10 bg-[#0b1220]/95 backdrop-blur">
