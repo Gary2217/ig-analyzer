@@ -63,7 +63,7 @@ export default function DemoToolPanel({ activeLocale, isConnectedFromServer, che
               </h2>
               <p className="mt-3 text-base text-white/70 leading-relaxed max-w-[60ch] whitespace-pre-line break-words">
                 {locale === "zh-TW"
-                  ? "Instagram 創作者資料庫\n瀏覽 Instagram 創作者名片"
+                  ? "Instagram 創作者資料庫"
                   : "Browse Instagram creator profiles\nFind collaboration partners"}
               </p>
             </div>
