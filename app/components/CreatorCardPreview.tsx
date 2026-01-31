@@ -939,7 +939,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                   @{resolvedUsername}
                 </div>
                 {minPriceText ? (
-                  <div className="mt-1 text-xs text-white/60 tabular-nums whitespace-nowrap truncate min-w-0">
+                  <div className="mt-1 text-xs font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-emerald-200/90 to-cyan-100/90">
                     {minPriceText}
                   </div>
                 ) : null}
@@ -961,23 +961,26 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
           {showStatsRow ? (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 min-w-0">
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
-              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.followers")}</div>
-              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
+            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_12px_30px_-18px_rgba(59,130,246,0.30)]">
+              <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-cyan-400/40 to-blue-500/30" />
+              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate min-w-0">{t("results.mediaKit.stats.followers")}</div>
+              <div className="mt-1 text-xl font-bold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200/95 to-blue-100/90">
                 {hasFollowers ? followers.toLocaleString() : "—"}
               </div>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
-              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.following")}</div>
-              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
+            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(167,139,250,0.18),0_12px_30px_-18px_rgba(236,72,153,0.30)]">
+              <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-violet-400/40 to-fuchsia-500/30" />
+              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate min-w-0">{t("results.mediaKit.stats.following")}</div>
+              <div className="mt-1 text-xl font-bold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-violet-200/95 to-fuchsia-100/90">
                 {hasFollowing ? following.toLocaleString() : "—"}
               </div>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 min-w-0">
-              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate">{t("results.mediaKit.stats.posts")}</div>
-              <div className="mt-1 text-xl font-bold text-slate-100 tabular-nums whitespace-nowrap truncate">
+            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.18),0_12px_30px_-18px_rgba(34,211,238,0.22)]">
+              <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
+              <div className="text-[11px] font-semibold text-white/55 whitespace-nowrap truncate min-w-0">{t("results.mediaKit.stats.posts")}</div>
+              <div className="mt-1 text-xl font-bold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-emerald-200/90 to-cyan-100/90">
                 {hasPosts ? posts.toLocaleString() : "—"}
               </div>
             </div>

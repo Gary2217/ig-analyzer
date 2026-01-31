@@ -168,22 +168,30 @@ export function CreatorCard({
             )}
           </div>
 
-          <div className="mt-3 rounded-xl bg-white/5 border border-white/10 px-3 py-3 min-w-0">
-            <div className="text-[11px] text-white/45 truncate">{mm.followersLabel}</div>
-            <div className="mt-1 text-[clamp(20px,4.5vw,28px)] leading-none font-semibold text-white/95 tabular-nums whitespace-nowrap">
-              {formatNumber(creator.stats?.followers)}
+          <div className="mt-3 grid grid-cols-2 gap-2 min-w-0">
+            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.20),0_12px_30px_-18px_rgba(59,130,246,0.35)]">
+              <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-cyan-400/40 to-blue-500/30" />
+              <div className="text-[11px] text-white/45 truncate min-w-0">{mm.followersLabel}</div>
+              <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200/95 to-blue-100/90">
+                {formatNumber(creator.stats?.followers)}
+              </div>
             </div>
-            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-white/65 min-w-0">
-              <span className="truncate">{mm.engagementLabel}</span>
-              <span className="tabular-nums whitespace-nowrap shrink-0">{formatER(creator.stats?.engagementRate)}</span>
+
+            <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(167,139,250,0.20),0_12px_30px_-18px_rgba(236,72,153,0.35)]">
+              <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-violet-400/40 to-fuchsia-500/30" />
+              <div className="text-[11px] text-white/45 truncate min-w-0">{mm.engagementLabel}</div>
+              <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-violet-200/95 to-fuchsia-100/90">
+                {formatER(creator.stats?.engagementRate)}
+              </div>
             </div>
 
             {typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice) ? (
-              <div className="mt-2 flex items-center justify-between gap-2 text-xs text-white/65 min-w-0">
-                <span className="truncate">{mm.budgetLabel}</span>
-                <span className="tabular-nums whitespace-nowrap shrink-0">
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.22),0_12px_30px_-18px_rgba(34,211,238,0.25)] col-span-2">
+                <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
+                <div className="text-[11px] text-white/45 truncate min-w-0">{mm.budgetLabel}</div>
+                <div className="mt-1 text-sm font-semibold text-white/85 tabular-nums whitespace-nowrap truncate min-w-0">
                   {mm.minPriceFrom(formatNTD(creator.minPrice) ?? "")}
-                </span>
+                </div>
               </div>
             ) : null}
           </div>
