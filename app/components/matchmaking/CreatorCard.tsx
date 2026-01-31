@@ -64,6 +64,16 @@ function safeParseCreatorContact(input: unknown): { emails: string[]; others: st
   }
 }
 
+function normalizeTelNumber(input: string) {
+  const raw = String(input || "").trim()
+  if (!raw) return ""
+  const hasPlus = raw.startsWith("+")
+  const stripped = raw.replace(/[\s\-().]/g, "")
+  const digits = stripped.replace(/[^0-9+]/g, "")
+  const core = hasPlus ? digits.replace(/\+/g, "+") : digits.replace(/\+/g, "")
+  return core
+}
+
 export function CreatorCard({
   creator,
   locale,
@@ -163,7 +173,13 @@ export function CreatorCard({
   const displayChips = topChips.slice(0, 2)
 
   const contactItems = (() => {
-    const out: Array<{ key: "email" | "phone" | "line"; value: string; className: string }> = []
+    const out: Array<{
+      key: "email" | "phone" | "line"
+      value: string
+      className: string
+      href?: string
+      ariaLabel?: string
+    }> = []
     const parsedContact = safeParseCreatorContact((creator as any)?.contact)
     const email =
       typeof creator.contactEmail === "string"
@@ -196,8 +212,36 @@ export function CreatorCard({
             ? String((creator as any)?.profile?.contactLine).trim()
             : ""
 
-    if (email) out.push({ key: "email", value: email, className: "" })
-    if (phone) out.push({ key: "phone", value: phone, className: "" })
+    if (email) {
+      const subject = encodeURIComponent("合作洽談 / Collaboration request")
+      const body = encodeURIComponent(
+        `你好 ${creator.name}，\n我在 Matchmaking 上看到你的資料，想跟你合作。\n\nHi ${creator.name},\nI saw your profile on Matchmaking and would like to collaborate.\n`,
+      )
+      const href = `mailto:${email}?subject=${subject}&body=${body}`
+      out.push({
+        key: "email",
+        value: email,
+        className: "",
+        href,
+        ariaLabel: `Email ${creator.name}`,
+      })
+    }
+
+    if (phone) {
+      const tel = normalizeTelNumber(phone)
+      if (tel) {
+        out.push({
+          key: "phone",
+          value: phone,
+          className: "",
+          href: `tel:${tel}`,
+          ariaLabel: `Call ${creator.name}`,
+        })
+      } else {
+        out.push({ key: "phone", value: phone, className: "" })
+      }
+    }
+
     if (line) out.push({ key: "line", value: line, className: "" })
     return out
   })()
@@ -403,7 +447,18 @@ export function CreatorCard({
                     className={`max-w-full overflow-hidden rounded-full bg-white/10 px-3 py-1 ${it.className}`}
                     title={it.value}
                   >
-                    <span className="block max-w-[220px] sm:max-w-[260px] truncate">{it.value}</span>
+                    {it.href ? (
+                      <a
+                        href={it.href}
+                        onClick={(e) => e.stopPropagation()}
+                        className="block max-w-[220px] sm:max-w-[260px] truncate underline underline-offset-2 decoration-white/20 hover:decoration-white/50"
+                        aria-label={it.ariaLabel}
+                      >
+                        {it.value}
+                      </a>
+                    ) : (
+                      <span className="block max-w-[220px] sm:max-w-[260px] truncate">{it.value}</span>
+                    )}
                   </span>
                 ))}
               </div>
