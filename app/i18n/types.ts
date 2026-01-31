@@ -79,5 +79,8 @@ export type CopyDictionary = {
 
     followersLabel: string
     engagementLabel: string
+
+    updatingStats: string
+    retryStatsAria: string
   }
 }

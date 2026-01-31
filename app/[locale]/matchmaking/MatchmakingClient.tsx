@@ -242,6 +242,15 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     >()
   )
 
+  const statsInFlightRef = useRef(new Set<string>())
+  const statsErrorRef = useRef(new Map<string, boolean>())
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [statsUiVersion, setStatsUiVersion] = useState(0)
+  const [statsPrefetchRunning, setStatsPrefetchRunning] = useState(false)
+
+  const STORAGE_KEY = "matchmaking_stats_cache_v1"
+  const STORAGE_TTL_MS = 24 * 60 * 60 * 1000
+
   const creatorIdAliasRef = useRef(new Map<string, string>())
 
   const [statsVersion, setStatsVersion] = useState(0)
@@ -258,6 +267,45 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
   const [myCardFirst, setMyCardFirst] = useState(true)
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+      const raw = window.sessionStorage.getItem(STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as any
+      const updatedAt = typeof parsed?.updatedAt === "number" ? parsed.updatedAt : 0
+      if (!updatedAt || Date.now() - updatedAt > STORAGE_TTL_MS) return
+
+      const mapObj = parsed?.map && typeof parsed.map === "object" ? (parsed.map as Record<string, any>) : null
+      if (!mapObj) return
+
+      let changed = false
+      for (const [creatorId, v] of Object.entries(mapObj)) {
+        if (!/^\d+$/.test(creatorId)) continue
+        const followers = typeof v?.followers === "number" && Number.isFinite(v.followers) ? Math.floor(v.followers) : undefined
+        const engagementRatePct =
+          typeof v?.engagementRatePct === "number" && Number.isFinite(v.engagementRatePct)
+            ? clampNumber(roundTo2(v.engagementRatePct), 0, 99)
+            : undefined
+
+        if (followers == null && engagementRatePct == null) continue
+        const prev = statsCacheRef.current.get(creatorId)
+        const next = {
+          followers: followers ?? prev?.followers,
+          engagementRatePct: engagementRatePct ?? prev?.engagementRatePct,
+        }
+        const didChange = prev?.followers !== next.followers || prev?.engagementRatePct !== next.engagementRatePct
+        statsCacheRef.current.set(creatorId, next)
+        if (didChange) changed = true
+      }
+
+      if (changed) setStatsVersion((v) => v + 1)
+    } catch {
+      // swallow
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     setCards(initialCards)
@@ -380,6 +428,9 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           statsCacheRef.current.set(creatorIdStr, nextCached)
           if (changed) setStatsVersion((v) => v + 1)
         }
+
+        statsErrorRef.current.delete(creatorIdStr)
+        setStatsUiVersion((v) => v + 1)
 
         setCards((prev) =>
           prev.map((c) => {
@@ -675,7 +726,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     const ac = new AbortController()
 
     const unique = visibleCreatorIds
-    const missing = unique.filter((id) => !statsCacheRef.current.has(id))
+    const missing = unique.filter((id) => !statsCacheRef.current.has(id) && !statsInFlightRef.current.has(id))
     if (!missing.length) return () => ac.abort()
 
     if (process.env.NODE_ENV !== "production") {
@@ -686,7 +737,13 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     const concurrency = 3
     let cursor = 0
 
+    setStatsPrefetchRunning(true)
+
     const fetchOne = async (creatorId: string) => {
+      if (statsInFlightRef.current.has(creatorId)) return
+      statsInFlightRef.current.add(creatorId)
+      setStatsUiVersion((v) => v + 1)
+
       const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
         method: "GET",
         cache: "no-store",
@@ -718,11 +775,14 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       statsCacheRef.current.set(creatorId, nextCached)
       if (changed) setStatsVersion((v) => v + 1)
 
-      if (process.env.NODE_ENV !== "production") {
-        if (changed) {
-          console.debug("[matchmaking] stats cache update", creatorId, nextCached.followers, nextCached.engagementRatePct)
-        }
+      if (!res.ok || json?.ok !== true) {
+        statsErrorRef.current.set(creatorId, true)
+      } else {
+        statsErrorRef.current.delete(creatorId)
       }
+
+      statsInFlightRef.current.delete(creatorId)
+      setStatsUiVersion((v) => v + 1)
     }
 
     const runWorker = async () => {
@@ -743,15 +803,105 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     ;(async () => {
-      const workers = Array.from({ length: Math.min(concurrency, missing.length) }, () => runWorker())
-      await Promise.all(workers)
+      const start = () => {
+        const workers = Array.from({ length: Math.min(concurrency, missing.length) }, () => runWorker())
+        Promise.all(workers)
+          .catch(() => null)
+          .finally(() => {
+            if (!didCancel) setStatsPrefetchRunning(false)
+          })
+      }
+
+      const w: any = typeof window !== "undefined" ? (window as any) : null
+      if (w && typeof w.requestIdleCallback === "function") {
+        w.requestIdleCallback(start)
+      } else {
+        setTimeout(start, 250)
+      }
     })()
 
     return () => {
       didCancel = true
       ac.abort()
+      setStatsPrefetchRunning(false)
     }
   }, [visibleCreatorIdsKey])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+
+    persistTimerRef.current = setTimeout(() => {
+      try {
+        const out: Record<string, { followers?: number; engagementRatePct?: number }> = {}
+        for (const [creatorId, v] of statsCacheRef.current.entries()) {
+          if (!/^\d+$/.test(creatorId)) continue
+          const followers = typeof v?.followers === "number" && Number.isFinite(v.followers) ? Math.floor(v.followers) : undefined
+          const engagementRatePct =
+            typeof v?.engagementRatePct === "number" && Number.isFinite(v.engagementRatePct)
+              ? clampNumber(roundTo2(v.engagementRatePct), 0, 99)
+              : undefined
+          if (followers == null && engagementRatePct == null) continue
+          out[creatorId] = { followers, engagementRatePct }
+        }
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ updatedAt: Date.now(), map: out }))
+      } catch {
+        // swallow
+      }
+    }, 400)
+
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    }
+  }, [statsVersion])
+
+  const retryStats = (creatorId: string) => {
+    if (!/^\d+$/.test(creatorId)) return
+    if (statsInFlightRef.current.has(creatorId)) return
+
+    const ac = new AbortController()
+    statsInFlightRef.current.add(creatorId)
+    statsErrorRef.current.delete(creatorId)
+    setStatsUiVersion((v) => v + 1)
+
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
+          method: "GET",
+          cache: "no-store",
+          signal: ac.signal,
+        })
+        const json = (await res.json().catch(() => null)) as any
+        const stats = json?.ok === true ? json?.stats : null
+
+        const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
+        const engagementRatePct =
+          typeof stats?.engagementRatePct === "number" && Number.isFinite(stats.engagementRatePct)
+            ? clampNumber(roundTo2(stats.engagementRatePct), 0, 99)
+            : null
+
+        const prevCached = statsCacheRef.current.get(creatorId)
+        const nextCached = {
+          followers: followers ?? prevCached?.followers,
+          engagementRatePct: engagementRatePct ?? prevCached?.engagementRatePct,
+        }
+        const changed =
+          prevCached?.followers !== nextCached.followers || prevCached?.engagementRatePct !== nextCached.engagementRatePct
+        statsCacheRef.current.set(creatorId, nextCached)
+        if (changed) setStatsVersion((v) => v + 1)
+
+        if (!res.ok || json?.ok !== true) statsErrorRef.current.set(creatorId, true)
+        else statsErrorRef.current.delete(creatorId)
+      } catch {
+        statsErrorRef.current.set(creatorId, true)
+      } finally {
+        statsInFlightRef.current.delete(creatorId)
+        setStatsUiVersion((v) => v + 1)
+      }
+    })()
+
+    return () => ac.abort()
+  }
 
   const favoritesList = useMemo(
     () => creators.filter((c) => fav.favoriteIds.has(c.id)),
@@ -792,10 +942,19 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           favoritesCount={fav.count}
           onOpenFavorites={() => setFavOpen(true)}
           total={filtered.length}
+          statsUpdating={statsPrefetchRunning}
         />
 
         <CreatorGrid>
           {pinned.map((c) => (
+            (() => {
+              const creatorId = (c as any)?.creatorId as string | undefined
+              const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
+              const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
+              const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
+              const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
+
+              return (
             <MatchmakingCreatorCard
               key={c.id}
               creator={c}
@@ -803,7 +962,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
               isFav={fav.isFav(c.id)}
               onToggleFav={() => fav.toggleFav(c.id)}
               isMyCard={Boolean(ownerCardId && c.id === ownerCardId)}
+              statsLoading={loading}
+              statsError={error}
+              onRetryStats={creatorId ? () => retryStats(creatorId) : undefined}
             />
+              )
+            })()
           ))}
         </CreatorGrid>
       </div>

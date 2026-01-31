@@ -81,5 +81,8 @@ export const en: CopyDictionary = {
 
     followersLabel: "Followers",
     engagementLabel: "Engagement",
+
+    updatingStats: "Updating stats…",
+    retryStatsAria: "Retry stats",
   },
 }

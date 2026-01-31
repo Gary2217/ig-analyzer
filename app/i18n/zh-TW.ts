@@ -81,5 +81,8 @@ export const zhTW: CopyDictionary = {
 
     followersLabel: "粉絲",
     engagementLabel: "互動率",
+
+    updatingStats: "更新數據中…",
+    retryStatsAria: "重新取得數據",
   },
 }

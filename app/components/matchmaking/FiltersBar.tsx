@@ -36,6 +36,7 @@ type Props = {
   onOpenFavorites: () => void
 
   total: number
+  statsUpdating?: boolean
 }
 
 export function FiltersBar(props: Props) {
@@ -160,6 +161,13 @@ export function FiltersBar(props: Props) {
                   <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
                     {mm.totalCreators(props.total)}
                   </div>
+
+                  {props.statsUpdating ? (
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-white/50 min-w-0">
+                      <div className="h-3 w-3 rounded-full border border-white/20 border-t-white/60 animate-spin shrink-0" />
+                      <span className="truncate min-w-0">{mm.updatingStats}</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 {props.selectedTypes.length ? (

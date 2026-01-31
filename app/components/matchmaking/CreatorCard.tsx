@@ -43,12 +43,18 @@ export function CreatorCard({
   isFav,
   onToggleFav,
   isMyCard,
+  statsLoading,
+  statsError,
+  onRetryStats,
 }: {
   creator: CreatorCardData
   locale: Locale
   isFav: boolean
   onToggleFav: () => void
   isMyCard?: boolean
+  statsLoading?: boolean
+  statsError?: boolean
+  onRetryStats?: () => void
 }) {
   const copy = getCopy(locale)
   const mm = copy.matchmaking
@@ -182,18 +188,39 @@ export function CreatorCard({
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
             <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.20),0_12px_30px_-18px_rgba(59,130,246,0.35)]">
               <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-cyan-400/40 to-blue-500/30" />
-              <div className="text-[11px] text-white/45 truncate min-w-0">{mm.followersLabel}</div>
-              <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200/95 to-blue-100/90">
-                {formatNumber(creator.stats?.followers)}
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <div className="text-[11px] text-white/45 truncate min-w-0">{mm.followersLabel}</div>
+                {statsError && onRetryStats ? (
+                  <button
+                    type="button"
+                    onClick={onRetryStats}
+                    className="shrink-0 h-6 w-6 grid place-items-center rounded-md border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
+                    aria-label={mm.retryStatsAria}
+                    title={mm.retryStatsAria}
+                  >
+                    ↻
+                  </button>
+                ) : null}
               </div>
+              {statsLoading ? (
+                <div className="mt-2 h-[22px] w-[110px] max-w-full rounded-md bg-white/10 animate-pulse" />
+              ) : (
+                <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200/95 to-blue-100/90">
+                  {formatNumber(creator.stats?.followers)}
+                </div>
+              )}
             </div>
 
             <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(167,139,250,0.20),0_12px_30px_-18px_rgba(236,72,153,0.35)]">
               <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-violet-400/40 to-fuchsia-500/30" />
               <div className="text-[11px] text-white/45 truncate min-w-0">{mm.engagementLabel}</div>
-              <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-violet-200/95 to-fuchsia-100/90">
-                {formatER(creator.stats?.engagementRate)}
-              </div>
+              {statsLoading ? (
+                <div className="mt-2 h-[22px] w-[90px] max-w-full rounded-md bg-white/10 animate-pulse" />
+              ) : (
+                <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-violet-200/95 to-fuchsia-100/90">
+                  {formatER(creator.stats?.engagementRate)}
+                </div>
+              )}
             </div>
 
             {typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice) ? (
