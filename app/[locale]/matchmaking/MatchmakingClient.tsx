@@ -333,20 +333,37 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             : null
 
         if (cancelled) return
+        const creatorIdStr = String(ownerIgUserId)
         setCards((prev) =>
           prev.map((c) =>
-            c.id === meCardId
-              ? {
-                  ...c,
-                  followerCount: followers ?? c.followerCount,
-                  engagementRate: engagementRatePct ?? c.engagementRate,
-                  stats: {
-                    ...(c.stats ?? {}),
-                    followers: followers ?? c.stats?.followers,
-                    engagementRatePct: engagementRatePct ?? c.stats?.engagementRatePct,
-                  },
-                }
-              : c
+            {
+              const cId = c?.id != null ? String(c.id) : ""
+              const cIgId =
+                (c as any)?.igId != null
+                  ? String((c as any).igId)
+                  : (c as any)?.creatorId != null
+                    ? String((c as any).creatorId)
+                    : (c as any)?.instagramId != null
+                      ? String((c as any).instagramId)
+                      : (c as any)?.stats?.creatorId != null
+                        ? String((c as any).stats.creatorId)
+                        : ""
+
+              const matches = cId === String(meCardId) || cId === creatorIdStr || (cIgId && cIgId === creatorIdStr)
+              if (!matches) return c
+
+              return {
+                ...c,
+                followerCount: followers ?? c.followerCount,
+                engagementRate: engagementRatePct ?? c.engagementRate,
+                stats: {
+                  ...(c.stats ?? {}),
+                  creatorId: creatorIdStr,
+                  followers: followers ?? c.stats?.followers,
+                  engagementRatePct: engagementRatePct ?? c.stats?.engagementRatePct,
+                },
+              }
+            }
           )
         )
       } catch {

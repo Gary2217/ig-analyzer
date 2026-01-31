@@ -10,6 +10,7 @@ export interface CreatorCard {
   avgComments?: number | null
   engagementRate: number | null
   stats?: {
+    creatorId?: string
     followers?: number | null
     engagementRatePct?: number | null
   }
