@@ -125,31 +125,21 @@ export function FiltersBar(props: Props) {
                   ))}
                 </select>
 
-                <div className="w-full sm:w-auto min-w-0 flex items-center gap-2">
-                  <select
-                    value={props.sort}
-                    onChange={(e) => props.onSort(e.target.value as any)}
-                    className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[180px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
-                  >
-                    <option value="best_match" className="bg-slate-900">
-                      {mm.sortBestMatch}
-                    </option>
-                    <option value="followers_desc" className="bg-slate-900">
-                      {mm.sortFollowersDesc}
-                    </option>
-                    <option value="er_desc" className="bg-slate-900">
-                      {mm.sortErDesc}
-                    </option>
-                  </select>
-                  <button
-                    type="button"
-                    className="h-11 w-11 grid place-items-center rounded-lg border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 shrink-0"
-                    aria-label={mm.bestMatchTooltip}
-                    title={mm.bestMatchTooltip}
-                  >
-                    i
-                  </button>
-                </div>
+                <select
+                  value={props.sort}
+                  onChange={(e) => props.onSort(e.target.value as any)}
+                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[180px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                >
+                  <option value="best_match" className="bg-slate-900">
+                    {mm.sortBestMatch}
+                  </option>
+                  <option value="followers_desc" className="bg-slate-900">
+                    {mm.sortFollowersDesc}
+                  </option>
+                  <option value="er_desc" className="bg-slate-900">
+                    {mm.sortErDesc}
+                  </option>
+                </select>
 
                 <button
                   type="button"

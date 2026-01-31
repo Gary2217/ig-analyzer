@@ -9,6 +9,7 @@ export type CopyDictionary = {
   matchmaking: {
     title: string
     description: string
+    myCardFirstToggle: string
     totalCreators: (n: number) => string
 
     allPlatforms: string
@@ -57,7 +58,6 @@ export type CopyDictionary = {
     sortEngagement: string
 
     myCardBadge: string
-    myCardFirstToggle: string
 
     filtersButton: string
     profileNotSet: string
@@ -84,7 +84,6 @@ export type CopyDictionary = {
     recommendedLabel: string
     popularBadge: string
     highEngagementLabel: string
-    bestMatchTooltip: string
 
     updatingStats: string
     retryStatsAria: string

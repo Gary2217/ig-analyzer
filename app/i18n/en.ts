@@ -86,7 +86,6 @@ export const en: CopyDictionary = {
     recommendedLabel: "Recommended",
     popularBadge: "Popular",
     highEngagementLabel: "High Engagement",
-    bestMatchTooltip: "Best Match weighs budget fit, engagement, and audience size.",
 
     updatingStats: "Updating stats…",
     retryStatsAria: "Retry stats",

@@ -86,7 +86,6 @@ export const zhTW: CopyDictionary = {
     recommendedLabel: "推薦",
     popularBadge: "人氣",
     highEngagementLabel: "互動亮眼",
-    bestMatchTooltip: "最可能成交會綜合預算匹配、互動與粉絲規模。",
 
     updatingStats: "更新數據中…",
     retryStatsAria: "重新取得數據",
