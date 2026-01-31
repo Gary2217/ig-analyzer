@@ -96,6 +96,8 @@ export async function GET(req: NextRequest) {
 
   const redirectTo = (path: string) => NextResponse.redirect(new URL(path, origin))
 
+  const shouldDiag = process.env.NODE_ENV !== "production" || process.env.IG_OAUTH_DEBUG === "1"
+
   const debugLog = (...args: any[]) => {
     if (process.env.IG_OAUTH_DEBUG !== "1") return
     console.log("[IG_OAUTH_DEBUG]", ...args)
@@ -241,6 +243,21 @@ export async function GET(req: NextRequest) {
     debugLog("callback token response has access_token=", true)
     debugLog("callback access_token length=", accessToken.length)
 
+    if (shouldDiag) {
+      try {
+        console.log(
+          JSON.stringify({
+            tag: "IG_CALLBACK_TOKEN",
+            ts: new Date().toISOString(),
+            hasAccessToken: true,
+            accessTokenLen: accessToken.length,
+          }),
+        )
+      } catch {
+        // swallow
+      }
+    }
+
     if (accessToken.length < 20) {
       const errPath = `/${locale}/results?ig_error=access_token_too_short`
       const res = redirectTo(errPath)
@@ -306,9 +323,18 @@ export async function GET(req: NextRequest) {
       tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString()
     }
 
+    const rawNext = url.searchParams.get("next") ?? cookieNext ?? ""
+    const nextPath = normalizeNextPath(rawNext)
+    const res = redirectTo(nextPath)
+    res.headers.set("Cache-Control", "no-store")
+
+    res.cookies.set("ig_connected", "1", { ...baseCookieOptions, httpOnly: false })
+    res.cookies.set("ig_access_token", longLivedToken, baseCookieOptions)
+
     // Determine page_id + ig_ig_id (IG business account id)
     let pageId = ""
     let igId = ""
+    let pagesCount = 0
     try {
       const accountsUrl = new URL(`${GRAPH_BASE}/${GRAPH_VERSION}/me/accounts`)
       accountsUrl.searchParams.set("fields", "name,instagram_business_account")
@@ -317,6 +343,7 @@ export async function GET(req: NextRequest) {
       const r = await fetch(accountsUrl.toString(), { method: "GET", cache: "no-store" })
       const data = await safeJson(r)
       const list: any[] = Array.isArray(data?.data) ? data.data : []
+      pagesCount = list.length
       const picked = list.find((p) => p?.instagram_business_account?.id)
       const nextPageId = typeof picked?.id === "string" ? picked.id : ""
       const nextIgId = typeof picked?.instagram_business_account?.id === "string" ? picked.instagram_business_account.id : ""
@@ -326,6 +353,22 @@ export async function GET(req: NextRequest) {
       }
     } catch {
       // swallow
+    }
+
+    if (shouldDiag) {
+      try {
+        console.log(
+          JSON.stringify({
+            tag: "IG_CALLBACK_PAGES",
+            ts: new Date().toISOString(),
+            pagesCount,
+            resolvedPageId: Boolean(pageId),
+            resolvedIgId: Boolean(igId),
+          }),
+        )
+      } catch {
+        // swallow
+      }
     }
 
     console.log("[IG CALLBACK] igId =", igId ?? null)
@@ -466,13 +509,6 @@ export async function GET(req: NextRequest) {
       // swallow
     }
 
-    const rawNext = url.searchParams.get("next") ?? cookieNext ?? ""
-    const nextPath = normalizeNextPath(rawNext)
-    const res = redirectTo(nextPath)
-    res.headers.set("Cache-Control", "no-store")
-
-    res.cookies.set("ig_connected", "1", { ...baseCookieOptions, httpOnly: false })
-    res.cookies.set("ig_access_token", longLivedToken, baseCookieOptions)
     if (pageId && igId) {
       res.cookies.set("ig_page_id", pageId, baseCookieOptions)
       res.cookies.set("ig_ig_id", igId, baseCookieOptions)
