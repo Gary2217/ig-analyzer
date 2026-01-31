@@ -214,20 +214,10 @@ function buildDemoCreators({
 function resolveCreatorId(c: any): string | null {
   if (!c) return null
 
-  const preferred =
-    c?.igId != null
-      ? String(c.igId)
-      : c?.creatorId != null
-        ? String(c.creatorId)
-        : c?.instagramId != null
-          ? String(c.instagramId)
-          : c?.stats?.creatorId != null
-            ? String(c.stats.creatorId)
-            : null
-
-  if (preferred) return preferred
-  if (c?.id != null) return String(c.id)
-  return null
+  const raw = c?.igId ?? c?.creatorId ?? c?.instagramId ?? c?.stats?.creatorId ?? c?.id
+  if (raw == null) return null
+  const s = String(raw)
+  return /^\d+$/.test(s) ? s : null
 }
 
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
@@ -675,6 +665,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     const missing = unique.filter((id) => !statsCacheRef.current.has(id))
     if (!missing.length) return () => ac.abort()
 
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[matchmaking] stats prefetch start", missing.slice(0, 3))
+    }
+
     let didCancel = false
     const concurrency = 3
     let cursor = 0
@@ -687,6 +681,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       })
       const json = (await res.json().catch(() => null)) as any
       const stats = json?.ok === true ? json?.stats : null
+
+      if (process.env.NODE_ENV !== "production") {
+        if (!res.ok || json?.ok !== true) {
+          console.debug("[matchmaking] stats prefetch non-ok", creatorId, res.status)
+        }
+      }
 
       const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
       const engagementRatePct =
@@ -704,6 +704,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         prevCached?.followers !== nextCached.followers || prevCached?.engagementRatePct !== nextCached.engagementRatePct
       statsCacheRef.current.set(creatorId, nextCached)
       if (changed) setStatsVersion((v) => v + 1)
+
+      if (process.env.NODE_ENV !== "production") {
+        if (changed) {
+          console.debug("[matchmaking] stats cache update", creatorId, nextCached.followers, nextCached.engagementRatePct)
+        }
+      }
     }
 
     const runWorker = async () => {
