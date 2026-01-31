@@ -208,6 +208,14 @@ function readNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
+function normalizeMinPriceInputToIntOrNull(v: string): number | null {
+  const digits = String(v ?? "").replace(/[^0-9]/g, "").trim()
+  if (!digits) return null
+  const n = Number(digits)
+  if (!Number.isFinite(n)) return null
+  return Math.max(0, Math.floor(n))
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
@@ -244,6 +252,7 @@ type CreatorCardUpsertPayload = {
   profileImageUrl?: string
   niche?: string
   audience?: string
+  minPrice?: number | null
   themeTypes?: string[]
   audienceProfiles?: string[]
   contact?: string | null
@@ -260,6 +269,7 @@ type CreatorCardPayload = {
   profileImageUrl?: string | null
   niche?: string | null
   audience?: string | null
+  minPrice?: number | null
   themeTypes?: string[] | null
   audienceProfiles?: string[] | null
   deliverables?: string[] | null
@@ -1273,6 +1283,9 @@ export default function CreatorCardPage() {
   const [collaborationNiches, setCollaborationNiches] = useState<string[]>([])
   const [pastCollaborations, setPastCollaborations] = useState<string[]>([])
 
+  const [minPrice, setMinPrice] = useState<number | null>(null)
+  const [minPriceDraft, setMinPriceDraft] = useState("")
+
   // Fetch preview data using shared hook (for stats and fallback data)
   const previewData = useCreatorCardPreviewData({ enabled: true })
   const [themeTypes, setThemeTypes] = useState<string[]>([])
@@ -1723,6 +1736,10 @@ export default function CreatorCardPage() {
                 null,
               niche: readString(card?.niche) ?? null,
               audience: readString(card?.audience) ?? null,
+              minPrice:
+                readNumber((card as any)?.minPrice) ??
+                readNumber((card as any)?.min_price) ??
+                null,
               themeTypes: Array.isArray(card?.themeTypes)
                 ? (card?.themeTypes as unknown[]).filter((x): x is string => typeof x === "string")
                 : Array.isArray(card?.theme_types)
@@ -1757,6 +1774,11 @@ export default function CreatorCardPage() {
         const shouldHydrateDrafts = !isBackgroundRefresh || !isDirtyRef.current || postSaveSyncRef.current
         if (shouldHydrateDrafts) {
           setIntroDraft(typeof nextBase?.audience === "string" ? nextBase.audience : "")
+          const nextMinPrice = typeof nextBase?.minPrice === "number" && Number.isFinite(nextBase.minPrice)
+            ? Math.max(0, Math.floor(nextBase.minPrice))
+            : null
+          setMinPrice(nextMinPrice)
+          setMinPriceDraft(nextMinPrice != null ? String(nextMinPrice) : "")
           const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
           setDeliverables(nextDeliverables)
           setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
@@ -2202,6 +2224,7 @@ export default function CreatorCardPage() {
       const draftCard = {
         ...baseCard,
         audience: introDraft.trim() || baseCard?.audience || null,
+        minPrice: minPrice,
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         deliverables: normalizeStringArray(deliverables, 50),
@@ -2278,7 +2301,16 @@ export default function CreatorCardPage() {
     } catch (err) {
       // Silently fail in production
     }
-  }, [baseCard, introDraft, themeTypes, audienceProfiles, deliverables, collaborationNiches, pastCollaborations, serializedContact])
+  }, [baseCard, introDraft, minPrice, themeTypes, audienceProfiles, deliverables, collaborationNiches, pastCollaborations, serializedContact])
+
+  const applyMinPriceDraft = useCallback(() => {
+    const nextDigits = String(minPriceDraft ?? "").replace(/[^0-9]/g, "").slice(0, 9)
+    const parsed = normalizeMinPriceInputToIntOrNull(nextDigits)
+    setMinPriceDraft(nextDigits)
+    setMinPrice(parsed)
+    setBaseCard((prev) => ({ ...(prev ?? {}), minPrice: parsed }))
+    markDirty()
+  }, [minPriceDraft, markDirty])
 
   const handleSave = useCallback(async () => {
     if (saving) return
@@ -2317,6 +2349,7 @@ export default function CreatorCardPage() {
         profileImageUrl: nextProfileImageUrl,
         niche: baseCard?.niche ?? undefined,
         audience: nextAudience || undefined,
+        minPrice: minPrice,
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         contact: serializedContact,
@@ -2546,7 +2579,7 @@ export default function CreatorCardPage() {
       saveInFlightRef.current = false
       setSaving(false)
     }
-  }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, introDraft, pastCollaborations, profileImageFile, saving, serializedContact, showToast, t, themeTypes])
+  }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, introDraft, minPrice, pastCollaborations, profileImageFile, saving, serializedContact, showToast, t, themeTypes])
 
   const handleBack = () => {
     if (returnTo) {
@@ -2863,6 +2896,41 @@ export default function CreatorCardPage() {
                         {introAppliedHint ? (
                           <div className="mt-2 text-xs text-slate-600">已套用到預覽，記得按右上儲存</div>
                         ) : null}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.minPriceLabel")}</div>
+                        <div className="mt-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Input
+                              inputMode="numeric"
+                              value={minPriceDraft}
+                              placeholder={t("creatorCardEditor.minPricePlaceholder")}
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                              onChange={(e) => {
+                                const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
+                                setMinPriceDraft(next)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  applyMinPriceDraft()
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 h-10 px-4"
+                              onClick={() => applyMinPriceDraft()}
+                              disabled={!minPriceDraft.trim() && minPrice == null}
+                            >
+                              {t("creatorCardEditor.addButton")}
+                            </Button>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">{t("creatorCardEditor.minPriceHelp")}</div>
+                        </div>
                       </div>
 
                       <div className="min-w-0">
@@ -4030,6 +4098,41 @@ export default function CreatorCardPage() {
                               </div>
 
                               <div className="min-w-0">
+                                <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.minPriceLabel")}</div>
+                                <div className="mt-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Input
+                                      inputMode="numeric"
+                                      value={minPriceDraft}
+                                      placeholder={t("creatorCardEditor.minPricePlaceholder")}
+                                      className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                      onChange={(e) => {
+                                        const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
+                                        setMinPriceDraft(next)
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault()
+                                          applyMinPriceDraft()
+                                        }
+                                      }}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="shrink-0 h-10 px-4"
+                                      onClick={() => applyMinPriceDraft()}
+                                      disabled={!minPriceDraft.trim() && minPrice == null}
+                                    >
+                                      {t("creatorCardEditor.addButton")}
+                                    </Button>
+                                  </div>
+                                  <div className="mt-2 text-xs text-slate-500">{t("creatorCardEditor.minPriceHelp")}</div>
+                                </div>
+                              </div>
+
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <div className="text-[12px] font-semibold text-white/55 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.profile.themeTitle")}</div>
                                   <div className="ml-auto shrink-0">
@@ -4434,6 +4537,7 @@ export default function CreatorCardPage() {
                       username: displayUsername || null,
                       aboutText: introDraft.trim() || baseCard?.audience || null,
                       primaryNiche: baseCard?.niche ?? null,
+                      minPrice: minPrice,
                       contact: previewContact,
                       featuredItems: featuredItems,
                       themeTypes: themeTypes,
@@ -4503,6 +4607,7 @@ export default function CreatorCardPage() {
                       displayName={displayName}
                       aboutText={baseCard?.audience ?? null}
                       primaryNiche={baseCard?.niche ?? null}
+                      minPrice={minPrice}
                       contact={previewContact}
                       featuredItems={featuredItems}
                       onReorderIgIds={(nextIgIds) => {

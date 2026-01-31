@@ -9,6 +9,7 @@ interface MobileCreatorCardLayoutProps {
   profileImageUrl?: string | null
   displayName?: string | null
   username?: string | null
+  minPriceText?: string | null
   aboutText?: string | null
   primaryNiche?: string | null
   audienceSummary?: string | null
@@ -34,6 +35,7 @@ export function MobileCreatorCardLayout({
   profileImageUrl,
   displayName,
   username,
+  minPriceText,
   aboutText,
   primaryNiche,
   audienceSummary,
@@ -106,6 +108,11 @@ export function MobileCreatorCardLayout({
           <div className="text-sm text-white/55 truncate">
             @{username || "—"}
           </div>
+          {minPriceText ? (
+            <div className="mt-1 text-xs text-white/60 tabular-nums whitespace-nowrap truncate min-w-0">
+              {minPriceText}
+            </div>
+          ) : null}
         </div>
       </div>
 

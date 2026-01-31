@@ -77,6 +77,8 @@ export const en: CopyDictionary = {
     favoritesCount: (n: number) => `${n} saved`,
     emptyFavorites: "No saved creators yet. Click “Save” on a card.",
 
+    minPriceFrom: (amount: string) => `From NT$${amount}`,
+
     followersLabel: "Followers",
     engagementLabel: "Engagement",
   },

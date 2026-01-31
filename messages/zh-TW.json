@@ -60,6 +60,10 @@
   "creatorCardEditor": {
     "title": "完善名片資料",
     "subtitle": "設定你的合作偏好，讓品牌商更快理解你適合哪些合作。",
+    "minPriceLabel": "最低接案金額（起）",
+    "minPricePlaceholder": "例如 5000",
+    "minPriceHelp": "顯示於名片並用於媒合預算篩選",
+    "addButton": "新增",
     "common": {
       "select": "請選擇",
       "unsavedConfirm": "你有尚未儲存的變更，確定要離開嗎？"
@@ -204,16 +208,20 @@
       "otherPlaceholder": "請輸入其他品類"
     },
     "pastCollaborations": {
-      "title": "合作品牌",
-      "subtitle": "加入曾合作品牌，建立信任。按 Enter 新增標籤。",
-      "placeholder": "輸入品牌名稱後按 Enter",
+      "title": "過往合作 / 品牌",
+      "subtitle": "加入合作品牌名稱，增加信任感。按 Enter 新增標籤。",
+      "placeholder": "輸入品牌名稱並按 Enter",
       "helper": "{count}/{max} 個標籤",
       "remove": "移除"
     }
   },
+  "creatorCardPreview": {
+    "minPriceFrom": "接案金額 NT${amount} 起",
+    "yourRate": "你的接案金額 NT${amount} 起"
+  },
   "aria": {
-    "previous": "上一個",
-    "next": "下一個",
+    "previous": "上一頁",
+    "next": "下一頁",
     "close": "關閉",
     "scrollLeft": "向左捲動",
     "scrollRight": "向右捲動",

@@ -317,6 +317,7 @@ export type CreatorCardPreviewProps = {
 
   aboutText?: string | null
   primaryNiche?: string | null
+  minPrice?: number | null
 
   contact?: unknown
 
@@ -413,6 +414,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     username,
     aboutText,
     primaryNiche,
+    minPrice,
     contact,
     featuredItems,
     featuredImageUrls,
@@ -503,6 +505,12 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   const resolvedDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : "—"
   const resolvedUsername = typeof username === "string" && username.trim() ? username.trim() : "—"
+
+  const minPriceText = useMemo(() => {
+    const v = typeof minPrice === "number" && Number.isFinite(minPrice) ? Math.max(0, Math.floor(minPrice)) : null
+    if (v == null) return null
+    return t("creatorCardPreview.yourRate").replace("{amount}", v.toLocaleString())
+  }, [minPrice, t])
 
   const parsedContact = useMemo(() => {
     const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
@@ -850,6 +858,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             aboutText={bioText}
             primaryNiche={resolvedPrimaryNiche}
             audienceSummary={audienceSummaryText}
+            minPriceText={minPriceText}
             collaborationNiches={nicheText}
             formats={formats.map((id) => ({ id, label: formatLabelMap[id] || id }))}
             brands={brands}
@@ -929,6 +938,11 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 >
                   @{resolvedUsername}
                 </div>
+                {minPriceText ? (
+                  <div className="mt-1 text-xs text-white/60 tabular-nums whitespace-nowrap truncate min-w-0">
+                    {minPriceText}
+                  </div>
+                ) : null}
               </div>
             </div>
 

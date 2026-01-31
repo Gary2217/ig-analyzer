@@ -75,6 +75,8 @@ export type CopyDictionary = {
     favoritesCount: (n: number) => string
     emptyFavorites: string
 
+    minPriceFrom: (amount: string) => string
+
     followersLabel: string
     engagementLabel: string
   }

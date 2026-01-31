@@ -26,6 +26,12 @@ export async function GET(req: Request) {
     const row = asRecord(data as unknown)
     const card = row ? {
       ...row,
+      minPrice:
+        typeof (row as any).minPrice === "number"
+          ? (row as any).minPrice
+          : typeof row.min_price === "number"
+            ? row.min_price
+            : null,
       featuredItems: Array.isArray(row.featured_items) ? row.featured_items : [],
     } : data
 

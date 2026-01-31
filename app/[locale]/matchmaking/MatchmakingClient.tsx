@@ -375,6 +375,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
         collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
         deliverables,
+        minPrice: typeof (c as any).minPrice === "number" && Number.isFinite((c as any).minPrice) ? Math.max(0, Math.floor((c as any).minPrice)) : undefined,
         stats: {
           followers: c.followerCount,
           engagementRate: typeof c.engagementRate === "number" ? c.engagementRate : undefined,
@@ -454,16 +455,29 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     ]
   }, [creators, creatorFormatsById, uiCopy.matchmaking])
 
-  function budgetMatch(range: BudgetRange, min?: number, max?: number) {
-    if (range === "any") return true
-    const hi = typeof max === "number" ? max : typeof min === "number" ? min : null
-    if (hi == null) return true
-    if (range === "0_5000") return hi <= 5000
-    if (range === "5000_10000") return hi >= 5000 && hi <= 10000
-    if (range === "10000_30000") return hi >= 10000 && hi <= 30000
-    if (range === "30000_60000") return hi >= 30000 && hi <= 60000
-    if (range === "60000_plus") return hi >= 60000
-    return true
+  function budgetMaxForRange(range: BudgetRange): number | null {
+    if (range === "0_5000") return 5000
+    if (range === "5000_10000") return 10000
+    if (range === "10000_30000") return 30000
+    if (range === "30000_60000") return 60000
+    if (range === "60000_plus") return null
+    return null
+  }
+
+  function budgetEligibleByMinPrice(selected: BudgetRange, creatorMinPrice?: number, custom?: string) {
+    if (selected === "any") return true
+    const mp = typeof creatorMinPrice === "number" && Number.isFinite(creatorMinPrice) ? creatorMinPrice : null
+    if (mp == null) return true
+
+    if (selected === "custom") {
+      const amt = Number((custom ?? "").trim())
+      if (!Number.isFinite(amt)) return true
+      return mp <= amt
+    }
+
+    const max = budgetMaxForRange(selected)
+    if (max == null) return true
+    return mp <= max
   }
 
   function platformMatch(p: Platform | "any", ps?: Platform[]) {
@@ -511,10 +525,9 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
       let okBudget = true
       if (budget === "custom") {
-        const amt = Number(customBudget)
-        okBudget = customBudget.trim() ? budgetMatchCustom(amt, c.budgetMin, c.budgetMax) : true
+        okBudget = budgetEligibleByMinPrice(budget, c.minPrice, customBudget)
       } else {
-        okBudget = budgetMatch(budget, c.budgetMin, c.budgetMax)
+        okBudget = budgetEligibleByMinPrice(budget, c.minPrice)
       }
 
       return okQ && okPlatform && okType && okBudget

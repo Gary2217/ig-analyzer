@@ -60,6 +60,10 @@
   "creatorCardEditor": {
     "title": "Complete Card Info",
     "subtitle": "Set your collaboration preferences so brands can quickly understand what you offer.",
+    "minPriceLabel": "Minimum price (from)",
+    "minPricePlaceholder": "e.g. 5000",
+    "minPriceHelp": "Shown on card and used for matchmaking budget filtering",
+    "addButton": "Add",
     "common": {
       "select": "Select",
       "unsavedConfirm": "You have unsaved changes. Leave without saving?"
@@ -211,6 +215,10 @@
       "remove": "Remove"
     }
   },
+  "creatorCardPreview": {
+    "minPriceFrom": "From NT${amount}",
+    "yourRate": "Your rate: NT${amount}+"
+  },
   "aria": {
     "previous": "Previous",
     "next": "Next",
@@ -236,6 +244,7 @@
     "creatorCardPreview": {
       "title": "Creator Card Preview",
       "subtitle": "Brands will see this card",
+      "minPriceFrom": "From NT${amount}",
       "actions": {
         "complete": "Complete Card Info",
         "viewProfile": "View Instagram Profile",

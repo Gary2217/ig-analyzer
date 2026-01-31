@@ -7,6 +7,22 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
+function normalizeMinPriceToIntOrNull(v: unknown): number | null {
+  if (v == null) return null
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) return null
+    return Math.max(0, Math.floor(v))
+  }
+  if (typeof v === "string") {
+    const digits = v.replace(/[^0-9]/g, "").trim()
+    if (!digits) return null
+    const n = Number(digits)
+    if (!Number.isFinite(n)) return null
+    return Math.max(0, Math.floor(n))
+  }
+  return null
+}
+
 function toSupabaseErrorResponse(err: unknown, where: string) {
   const errObj = asRecord(err)
   const rawMsg = typeof errObj?.message === "string" ? String(errObj.message) : "unknown"
@@ -193,6 +209,8 @@ export async function POST(req: Request) {
     const pastCollaborations = normalizeStringArray(body.pastCollaborations, 50)
 
     const contactText = normalizeContactToText(body.contact)
+
+    const minPrice = normalizeMinPriceToIntOrNull((body as any).minPrice)
     
     // DEV-ONLY: Log featuredItems in request
     if (process.env.NODE_ENV !== "production") {
@@ -210,6 +228,7 @@ export async function POST(req: Request) {
       profile_image_url: profileImageUrl,
       niche: String(body.niche ?? "").trim() || null,
       audience: audience || null,
+      min_price: minPrice,
       contact: contactText,
       collaboration_niches: collaborationNiches,
       deliverables,

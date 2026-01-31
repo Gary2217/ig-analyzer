@@ -9,7 +9,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_username, niche, profile_image_url, updated_at")
+      .select("id, ig_username, niche, profile_image_url, updated_at, min_price")
       .eq("is_public", true)
       .order("updated_at", { ascending: false })
 
@@ -21,7 +21,14 @@ export async function GET() {
       )
     }
 
-    return NextResponse.json({ ok: true, cards: data || [] })
+    const cards = (data || []).map((row: any) => {
+      return {
+        ...row,
+        minPrice: typeof row?.min_price === "number" ? row.min_price : null,
+      }
+    })
+
+    return NextResponse.json({ ok: true, cards })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "unknown"
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })

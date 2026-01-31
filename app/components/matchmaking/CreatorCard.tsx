@@ -17,6 +17,12 @@ function formatER(er?: number) {
   return `${v.toFixed(1)}%`
 }
 
+function formatNTD(n?: number) {
+  if (n == null || Number.isNaN(n)) return null
+  const v = Math.max(0, Math.floor(n))
+  return v.toLocaleString()
+}
+
 function deriveFormatKeysFromDeliverables(input?: string[]) {
   const d = Array.isArray(input) ? input : []
   const set = new Set<"reels" | "posts" | "stories" | "other">()
@@ -171,6 +177,15 @@ export function CreatorCard({
               <span className="truncate">{mm.engagementLabel}</span>
               <span className="tabular-nums whitespace-nowrap shrink-0">{formatER(creator.stats?.engagementRate)}</span>
             </div>
+
+            {typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice) ? (
+              <div className="mt-2 flex items-center justify-between gap-2 text-xs text-white/65 min-w-0">
+                <span className="truncate">{mm.budgetLabel}</span>
+                <span className="tabular-nums whitespace-nowrap shrink-0">
+                  {mm.minPriceFrom(formatNTD(creator.minPrice) ?? "")}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
         </Link>

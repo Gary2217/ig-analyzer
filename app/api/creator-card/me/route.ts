@@ -117,6 +117,12 @@ export async function GET(req: NextRequest) {
         ? {
             ...row,
             profileImageUrl: typeof row.profile_image_url === "string" ? row.profile_image_url : null,
+            minPrice:
+              typeof (row as any).minPrice === "number"
+                ? (row as any).minPrice
+                : typeof row.min_price === "number"
+                  ? row.min_price
+                  : null,
             collaborationNiches: Array.isArray(row.collaboration_niches) ? row.collaboration_niches : null,
             pastCollaborations: Array.isArray(row.past_collaborations) ? row.past_collaborations : null,
             themeTypes: Array.isArray(row.theme_types) ? row.theme_types : null,

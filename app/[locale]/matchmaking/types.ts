@@ -4,6 +4,7 @@ export interface CreatorCard {
   avatarUrl: string
   category: string
   deliverables?: string[]
+  minPrice?: number | null
   followerCount: number
   avgLikes?: number | null
   avgComments?: number | null

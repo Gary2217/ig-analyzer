@@ -77,6 +77,8 @@ export const zhTW: CopyDictionary = {
     favoritesCount: (n: number) => `${n} 位已收藏`,
     emptyFavorites: "尚未收藏任何創作者。請在卡片點選「收藏」。",
 
+    minPriceFrom: (amount: string) => `接案金額 NT$${amount} 起`,
+
     followersLabel: "粉絲",
     engagementLabel: "互動率",
   },

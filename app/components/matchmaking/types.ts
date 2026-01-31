@@ -43,6 +43,7 @@ export type CreatorCardData = {
   deliverables?: string[]
   budgetMin?: number
   budgetMax?: number
+  minPrice?: number
   stats?: CreatorStats
   href: string
   isDemo?: boolean
