@@ -25,6 +25,7 @@ interface CreatorCardData {
   is_public: boolean
   about_text: string | null
   audience: string | null
+  min_price?: number | null
   theme_types: string[] | null
   audience_profiles: string[] | null
   deliverables: string[] | null
@@ -121,6 +122,9 @@ function ensureProxiedThumbnail(url: string): string {
 
 // Normalize creator card data to match shared component expectations
 function normalizeCreatorCardForPreview(card: CreatorCardData) {
+  const rawMinPrice = typeof card.min_price === "number" && Number.isFinite(card.min_price) ? Math.floor(card.min_price) : null
+  const minPrice = rawMinPrice == null ? null : Math.max(1000, rawMinPrice)
+
   // Extract featured items from portfolio-ish fields (priority order)
   const candidates = [
     card.portfolio,
@@ -177,6 +181,7 @@ function normalizeCreatorCardForPreview(card: CreatorCardData) {
     username: card.ig_username,
     aboutText: card.about_text || card.audience,
     primaryNiche: card.primary_niche || card.niche,
+    minPrice,
     contact: card.contact,
     featuredItems,
     deliverables: card.deliverables || [],

@@ -11,6 +11,7 @@ interface PublicCardClientProps {
     username?: string | null
     aboutText?: string | null
     primaryNiche?: string | null
+    minPrice?: number | null
     contact?: any
     featuredItems?: any[]
     deliverables?: any[]
@@ -56,6 +57,7 @@ export function PublicCardClient({ locale, creatorCard, messages }: PublicCardCl
         username={creatorCard.username}
         aboutText={creatorCard.aboutText}
         primaryNiche={creatorCard.primaryNiche}
+        minPrice={typeof creatorCard.minPrice === "number" ? creatorCard.minPrice : null}
         contact={creatorCard.contact}
         featuredItems={creatorCard.featuredItems || []}
         themeTypes={creatorCard.themeTypes}
