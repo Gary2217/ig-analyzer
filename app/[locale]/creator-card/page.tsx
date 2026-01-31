@@ -4537,7 +4537,7 @@ export default function CreatorCardPage() {
                       username: displayUsername || null,
                       aboutText: introDraft.trim() || baseCard?.audience || null,
                       primaryNiche: baseCard?.niche ?? null,
-                      minPrice: minPrice,
+                      minPrice: minPrice ?? null,
                       contact: previewContact,
                       featuredItems: featuredItems,
                       themeTypes: themeTypes,
@@ -4607,7 +4607,7 @@ export default function CreatorCardPage() {
                       displayName={displayName}
                       aboutText={baseCard?.audience ?? null}
                       primaryNiche={baseCard?.niche ?? null}
-                      minPrice={minPrice}
+                      minPrice={minPrice ?? null}
                       contact={previewContact}
                       featuredItems={featuredItems}
                       onReorderIgIds={(nextIgIds) => {
