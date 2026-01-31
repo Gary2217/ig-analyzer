@@ -326,6 +326,16 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     cardsRef.current = cards
   }, [cards])
 
+  const ownerCardIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    ownerCardIdRef.current = ownerCardId
+  }, [ownerCardId])
+
+  useEffect(() => {
+    if (!ownerCardId) return
+    setMyCardFirst(true)
+  }, [ownerCardId])
+
   const ownerLookupStartedRef = useRef(false)
 
   function applyAuthResult(data: { connected: boolean; igUserId: string | null }) {
@@ -338,8 +348,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     if (!connected) {
       setNeedsAuth(true)
       setPinMyCardDisabled(true)
-      setPinMyCardHint(null)
-      setMyCardFirst(false)
+      setPinMyCardHint(ownerCardIdRef.current ? "Verify Instagram to lock your card at the top" : null)
     } else {
       setNeedsAuth(false)
       setPinMyCardDisabled(false)
