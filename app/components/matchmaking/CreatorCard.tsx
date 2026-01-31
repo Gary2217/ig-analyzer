@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
@@ -63,8 +63,16 @@ export function CreatorCard({
   const mm = copy.matchmaking
   const isEmpty = Boolean(creator.isDemo)
   const [showContact, setShowContact] = useState(false)
+  const [ctaToast, setCtaToast] = useState<string | null>(null)
+  const ctaToastTimerRef = useRef<number | null>(null)
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
+
+  useEffect(() => {
+    return () => {
+      if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
+    }
+  }, [])
 
   const isPopular =
     (typeof creator.stats?.followers === "number" && Number.isFinite(creator.stats.followers) && creator.stats.followers > 5000) ||
@@ -170,8 +178,8 @@ export function CreatorCard({
       }`}
     >
       {isPopular && !isEmpty ? (
-        <div className="absolute top-3 right-14 z-10">
-          <span className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-100/90 whitespace-nowrap">
+        <div className="absolute top-3 right-14 z-30">
+          <span className="inline-flex items-center rounded-full bg-black/55 backdrop-blur border border-amber-200/30 px-2 py-1 text-[10px] font-semibold text-amber-100 shadow-sm whitespace-nowrap">
             {mm.popularBadge}
           </span>
         </div>
@@ -180,8 +188,9 @@ export function CreatorCard({
       <button
         type="button"
         onClick={onToggleFav}
-        className={`absolute right-3 top-3 z-10 grid place-items-center h-9 w-9 rounded-full border border-white/10 bg-black/40 text-sm text-white/90 hover:bg-black/55 backdrop-blur transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 ${
-          isEmpty ? "pointer-events-none opacity-0" : ""
+        disabled={isEmpty}
+        className={`absolute right-3 top-3 z-30 grid place-items-center h-9 w-9 rounded-full border border-white/20 bg-black/60 text-sm text-white shadow-sm backdrop-blur transition-opacity opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 ${
+          isEmpty ? "opacity-40" : "hover:bg-black/70"
         }`}
         aria-label={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
         title={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
@@ -211,7 +220,7 @@ export function CreatorCard({
         </div>
       ) : (
         <div className="flex flex-col h-full">
-          <Link href={creator.href} className="block flex-1">
+          <Link href={creator.href} className="block flex-1 relative z-0">
             <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
               {creator.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -319,18 +328,41 @@ export function CreatorCard({
             </div>
           </Link>
 
-          <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3">
+          <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3 relative z-20 pointer-events-auto">
             <button
               type="button"
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
+                if (!contactItems.length) {
+                  setShowContact(false)
+                  setCtaToast("沒有提供聯絡方式 / No contact info provided")
+                  if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
+                  ctaToastTimerRef.current = window.setTimeout(() => {
+                    setCtaToast(null)
+                    ctaToastTimerRef.current = null
+                  }, 1600)
+                  return
+                }
+
+                setCtaToast(null)
                 setShowContact((v) => !v)
               }}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
             >
               <span className="min-w-0 break-words [overflow-wrap:anywhere]">{mm.ctaStartCollaboration}</span>
             </button>
+
+            <div aria-live="polite" className="sr-only">
+              {ctaToast ?? ""}
+            </div>
+            {ctaToast ? (
+              <div className="mt-2">
+                <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-3 py-2 text-xs text-slate-200 shadow-lg break-words [overflow-wrap:anywhere]">
+                  {ctaToast}
+                </div>
+              </div>
+            ) : null}
 
             {showContact && contactItems.length ? (
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/80 transition-opacity duration-200 opacity-100 min-w-0">
