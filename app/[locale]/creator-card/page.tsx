@@ -2417,29 +2417,45 @@ export default function CreatorCardPage() {
       const text = json ? null : await res.text().catch(() => null)
 
       if (!res.ok || !json?.ok) {
+        const errObj = asRecord(jsonRaw) ?? (asRecord(json) as any) ?? null
+        const errCode = typeof errObj?.code === "string" ? String(errObj.code) : null
+        const errMessage = typeof errObj?.message === "string" ? String(errObj.message) : null
+        const errDetails = typeof errObj?.details === "string" ? String(errObj.details) : null
+        const errHint = typeof errObj?.hint === "string" ? String(errObj.hint) : null
+        const errTag = typeof errObj?.error === "string" ? String(errObj.error) : null
+
+        console.error("[creator-card] save failed", {
+          status: res.status,
+          error: errTag,
+          code: errCode,
+          message: errMessage,
+          details: errDetails,
+          hint: errHint,
+          text: typeof text === "string" ? text.slice(0, 300) : null,
+        })
+
         if (res.status === 401) {
-          setSaveError("未登入或登入已過期 / Not authenticated (session expired)")
+          setSaveError(t("creatorCardEditor.errors.notAuthenticated"))
           showToast(t("creatorCardEditor.errors.saveFailed"))
           return
         }
 
-        if (res.status === 403 && json?.error === "not_connected") {
-          setSaveError("尚未連結 IG 或連結已失效，請重新連結 / IG not connected or expired, please reconnect")
+        if (res.status === 403 && errTag === "not_connected") {
+          setSaveError(t("creatorCardEditor.errors.notConnected"))
           showToast(t("creatorCardEditor.errors.saveFailed"))
           return
         }
 
-        const serverMsg =
-          typeof json?.error === "string"
-            ? json.error
-            : typeof json?.message === "string"
-              ? json.message
-              : typeof text === "string" && text.trim()
-                ? text.trim()
-                : null
+        const baseMsg = t("creatorCardEditor.errors.saveFailed")
+        const detailParts = [errTag, errCode, errMessage, errDetails, errHint]
+          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .map((x) => x.trim())
 
-        setSaveError(serverMsg ? `${t("creatorCardEditor.errors.saveFailed")}: ${serverMsg}` : t("creatorCardEditor.errors.saveFailed"))
-        showToast(t("creatorCardEditor.errors.saveFailed"))
+        const detailsText = detailParts.length > 0 ? detailParts.join(" | ").slice(0, 300) : null
+        const serverMsg = detailsText || (typeof text === "string" && text.trim() ? text.trim().slice(0, 300) : null)
+
+        setSaveError(serverMsg ? `${baseMsg}: ${serverMsg}` : baseMsg)
+        showToast(baseMsg)
         return
       }
 

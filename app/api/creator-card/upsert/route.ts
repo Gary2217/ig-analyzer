@@ -25,15 +25,62 @@ function normalizeMinPriceToIntOrNull(v: unknown): number | null {
 
 function toSupabaseErrorResponse(err: unknown, where: string) {
   const errObj = asRecord(err)
-  const rawMsg = typeof errObj?.message === "string" ? String(errObj.message) : "unknown"
-  console.error("[creator-card/upsert] supabase error", { where, message: rawMsg, code: errObj?.code ?? null })
-  if (rawMsg.includes("Invalid API key")) {
+  const message = typeof errObj?.message === "string" ? String(errObj.message) : "unknown"
+  const code = typeof errObj?.code === "string" ? String(errObj.code) : null
+  const details = typeof errObj?.details === "string" ? String(errObj.details) : null
+  const hint = typeof errObj?.hint === "string" ? String(errObj.hint) : null
+
+  console.error("[creator-card/upsert] supabase error", {
+    where,
+    message,
+    code,
+    details,
+    hint,
+  })
+  if (message.includes("Invalid API key")) {
     return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
   }
+
+  const status = (() => {
+    if (code === "42501" || message.toLowerCase().includes("permission denied")) return 403
+    return 500
+  })()
+
   return NextResponse.json(
-    { ok: false, error: "upsert_failed", message: rawMsg.slice(0, 400) },
-    { status: 400 },
+    {
+      ok: false,
+      error: "upsert_failed",
+      message: message.slice(0, 400),
+      code,
+      details: details ? details.slice(0, 400) : null,
+      hint: hint ? hint.slice(0, 400) : null,
+    },
+    { status },
   )
+}
+
+async function checkMinPriceColumnBestEffort(igUserId: string) {
+  try {
+    const res = await supabaseServer.from("creator_cards").select("min_price").eq("ig_user_id", igUserId).limit(1)
+    if (!res.error) return { ok: true as const }
+
+    const msg = typeof (res.error as any)?.message === "string" ? String((res.error as any).message) : ""
+    const code = typeof (res.error as any)?.code === "string" ? String((res.error as any).code) : ""
+
+    const isMissingColumn = code === "42703" || (msg.toLowerCase().includes("min_price") && msg.toLowerCase().includes("column"))
+    if (isMissingColumn) {
+      return {
+        ok: false as const,
+        missing: true as const,
+        message:
+          "Database schema missing column min_price; run migration 20260131000100_add_creator_card_min_price.sql in production.",
+      }
+    }
+  } catch {
+    // Best-effort guard: ignore and rely on main upsert error details.
+  }
+
+  return { ok: true as const }
 }
 
 function normalizeStringArray(value: unknown, maxLen: number) {
@@ -135,6 +182,23 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
         { status: 403 },
+      )
+    }
+
+    // Best-effort schema guard: do not fail if query permissions are limited.
+    const schemaGuard = await checkMinPriceColumnBestEffort(igUserId)
+    if (!schemaGuard.ok && schemaGuard.missing) {
+      console.error("[creator-card/upsert] schema guard", { message: schemaGuard.message })
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "upsert_failed",
+          message: schemaGuard.message,
+          code: "schema_missing_min_price",
+          details: null,
+          hint: null,
+        },
+        { status: 500 },
       )
     }
 
