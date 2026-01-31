@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { FiltersBar } from "@/app/components/matchmaking/FiltersBar"
 import { CreatorGrid } from "@/app/components/matchmaking/CreatorGrid"
@@ -211,11 +211,42 @@ function buildDemoCreators({
   return out
 }
 
+function resolveCreatorId(c: any): string | null {
+  if (!c) return null
+
+  const preferred =
+    c?.igId != null
+      ? String(c.igId)
+      : c?.creatorId != null
+        ? String(c.creatorId)
+        : c?.instagramId != null
+          ? String(c.instagramId)
+          : c?.stats?.creatorId != null
+            ? String(c.stats.creatorId)
+            : null
+
+  if (preferred) return preferred
+  if (c?.id != null) return String(c.id)
+  return null
+}
+
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
+
+  const statsCacheRef = useRef(
+    new Map<
+      string,
+      {
+        followers?: number
+        engagementRatePct?: number
+      }
+    >()
+  )
+
+  const [statsVersion, setStatsVersion] = useState(0)
 
   const uiCopy = useMemo(() => getCopy(locale), [locale])
 
@@ -334,37 +365,39 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
         if (cancelled) return
         const creatorIdStr = String(ownerIgUserId)
+
+        {
+          const prevCached = statsCacheRef.current.get(creatorIdStr)
+          const nextCached = {
+            followers: followers ?? prevCached?.followers,
+            engagementRatePct: engagementRatePct ?? prevCached?.engagementRatePct,
+          }
+          const changed =
+            prevCached?.followers !== nextCached.followers || prevCached?.engagementRatePct !== nextCached.engagementRatePct
+          statsCacheRef.current.set(creatorIdStr, nextCached)
+          if (changed) setStatsVersion((v) => v + 1)
+        }
+
         setCards((prev) =>
-          prev.map((c) =>
-            {
-              const cId = c?.id != null ? String(c.id) : ""
-              const cIgId =
-                (c as any)?.igId != null
-                  ? String((c as any).igId)
-                  : (c as any)?.creatorId != null
-                    ? String((c as any).creatorId)
-                    : (c as any)?.instagramId != null
-                      ? String((c as any).instagramId)
-                      : (c as any)?.stats?.creatorId != null
-                        ? String((c as any).stats.creatorId)
-                        : ""
+          prev.map((c) => {
+            const cId = c?.id != null ? String(c.id) : ""
+            const resolved = resolveCreatorId(c)
 
-              const matches = cId === String(meCardId) || cId === creatorIdStr || (cIgId && cIgId === creatorIdStr)
-              if (!matches) return c
+            const matches = cId === String(meCardId) || resolved === creatorIdStr || cId === creatorIdStr
+            if (!matches) return c
 
-              return {
-                ...c,
-                followerCount: followers ?? c.followerCount,
-                engagementRate: engagementRatePct ?? c.engagementRate,
-                stats: {
-                  ...(c.stats ?? {}),
-                  creatorId: creatorIdStr,
-                  followers: followers ?? c.stats?.followers,
-                  engagementRatePct: engagementRatePct ?? c.stats?.engagementRatePct,
-                },
-              }
+            return {
+              ...c,
+              followerCount: followers ?? c.followerCount,
+              engagementRate: engagementRatePct ?? c.engagementRate,
+              stats: {
+                ...(c.stats ?? {}),
+                creatorId: creatorIdStr,
+                followers: followers ?? c.stats?.followers,
+                engagementRatePct: engagementRatePct ?? c.stats?.engagementRatePct,
+              },
             }
-          )
+          })
         )
       } catch {
         // swallow
@@ -385,12 +418,15 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return [...realCards, ...demos]
   }, [cards, locale])
 
-  const creators: CreatorCardData[] = useMemo(() => {
+  const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
     return cardsWithDemos.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
+
+      const creatorIdStr = resolveCreatorId(c)
+      const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
 
       const rawHandle =
         typeof (c as any).handle === "string"
@@ -405,14 +441,18 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
 
       const rawFollowers =
-        typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
+        typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
+          ? Math.floor(cachedStats.followers)
+          : typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
           ? Math.floor((c as any).stats.followers)
           : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount)
             ? Math.floor((c as any).followerCount)
             : undefined
 
       const rawER =
-        typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
+        typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
+          ? cachedStats.engagementRatePct
+          : typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
           ? (c as any).stats.engagementRatePct
           : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
             ? (c as any).stats.engagementRate
@@ -422,6 +462,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
       return {
         id: c.id,
+        creatorId: creatorIdStr ?? undefined,
         name: c.displayName,
         handle,
         avatarUrl: c.avatarUrl,
@@ -438,7 +479,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         isDemo: Boolean(c.isDemo),
       }
     })
-  }, [cardsWithDemos])
+  }, [cardsWithDemos, statsVersion])
 
   const creatorFormatsById = useMemo(() => {
     const map = new Map<string, FormatKey[]>()
@@ -608,6 +649,90 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     const others = filtered.filter((c) => c.id !== ownerCardId)
     return [mine, ...others]
   }, [filtered, myCardFirst, ownerCardId])
+
+  const visibleCreatorIds = useMemo(() => {
+    const ids = pinned
+      .map((c) => resolveCreatorId(c))
+      .filter((x): x is string => typeof x === "string" && x.length > 0)
+
+    const seen = new Set<string>()
+    const uniqueOrdered: string[] = []
+    for (const id of ids) {
+      if (seen.has(id)) continue
+      seen.add(id)
+      uniqueOrdered.push(id)
+    }
+
+    return uniqueOrdered
+  }, [pinned])
+
+  const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
+
+  useEffect(() => {
+    const ac = new AbortController()
+
+    const unique = visibleCreatorIds
+    const missing = unique.filter((id) => !statsCacheRef.current.has(id))
+    if (!missing.length) return () => ac.abort()
+
+    let didCancel = false
+    const concurrency = 3
+    let cursor = 0
+
+    const fetchOne = async (creatorId: string) => {
+      const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
+        method: "GET",
+        cache: "no-store",
+        signal: ac.signal,
+      })
+      const json = (await res.json().catch(() => null)) as any
+      const stats = json?.ok === true ? json?.stats : null
+
+      const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
+      const engagementRatePct =
+        typeof stats?.engagementRatePct === "number" && Number.isFinite(stats.engagementRatePct)
+          ? clampNumber(roundTo2(stats.engagementRatePct), 0, 99)
+          : null
+
+      const prevCached = statsCacheRef.current.get(creatorId)
+      const nextCached = {
+        followers: followers ?? prevCached?.followers,
+        engagementRatePct: engagementRatePct ?? prevCached?.engagementRatePct,
+      }
+
+      const changed =
+        prevCached?.followers !== nextCached.followers || prevCached?.engagementRatePct !== nextCached.engagementRatePct
+      statsCacheRef.current.set(creatorId, nextCached)
+      if (changed) setStatsVersion((v) => v + 1)
+    }
+
+    const runWorker = async () => {
+      while (!didCancel) {
+        const idx = cursor
+        cursor += 1
+        if (idx >= missing.length) return
+
+        const creatorId = missing[idx]
+        if (!creatorId || statsCacheRef.current.has(creatorId)) continue
+
+        try {
+          await fetchOne(creatorId)
+        } catch {
+          // swallow
+        }
+      }
+    }
+
+    ;(async () => {
+      const workers = Array.from({ length: Math.min(concurrency, missing.length) }, () => runWorker())
+      await Promise.all(workers)
+    })()
+
+    return () => {
+      didCancel = true
+      ac.abort()
+    }
+  }, [visibleCreatorIdsKey])
 
   const favoritesList = useMemo(
     () => creators.filter((c) => fav.favoriteIds.has(c.id)),
