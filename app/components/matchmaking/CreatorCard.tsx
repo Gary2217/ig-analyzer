@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
@@ -61,6 +62,7 @@ export function CreatorCard({
   const copy = getCopy(locale)
   const mm = copy.matchmaking
   const isEmpty = Boolean(creator.isDemo)
+  const [showContact, setShowContact] = useState(false)
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
 
@@ -126,9 +128,20 @@ export function CreatorCard({
   else if (primaryFormat) topChips.push({ key: primaryFormat, label: typeLabel(primaryFormat) })
   const displayChips = topChips.slice(0, 2)
 
+  const contactItems = (() => {
+    const out: Array<{ key: "email" | "phone" | "line"; value: string; className: string }> = []
+    const email = typeof creator.contactEmail === "string" ? creator.contactEmail.trim() : ""
+    const phone = typeof creator.contactPhone === "string" ? creator.contactPhone.trim() : ""
+    const line = typeof creator.contactLine === "string" ? creator.contactLine.trim() : ""
+    if (email) out.push({ key: "email", value: email, className: "break-all" })
+    if (phone) out.push({ key: "phone", value: phone, className: "break-all" })
+    if (line) out.push({ key: "line", value: line, className: "break-all" })
+    return out
+  })()
+
   return (
     <div
-      className={`group relative rounded-2xl border bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden ${
+      className={`group relative rounded-2xl border bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full ${
         isMyCard ? "border-sky-400/40 ring-1 ring-sky-400/30" : "border-white/10"
       }`}
     >
@@ -173,8 +186,8 @@ export function CreatorCard({
           </div>
         </div>
       ) : (
-        <div className="block">
-          <Link href={creator.href} className="block">
+        <div className="flex flex-col h-full">
+          <Link href={creator.href} className="block flex-1">
             <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
               {creator.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -288,14 +301,28 @@ export function CreatorCard({
             </div>
           </Link>
 
-          <div className="px-3 pb-3 sm:px-4 sm:pb-4">
-            <Link
-              href={creator.href}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 py-3 text-sm font-semibold text-white hover:brightness-110 transition-all min-w-0"
-              style={{ minHeight: "44px" }}
+          <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3">
+            <button
+              type="button"
+              onClick={() => setShowContact(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
             >
               <span className="min-w-0 break-words [overflow-wrap:anywhere]">{mm.ctaStartCollaboration}</span>
-            </Link>
+            </button>
+
+            {showContact && contactItems.length ? (
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/80 transition-opacity duration-200 opacity-100">
+                {contactItems.map((it) => (
+                  <span
+                    key={it.key}
+                    className={`max-w-full truncate rounded-full bg-white/10 px-3 py-1 ${it.className}`}
+                    title={it.value}
+                  >
+                    {it.value}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       )}

@@ -48,6 +48,9 @@ export type CreatorCardData = {
   budgetMax?: number
   minPrice?: number
   stats?: CreatorStats
+  contactEmail?: string
+  contactPhone?: string
+  contactLine?: string
   href: string
   isDemo?: boolean
 }
