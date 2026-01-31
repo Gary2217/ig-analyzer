@@ -226,6 +226,36 @@ function resolveCreatorId(c: any, aliasMap?: Map<string, string>): string | null
   return alias && /^\d+$/.test(alias) ? alias : null
 }
 
+function safeParseContact(input: unknown): {
+  emails: string[]
+  instagrams: string[]
+  others: string[]
+} {
+  const empty = { emails: [] as string[], instagrams: [] as string[], others: [] as string[] }
+  if (typeof input !== "string") return empty
+  const raw = input.trim()
+  if (!raw) return empty
+  try {
+    const obj = JSON.parse(raw)
+    if (!obj || typeof obj !== "object") return empty
+    const readArr = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean) : [])
+    const emails = readArr((obj as any).emails)
+    const instagrams = readArr((obj as any).instagrams)
+    const others = readArr((obj as any).others)
+    const email1 = typeof (obj as any).email === "string" ? String((obj as any).email).trim() : ""
+    const ig1 = typeof (obj as any).instagram === "string" ? String((obj as any).instagram).trim() : ""
+    const other1 = typeof (obj as any).other === "string" ? String((obj as any).other).trim() : ""
+    const mergedEmails = [...(email1 ? [email1] : []), ...emails]
+    const mergedIgs = [...(ig1 ? [ig1] : []), ...instagrams]
+    const mergedOthers = [...(other1 ? [other1] : []), ...others]
+
+    const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
+    return { emails: uniq(mergedEmails), instagrams: uniq(mergedIgs), others: uniq(mergedOthers) }
+  } catch {
+    return empty
+  }
+}
+
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -505,6 +535,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
                 : ""
       const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
 
+      const parsedContact = safeParseContact((c as any).contact)
+      const contactEmail = parsedContact.emails[0] || undefined
+      const contactLine = parsedContact.others[0] || undefined
+
       const rawFollowers =
         typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
           ? Math.floor(cachedStats.followers)
@@ -540,6 +574,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           followers: rawFollowers,
           engagementRate: rawER,
         },
+        contactEmail,
+        contactLine,
         href: c.isDemo ? "#" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
       }

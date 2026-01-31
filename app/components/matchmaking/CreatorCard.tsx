@@ -38,6 +38,32 @@ function deriveFormatKeysFromDeliverables(input?: string[]) {
   return Array.from(set)
 }
 
+function safeParseCreatorContact(input: unknown): { emails: string[]; others: string[] } {
+  const empty = { emails: [] as string[], others: [] as string[] }
+  if (typeof input !== "string") return empty
+  const raw = input.trim()
+  if (!raw) return empty
+  try {
+    const obj = JSON.parse(raw)
+    if (!obj || typeof obj !== "object") return empty
+    const readArr = (v: unknown) =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean) : []
+
+    const emails = readArr((obj as any).emails)
+    const others = readArr((obj as any).others)
+    const email1 = typeof (obj as any).email === "string" ? String((obj as any).email).trim() : ""
+    const other1 = typeof (obj as any).other === "string" ? String((obj as any).other).trim() : ""
+
+    const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
+    return {
+      emails: uniq([...(email1 ? [email1] : []), ...emails]),
+      others: uniq([...(other1 ? [other1] : []), ...others]),
+    }
+  } catch {
+    return empty
+  }
+}
+
 export function CreatorCard({
   creator,
   locale,
@@ -138,9 +164,12 @@ export function CreatorCard({
 
   const contactItems = (() => {
     const out: Array<{ key: "email" | "phone" | "line"; value: string; className: string }> = []
+    const parsedContact = safeParseCreatorContact((creator as any)?.contact)
     const email =
       typeof creator.contactEmail === "string"
         ? creator.contactEmail.trim()
+        : typeof parsedContact.emails[0] === "string"
+          ? parsedContact.emails[0].trim()
         : typeof (creator as any)?.creatorCard?.contactEmail === "string"
           ? String((creator as any)?.creatorCard?.contactEmail).trim()
           : typeof (creator as any)?.profile?.contactEmail === "string"
@@ -159,6 +188,8 @@ export function CreatorCard({
     const line =
       typeof creator.contactLine === "string"
         ? creator.contactLine.trim()
+        : typeof parsedContact.others[0] === "string"
+          ? parsedContact.others[0].trim()
         : typeof (creator as any)?.creatorCard?.contactLine === "string"
           ? String((creator as any)?.creatorCard?.contactLine).trim()
           : typeof (creator as any)?.profile?.contactLine === "string"
