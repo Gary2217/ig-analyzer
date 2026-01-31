@@ -56,6 +56,15 @@ export function CreatorCard({
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
 
+  const shouldShowHandle = (() => {
+    const handle = typeof creator.handle === "string" ? creator.handle.trim() : ""
+    if (!handle) return false
+    const name = typeof creator.name === "string" ? creator.name.trim() : ""
+    const normalizedName = name.replace(/^@/, "").toLowerCase()
+    const normalizedHandle = handle.replace(/^@/, "").toLowerCase()
+    return normalizedName !== normalizedHandle
+  })()
+
   const typeLabel = (t: string) => {
     if (t === "short_video") return mm.typeShortVideo
     if (t === "long_video") return mm.typeLongVideo
@@ -141,17 +150,19 @@ export function CreatorCard({
 
         <div className="p-3 sm:p-4 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="text-sm sm:text-[15px] font-semibold text-white/90 truncate min-w-0">
-              {creator.name}
-            </div>
             {isMyCard ? (
               <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-200/90 whitespace-nowrap">
                 {mm.myCardBadge}
               </span>
             ) : null}
+            <div className="text-sm sm:text-[15px] font-semibold text-white/90 truncate min-w-0">
+              {creator.name}
+            </div>
           </div>
 
-          <div className="mt-0.5 text-xs text-white/55 truncate min-w-0 [overflow-wrap:anywhere]">{creator.handle ? `@${creator.handle}` : ""}</div>
+          <div className="mt-0.5 text-xs text-white/55 truncate min-w-0 [overflow-wrap:anywhere]">
+            {shouldShowHandle && creator.handle ? `@${creator.handle}` : ""}
+          </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
             {displayChips.length ? (

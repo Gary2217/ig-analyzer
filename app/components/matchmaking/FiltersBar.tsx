@@ -47,6 +47,8 @@ export function FiltersBar(props: Props) {
     () => [
       { value: "any", label: mm.anyBudget },
       { value: "custom", label: mm.budgetOtherAmount },
+      { value: "1000", label: "1,000" },
+      { value: "3000", label: "3,000" },
       { value: "0_5000", label: mm.budgetRange0_5000 },
       { value: "5000_10000", label: mm.budgetRange5000_10000 },
       { value: "10000_30000", label: mm.budgetRange10000_30000 },

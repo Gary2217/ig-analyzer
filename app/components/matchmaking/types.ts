@@ -20,6 +20,8 @@ export type TypeKey = CollabType | FormatKey
 export type BudgetRange =
   | "any"
   | "custom"
+  | "1000"
+  | "3000"
   | "0_5000"
   | "5000_10000"
   | "10000_30000"

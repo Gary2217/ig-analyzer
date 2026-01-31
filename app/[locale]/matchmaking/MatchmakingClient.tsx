@@ -264,6 +264,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     // If budget param is not one of the known presets, fall back to any.
     const isKnownBudget: boolean =
       nextBudget === "any" ||
+      nextBudget === "1000" ||
+      nextBudget === "3000" ||
       nextBudget === "0_5000" ||
       nextBudget === "5000_10000" ||
       nextBudget === "10000_30000" ||
@@ -456,6 +458,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   }, [creators, creatorFormatsById, uiCopy.matchmaking])
 
   function budgetMaxForRange(range: BudgetRange): number | null {
+    if (range === "1000") return 1000
+    if (range === "3000") return 3000
     if (range === "0_5000") return 5000
     if (range === "5000_10000") return 10000
     if (range === "10000_30000") return 30000
