@@ -5,14 +5,14 @@ import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
 function formatNumber(n?: number) {
-  if (n == null || Number.isNaN(n)) return "—"
+  if (typeof n !== "number" || !Number.isFinite(n)) return "—"
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return `${n}`
 }
 
 function formatER(er?: number) {
-  if (er == null || Number.isNaN(er)) return "—"
+  if (typeof er !== "number" || !Number.isFinite(er)) return "—"
   const v = er > 1 ? er : er * 100
   return `${v.toFixed(1)}%`
 }

@@ -435,15 +435,15 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           ? Math.floor(cachedStats.followers)
           : typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
           ? Math.floor((c as any).stats.followers)
-          : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount)
+          : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) && (c as any).followerCount > 0
             ? Math.floor((c as any).followerCount)
             : undefined
 
       const rawER =
         typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
-          ? cachedStats.engagementRatePct
+          ? cachedStats.engagementRatePct / 100
           : typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
-          ? (c as any).stats.engagementRatePct
+          ? (c as any).stats.engagementRatePct / 100
           : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
             ? (c as any).stats.engagementRate
             : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
