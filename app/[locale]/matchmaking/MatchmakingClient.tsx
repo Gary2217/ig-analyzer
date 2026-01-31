@@ -368,10 +368,37 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
+
+      const rawHandle =
+        typeof (c as any).handle === "string"
+          ? String((c as any).handle).trim()
+          : typeof (c as any).igUsername === "string"
+            ? String((c as any).igUsername).trim()
+            : typeof (c as any).username === "string"
+              ? String((c as any).username).trim()
+              : typeof (c as any).displayName === "string"
+                ? String((c as any).displayName).trim()
+                : ""
+      const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
+
+      const rawFollowers =
+        typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
+          ? Math.floor((c as any).stats.followers)
+          : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount)
+            ? Math.floor((c as any).followerCount)
+            : undefined
+
+      const rawER =
+        typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
+          ? (c as any).stats.engagementRate
+          : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
+            ? (c as any).engagementRate
+            : undefined
+
       return {
         id: c.id,
         name: c.displayName,
-        handle: c.displayName ? c.displayName.replace(/^@/, "") : undefined,
+        handle,
         avatarUrl: c.avatarUrl,
         topics,
         platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
@@ -379,8 +406,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         deliverables,
         minPrice: typeof (c as any).minPrice === "number" && Number.isFinite((c as any).minPrice) ? Math.max(0, Math.floor((c as any).minPrice)) : undefined,
         stats: {
-          followers: c.followerCount,
-          engagementRate: typeof c.engagementRate === "number" ? c.engagementRate : undefined,
+          followers: rawFollowers,
+          engagementRate: rawER,
         },
         href: c.isDemo ? "#" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
