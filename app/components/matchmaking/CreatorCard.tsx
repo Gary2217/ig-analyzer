@@ -179,7 +179,7 @@ export function CreatorCard({
             )}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 min-w-0">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
             <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.20),0_12px_30px_-18px_rgba(59,130,246,0.35)]">
               <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-cyan-400/40 to-blue-500/30" />
               <div className="text-[11px] text-white/45 truncate min-w-0">{mm.followersLabel}</div>
@@ -197,7 +197,7 @@ export function CreatorCard({
             </div>
 
             {typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice) ? (
-              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.22),0_12px_30px_-18px_rgba(34,211,238,0.25)] col-span-2">
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.22),0_12px_30px_-18px_rgba(34,211,238,0.25)] sm:col-span-2">
                 <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
                 <div className="text-[11px] text-white/45 truncate min-w-0">{mm.budgetLabel}</div>
                 <div className="mt-1 text-sm font-semibold text-white/85 tabular-nums whitespace-nowrap truncate min-w-0">

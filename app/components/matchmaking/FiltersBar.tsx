@@ -97,13 +97,13 @@ export function FiltersBar(props: Props) {
                   value={props.search}
                   onChange={(e) => props.onSearch(e.target.value)}
                   placeholder={copy.common.searchPlaceholder}
-                  className="h-11 flex-1 min-w-[160px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+                  className="h-11 w-full sm:flex-1 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
                 />
 
                 <select
                   value={props.platform}
                   onChange={(e) => props.onPlatform(e.target.value as any)}
-                  className="h-11 min-w-[140px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[140px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
                 >
                   {props.platformOptions.map((o) => (
                     <option key={o.value} value={o.value} className="bg-slate-900">
@@ -115,7 +115,7 @@ export function FiltersBar(props: Props) {
                 <select
                   value={props.budget}
                   onChange={(e) => props.onBudget(e.target.value as any)}
-                  className="h-11 min-w-[140px] max-w-full sm:max-w-none rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[140px] max-w-full sm:max-w-none rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
                 >
                   {budgetOptions.map((o) => (
                     <option key={o.value} value={o.value} className="bg-slate-900">
@@ -127,7 +127,7 @@ export function FiltersBar(props: Props) {
                 <select
                   value={props.sort}
                   onChange={(e) => props.onSort(e.target.value as any)}
-                  className="h-11 min-w-[180px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[180px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
                 >
                   <option value="followers_desc" className="bg-slate-900">
                     {mm.sortFollowersDesc}
@@ -140,7 +140,7 @@ export function FiltersBar(props: Props) {
                 <button
                   type="button"
                   onClick={props.onOpenFavorites}
-                  className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 whitespace-nowrap"
+                  className="h-11 w-full sm:w-auto px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 whitespace-nowrap"
                 >
                   {copy.common.favorites} ({props.favoritesCount})
                 </button>
