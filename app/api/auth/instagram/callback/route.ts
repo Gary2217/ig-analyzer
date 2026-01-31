@@ -36,6 +36,10 @@ function isAllowedRedirectUri(redirectUri: string, origin: string | null) {
 }
 
 function getRequestOrigin(req: NextRequest) {
+  const canonicalRaw = (process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_BASE_URL || "").trim()
+  if (process.env.NODE_ENV === "production" && canonicalRaw) {
+    return normalizeOrigin(canonicalRaw)
+  }
   const xfProto = req.headers.get("x-forwarded-proto")?.toLowerCase()
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host
   const isLocalhost = /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/.test(host)

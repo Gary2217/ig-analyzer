@@ -83,6 +83,25 @@ export async function GET(req: NextRequest) {
     const { igUserId, igUsername } = await resolveIgIdentity(req)
 
     if (!igUserId) {
+      if (process.env.NODE_ENV !== "production" || process.env.IG_OAUTH_DEBUG === "1") {
+        try {
+          const c = await cookies()
+          const h = await headers()
+          console.log("[creator-card/me] not_connected", {
+            host: h.get("host"),
+            xfHost: h.get("x-forwarded-host"),
+            xfProto: h.get("x-forwarded-proto"),
+            has_ig_connected: Boolean((c.get("ig_connected")?.value ?? "").trim()),
+            has_ig_access_token: Boolean((c.get("ig_access_token")?.value ?? "").trim()),
+            has_ig_ig_id: Boolean((c.get("ig_ig_id")?.value ?? "").trim()),
+            has_ig_page_id: Boolean((c.get("ig_page_id")?.value ?? "").trim()),
+            has_ig_user_id: Boolean((c.get("ig_user_id")?.value ?? "").trim()),
+            has_ig_username: Boolean((c.get("ig_username")?.value ?? "").trim()),
+          })
+        } catch {
+          // swallow
+        }
+      }
       return NextResponse.json({ ok: false, error: "not_connected" }, { status: 401, headers: JSON_HEADERS })
     }
 
