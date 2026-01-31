@@ -174,6 +174,8 @@ export async function getMeState(req: NextRequest) {
       provider: "instagram" as const,
       hasToken,
       hasIds,
+      igUserId: hasIds ? igId : null,
+      pageId: hasIds ? pageId : null,
       username: hasToken ? (typeof profile?.username === "string" ? profile.username : preferredUsername) : null,
       profile,
       ...(profileError ? { profileError } : null),
@@ -184,6 +186,8 @@ export async function getMeState(req: NextRequest) {
       provider: "instagram" as const,
       hasToken: false,
       hasIds: false,
+      igUserId: null,
+      pageId: null,
       username: null,
       profile: null,
     }

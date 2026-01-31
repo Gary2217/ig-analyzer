@@ -281,6 +281,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [myCardFirst, setMyCardFirst] = useState(true)
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
   const [ownerLookupDone, setOwnerLookupDone] = useState(false)
+  const [pinMyCardDisabled, setPinMyCardDisabled] = useState(false)
+  const [pinMyCardHint, setPinMyCardHint] = useState<string | null>(null)
 
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
@@ -423,6 +425,41 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           if (process.env.NODE_ENV !== "production") {
             console.debug("[matchmaking] /api/creator-card/me non-ok", meRes.status)
           }
+
+          // Fallback path: if /creator-card/me is blocked (e.g., 401), try cookie-derived IG identity.
+          try {
+            const authRes = await fetch("/api/auth/instagram/me", {
+              method: "GET",
+              cache: "no-store",
+              credentials: "include",
+            })
+            const authJson = (await authRes.json().catch(() => null)) as any
+
+            const connected = Boolean(authJson?.connected)
+            const igUserId = typeof authJson?.igUserId === "string" ? authJson.igUserId : null
+
+            if (connected && igUserId) {
+              const mine = cards.find((c) => (c as any)?.igUserId === igUserId)
+              if (mine?.id && !cancelled) {
+                setOwnerCardId(String(mine.id))
+                setPinMyCardDisabled(false)
+                setPinMyCardHint(null)
+              }
+            } else {
+              if (!cancelled) {
+                setPinMyCardDisabled(true)
+                setMyCardFirst(false)
+                setPinMyCardHint("請先登入後才能置頂 / Please sign in to pin your card")
+              }
+            }
+          } catch {
+            if (!cancelled) {
+              setPinMyCardDisabled(true)
+              setMyCardFirst(false)
+              setPinMyCardHint("請先登入後才能置頂 / Please sign in to pin your card")
+            }
+          }
+
           return
         }
         const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
@@ -430,6 +467,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         if (!ownerIgUserId || !meCardId) return
 
         if (!cancelled) setOwnerCardId(meCardId)
+        if (!cancelled) {
+          setPinMyCardDisabled(false)
+          setPinMyCardHint(null)
+        }
 
         const statsRes = await fetch(`/api/creators/${encodeURIComponent(ownerIgUserId)}/stats`, {
           method: "GET",
@@ -1037,6 +1078,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           }}
           myCardFirst={myCardFirst}
           onMyCardFirst={setMyCardFirst}
+          myCardFirstDisabled={pinMyCardDisabled}
+          myCardFirstHint={pinMyCardHint}
           favoritesCount={fav.count}
           onOpenFavorites={() => setFavOpen(true)}
           total={filtered.length}

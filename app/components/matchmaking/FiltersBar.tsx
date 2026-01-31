@@ -31,6 +31,8 @@ type Props = {
 
   myCardFirst: boolean
   onMyCardFirst: (v: boolean) => void
+  myCardFirstDisabled?: boolean
+  myCardFirstHint?: string | null
 
   favoritesCount: number
   onOpenFavorites: () => void
@@ -158,10 +160,14 @@ export function FiltersBar(props: Props) {
                       type="checkbox"
                       checked={props.myCardFirst}
                       onChange={(e) => props.onMyCardFirst(e.target.checked)}
+                      disabled={props.myCardFirstDisabled}
                       className="h-4 w-4 rounded border-white/20 bg-white/5"
                     />
                     <span className="min-w-0 truncate">{mm.myCardFirstToggle}</span>
                   </label>
+                  {props.myCardFirstHint ? (
+                    <div className="text-xs sm:text-sm text-white/45 min-w-0 truncate">{props.myCardFirstHint}</div>
+                  ) : null}
                   <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
                     {mm.totalCreators(props.total)}
                   </div>
