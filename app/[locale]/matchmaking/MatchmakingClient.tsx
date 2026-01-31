@@ -20,6 +20,7 @@ import type { CreatorCard } from "./types"
 
 const AUTH_CACHE_KEY = "ig_auth_cache_v1"
 const AUTH_TTL = 24 * 60 * 60 * 1000
+const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
 
 function getAuthCache(): { connected: boolean; igUserId: string | null } | null {
   try {
@@ -325,6 +326,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     cardsRef.current = cards
   }, [cards])
 
+  const ownerLookupStartedRef = useRef(false)
+
   function applyAuthResult(data: { connected: boolean; igUserId: string | null }) {
     const igUserId = data.igUserId
     const connected = data.connected
@@ -523,7 +526,33 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     let cancelled = false
 
     ;(async () => {
+      let nextOwnerCardId: string | null = null
+      let shouldPersistOwnerLookup = true
+
       try {
+        if (ownerLookupStartedRef.current) return
+        ownerLookupStartedRef.current = true
+
+        try {
+          const raw = window.sessionStorage.getItem(OWNER_LOOKUP_CACHE_KEY)
+          if (raw) {
+            const cached = JSON.parse(raw) as any
+            if (cached?.done) {
+              shouldPersistOwnerLookup = false
+              const cachedOwnerCardId = typeof cached?.ownerCardId === "string" ? cached.ownerCardId : null
+              if (!cancelled && cachedOwnerCardId) setOwnerCardId(cachedOwnerCardId)
+              if (!cancelled) setOwnerLookupDone(true)
+              return
+            }
+          }
+          window.sessionStorage.setItem(
+            OWNER_LOOKUP_CACHE_KEY,
+            JSON.stringify({ startedAt: Date.now(), done: false, ownerCardId: null }),
+          )
+        } catch {
+          // swallow
+        }
+
         const meRes = await fetch("/api/creator-card/me", {
           method: "GET",
           cache: "no-store",
@@ -531,7 +560,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         })
         const meJson = (await meRes.json().catch(() => null)) as any
         if (!meRes.ok || meJson?.ok !== true) {
-          if (process.env.NODE_ENV !== "production") {
+          if (process.env.NODE_ENV !== "production" && meRes.status !== 401) {
             console.debug("[matchmaking] /api/creator-card/me non-ok", meRes.status)
           }
 
@@ -545,9 +574,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
               const igUserId = typeof cached?.igUserId === "string" ? cached.igUserId : null
 
               if (connected && igUserId) {
-                const mine = cards.find((c) => (c as any)?.igUserId === igUserId)
+                const mine = cardsRef.current.find((c) => (c as any)?.igUserId === igUserId)
                 if (mine?.id && !cancelled) {
-                  setOwnerCardId(String(mine.id))
+                  nextOwnerCardId = String(mine.id)
+                  setOwnerCardId(nextOwnerCardId)
                 }
               }
               return
@@ -569,9 +599,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             applyAuthResult(payload)
 
             if (payload.connected && payload.igUserId) {
-              const mine = cards.find((c) => (c as any)?.igUserId === payload.igUserId)
+              const mine = cardsRef.current.find((c) => (c as any)?.igUserId === payload.igUserId)
               if (mine?.id && !cancelled) {
-                setOwnerCardId(String(mine.id))
+                nextOwnerCardId = String(mine.id)
+                setOwnerCardId(nextOwnerCardId)
               }
             }
           } catch {
@@ -584,6 +615,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
         if (!ownerIgUserId || !meCardId) return
 
+        nextOwnerCardId = meCardId
         if (!cancelled) setOwnerCardId(meCardId)
         if (!cancelled) {
           setPinMyCardDisabled(false)
@@ -658,6 +690,16 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       } catch {
         // swallow
       } finally {
+        if (shouldPersistOwnerLookup) {
+          try {
+            window.sessionStorage.setItem(
+              OWNER_LOOKUP_CACHE_KEY,
+              JSON.stringify({ done: true, ownerCardId: typeof nextOwnerCardId === "string" ? nextOwnerCardId : null }),
+            )
+          } catch {
+            // swallow
+          }
+        }
         if (!cancelled) setOwnerLookupDone(true)
       }
     })()
