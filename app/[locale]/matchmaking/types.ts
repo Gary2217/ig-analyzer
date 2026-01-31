@@ -9,6 +9,10 @@ export interface CreatorCard {
   avgLikes?: number | null
   avgComments?: number | null
   engagementRate: number | null
+  stats?: {
+    followers?: number | null
+    engagementRatePct?: number | null
+  }
   isVerified: boolean
   profileUrl: string
   isDemo?: boolean

@@ -327,7 +327,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const stats = statsJson?.ok === true ? statsJson?.stats : null
 
         const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
-        const engagementRate =
+        const engagementRatePct =
           typeof stats?.engagementRatePct === "number" && Number.isFinite(stats.engagementRatePct)
             ? clampNumber(roundTo2(stats.engagementRatePct), 0, 99)
             : null
@@ -339,7 +339,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
               ? {
                   ...c,
                   followerCount: followers ?? c.followerCount,
-                  engagementRate: engagementRate ?? c.engagementRate,
+                  engagementRate: engagementRatePct ?? c.engagementRate,
+                  stats: {
+                    ...(c.stats ?? {}),
+                    followers: followers ?? c.stats?.followers,
+                    engagementRatePct: engagementRatePct ?? c.stats?.engagementRatePct,
+                  },
                 }
               : c
           )
@@ -390,11 +395,13 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             : undefined
 
       const rawER =
-        typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
-          ? (c as any).stats.engagementRate
-          : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
-            ? (c as any).engagementRate
-            : undefined
+        typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
+          ? (c as any).stats.engagementRatePct
+          : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
+            ? (c as any).stats.engagementRate
+            : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
+              ? (c as any).engagementRate
+              : undefined
 
       return {
         id: c.id,
