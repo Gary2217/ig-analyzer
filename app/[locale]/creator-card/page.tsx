@@ -2305,7 +2305,8 @@ export default function CreatorCardPage() {
 
   const applyMinPriceDraft = useCallback(() => {
     const nextDigits = String(minPriceDraft ?? "").replace(/[^0-9]/g, "").slice(0, 9)
-    const parsed = normalizeMinPriceInputToIntOrNull(nextDigits)
+    const rawParsed = normalizeMinPriceInputToIntOrNull(nextDigits)
+    const parsed = rawParsed == null ? null : Math.max(1000, rawParsed)
     setMinPriceDraft(nextDigits)
     setMinPrice(parsed)
     setBaseCard((prev) => ({ ...(prev ?? {}), minPrice: parsed }))

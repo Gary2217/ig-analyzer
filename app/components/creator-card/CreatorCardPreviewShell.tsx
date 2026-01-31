@@ -189,6 +189,7 @@ export function CreatorCardPreviewShell({
         username={(typeof creatorCard.username === "string" ? creatorCard.username : null) ?? username ?? null}
         aboutText={(typeof creatorCard.aboutText === "string" ? creatorCard.aboutText : null) ?? null}
         primaryNiche={(typeof creatorCard.primaryNiche === "string" ? creatorCard.primaryNiche : null) ?? null}
+        minPrice={typeof creatorCard?.minPrice === "number" ? creatorCard.minPrice : null}
         contact={creatorCard.contact}
         featuredItems={Array.isArray(creatorCard.featuredItems) ? creatorCard.featuredItems : []}
         themeTypes={Array.isArray(creatorCard.themeTypes) ? creatorCard.themeTypes : null}
