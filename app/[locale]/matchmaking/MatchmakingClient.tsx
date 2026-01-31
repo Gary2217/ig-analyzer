@@ -18,6 +18,39 @@ import type {
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
 
+const AUTH_CACHE_KEY = "ig_auth_cache_v1"
+const AUTH_TTL = 24 * 60 * 60 * 1000
+
+function getAuthCache(): { connected: boolean; igUserId: string | null } | null {
+  try {
+    const raw = localStorage.getItem(AUTH_CACHE_KEY)
+    if (!raw) return null
+
+    const data = JSON.parse(raw) as any
+
+    if (Date.now() - data.ts > AUTH_TTL) {
+      localStorage.removeItem(AUTH_CACHE_KEY)
+      return null
+    }
+
+    return data
+  } catch {
+    return null
+  }
+}
+
+function setAuthCache(payload: { connected: boolean; igUserId: string | null }) {
+  try {
+    localStorage.setItem(
+      AUTH_CACHE_KEY,
+      JSON.stringify({
+        ...payload,
+        ts: Date.now(),
+      }),
+    )
+  } catch {}
+}
+
 interface MatchmakingClientProps {
   locale: Locale
   initialCards: CreatorCard[]
@@ -283,8 +316,33 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [ownerLookupDone, setOwnerLookupDone] = useState(false)
   const [pinMyCardDisabled, setPinMyCardDisabled] = useState(false)
   const [pinMyCardHint, setPinMyCardHint] = useState<string | null>(null)
+  const [needsAuth, setNeedsAuth] = useState(false)
 
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
+
+  const cardsRef = useRef(cards)
+  useEffect(() => {
+    cardsRef.current = cards
+  }, [cards])
+
+  function applyAuthResult(data: { connected: boolean; igUserId: string | null }) {
+    const igUserId = data.igUserId
+    const connected = data.connected
+
+    const hasCard = cardsRef.current.some((c) => c.igUserId && c.igUserId === igUserId)
+    if (!hasCard) return
+
+    if (!connected) {
+      setNeedsAuth(true)
+      setPinMyCardDisabled(true)
+      setPinMyCardHint(null)
+      setMyCardFirst(false)
+    } else {
+      setNeedsAuth(false)
+      setPinMyCardDisabled(false)
+      setPinMyCardHint(null)
+    }
+  }
 
   useEffect(() => {
     try {
@@ -413,6 +471,57 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   useEffect(() => {
     let cancelled = false
 
+    const cached = getAuthCache()
+
+    if (cached) {
+      applyAuthResult(cached)
+      return
+    }
+
+    fetch("/api/auth/instagram/me", {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return
+
+        const payload = {
+          connected: Boolean(data?.connected),
+          igUserId: data?.igUserId ?? null,
+        }
+
+        setAuthCache(payload)
+        applyAuthResult(payload)
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch("/api/auth/instagram/me", {
+        credentials: "include",
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          setAuthCache({
+            connected: Boolean(data?.connected),
+            igUserId: data?.igUserId ?? null,
+          })
+        })
+        .catch(() => {})
+    }, 5000)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
     ;(async () => {
       try {
         const meRes = await fetch("/api/creator-card/me", {
@@ -428,6 +537,22 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
           // Fallback path: if /creator-card/me is blocked (e.g., 401), try cookie-derived IG identity.
           try {
+            const cached = getAuthCache()
+            if (cached) {
+              applyAuthResult(cached)
+
+              const connected = Boolean(cached?.connected)
+              const igUserId = typeof cached?.igUserId === "string" ? cached.igUserId : null
+
+              if (connected && igUserId) {
+                const mine = cards.find((c) => (c as any)?.igUserId === igUserId)
+                if (mine?.id && !cancelled) {
+                  setOwnerCardId(String(mine.id))
+                }
+              }
+              return
+            }
+
             const authRes = await fetch("/api/auth/instagram/me", {
               method: "GET",
               cache: "no-store",
@@ -435,29 +560,22 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             })
             const authJson = (await authRes.json().catch(() => null)) as any
 
-            const connected = Boolean(authJson?.connected)
-            const igUserId = typeof authJson?.igUserId === "string" ? authJson.igUserId : null
+            const payload = {
+              connected: Boolean(authJson?.connected),
+              igUserId: typeof authJson?.igUserId === "string" ? authJson.igUserId : null,
+            }
 
-            if (connected && igUserId) {
-              const mine = cards.find((c) => (c as any)?.igUserId === igUserId)
+            setAuthCache(payload)
+            applyAuthResult(payload)
+
+            if (payload.connected && payload.igUserId) {
+              const mine = cards.find((c) => (c as any)?.igUserId === payload.igUserId)
               if (mine?.id && !cancelled) {
                 setOwnerCardId(String(mine.id))
-                setPinMyCardDisabled(false)
-                setPinMyCardHint(null)
-              }
-            } else {
-              if (!cancelled) {
-                setPinMyCardDisabled(true)
-                setMyCardFirst(false)
-                setPinMyCardHint("請先登入後才能置頂 / Please sign in to pin your card")
               }
             }
           } catch {
-            if (!cancelled) {
-              setPinMyCardDisabled(true)
-              setMyCardFirst(false)
-              setPinMyCardHint("請先登入後才能置頂 / Please sign in to pin your card")
-            }
+            // swallow
           }
 
           return
@@ -470,6 +588,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         if (!cancelled) {
           setPinMyCardDisabled(false)
           setPinMyCardHint(null)
+          setNeedsAuth(false)
         }
 
         const statsRes = await fetch(`/api/creators/${encodeURIComponent(ownerIgUserId)}/stats`, {
@@ -1085,6 +1204,20 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           total={filtered.length}
           statsUpdating={statsPrefetchRunning}
         />
+
+        {needsAuth ? (
+          <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-3">
+            <div className="flex items-center gap-3 text-xs sm:text-sm text-white/70">
+              <div className="min-w-0 truncate">Pin your card by verifying Instagram</div>
+              <a
+                href="/api/auth/instagram"
+                className="shrink-0 inline-flex items-center h-8 px-3 rounded-md border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+              >
+                Verify IG
+              </a>
+            </div>
+          </div>
+        ) : null}
 
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
           <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
