@@ -211,13 +211,19 @@ function buildDemoCreators({
   return out
 }
 
-function resolveCreatorId(c: any): string | null {
+function resolveCreatorId(c: any, aliasMap?: Map<string, string>): string | null {
   if (!c) return null
 
   const raw = c?.igId ?? c?.creatorId ?? c?.instagramId ?? c?.stats?.creatorId ?? c?.id
-  if (raw == null) return null
-  const s = String(raw)
-  return /^\d+$/.test(s) ? s : null
+  if (raw != null) {
+    const s = String(raw)
+    if (/^\d+$/.test(s)) return s
+  }
+
+  const key = c?.id != null ? String(c.id) : null
+  if (!key) return null
+  const alias = aliasMap?.get(key)
+  return alias && /^\d+$/.test(alias) ? alias : null
 }
 
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
@@ -235,6 +241,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       }
     >()
   )
+
+  const creatorIdAliasRef = useRef(new Map<string, string>())
 
   const [statsVersion, setStatsVersion] = useState(0)
 
@@ -338,6 +346,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
         if (!ownerIgUserId || !meCardId) return
 
+        {
+          const ownerIdStr = String(ownerIgUserId)
+          creatorIdAliasRef.current.set(String(meCardId), ownerIdStr)
+        }
+
         if (!cancelled) setOwnerCardId(meCardId)
 
         const statsRes = await fetch(`/api/creators/${encodeURIComponent(ownerIgUserId)}/stats`, {
@@ -371,7 +384,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         setCards((prev) =>
           prev.map((c) => {
             const cId = c?.id != null ? String(c.id) : ""
-            const resolved = resolveCreatorId(c)
+            const resolved = resolveCreatorId(c, creatorIdAliasRef.current)
 
             const matches = cId === String(meCardId) || resolved === creatorIdStr || cId === creatorIdStr
             if (!matches) return c
@@ -415,7 +428,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
 
-      const creatorIdStr = resolveCreatorId(c)
+      const creatorIdStr = resolveCreatorId(c, creatorIdAliasRef.current)
       const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
 
       const rawHandle =
@@ -642,7 +655,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
   const visibleCreatorIds = useMemo(() => {
     const ids = pinned
-      .map((c) => resolveCreatorId(c))
+      .map((c) => resolveCreatorId(c, creatorIdAliasRef.current))
       .filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
