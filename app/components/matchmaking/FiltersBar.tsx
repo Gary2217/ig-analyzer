@@ -85,11 +85,6 @@ export function FiltersBar(props: Props) {
   return (
     <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
       <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-white/90">{mm.title}</h1>
-          <p className="text-xs sm:text-sm text-white/50">{mm.description}</p>
-        </div>
-
         <div className="sticky top-[52px] sm:top-[72px] z-40 -mx-3 sm:mx-0 px-3 sm:px-0">
           <div className="rounded-2xl border border-white/10 bg-[#0b1220]/75 backdrop-blur-md">
             <div className="p-3 sm:p-4">
@@ -149,6 +144,12 @@ export function FiltersBar(props: Props) {
                   {copy.common.favorites} ({props.favoritesCount})
                 </button>
               </div>
+
+              {props.sort === "best_match" ? (
+                <div className="mt-2 text-xs sm:text-sm text-white/50 max-w-full break-words min-w-0">
+                  {mm.bestMatchHelper}
+                </div>
+              ) : null}
 
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">

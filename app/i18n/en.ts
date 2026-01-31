@@ -4,13 +4,22 @@ export const en: CopyDictionary = {
   common: {
     save: "Save",
     saved: "Saved",
-    favorites: "Saved",
+    favorites: "Shortlist",
     all: "All",
     searchPlaceholder: "Search name / handle / keyword...",
   },
   matchmaking: {
     title: "Matchmaking",
     description: "Filter creators by platform, budget, and collaboration type.",
+    pageHeadline: "Find creators that fit your budget and convert",
+    pageSubheadline: "Compare by engagement and price, then start a collaboration in one click.",
+    bestMatchHelper: "Best Match combines engagement, audience size, and your selected budget.",
+    ctaStartCollaboration: "Start Collaboration",
+    badgeWorkedWithBrands: "Worked with brands",
+    badgeProfileComplete: "Profile complete",
+    labelFollowers: "Followers",
+    labelEngagement: "Engagement",
+    withinBudgetLabel: "Within your budget",
     totalCreators: (n: number) => `${n} creators`,
 
     allPlatforms: "All Platforms",

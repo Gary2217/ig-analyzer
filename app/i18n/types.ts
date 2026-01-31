@@ -9,6 +9,15 @@ export type CopyDictionary = {
   matchmaking: {
     title: string
     description: string
+    pageHeadline: string
+    pageSubheadline: string
+    bestMatchHelper: string
+    ctaStartCollaboration: string
+    badgeWorkedWithBrands: string
+    badgeProfileComplete: string
+    labelFollowers: string
+    labelEngagement: string
+    withinBudgetLabel: string
     myCardFirstToggle: string
     totalCreators: (n: number) => string
 

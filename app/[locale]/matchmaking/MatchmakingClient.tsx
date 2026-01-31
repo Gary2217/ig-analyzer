@@ -733,6 +733,15 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return [mine, ...others]
   }, [filtered, myCardFirst, ownerCardId])
 
+  const selectedBudgetMax = useMemo(() => {
+    if (budget === "any") return null
+    if (budget === "custom") {
+      const amt = Number(customBudget.trim())
+      return Number.isFinite(amt) ? amt : null
+    }
+    return budgetMaxForRange(budget)
+  }, [budget, customBudget])
+
   const visibleCreatorIds = useMemo(() => {
     const ids = pinned
       .map((c) => resolveCreatorId(c, creatorIdAliasRef.current))
@@ -939,7 +948,18 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
-      <div className="pt-8">
+      <div className="pt-6 sm:pt-8">
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
+          <div className="min-w-0">
+            <h1 className="text-[clamp(20px,4.2vw,28px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
+              {uiCopy.matchmaking.pageHeadline}
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-white/55 max-w-full break-words min-w-0">
+              {uiCopy.matchmaking.pageSubheadline}
+            </p>
+          </div>
+        </div>
+
         <FiltersBar
           locale={locale}
           search={q}
@@ -989,29 +1009,31 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         </div>
 
         <CreatorGrid>
-          {pinned.map((c) => (
-            (() => {
-              const creatorId = (c as any)?.creatorId as string | undefined
-              const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
-              const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
-              const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
-              const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
+          {pinned.map((c) => {
+            const creatorId = (c as any)?.creatorId as string | undefined
+            const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
+            const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
+            const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
+            const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
 
-              return (
-            <MatchmakingCreatorCard
-              key={c.id}
-              creator={c}
-              locale={locale}
-              isFav={fav.isFav(c.id)}
-              onToggleFav={() => fav.toggleFav(c.id)}
-              isMyCard={Boolean(ownerCardId && c.id === ownerCardId)}
-              statsLoading={loading}
-              statsError={error}
-              onRetryStats={creatorId ? () => retryStats(creatorId) : undefined}
-            />
-              )
-            })()
-          ))}
+            return (
+              <MatchmakingCreatorCard
+                key={c.id}
+                creator={c}
+                locale={locale}
+                isFav={fav.isFav(c.id)}
+                onToggleFav={() => fav.toggleFav(c.id)}
+                isMyCard={Boolean(ownerCardId && c.id === ownerCardId)}
+                statsLoading={loading}
+                statsError={error}
+                selectedBudgetMax={selectedBudgetMax}
+                onRetryStats={() => {
+                  if (!creatorId) return
+                  retryStats(creatorId)
+                }}
+              />
+            )
+          })}
         </CreatorGrid>
       </div>
 
