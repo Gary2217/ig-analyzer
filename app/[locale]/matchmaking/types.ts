@@ -1,5 +1,6 @@
 export interface CreatorCard {
   id: string
+  igUserId?: string | null
   displayName: string
   avatarUrl: string
   category: string
@@ -11,7 +12,6 @@ export interface CreatorCard {
   avgComments?: number | null
   engagementRate: number | null
   stats?: {
-    creatorId?: string
     followers?: number | null
     engagementRatePct?: number | null
   }

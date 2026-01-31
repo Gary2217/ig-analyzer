@@ -201,7 +201,7 @@ function buildDemoCreators({
       followerCount: followers,
       avgLikes,
       avgComments,
-      engagementRate: Math.round(er * 100) / 100,
+      engagementRate: Math.round(er * 100) / 10000,
       isVerified: false,
       profileUrl: "",
       isDemo: true,
@@ -209,21 +209,6 @@ function buildDemoCreators({
   }
 
   return out
-}
-
-function resolveCreatorId(c: any, aliasMap?: Map<string, string>): string | null {
-  if (!c) return null
-
-  const raw = c?.igId ?? c?.creatorId ?? c?.instagramId ?? c?.stats?.creatorId ?? c?.id
-  if (raw != null) {
-    const s = String(raw)
-    if (/^\d+$/.test(s)) return s
-  }
-
-  const key = c?.id != null ? String(c.id) : null
-  if (!key) return null
-  const alias = aliasMap?.get(key)
-  return alias && /^\d+$/.test(alias) ? alias : null
 }
 
 function safeParseContact(input: unknown): {
@@ -281,8 +266,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const STORAGE_KEY = "matchmaking_stats_cache_v1"
   const STORAGE_TTL_MS = 24 * 60 * 60 * 1000
 
-  const creatorIdAliasRef = useRef(new Map<string, string>())
-
   const [statsVersion, setStatsVersion] = useState(0)
 
   const uiCopy = useMemo(() => getCopy(locale), [locale])
@@ -297,6 +280,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
   const [myCardFirst, setMyCardFirst] = useState(true)
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
+  const [ownerLookupDone, setOwnerLookupDone] = useState(false)
 
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
@@ -429,31 +413,50 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
     ;(async () => {
       try {
-        const meRes = await fetch("/api/creator-card/me", { method: "GET", cache: "no-store" })
+        const meRes = await fetch("/api/creator-card/me", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
         const meJson = (await meRes.json().catch(() => null)) as any
+        if (!meRes.ok || meJson?.ok !== true) {
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[matchmaking] /api/creator-card/me non-ok", meRes.status)
+          }
+          return
+        }
         const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
         if (!ownerIgUserId || !meCardId) return
-
-        {
-          const ownerIdStr = String(ownerIgUserId)
-          creatorIdAliasRef.current.set(String(meCardId), ownerIdStr)
-        }
 
         if (!cancelled) setOwnerCardId(meCardId)
 
         const statsRes = await fetch(`/api/creators/${encodeURIComponent(ownerIgUserId)}/stats`, {
           method: "GET",
           cache: "no-store",
+          credentials: "include",
         })
         const statsJson = (await statsRes.json().catch(() => null)) as any
-        const stats = statsJson?.ok === true ? statsJson?.stats : null
+        const statsOk = Boolean(statsRes.ok && statsJson?.ok === true)
+        const stats = statsOk ? statsJson?.stats : null
+
+        if (!statsOk) {
+          if (cancelled) return
+          const creatorIdStr = String(ownerIgUserId)
+          statsErrorRef.current.set(creatorIdStr, true)
+          setStatsUiVersion((v) => v + 1)
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[matchmaking] owner stats non-ok", creatorIdStr, statsRes.status)
+          }
+          return
+        }
 
         const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
         const engagementRatePct =
           typeof stats?.engagementRatePct === "number" && Number.isFinite(stats.engagementRatePct)
             ? clampNumber(roundTo2(stats.engagementRatePct), 0, 99)
             : null
+        const engagementRate = typeof engagementRatePct === "number" ? engagementRatePct / 100 : null
 
         if (cancelled) return
         const creatorIdStr = String(ownerIgUserId)
@@ -476,18 +479,16 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         setCards((prev) =>
           prev.map((c) => {
             const cId = c?.id != null ? String(c.id) : ""
-            const resolved = resolveCreatorId(c, creatorIdAliasRef.current)
 
-            const matches = cId === String(meCardId) || resolved === creatorIdStr || cId === creatorIdStr
+            const matches = cId === String(meCardId)
             if (!matches) return c
 
             return {
               ...c,
               followerCount: followers ?? c.followerCount,
-              engagementRate: engagementRatePct ?? c.engagementRate,
+              engagementRate: engagementRate ?? c.engagementRate,
               stats: {
                 ...(c.stats ?? {}),
-                creatorId: creatorIdStr,
                 followers: followers ?? c.stats?.followers,
                 engagementRatePct: engagementRatePct ?? c.stats?.engagementRatePct,
               },
@@ -496,6 +497,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         )
       } catch {
         // swallow
+      } finally {
+        if (!cancelled) setOwnerLookupDone(true)
       }
     })()
 
@@ -520,7 +523,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
 
-      const creatorIdStr = resolveCreatorId(c, creatorIdAliasRef.current)
+      const creatorIdStr = typeof c.igUserId === "string" && /^\d+$/.test(c.igUserId) ? c.igUserId : null
       const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
 
       const rawHandle =
@@ -762,12 +765,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
   const pinned = useMemo(() => {
-    if (!myCardFirst || !ownerCardId) return filtered
+    if (!myCardFirst || !ownerLookupDone || !ownerCardId) return filtered
     const mine = filtered.find((c) => c.id === ownerCardId)
     if (!mine) return filtered
     const others = filtered.filter((c) => c.id !== ownerCardId)
     return [mine, ...others]
-  }, [filtered, myCardFirst, ownerCardId])
+  }, [filtered, myCardFirst, ownerCardId, ownerLookupDone])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
@@ -779,9 +782,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   }, [budget, customBudget])
 
   const visibleCreatorIds = useMemo(() => {
-    const ids = pinned
-      .map((c) => resolveCreatorId(c, creatorIdAliasRef.current))
-      .filter((x): x is string => typeof x === "string" && x.length > 0)
+    const ids = pinned.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
     const uniqueOrdered: string[] = []
@@ -821,6 +822,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
         method: "GET",
         cache: "no-store",
+        credentials: "include",
         signal: ac.signal,
       })
       const json = (await res.json().catch(() => null)) as any
@@ -943,6 +945,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
           method: "GET",
           cache: "no-store",
+          credentials: "include",
           signal: ac.signal,
         })
         const json = (await res.json().catch(() => null)) as any
@@ -1046,7 +1049,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
         <CreatorGrid>
           {pinned.map((c) => {
-            const creatorId = (c as any)?.creatorId as string | undefined
+            const creatorId = c.creatorId
             const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
             const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
             const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
