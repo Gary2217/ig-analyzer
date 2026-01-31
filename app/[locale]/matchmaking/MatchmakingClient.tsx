@@ -266,11 +266,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       nextBudget === "any" ||
       nextBudget === "1000" ||
       nextBudget === "3000" ||
-      nextBudget === "0_5000" ||
+      nextBudget === "1000_5000" ||
       nextBudget === "5000_10000" ||
       nextBudget === "10000_30000" ||
       nextBudget === "30000_60000" ||
-      nextBudget === "60000_plus"
+      nextBudget === "60000_100000" ||
+      nextBudget === "100000_plus"
     setBudget(isKnownBudget ? nextBudget : "any")
     setCustomBudget("")
 
@@ -338,7 +339,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
               ? {
                   ...c,
                   followerCount: followers ?? c.followerCount,
-                  engagementRate,
+                  engagementRate: engagementRate ?? c.engagementRate,
                 }
               : c
           )
@@ -487,11 +488,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   function budgetMaxForRange(range: BudgetRange): number | null {
     if (range === "1000") return 1000
     if (range === "3000") return 3000
-    if (range === "0_5000") return 5000
+    if (range === "1000_5000") return 5000
     if (range === "5000_10000") return 10000
     if (range === "10000_30000") return 30000
     if (range === "30000_60000") return 60000
-    if (range === "60000_plus") return null
+    if (range === "60000_100000") return 100000
+    if (range === "100000_plus") return 100000
     return null
   }
 

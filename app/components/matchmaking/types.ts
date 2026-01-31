@@ -22,11 +22,12 @@ export type BudgetRange =
   | "custom"
   | "1000"
   | "3000"
-  | "0_5000"
+  | "1000_5000"
   | "5000_10000"
   | "10000_30000"
   | "30000_60000"
-  | "60000_plus"
+  | "60000_100000"
+  | "100000_plus"
 
 export type CreatorStats = {
   followers?: number

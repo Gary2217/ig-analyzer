@@ -43,19 +43,33 @@ export function FiltersBar(props: Props) {
   const mm = copy.matchmaking
   const [chipsExpanded, setChipsExpanded] = useState(false)
 
+  const budgetLabelFor = (range: Exclude<BudgetRange, "any" | "custom">) => {
+    const isZh = props.locale === "zh-TW"
+    if (range === "1000") return "1,000"
+    if (range === "3000") return "3,000"
+    if (range === "1000_5000") return isZh ? "1,000～5,000" : "1,000–5,000"
+    if (range === "5000_10000") return isZh ? "5,000～1萬" : "5,000–10,000"
+    if (range === "10000_30000") return isZh ? "1萬～3萬" : "10,000–30,000"
+    if (range === "30000_60000") return isZh ? "3萬～6萬" : "30,000–60,000"
+    if (range === "60000_100000") return isZh ? "6萬～10萬" : "60,000–100,000"
+    if (range === "100000_plus") return isZh ? "10萬以上" : "100,000+"
+    return String(range)
+  }
+
   const budgetOptions: Array<{ value: BudgetRange; label: string }> = useMemo(
     () => [
       { value: "any", label: mm.anyBudget },
       { value: "custom", label: mm.budgetOtherAmount },
-      { value: "1000", label: "1,000" },
-      { value: "3000", label: "3,000" },
-      { value: "0_5000", label: mm.budgetRange0_5000 },
-      { value: "5000_10000", label: mm.budgetRange5000_10000 },
-      { value: "10000_30000", label: mm.budgetRange10000_30000 },
-      { value: "30000_60000", label: mm.budgetRange30000_60000 },
-      { value: "60000_plus", label: mm.budgetRange60000_plus },
+      { value: "1000", label: budgetLabelFor("1000") },
+      { value: "3000", label: budgetLabelFor("3000") },
+      { value: "1000_5000", label: budgetLabelFor("1000_5000") },
+      { value: "5000_10000", label: budgetLabelFor("5000_10000") },
+      { value: "10000_30000", label: budgetLabelFor("10000_30000") },
+      { value: "30000_60000", label: budgetLabelFor("30000_60000") },
+      { value: "60000_100000", label: budgetLabelFor("60000_100000") },
+      { value: "100000_plus", label: budgetLabelFor("100000_plus") },
     ],
-    [mm]
+    [mm, props.locale]
   )
 
   const chipOptions = useMemo(
@@ -101,7 +115,7 @@ export function FiltersBar(props: Props) {
                 <select
                   value={props.budget}
                   onChange={(e) => props.onBudget(e.target.value as any)}
-                  className="h-11 min-w-[140px] rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                  className="h-11 min-w-[140px] max-w-full sm:max-w-none rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
                 >
                   {budgetOptions.map((o) => (
                     <option key={o.value} value={o.value} className="bg-slate-900">
