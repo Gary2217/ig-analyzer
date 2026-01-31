@@ -48,6 +48,7 @@ export const zhTW: CopyDictionary = {
     budgetRange30000_60000: "30,000–60,000",
     budgetRange60000_plus: "60,000+",
 
+    sortBestMatch: "最佳媒合",
     sortFollowersDesc: "粉絲數（高→低）",
     sortErDesc: "互動率（高→低）",
 
@@ -81,6 +82,11 @@ export const zhTW: CopyDictionary = {
 
     followersLabel: "粉絲",
     engagementLabel: "互動率",
+
+    recommendedLabel: "推薦",
+    popularBadge: "人氣",
+    highEngagementLabel: "互動亮眼",
+    bestMatchTooltip: "最可能成交會綜合預算匹配、互動與粉絲規模。",
 
     updatingStats: "更新數據中…",
     retryStatsAria: "重新取得數據",

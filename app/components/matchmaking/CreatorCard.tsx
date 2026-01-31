@@ -62,6 +62,13 @@ export function CreatorCard({
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
 
+  const isPopular =
+    (typeof creator.stats?.followers === "number" && Number.isFinite(creator.stats.followers) && creator.stats.followers > 5000) ||
+    (typeof creator.stats?.engagementRate === "number" && Number.isFinite(creator.stats.engagementRate) && creator.stats.engagementRate > 0.03)
+
+  const showHighEngagement =
+    typeof creator.stats?.engagementRate === "number" && Number.isFinite(creator.stats.engagementRate) && creator.stats.engagementRate > 0.02
+
   const shouldShowHandle = (() => {
     const handle = typeof creator.handle === "string" ? creator.handle.trim() : ""
     if (!handle) return false
@@ -107,6 +114,14 @@ export function CreatorCard({
         isMyCard ? "border-sky-400/40 ring-1 ring-sky-400/30" : "border-white/10"
       }`}
     >
+      {isPopular && !isEmpty ? (
+        <div className="absolute top-3 right-14 z-10">
+          <span className="inline-flex items-center rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-100/90 whitespace-nowrap">
+            {mm.popularBadge}
+          </span>
+        </div>
+      ) : null}
+
       <button
         type="button"
         onClick={onToggleFav}
@@ -233,6 +248,10 @@ export function CreatorCard({
               </div>
             ) : null}
           </div>
+
+          {showHighEngagement ? (
+            <div className="mt-3 text-[11px] text-white/55 truncate min-w-0">{mm.highEngagementLabel}</div>
+          ) : null}
         </div>
         </Link>
       )}

@@ -46,6 +46,7 @@ export type CopyDictionary = {
     budgetRange30000_60000: string
     budgetRange60000_plus: string
 
+    sortBestMatch: string
     sortFollowersDesc: string
     sortErDesc: string
 
@@ -79,6 +80,11 @@ export type CopyDictionary = {
 
     followersLabel: string
     engagementLabel: string
+
+    recommendedLabel: string
+    popularBadge: string
+    highEngagementLabel: string
+    bestMatchTooltip: string
 
     updatingStats: string
     retryStatsAria: string

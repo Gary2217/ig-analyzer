@@ -48,6 +48,7 @@ export const en: CopyDictionary = {
     budgetRange30000_60000: "30,000–60,000",
     budgetRange60000_plus: "60,000+",
 
+    sortBestMatch: "Best Match",
     sortFollowersDesc: "Followers (High)",
     sortErDesc: "Engagement Rate (High)",
 
@@ -81,6 +82,11 @@ export const en: CopyDictionary = {
 
     followersLabel: "Followers",
     engagementLabel: "Engagement",
+
+    recommendedLabel: "Recommended",
+    popularBadge: "Popular",
+    highEngagementLabel: "High Engagement",
+    bestMatchTooltip: "Best Match weighs budget fit, engagement, and audience size.",
 
     updatingStats: "Updating stats…",
     retryStatsAria: "Retry stats",

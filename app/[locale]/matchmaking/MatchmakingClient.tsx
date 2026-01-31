@@ -260,13 +260,15 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
 
   const [q, setQ] = useState("")
-  const [sort, setSort] = useState<"followers_desc" | "er_desc">("followers_desc")
+  const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [platform, setPlatform] = useState<Platform | "any">("any")
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
   const [myCardFirst, setMyCardFirst] = useState(true)
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
+
+  const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
   useEffect(() => {
     try {
@@ -318,14 +320,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     const nextPlatform = (qp.get("platform") ?? "any") as Platform | "any"
     const nextBudget = (qp.get("budget") ?? "any") as BudgetRange
     const nextCollab = (qp.get("collab") ?? "any") as CollabType | "any"
-    const nextSort = (qp.get("sort") ?? "followers_desc") as any
 
     setQ(nextQ)
     setPlatform(nextPlatform)
     setBudget(nextBudget)
-
-    if (nextSort === "er_desc") setSort("er_desc")
-    else setSort("followers_desc")
 
     // Keep URL compatibility: initialize selected types from the existing collab param (single value).
     const isKnownCollab: boolean =
@@ -356,11 +354,24 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Sort is local-only: hydrate from localStorage (no URL read/write).
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+      const raw = window.localStorage.getItem(LS_SORT_KEY)
+      if (raw === "followers_desc" || raw === "er_desc" || raw === "best_match") {
+        setSort(raw)
+      }
+    } catch {
+      // swallow
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Sync state -> URL
   useEffect(() => {
     const params = new URLSearchParams()
     if (q.trim()) params.set("q", q.trim())
-    if (sort && sort !== "followers_desc") params.set("sort", sort)
     if (platform !== "any") params.set("platform", platform)
     // Do not introduce new URL values. Only persist known preset budgets.
     if (budget !== "any" && budget !== "custom") params.set("budget", budget)
@@ -381,7 +392,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
     const qs = params.toString()
     router.replace(qs ? `?${qs}` : "?", { scroll: false })
-  }, [q, sort, platform, budget, selectedTypes, router])
+  }, [q, platform, budget, selectedTypes, router])
 
   useEffect(() => {
     let cancelled = false
@@ -685,7 +696,25 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       return okQ && okPlatform && okType && okBudget
     })
 
-    if (sort === "followers_desc") {
+    if (sort === "best_match") {
+      const maxFollowers = out.reduce((m, c) => {
+        const f = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers) ? c.stats.followers : 0
+        return Math.max(m, f)
+      }, 0)
+
+      const scoreFor = (c: (typeof out)[number]) => {
+        const er = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate) ? c.stats.engagementRate : 0
+        const followers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers) ? c.stats.followers : 0
+        const followersNormalized = maxFollowers > 0 ? Math.min(1, Math.max(0, followers / maxFollowers)) : 0
+        const seed = hashStringToInt(String(c.id))
+        const rand = mulberry32(seed)()
+        const randomSmallVar = Math.min(1, Math.max(0, rand))
+        const budgetFit = 0.5
+        return er * 0.4 + budgetFit * 0.3 + followersNormalized * 0.2 + randomSmallVar * 0.1
+      }
+
+      out = [...out].sort((a, b) => scoreFor(b) - scoreFor(a))
+    } else if (sort === "followers_desc") {
       out = [...out].sort((a, b) => (b.stats?.followers ?? -1) - (a.stats?.followers ?? -1))
     } else if (sort === "er_desc") {
       out = [...out].sort((a, b) => (b.stats?.engagementRate ?? -1) - (a.stats?.engagementRate ?? -1))
@@ -936,7 +965,17 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           onClearTypes={() => setSelectedTypes([])}
           typeOptions={typeOptions}
           sort={sort}
-          onSort={(v) => setSort(v === "er_desc" ? "er_desc" : "followers_desc")}
+          onSort={(v) => {
+            try {
+              if (typeof window !== "undefined") window.localStorage.setItem(LS_SORT_KEY, v)
+            } catch {
+              // swallow
+            }
+
+            if (v === "followers_desc") setSort("followers_desc")
+            else if (v === "er_desc") setSort("er_desc")
+            else setSort("best_match")
+          }}
           myCardFirst={myCardFirst}
           onMyCardFirst={setMyCardFirst}
           favoritesCount={fav.count}
@@ -944,6 +983,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           total={filtered.length}
           statsUpdating={statsPrefetchRunning}
         />
+
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
+          <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
+        </div>
 
         <CreatorGrid>
           {pinned.map((c) => (
