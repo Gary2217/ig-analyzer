@@ -130,12 +130,36 @@ export function CreatorCard({
 
   const contactItems = (() => {
     const out: Array<{ key: "email" | "phone" | "line"; value: string; className: string }> = []
-    const email = typeof creator.contactEmail === "string" ? creator.contactEmail.trim() : ""
-    const phone = typeof creator.contactPhone === "string" ? creator.contactPhone.trim() : ""
-    const line = typeof creator.contactLine === "string" ? creator.contactLine.trim() : ""
-    if (email) out.push({ key: "email", value: email, className: "break-all" })
-    if (phone) out.push({ key: "phone", value: phone, className: "break-all" })
-    if (line) out.push({ key: "line", value: line, className: "break-all" })
+    const email =
+      typeof creator.contactEmail === "string"
+        ? creator.contactEmail.trim()
+        : typeof (creator as any)?.creatorCard?.contactEmail === "string"
+          ? String((creator as any)?.creatorCard?.contactEmail).trim()
+          : typeof (creator as any)?.profile?.contactEmail === "string"
+            ? String((creator as any)?.profile?.contactEmail).trim()
+            : ""
+
+    const phone =
+      typeof creator.contactPhone === "string"
+        ? creator.contactPhone.trim()
+        : typeof (creator as any)?.creatorCard?.contactPhone === "string"
+          ? String((creator as any)?.creatorCard?.contactPhone).trim()
+          : typeof (creator as any)?.profile?.contactPhone === "string"
+            ? String((creator as any)?.profile?.contactPhone).trim()
+            : ""
+
+    const line =
+      typeof creator.contactLine === "string"
+        ? creator.contactLine.trim()
+        : typeof (creator as any)?.creatorCard?.contactLine === "string"
+          ? String((creator as any)?.creatorCard?.contactLine).trim()
+          : typeof (creator as any)?.profile?.contactLine === "string"
+            ? String((creator as any)?.profile?.contactLine).trim()
+            : ""
+
+    if (email) out.push({ key: "email", value: email, className: "" })
+    if (phone) out.push({ key: "phone", value: phone, className: "" })
+    if (line) out.push({ key: "line", value: line, className: "" })
     return out
   })()
 
@@ -289,12 +313,6 @@ export function CreatorCard({
                 ) : null}
               </div>
 
-              <div className="mt-3">
-                <div className="h-11">
-                  <span className="sr-only">{mm.viewDetails}</span>
-                </div>
-              </div>
-
               {showHighEngagement ? (
                 <div className="mt-2 text-[11px] text-white/55 truncate min-w-0">{mm.highEngagementLabel}</div>
               ) : null}
@@ -304,21 +322,25 @@ export function CreatorCard({
           <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3">
             <button
               type="button"
-              onClick={() => setShowContact(true)}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowContact((v) => !v)
+              }}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
             >
               <span className="min-w-0 break-words [overflow-wrap:anywhere]">{mm.ctaStartCollaboration}</span>
             </button>
 
             {showContact && contactItems.length ? (
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/80 transition-opacity duration-200 opacity-100">
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/80 transition-opacity duration-200 opacity-100 min-w-0">
                 {contactItems.map((it) => (
                   <span
                     key={it.key}
-                    className={`max-w-full truncate rounded-full bg-white/10 px-3 py-1 ${it.className}`}
+                    className={`max-w-full overflow-hidden rounded-full bg-white/10 px-3 py-1 ${it.className}`}
                     title={it.value}
                   >
-                    {it.value}
+                    <span className="block max-w-[220px] sm:max-w-[260px] truncate">{it.value}</span>
                   </span>
                 ))}
               </div>
