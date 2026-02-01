@@ -220,10 +220,22 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
+function parseEpochMsFromUnknown(v: unknown): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v
+  if (typeof v === "string") {
+    const n = Number(v)
+    if (Number.isFinite(n)) return n
+    const t = Date.parse(v)
+    if (Number.isFinite(t)) return t
+  }
+  return 0
+}
+
 type CreatorCardMeResponse = {
   ok: boolean
   card?: unknown
   me?: unknown
+  draftUpdatedAt?: number
   error?: unknown
 }
 
@@ -1170,6 +1182,7 @@ export default function CreatorCardPage() {
 
   const [refetchTick, setRefetchTick] = useState(0)
   const [creatorId, setCreatorId] = useState<string | null>(null)
+  const [cardId, setCardId] = useState<string | null>(null)
   const [creatorStats, setCreatorStats] = useState<CreatorStats | null>(null)
   
   // Featured carousel scroll state
@@ -1307,6 +1320,9 @@ export default function CreatorCardPage() {
 
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
+  const dbUpdatedAtMsRef = useRef<number>(0)
+  const didBackfillFeaturedRef = useRef(false)
+  const didBackfillTopPostsRef = useRef(false)
   const featuredAddInputRef = useRef<HTMLInputElement | null>(null)
   const featuredReplaceInputRef = useRef<HTMLInputElement | null>(null)
   const [isAddIgOpen, setIsAddIgOpen] = useState(false)
@@ -1721,6 +1737,11 @@ export default function CreatorCardPage() {
 
         const card = asRecord(json?.card) ?? null
 
+        const dbUpdatedAtMs = parseEpochMsFromUnknown((card as any)?.updated_at)
+        dbUpdatedAtMsRef.current = dbUpdatedAtMs
+        const nextCardId = card ? readString((card as any)?.id) : null
+        setCardId(nextCardId ? String(nextCardId) : null)
+
         const meObj = asRecord(json?.me)
         const nextCreatorIdRaw = meObj ? readString(meObj.igUserId) : null
         const nextCreatorId = nextCreatorIdRaw ? String(nextCreatorIdRaw).trim() : ""
@@ -1828,7 +1849,7 @@ export default function CreatorCardPage() {
         setContactInstagramInput("")
         setContactOtherInput("")
 
-        const nextFeaturedItems = (() => {
+        const nextFeaturedItemsFromDb = (() => {
           // Check if card has featuredItems stored in flexible JSON field
           // Support both camelCase (from API mapping) and snake_case (from DB)
           const storedFeaturedItems = Array.isArray(card?.featuredItems) 
@@ -1924,6 +1945,61 @@ export default function CreatorCardPage() {
           return items.slice(0, 20)
         })()
 
+        const { localFeaturedItems, localDraftUpdatedAtMs } = (() => {
+          try {
+            if (typeof window === "undefined") return { localFeaturedItems: [] as FeaturedItem[], localDraftUpdatedAtMs: 0 }
+            const raw = window.localStorage.getItem("creator_card_draft_v1")
+            if (!raw) {
+              const legacyMs = parseEpochMsFromUnknown(window.localStorage.getItem("creator_card_updated_at"))
+              return { localFeaturedItems: [] as FeaturedItem[], localDraftUpdatedAtMs: legacyMs }
+            }
+            const draft = JSON.parse(raw) as any
+            const ms =
+              parseEpochMsFromUnknown(draft?.draftUpdatedAt) ||
+              parseEpochMsFromUnknown(draft?.draft_updated_at) ||
+              parseEpochMsFromUnknown(window.localStorage.getItem("creator_card_updated_at"))
+
+            const itemsRaw = Array.isArray(draft?.featuredItems)
+              ? draft.featuredItems
+              : Array.isArray(draft?.featured_items)
+                ? draft.featured_items
+                : []
+
+            const restoredItems: FeaturedItem[] = (Array.isArray(itemsRaw) ? itemsRaw : []).map((item: any) => ({
+              id: item.id || `restored-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              type: item.type || "media",
+              url: item.url || "",
+              brand: item.brand || "",
+              collabType: item.collabType || "",
+              caption: item.caption || "",
+              title: item.title || "",
+              text: item.text || "",
+              thumbnailUrl:
+                item.type === "ig"
+                  ? normalizeIgThumbnailUrlOrNull(item.thumbnailUrl)
+                  : typeof item.thumbnailUrl === "string"
+                    ? item.thumbnailUrl
+                    : null,
+            }))
+
+            return { localFeaturedItems: restoredItems.slice(0, 20), localDraftUpdatedAtMs: ms }
+          } catch {
+            return { localFeaturedItems: [] as FeaturedItem[], localDraftUpdatedAtMs: 0 }
+          }
+        })()
+
+        const shouldUseLocalForFeatured =
+          localFeaturedItems.length > 0 &&
+          (nextFeaturedItemsFromDb.length === 0 || localDraftUpdatedAtMs > dbUpdatedAtMsRef.current)
+
+        const nextFeaturedItems = shouldUseLocalForFeatured ? localFeaturedItems : nextFeaturedItemsFromDb
+
+        const shouldBackfillFeaturedToDb =
+          shouldUseLocalForFeatured &&
+          !didBackfillFeaturedRef.current &&
+          Boolean(cardId || nextCardId) &&
+          localDraftUpdatedAtMs > 0
+
         // Merge thumbnails from localStorage draft BEFORE setting state
         const mergedFromLocalDraft = mergeThumbsFromLocalDraft(nextFeaturedItems)
         
@@ -1962,6 +2038,96 @@ export default function CreatorCardPage() {
           }
           return next
         })
+
+        if (shouldBackfillFeaturedToDb) {
+          didBackfillFeaturedRef.current = true
+          const nextHandle = typeof nextBase?.handle === "string" ? nextBase.handle : undefined
+          const nextDisplayName = typeof nextBase?.displayName === "string" ? nextBase.displayName : undefined
+          const nextProfileImageUrl = typeof nextBase?.profileImageUrl === "string" ? nextBase.profileImageUrl : undefined
+          const nextNiche = typeof nextBase?.niche === "string" ? nextBase.niche : undefined
+          const nextAudience = typeof nextBase?.audience === "string" ? nextBase.audience : undefined
+          const nextMinPrice = typeof nextBase?.minPrice === "number" && Number.isFinite(nextBase.minPrice) ? nextBase.minPrice : null
+          const nextThemeTypes = Array.isArray(nextBase?.themeTypes) ? nextBase.themeTypes : []
+          const nextAudienceProfiles = Array.isArray(nextBase?.audienceProfiles) ? nextBase.audienceProfiles : []
+          const nextDeliverables = Array.isArray(nextBase?.deliverables) ? nextBase.deliverables : []
+          const nextCollaborationNiches = Array.isArray(nextBase?.collaborationNiches) ? nextBase.collaborationNiches : []
+          const nextPastCollaborations = Array.isArray(nextBase?.pastCollaborations) ? nextBase.pastCollaborations : []
+          const nextContact = typeof nextBase?.contact === "string" ? nextBase.contact : undefined
+          const nextIsPublic = typeof nextBase?.isPublic === "boolean" ? nextBase.isPublic : undefined
+
+          const nextPortfolio = nextFeaturedItems
+            .filter((x) => {
+              const itemType = x.type || "media"
+              return itemType === "media" && isPersistedUrl(x.url)
+            })
+            .map((x, idx) => ({
+              id: x.id,
+              url: x.url || "",
+              brand: x.brand || "",
+              collabType: x.collabType || "",
+              caption: x.caption || "",
+              order: idx,
+            }))
+
+          const nextFeaturedPayload = nextFeaturedItems.map((x, idx) => {
+            const itemType = x.type || "media"
+            if (itemType === "text") {
+              return {
+                id: x.id,
+                type: "text",
+                title: x.title || "",
+                text: x.text || "",
+                order: idx,
+              }
+            }
+            if (itemType === "ig") {
+              return {
+                id: x.id,
+                type: "ig",
+                url: x.url || "",
+                caption: x.caption || "",
+                thumbnailUrl: x.thumbnailUrl || undefined,
+                order: idx,
+              }
+            }
+            return {
+              id: x.id,
+              type: "media",
+              url: x.url || "",
+              brand: x.brand || "",
+              collabType: x.collabType || "",
+              caption: x.caption || "",
+              order: idx,
+            }
+          })
+
+          const payload: any = {
+            handle: nextHandle,
+            displayName: nextDisplayName,
+            profileImageUrl: nextProfileImageUrl,
+            niche: nextNiche,
+            audience: nextAudience,
+            minPrice: nextMinPrice,
+            themeTypes: normalizeStringArray(nextThemeTypes, 20),
+            audienceProfiles: normalizeStringArray(nextAudienceProfiles, 20),
+            contact: nextContact,
+            portfolio: nextPortfolio,
+            featuredItems: nextFeaturedPayload,
+            isPublic: nextIsPublic,
+            deliverables: normalizeStringArray(nextDeliverables, 50),
+            collaborationNiches: normalizeStringArray(nextCollaborationNiches, 20),
+            pastCollaborations: normalizeStringArray(nextPastCollaborations, 20),
+          }
+
+          setTimeout(() => {
+            fetch("/api/creator-card/upsert", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify(payload),
+            }).catch(() => null)
+          }, 0)
+        }
 
         const primaryParts = (() => {
           const raw = typeof nextBase?.niche === "string" ? nextBase.niche : ""
@@ -2057,13 +2223,19 @@ export default function CreatorCardPage() {
       return
     }
     
-    // Else (no items), restore from localStorage
+    // Else (no items), restore from localStorage if newer than DB
     try {
       const draftJson = localStorage.getItem("creator_card_draft_v1")
       if (!draftJson) return
       
       const draft = JSON.parse(draftJson)
       if (!draft || typeof draft !== "object") return
+
+      const localMs =
+        parseEpochMsFromUnknown((draft as any)?.draftUpdatedAt) ||
+        parseEpochMsFromUnknown((draft as any)?.draft_updated_at) ||
+        parseEpochMsFromUnknown(localStorage.getItem("creator_card_updated_at"))
+      if (dbUpdatedAtMsRef.current > 0 && localMs > 0 && localMs <= dbUpdatedAtMsRef.current) return
       
       // Read from either camelCase or snake_case
       const items = Array.isArray(draft.featuredItems) 
@@ -2120,8 +2292,76 @@ export default function CreatorCardPage() {
   useEffect(() => {
     if (creatorId) {
       localStorage.setItem("creatorCardId", creatorId)
+      localStorage.setItem("igUserId", creatorId)
     }
   }, [creatorId])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!cardId) return
+    if (didBackfillTopPostsRef.current) return
+
+    didBackfillTopPostsRef.current = true
+    try {
+      const rawPosts =
+        window.localStorage.getItem("ig_top_posts_v1") ??
+        window.localStorage.getItem("ig_top_posts") ??
+        null
+      const rawSnap =
+        window.localStorage.getItem("ig_top_posts_snapshot_v1") ??
+        window.localStorage.getItem("ig_top_posts_snapshot") ??
+        null
+
+      const posts = (() => {
+        if (!rawPosts) return null
+        try {
+          const parsed = JSON.parse(rawPosts)
+          return Array.isArray(parsed) ? parsed.slice(0, 50) : null
+        } catch {
+          return null
+        }
+      })()
+
+      if (!posts || posts.length === 0) return
+
+      setTimeout(() => {
+        fetch(`/api/creator-card/ig-posts?cardId=${encodeURIComponent(cardId)}`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+          .then((r) => r.json().catch(() => null))
+          .then((j: any) => {
+            if (j?.ok === true && Array.isArray(j?.posts) && j.posts.length > 0) return
+            fetch("/api/creator-card/ig-posts", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                cardId,
+                posts,
+                source: "local_cache",
+                snapshotAt: rawSnap ?? undefined,
+              }),
+            }).catch(() => null)
+          })
+          .catch(() => null)
+      }, 0)
+    } catch {
+      // swallow
+    }
+  }, [cardId])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const legacy = window.localStorage.getItem("creatorCardId")
+      const next = window.localStorage.getItem("igUserId")
+      if (!next && legacy) window.localStorage.setItem("igUserId", legacy)
+    } catch {
+      // swallow
+    }
+  }, [])
 
   useEffect(() => {
     if (!creatorId) {
@@ -2231,6 +2471,7 @@ export default function CreatorCardPage() {
         collaborationNiches: normalizeStringArray(collaborationNiches, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
         contact: serializedContact,
+        draftUpdatedAt: Date.now(),
         featuredItems: updatedFeaturedItems.map((x, idx) => {
           const itemType = x.type || "media"
           if (itemType === "text") {
@@ -2549,7 +2790,7 @@ export default function CreatorCardPage() {
             }
           } else {
             // Store the persisted card (already has both snake_case and camelCase from API)
-            const draftJson = JSON.stringify(persistedCard)
+            const draftJson = JSON.stringify({ ...(persistedCard as any), draftUpdatedAt: Date.now() })
             localStorage.setItem("creator_card_draft_v1", draftJson)
             localStorage.setItem("creator_card_updated_at", String(Date.now()))
             
