@@ -455,7 +455,16 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     if (!ownerCardId) return false
     return cards.some((c) => c.id === ownerCardId)
   }, [cards, ownerCardId])
-  const showDevBadge = process.env.NODE_ENV !== "production" && locale === "zh-TW"
+  const debugOwner = useMemo(() => {
+    try {
+      if (typeof window === "undefined") return false
+      const qp = new URLSearchParams(window.location.search)
+      return qp.get("debugOwner") === "1"
+    } catch {
+      return false
+    }
+  }, [])
+  const showDevBadge = debugOwner
 
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
@@ -1372,6 +1381,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
                 {devCcPinExists ? ` exp:${devCcPinExpires ?? "?"}` : ""}
               </div>
               <div>cards has owner: {devHasOwnerInCards ? "yes" : "no"}</div>
+              <div>first5: {finalCards.slice(0, 5).map((c) => c.id).join(",")}</div>
             </div>
           ) : null}
         </div>
