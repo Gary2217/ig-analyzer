@@ -449,6 +449,14 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
   const ccPinInjectedIdRef = useRef<string | null>(null)
 
+  const [devCcPinExists, setDevCcPinExists] = useState(false)
+  const [devCcPinExpires, setDevCcPinExpires] = useState<string | null>(null)
+  const devHasOwnerInCards = useMemo(() => {
+    if (!ownerCardId) return false
+    return cards.some((c) => c.id === ownerCardId)
+  }, [cards, ownerCardId])
+  const showDevBadge = process.env.NODE_ENV !== "production" && locale === "zh-TW"
+
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
   const cardsRef = useRef(cards)
@@ -500,6 +508,26 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   useEffect(() => {
     setCards(initialCards)
   }, [initialCards])
+
+  useEffect(() => {
+    if (!showDevBadge) return
+    try {
+      const raw = window.localStorage.getItem(CC_PIN_KEY)
+      if (!raw) {
+        setDevCcPinExists(false)
+        setDevCcPinExpires(null)
+        return
+      }
+      setDevCcPinExists(true)
+      const parsed = JSON.parse(raw) as any
+      const expires = typeof parsed?.expires === "string" ? String(parsed.expires) : null
+      setDevCcPinExpires(expires)
+    } catch {
+      setDevCcPinExists(false)
+      setDevCcPinExpires(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const pin = readCcPin()
@@ -1294,46 +1322,59 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           </div>
         </div>
 
-        <FiltersBar
-          locale={locale}
-          search={q}
-          onSearch={setQ}
-          platform={platform}
-          onPlatform={setPlatform}
-          platformOptions={platformOptions}
-          budget={budget}
-          onBudget={(v) => {
-            setBudget(v)
-            if (v !== "custom") setCustomBudget("")
-          }}
-          customBudget={customBudget}
-          onCustomBudget={setCustomBudget}
-          onClearCustomBudget={() => {
-            setBudget("any")
-            setCustomBudget("")
-          }}
-          selectedTypes={selectedTypes}
-          onToggleType={(t: TypeKey) =>
-            setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
-          }
-          onClearTypes={() => setSelectedTypes([])}
-          typeOptions={typeOptions}
-          sort={sort}
-          onSort={(v) => {
-            try {
-              if (typeof window !== "undefined") window.localStorage.setItem(LS_SORT_KEY, v)
-            } catch {
-              // swallow
+        <div className="relative">
+          <FiltersBar
+            locale={locale}
+            search={q}
+            onSearch={setQ}
+            platform={platform}
+            onPlatform={setPlatform}
+            platformOptions={platformOptions}
+            budget={budget}
+            onBudget={(v) => {
+              setBudget(v)
+              if (v !== "custom") setCustomBudget("")
+            }}
+            customBudget={customBudget}
+            onCustomBudget={setCustomBudget}
+            onClearCustomBudget={() => {
+              setBudget("any")
+              setCustomBudget("")
+            }}
+            selectedTypes={selectedTypes}
+            onToggleType={(t: TypeKey) =>
+              setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
             }
+            onClearTypes={() => setSelectedTypes([])}
+            typeOptions={typeOptions}
+            sort={sort}
+            onSort={(v) => {
+              try {
+                if (typeof window !== "undefined") window.localStorage.setItem(LS_SORT_KEY, v)
+              } catch {
+                // swallow
+              }
 
-            if (v === "followers_desc") setSort("followers_desc")
-            else if (v === "er_desc") setSort("er_desc")
-            else setSort("best_match")
-          }}
-          favoritesCount={fav.count}
-          onOpenFavorites={() => setFavOpen(true)}
-          statsUpdating={statsPrefetchRunning}
-        />
+              if (v === "followers_desc") setSort("followers_desc")
+              else if (v === "er_desc") setSort("er_desc")
+              else setSort("best_match")
+            }}
+            favoritesCount={fav.count}
+            onOpenFavorites={() => setFavOpen(true)}
+            statsUpdating={statsPrefetchRunning}
+          />
+
+          {showDevBadge ? (
+            <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/40 px-2 py-1 text-[10px] leading-tight text-white/70">
+              <div>ownerCardId: {ownerCardId ?? "null"}</div>
+              <div>
+                cc_pin_v1: {devCcPinExists ? "yes" : "no"}
+                {devCcPinExists ? ` exp:${devCcPinExpires ?? "?"}` : ""}
+              </div>
+              <div>cards has owner: {devHasOwnerInCards ? "yes" : "no"}</div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
           <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
