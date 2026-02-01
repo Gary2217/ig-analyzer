@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { supabaseServer } from "@/lib/supabase/server"
+import crypto from "crypto"
+import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -48,7 +49,10 @@ function getRequestOrigin(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  console.log("[IG CALLBACK] HIT", new Date().toISOString())
+  const shouldDiag = process.env.NODE_ENV !== "production" || process.env.IG_OAUTH_DEBUG === "1"
+  if (shouldDiag) {
+    console.log("[IG CALLBACK] HIT", new Date().toISOString())
+  }
   try {
     const reqUrl = new URL(req.url)
     const supabaseUrlRaw = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()
@@ -58,20 +62,37 @@ export async function GET(req: NextRequest) {
     } catch {
       supabaseHost = null
     }
-    console.log(
-      JSON.stringify({
-        tag: "IG_CALLBACK_ENTRY",
-        ts: new Date().toISOString(),
-        reqHost: reqUrl.host,
-        reqPath: reqUrl.pathname,
-        supabaseHost,
-        hasServiceRoleKey: Boolean((process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()),
-        hasAnonKey: Boolean((process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim()),
-      }),
-    )
+    if (shouldDiag) {
+      console.log(
+        JSON.stringify({
+          tag: "IG_CALLBACK_ENTRY",
+          ts: new Date().toISOString(),
+          reqHost: reqUrl.host,
+          reqPath: reqUrl.pathname,
+          supabaseHost,
+          hasServiceRoleKey: Boolean((process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()),
+          hasAnonKey: Boolean((process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim()),
+        }),
+      )
+    }
   } catch {
     // swallow
   }
+  const authed = await createAuthedClient()
+  const {
+    data: { user },
+  } = await authed.auth.getUser()
+
+  if (!user) {
+    const origin = getRequestOrigin(req)
+    const nextAfterLogin = `${req.nextUrl.pathname}${req.nextUrl.search}`
+    const res = NextResponse.redirect(
+      new URL(`/api/auth/login?next=${encodeURIComponent(nextAfterLogin)}`, origin),
+    )
+    res.headers.set("Cache-Control", "no-store")
+    return res
+  }
+
   const url = new URL(req.url)
   const code = url.searchParams.get("code")
   const state = url.searchParams.get("state")
@@ -95,8 +116,6 @@ export async function GET(req: NextRequest) {
   const origin = getRequestOrigin(req)
 
   const redirectTo = (path: string) => NextResponse.redirect(new URL(path, origin))
-
-  const shouldDiag = process.env.NODE_ENV !== "production" || process.env.IG_OAUTH_DEBUG === "1"
 
   const debugLog = (...args: any[]) => {
     if (process.env.IG_OAUTH_DEBUG !== "1") return
@@ -371,22 +390,26 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    console.log("[IG CALLBACK] igId =", igId ?? null)
+    if (shouldDiag) {
+      console.log("[IG CALLBACK] igId =", igId ?? null)
+    }
 
     try {
       const nowIso = new Date().toISOString()
 
       if (igId) {
         try {
-          console.log(
-            JSON.stringify({
-              tag: "IG_CALLBACK_UPSERT_ATTEMPT",
-              ts: new Date().toISOString(),
-              table: "ig_auth_state",
-              igId,
-              pageId: pageId || null,
-            }),
-          )
+          if (shouldDiag) {
+            console.log(
+              JSON.stringify({
+                tag: "IG_CALLBACK_UPSERT_ATTEMPT",
+                ts: new Date().toISOString(),
+                table: "ig_auth_state",
+                igId,
+                pageId: pageId || null,
+              }),
+            )
+          }
         } catch {
           // swallow
         }
@@ -400,54 +423,62 @@ export async function GET(req: NextRequest) {
             )
 
           if (error) {
-            console.log(
-              JSON.stringify({
-                tag: "IG_CALLBACK_UPSERT_FAIL",
-                ts: new Date().toISOString(),
-                table: "ig_auth_state",
-                igId,
-                message: error.message,
-                code: (error as any)?.code ?? null,
-                hint: (error as any)?.hint ?? null,
-              }),
-            )
+            if (shouldDiag) {
+              console.log(
+                JSON.stringify({
+                  tag: "IG_CALLBACK_UPSERT_FAIL",
+                  ts: new Date().toISOString(),
+                  table: "ig_auth_state",
+                  igId,
+                  message: error.message,
+                  code: (error as any)?.code ?? null,
+                  hint: (error as any)?.hint ?? null,
+                }),
+              )
+            }
           } else {
             const d: any = data as any
             const len = Array.isArray(d) ? d.length : d ? 1 : 0
+            if (shouldDiag) {
+              console.log(
+                JSON.stringify({
+                  tag: "IG_CALLBACK_UPSERT_OK",
+                  ts: new Date().toISOString(),
+                  table: "ig_auth_state",
+                  igId,
+                  dataLen: len,
+                }),
+              )
+            }
+          }
+        } catch (e: any) {
+          if (shouldDiag) {
             console.log(
               JSON.stringify({
-                tag: "IG_CALLBACK_UPSERT_OK",
+                tag: "IG_CALLBACK_UPSERT_THROW",
                 ts: new Date().toISOString(),
                 table: "ig_auth_state",
                 igId,
-                dataLen: len,
+                message: e?.message ?? String(e),
               }),
             )
           }
-        } catch (e: any) {
-          console.log(
-            JSON.stringify({
-              tag: "IG_CALLBACK_UPSERT_THROW",
-              ts: new Date().toISOString(),
-              table: "ig_auth_state",
-              igId,
-              message: e?.message ?? String(e),
-            }),
-          )
         }
       }
 
       if (igId && pageId) {
         try {
-          console.log(
-            JSON.stringify({
-              tag: "IG_CALLBACK_UPSERT_ATTEMPT",
-              ts: new Date().toISOString(),
-              table: "ig_credentials",
-              igId,
-              pageId,
-            }),
-          )
+          if (shouldDiag) {
+            console.log(
+              JSON.stringify({
+                tag: "IG_CALLBACK_UPSERT_ATTEMPT",
+                ts: new Date().toISOString(),
+                table: "ig_credentials",
+                igId,
+                pageId,
+              }),
+            )
+          }
         } catch {
           // swallow
         }
@@ -466,43 +497,49 @@ export async function GET(req: NextRequest) {
             )
 
           if (error) {
-            console.log(
-              JSON.stringify({
-                tag: "IG_CALLBACK_UPSERT_FAIL",
-                ts: new Date().toISOString(),
-                table: "ig_credentials",
-                igId,
-                pageId,
-                message: error.message,
-                code: (error as any)?.code ?? null,
-                hint: (error as any)?.hint ?? null,
-              }),
-            )
+            if (shouldDiag) {
+              console.log(
+                JSON.stringify({
+                  tag: "IG_CALLBACK_UPSERT_FAIL",
+                  ts: new Date().toISOString(),
+                  table: "ig_credentials",
+                  igId,
+                  pageId,
+                  message: error.message,
+                  code: (error as any)?.code ?? null,
+                  hint: (error as any)?.hint ?? null,
+                }),
+              )
+            }
           } else {
             const d: any = data as any
             const len = Array.isArray(d) ? d.length : d ? 1 : 0
+            if (shouldDiag) {
+              console.log(
+                JSON.stringify({
+                  tag: "IG_CALLBACK_UPSERT_OK",
+                  ts: new Date().toISOString(),
+                  table: "ig_credentials",
+                  igId,
+                  pageId,
+                  dataLen: len,
+                }),
+              )
+            }
+          }
+        } catch (e: any) {
+          if (shouldDiag) {
             console.log(
               JSON.stringify({
-                tag: "IG_CALLBACK_UPSERT_OK",
+                tag: "IG_CALLBACK_UPSERT_THROW",
                 ts: new Date().toISOString(),
                 table: "ig_credentials",
                 igId,
                 pageId,
-                dataLen: len,
+                message: e?.message ?? String(e),
               }),
             )
           }
-        } catch (e: any) {
-          console.log(
-            JSON.stringify({
-              tag: "IG_CALLBACK_UPSERT_THROW",
-              ts: new Date().toISOString(),
-              table: "ig_credentials",
-              igId,
-              pageId,
-              message: e?.message ?? String(e),
-            }),
-          )
         }
       }
     } catch {

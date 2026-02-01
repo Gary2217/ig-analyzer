@@ -1438,7 +1438,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
                   className="mt-5 w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-white text-black font-semibold px-5 py-3 text-base"
                   onClick={() => {
                     const nextPath = `/${locale}/matchmaking`
-                    const oauthUrl = `/api/auth/instagram?provider=instagram&locale=${encodeURIComponent(locale)}&next=${encodeURIComponent(nextPath)}`
+                    const oauthUrl = `/api/auth/login?next=${encodeURIComponent(nextPath)}`
                     if (typeof window !== "undefined") {
                       window.location.href = oauthUrl
                     }

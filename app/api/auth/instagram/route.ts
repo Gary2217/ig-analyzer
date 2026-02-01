@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import crypto from "crypto"
+import { createAuthedClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -25,16 +26,31 @@ function summarizeUrl(v: string) {
   }
 }
 
- function mask(v?: string) {
-   if (!v) return null
-   if (v.length <= 4) return "***"
-   return `${v.slice(0, 2)}...${v.slice(-2)}`
- }
+function mask(v?: string) {
+  if (!v) return null
+  if (v.length <= 4) return "***"
+  return `${v.slice(0, 2)}...${v.slice(-2)}`
+}
 
 export async function GET(req: NextRequest) {
   const locale = req.nextUrl.searchParams.get("locale") || "en"
   const provider = req.nextUrl.searchParams.get("provider") || "instagram"
   const next = req.nextUrl.searchParams.get("next") || ""
+
+  const authed = await createAuthedClient()
+  const {
+    data: { user },
+  } = await authed.auth.getUser()
+
+  if (!user) {
+    const origin = getRequestOrigin(req)
+    const nextAfterLogin = `${req.nextUrl.pathname}${req.nextUrl.search}`
+    const res = NextResponse.redirect(
+      new URL(`/api/auth/login?next=${encodeURIComponent(nextAfterLogin)}`, origin),
+    )
+    res.headers.set("Cache-Control", "no-store")
+    return res
+  }
 
   const state = crypto.randomBytes(32).toString("hex")
 
