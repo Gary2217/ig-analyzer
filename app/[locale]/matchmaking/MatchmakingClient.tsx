@@ -25,6 +25,8 @@ interface MatchmakingClientProps {
   initialCards: CreatorCard[]
 }
 
+type CreatorWithId = CreatorCardData & { creatorId?: string }
+
 function clampNumber(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n))
 }
@@ -429,6 +431,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
   const uiCopy = useMemo(() => getCopy(locale), [locale])
 
+  const [authChecked, setAuthChecked] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const canRenderMatchmaking = authChecked && isLoggedIn
+
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
 
   const [q, setQ] = useState("")
@@ -439,6 +445,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
   const ccPinInjectedIdRef = useRef<string | null>(null)
+
+  const initialMeRef = useRef<{ ok: boolean; json: any } | null>(null)
 
   const [devCcPinExists, setDevCcPinExists] = useState(false)
   const [devCcPinExpires, setDevCcPinExpires] = useState<string | null>(null)
@@ -467,6 +475,37 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const ownerLookupStartedRef = useRef(false)
 
   useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const meRes = await fetch("/api/creator-card/me", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+        const meJson = (await meRes.json().catch(() => null)) as any
+        const ok = Boolean(meRes.ok && meJson?.ok === true)
+
+        if (cancelled) return
+        initialMeRef.current = { ok, json: meJson }
+        setIsLoggedIn(ok)
+        setAuthChecked(true)
+      } catch {
+        if (cancelled) return
+        initialMeRef.current = { ok: false, json: null }
+        setIsLoggedIn(false)
+        setAuthChecked(true)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!canRenderMatchmaking) return
     try {
       if (typeof window === "undefined") return
       const raw = window.sessionStorage.getItem(STORAGE_KEY)
@@ -502,8 +541,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     } catch {
       // swallow
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canRenderMatchmaking])
 
   useEffect(() => {
     setCards(initialCards)
@@ -511,6 +549,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
   useEffect(() => {
     if (!showDevBadge) return
+    if (!canRenderMatchmaking) return
     try {
       const raw = window.localStorage.getItem(CC_PIN_KEY)
       if (!raw) {
@@ -527,9 +566,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       setDevCcPinExpires(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canRenderMatchmaking, showDevBadge])
 
   useEffect(() => {
+    if (!canRenderMatchmaking) return
     const pin = readCcPin()
     if (!pin) return
     const adapted = adaptPinnedCardToMatchmakingCard(pin.card, localePrefix)
@@ -543,10 +583,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       return [adapted, ...prev]
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canRenderMatchmaking])
 
   // Initialize from URL query params on first client render
   useEffect(() => {
+    if (!canRenderMatchmaking) return
     const qp = searchParams
     const nextQ = (qp.get("q") ?? "").slice(0, 120)
     const nextPlatform = (qp.get("platform") ?? "any") as Platform | "any"
@@ -584,10 +625,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
     setPlatform(nextPlatform)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [canRenderMatchmaking])
 
   // Sort is local-only: hydrate from localStorage (no URL read/write).
   useEffect(() => {
+    if (!canRenderMatchmaking) return
     try {
       if (typeof window === "undefined") return
       const raw = window.localStorage.getItem(LS_SORT_KEY)
@@ -602,6 +644,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
   // Sync state -> URL
   useEffect(() => {
+    if (!canRenderMatchmaking) return
     const params = new URLSearchParams()
     if (q.trim()) params.set("q", q.trim())
     if (platform !== "any") params.set("platform", platform)
@@ -624,10 +667,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
     const qs = params.toString()
     router.replace(qs ? `?${qs}` : "?", { scroll: false })
-  }, [q, platform, budget, selectedTypes, router])
+  }, [canRenderMatchmaking, q, platform, budget, selectedTypes, router])
 
 
   useEffect(() => {
+    if (!canRenderMatchmaking) return
     let cancelled = false
 
     ;(async () => {
@@ -668,14 +712,24 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           // swallow
         }
 
-        const meRes = await fetch("/api/creator-card/me", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        })
-        const meJson = (await meRes.json().catch(() => null)) as any
+        let meResOk = false
+        let meJson: any = null
 
-        if (!meRes.ok || meJson?.ok !== true) return
+        if (initialMeRef.current) {
+          meResOk = Boolean(initialMeRef.current.ok)
+          meJson = initialMeRef.current.json
+          initialMeRef.current = null
+        } else {
+          const meRes = await fetch("/api/creator-card/me", {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+          })
+          meJson = (await meRes.json().catch(() => null)) as any
+          meResOk = Boolean(meRes.ok && meJson?.ok === true)
+        }
+
+        if (!meResOk) return
 
         const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
@@ -827,18 +881,21 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [canRenderMatchmaking])
 
   const cardsWithDemos = useMemo(() => {
+    if (!canRenderMatchmaking) return []
     const TARGET_TOTAL = 12
     const existingIds = new Set(cards.map((c) => c.id))
     const realCards = cards.filter((c) => !c.isDemo)
     const missing = Math.min(3, Math.max(0, TARGET_TOTAL - realCards.length))
     const demos = missing > 0 ? buildDemoCreators({ locale, existingIds, count: missing, seedBase: "matchmaking" }) : []
     return [...realCards, ...demos]
-  }, [cards, locale])
+  }, [canRenderMatchmaking, cards, locale])
 
-  const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
+  const creators: CreatorWithId[] = useMemo(() => {
+    if (!canRenderMatchmaking) return []
+
     return cardsWithDemos.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
@@ -868,21 +925,23 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
           ? Math.floor(cachedStats.followers)
           : typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
-          ? Math.floor((c as any).stats.followers)
-          : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) && (c as any).followerCount > 0
-            ? Math.floor((c as any).followerCount)
-            : undefined
+            ? Math.floor((c as any).stats.followers)
+            : typeof (c as any)?.followerCount === "number" &&
+                Number.isFinite((c as any).followerCount) &&
+                (c as any).followerCount > 0
+              ? Math.floor((c as any).followerCount)
+              : undefined
 
       const rawER =
         typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
           ? cachedStats.engagementRatePct / 100
           : typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
-          ? (c as any).stats.engagementRatePct / 100
-          : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
-            ? (c as any).stats.engagementRate
-            : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
-              ? (c as any).engagementRate
-              : undefined
+            ? (c as any).stats.engagementRatePct / 100
+            : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
+              ? (c as any).stats.engagementRate
+              : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
+                ? (c as any).engagementRate
+                : undefined
 
       const rawMinPrice =
         typeof (c as any).minPrice === "number" && Number.isFinite((c as any).minPrice)
@@ -891,28 +950,35 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             ? (c as any).min_price
             : undefined
 
+      const avatarUrl = typeof c.avatarUrl === "string" && c.avatarUrl.trim() ? c.avatarUrl.trim() : undefined
+
+      const followers = typeof rawFollowers === "number" && Number.isFinite(rawFollowers) ? rawFollowers : null
+      const engagementRate = typeof rawER === "number" && Number.isFinite(rawER) ? rawER : null
+      const minPrice = typeof rawMinPrice === "number" && Number.isFinite(rawMinPrice) ? rawMinPrice : undefined
+
       return {
         id: c.id,
-        creatorId: creatorIdStr ?? undefined,
         name: c.displayName,
         handle,
-        avatarUrl: c.avatarUrl,
+        avatarUrl,
         topics,
-        platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
-        collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
+        platforms: derivedPlatforms,
+        collabTypes: derivedCollabTypes,
         deliverables,
-        minPrice: typeof rawMinPrice === "number" ? Math.max(0, Math.floor(rawMinPrice)) : undefined,
+        minPrice,
         stats: {
-          followers: rawFollowers,
-          engagementRate: rawER,
+          followers: followers ?? undefined,
+          engagementRate: engagementRate ?? undefined,
         },
+        contact: typeof (c as any).contact === "string" ? String((c as any).contact) : null,
         contactEmail,
         contactLine,
         href: c.isDemo ? "#" : c.profileUrl,
-        isDemo: Boolean(c.isDemo),
-      }
+        isDemo: Boolean((c as any).isDemo),
+        creatorId: creatorIdStr ?? undefined,
+      } as CreatorWithId
     })
-  }, [cardsWithDemos, statsVersion])
+  }, [canRenderMatchmaking, cardsWithDemos])
 
   const creatorFormatsById = useMemo(() => {
     const map = new Map<string, FormatKey[]>()
@@ -1045,16 +1111,19 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   }
 
   const ownerCreator = useMemo(() => {
+    if (!canRenderMatchmaking) return null
     if (!ownerCardId) return null
     return creators.find((c) => c.id === ownerCardId) ?? null
-  }, [creators, ownerCardId])
+  }, [canRenderMatchmaking, creators, ownerCardId])
 
   const nonOwnerCreators = useMemo(() => {
+    if (!canRenderMatchmaking) return []
     if (!ownerCardId) return creators
     return creators.filter((c) => c.id !== ownerCardId)
-  }, [creators, ownerCardId])
+  }, [canRenderMatchmaking, creators, ownerCardId])
 
   const filteredNonOwner = useMemo(() => {
+    if (!canRenderMatchmaking) return []
     const qq = q.trim().toLowerCase()
 
     let out = nonOwnerCreators.filter((c) => {
@@ -1101,23 +1170,26 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     return out
-  }, [nonOwnerCreators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
+  }, [canRenderMatchmaking, nonOwnerCreators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
   const finalCards = useMemo(() => {
+    if (!canRenderMatchmaking) return []
     if (!ownerCreator) return filteredNonOwner
     return [ownerCreator, ...filteredNonOwner]
-  }, [filteredNonOwner, ownerCreator])
+  }, [canRenderMatchmaking, filteredNonOwner, ownerCreator])
 
   const selectedBudgetMax = useMemo(() => {
+    if (!canRenderMatchmaking) return null
     if (budget === "any") return null
     if (budget === "custom") {
       const amt = Number(customBudget.trim())
       return Number.isFinite(amt) ? amt : null
     }
     return budgetMaxForRange(budget)
-  }, [budget, customBudget])
+  }, [canRenderMatchmaking, budget, customBudget])
 
   const visibleCreatorIds = useMemo(() => {
+    if (!canRenderMatchmaking) return []
     const ids = finalCards.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
@@ -1129,11 +1201,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     return uniqueOrdered
-  }, [finalCards])
+  }, [canRenderMatchmaking, finalCards])
 
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
   useEffect(() => {
+    if (!canRenderMatchmaking) return
     const ac = new AbortController()
 
     const unique = visibleCreatorIds
@@ -1237,9 +1310,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       ac.abort()
       setStatsPrefetchRunning(false)
     }
-  }, [visibleCreatorIdsKey])
+  }, [canRenderMatchmaking, visibleCreatorIdsKey])
 
   useEffect(() => {
+    if (!canRenderMatchmaking) return
     if (typeof window === "undefined") return
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
 
@@ -1265,7 +1339,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
     }
-  }, [statsVersion])
+  }, [canRenderMatchmaking, statsVersion])
 
   const retryStats = (creatorId: string) => {
     if (!/^\d+$/.test(creatorId)) return
@@ -1316,10 +1390,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return () => ac.abort()
   }
 
-  const favoritesList = useMemo(
-    () => creators.filter((c) => fav.favoriteIds.has(c.id)),
-    [creators, fav.favoriteIds]
-  )
+  const favoritesList = useMemo(() => {
+    if (!canRenderMatchmaking) return []
+    return creators.filter((c) => fav.favoriteIds.has(c.id))
+  }, [canRenderMatchmaking, creators, fav.favoriteIds])
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
@@ -1335,100 +1409,146 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           </div>
         </div>
 
-        <div className="relative">
-          <FiltersBar
-            locale={locale}
-            search={q}
-            onSearch={setQ}
-            platform={platform}
-            onPlatform={setPlatform}
-            platformOptions={platformOptions}
-            budget={budget}
-            onBudget={(v) => {
-              setBudget(v)
-              if (v !== "custom") setCustomBudget("")
-            }}
-            customBudget={customBudget}
-            onCustomBudget={setCustomBudget}
-            onClearCustomBudget={() => {
-              setBudget("any")
-              setCustomBudget("")
-            }}
-            selectedTypes={selectedTypes}
-            onToggleType={(t: TypeKey) =>
-              setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
-            }
-            onClearTypes={() => setSelectedTypes([])}
-            typeOptions={typeOptions}
-            sort={sort}
-            onSort={(v) => {
-              try {
-                if (typeof window !== "undefined") window.localStorage.setItem(LS_SORT_KEY, v)
-              } catch {
-                // swallow
-              }
-
-              if (v === "followers_desc") setSort("followers_desc")
-              else if (v === "er_desc") setSort("er_desc")
-              else setSort("best_match")
-            }}
-            favoritesCount={fav.count}
-            onOpenFavorites={() => setFavOpen(true)}
-            statsUpdating={statsPrefetchRunning}
-          />
-
-          {showDevBadge ? (
-            <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/40 px-2 py-1 text-[10px] leading-tight text-white/70">
-              <div>ownerCardId: {ownerCardId ?? "null"}</div>
-              <div>
-                cc_pin_v1: {devCcPinExists ? "yes" : "no"}
-                {devCcPinExists ? ` exp:${devCcPinExpires ?? "?"}` : ""}
+        {/* AUTH GATE START */}
+        {!authChecked ? (
+          <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-10">
+            <div className="min-h-[45dvh] flex items-center justify-center">
+              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 px-4 py-6 sm:px-6 text-center">
+                <div className="text-lg sm:text-xl font-semibold text-white/90">
+                  {locale === "zh-TW" ? "載入中…" : "Loading…"}
+                </div>
               </div>
-              <div>cards has owner: {devHasOwnerInCards ? "yes" : "no"}</div>
-              <div>first5: {finalCards.slice(0, 5).map((c) => c.id).join(",")}</div>
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : !isLoggedIn ? (
+          <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-10">
+            <div className="min-h-[45dvh] flex items-center justify-center">
+              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 px-4 py-6 sm:px-6 text-center">
+                <div className="text-lg sm:text-xl font-semibold text-white/90">
+                  {locale === "zh-TW" ? "請先登入" : "Please log in"}
+                </div>
+                <div className="mt-2 text-sm sm:text-base text-white/60 break-words">
+                  {locale === "zh-TW"
+                    ? "登入後即可看到為你排序的創作者配對結果"
+                    : "Log in to see your personalized matchmaking results"}
+                </div>
 
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
-          <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
-        </div>
+                <button
+                  type="button"
+                  className="mt-5 w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-white text-black font-semibold px-5 py-3 text-base"
+                  onClick={() => {
+                    const next = `/${locale}/matchmaking`
+                    router.push(`/${locale}?next=${encodeURIComponent(next)}`)
+                  }}
+                >
+                  {locale === "zh-TW" ? "前往登入" : "Go to login"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {/* AUTH GATE END */}
 
-        <CreatorGrid>
-          {finalCards.map((c) => {
-            const creatorId = c.creatorId
-            const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
-            const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
-            const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
-            const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
-
-            return (
-              <MatchmakingCreatorCard
-                key={c.id}
-                creator={c}
+        {!canRenderMatchmaking ? null : (
+          <>
+            <div className="relative">
+              <FiltersBar
                 locale={locale}
-                isFav={fav.isFav(c.id)}
-                onToggleFav={() => fav.toggleFav(c.id)}
-                statsLoading={loading}
-                statsError={error}
-                selectedBudgetMax={selectedBudgetMax}
-                onRetryStats={() => {
-                  if (!creatorId) return
-                  retryStats(creatorId)
+                search={q}
+                onSearch={setQ}
+                platform={platform}
+                onPlatform={setPlatform}
+                platformOptions={platformOptions}
+                budget={budget}
+                onBudget={(v) => {
+                  setBudget(v)
+                  if (v !== "custom") setCustomBudget("")
                 }}
+                customBudget={customBudget}
+                onCustomBudget={setCustomBudget}
+                onClearCustomBudget={() => {
+                  setBudget("any")
+                  setCustomBudget("")
+                }}
+                selectedTypes={selectedTypes}
+                onToggleType={(t: TypeKey) =>
+                  setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+                }
+                onClearTypes={() => setSelectedTypes([])}
+                typeOptions={typeOptions}
+                sort={sort}
+                onSort={(v) => {
+                  try {
+                    if (typeof window !== "undefined") window.localStorage.setItem(LS_SORT_KEY, v)
+                  } catch {
+                    // swallow
+                  }
+
+                  if (v === "followers_desc") setSort("followers_desc")
+                  else if (v === "er_desc") setSort("er_desc")
+                  else setSort("best_match")
+                }}
+                favoritesCount={fav.count}
+                onOpenFavorites={() => setFavOpen(true)}
+                statsUpdating={statsPrefetchRunning}
               />
-            )
-          })}
-        </CreatorGrid>
+
+              {showDevBadge ? (
+                <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/40 px-2 py-1 text-[10px] leading-tight text-white/70">
+                  <div>ownerCardId: {ownerCardId ?? "null"}</div>
+                  <div>
+                    cc_pin_v1: {devCcPinExists ? "yes" : "no"}
+                    {devCcPinExists ? ` exp:${devCcPinExpires ?? "?"}` : ""}
+                  </div>
+                  <div>cards has owner: {devHasOwnerInCards ? "yes" : "no"}</div>
+                  <div>first5: {finalCards.slice(0, 5).map((c) => c.id).join(",")}</div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
+              <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
+            </div>
+
+            <CreatorGrid>
+              {finalCards.map((c) => {
+                const creatorId = c.creatorId
+                const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
+                const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
+                const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
+                const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
+
+                return (
+                  <MatchmakingCreatorCard
+                    key={c.id}
+                    creator={c}
+                    locale={locale}
+                    isFav={fav.isFav(c.id)}
+                    onToggleFav={() => fav.toggleFav(c.id)}
+                    statsLoading={loading}
+                    statsError={error}
+                    selectedBudgetMax={selectedBudgetMax}
+                    onRetryStats={() => {
+                      if (!creatorId) return
+                      retryStats(creatorId)
+                    }}
+                  />
+                )
+              })}
+            </CreatorGrid>
+          </>
+        )}
       </div>
 
-      <FavoritesDrawer
-        locale={locale}
-        open={favOpen}
-        onClose={() => setFavOpen(false)}
-        favorites={favoritesList}
-        onClearAll={fav.clearAll}
-      />
+      {!canRenderMatchmaking ? null : (
+        <FavoritesDrawer
+          locale={locale}
+          open={favOpen}
+          onClose={() => setFavOpen(false)}
+          favorites={favoritesList}
+          onClearAll={fav.clearAll}
+        />
+      )}
     </div>
   )
 }
