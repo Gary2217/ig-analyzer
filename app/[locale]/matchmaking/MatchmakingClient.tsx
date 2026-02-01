@@ -243,15 +243,6 @@ function safeParseContact(input: unknown): {
   }
 }
 
-function pinOwnerCardFirst<T extends { id: string }>(cards: T[], ownerCardId: string | null) {
-  if (!ownerCardId) return cards
-  const idx = cards.findIndex((c) => c.id === ownerCardId)
-  if (idx <= 0) return cards
-  const owner = cards[idx]
-  const rest = cards.filter((_, i) => i !== idx)
-  return [owner, ...rest]
-}
-
 function getLocalDateYYYYMMDD() {
   const d = new Date()
   const yyyy = String(d.getFullYear())
@@ -1053,10 +1044,20 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return true
   }
 
-  const filtered = useMemo(() => {
+  const ownerCreator = useMemo(() => {
+    if (!ownerCardId) return null
+    return creators.find((c) => c.id === ownerCardId) ?? null
+  }, [creators, ownerCardId])
+
+  const nonOwnerCreators = useMemo(() => {
+    if (!ownerCardId) return creators
+    return creators.filter((c) => c.id !== ownerCardId)
+  }, [creators, ownerCardId])
+
+  const filteredNonOwner = useMemo(() => {
     const qq = q.trim().toLowerCase()
 
-    let out = creators.filter((c) => {
+    let out = nonOwnerCreators.filter((c) => {
       const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")}`.toLowerCase()
       const okQ = !qq || hay.includes(qq)
       const okPlatform = platformMatch(platform, c.platforms)
@@ -1100,9 +1101,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     return out
-  }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
+  }, [nonOwnerCreators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
-  const finalCards = useMemo(() => pinOwnerCardFirst(filtered, ownerCardId), [filtered, ownerCardId])
+  const finalCards = useMemo(() => {
+    if (!ownerCreator) return filteredNonOwner
+    return [ownerCreator, ...filteredNonOwner]
+  }, [filteredNonOwner, ownerCreator])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
