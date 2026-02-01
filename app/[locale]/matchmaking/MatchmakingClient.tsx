@@ -1437,8 +1437,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
                   type="button"
                   className="mt-5 w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-white text-black font-semibold px-5 py-3 text-base"
                   onClick={() => {
-                    const next = `/${locale}/matchmaking`
-                    router.push(`/${locale}?next=${encodeURIComponent(next)}`)
+                    const nextPath = `/${locale}/matchmaking`
+                    const oauthUrl = `/api/auth/instagram?provider=instagram&locale=${encodeURIComponent(locale)}&next=${encodeURIComponent(nextPath)}`
+                    if (typeof window !== "undefined") {
+                      window.location.href = oauthUrl
+                    }
                   }}
                 >
                   {locale === "zh-TW" ? "前往登入" : "Go to login"}
