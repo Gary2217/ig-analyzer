@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { supabaseServer } from "@/lib/supabase/server"
+import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null
@@ -164,6 +164,16 @@ async function getIGMe(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const authed = await createAuthedClient()
+    const userRes = await authed.auth.getUser()
+    const user = userRes?.data?.user ?? null
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "unauthenticated", message: "not_logged_in" },
+        { status: 401 },
+      )
+    }
+
     const c = await cookies()
     const token = (c.get("ig_access_token")?.value ?? "").trim()
     if (!token) {
@@ -212,15 +222,38 @@ export async function POST(req: Request) {
     let base = proposed ? slugify(proposed) : slugify(igUsername || "creator")
     if (!base) base = "creator"
 
-    const existing = await supabaseServer
+    let existing = await supabaseServer
       .from("creator_cards")
-      .select("id, handle")
-      .eq("ig_user_id", igUserId)
+      .select("id, handle, user_id, ig_user_id")
+      .eq("user_id", user.id)
       .limit(1)
       .maybeSingle()
 
     if (existing.error) {
-      return toSupabaseErrorResponse(existing.error, "select existing")
+      return toSupabaseErrorResponse(existing.error, "select existing by user_id")
+    }
+
+    if (!existing.data) {
+      const byIg = await supabaseServer
+        .from("creator_cards")
+        .select("id, handle, user_id, ig_user_id")
+        .eq("ig_user_id", igUserId)
+        .limit(1)
+        .maybeSingle()
+
+      if (byIg.error) {
+        return toSupabaseErrorResponse(byIg.error, "select existing by ig_user_id")
+      }
+
+      const otherUserId = typeof (byIg.data as any)?.user_id === "string" ? String((byIg.data as any).user_id) : null
+      if (otherUserId && otherUserId !== user.id) {
+        return NextResponse.json(
+          { ok: false, error: "forbidden", message: "not_owner" },
+          { status: 403 },
+        )
+      }
+
+      existing = byIg
     }
 
     const wantsNewHandle = Boolean(proposed) && slugify(proposed) !== (existing.data?.handle || "")
@@ -286,6 +319,7 @@ export async function POST(req: Request) {
     }
 
     const dbWrite: Record<string, unknown> = {
+      user_id: user.id,
       ig_user_id: igUserId,
       ig_username: igUsername,
       handle,
@@ -308,7 +342,12 @@ export async function POST(req: Request) {
     const query = supabaseServer.from("creator_cards")
     const runUpsert = async (p: Record<string, unknown>) => {
       return existing.data?.id
-        ? await query.update(p).eq("id", existing.data.id).select("*").maybeSingle()
+        ? await query
+            .update(p)
+            .eq("id", existing.data.id)
+            .or(`user_id.is.null,user_id.eq.${user.id}`)
+            .select("*")
+            .maybeSingle()
         : await query.insert(p).select("*").maybeSingle()
     }
 

@@ -275,6 +275,15 @@ function safeParseContact(input: unknown): {
   }
 }
 
+function pinOwnerCardFirst(cards: CreatorCard[], ownerCardId: string | null) {
+  if (!ownerCardId) return cards
+  const idx = cards.findIndex((c) => String(c?.id ?? "") === ownerCardId)
+  if (idx <= 0) return cards
+  const owner = cards[idx]
+  const rest = cards.filter((_, i) => i !== idx)
+  return [owner, ...rest]
+}
+
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -336,24 +345,33 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     setMyCardFirst(true)
   }, [ownerCardId])
 
+  useEffect(() => {
+    if (!ownerCardId) return
+    setCards((prev) => {
+      const next = pinOwnerCardFirst(prev, ownerCardId)
+      return next === prev ? prev : next
+    })
+  }, [ownerCardId, cards])
+
+  useEffect(() => {
+    if (!ownerCardId) return
+    const cached = getAuthCache()
+    if (cached) applyAuthResult(cached)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerCardId])
+
   const ownerLookupStartedRef = useRef(false)
 
   function applyAuthResult(data: { connected: boolean; igUserId: string | null }) {
     const igUserId = data.igUserId
     const connected = data.connected
 
-    const hasCard = cardsRef.current.some((c) => c.igUserId && c.igUserId === igUserId)
+    const hasCard = Boolean(ownerCardIdRef.current) || cardsRef.current.some((c) => c.igUserId && c.igUserId === igUserId)
     if (!hasCard) return
 
-    if (!connected) {
-      setNeedsAuth(true)
-      setPinMyCardDisabled(true)
-      setPinMyCardHint(ownerCardIdRef.current ? "Verify Instagram to lock your card at the top" : null)
-    } else {
-      setNeedsAuth(false)
-      setPinMyCardDisabled(false)
-      setPinMyCardHint(null)
-    }
+    setNeedsAuth(false)
+    setPinMyCardDisabled(false)
+    setPinMyCardHint(null)
   }
 
   useEffect(() => {
@@ -568,69 +586,16 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           credentials: "include",
         })
         const meJson = (await meRes.json().catch(() => null)) as any
-        if (!meRes.ok || meJson?.ok !== true) {
-          if (process.env.NODE_ENV !== "production" && meRes.status !== 401) {
-            console.debug("[matchmaking] /api/creator-card/me non-ok", meRes.status)
-          }
+        if (!meRes.ok || meJson?.ok !== true) return
 
-          // Fallback path: if /creator-card/me is blocked (e.g., 401), try cookie-derived IG identity.
-          try {
-            const cached = getAuthCache()
-            if (cached) {
-              applyAuthResult(cached)
-
-              const connected = Boolean(cached?.connected)
-              const igUserId = typeof cached?.igUserId === "string" ? cached.igUserId : null
-
-              if (connected && igUserId) {
-                const mine = cardsRef.current.find((c) => (c as any)?.igUserId === igUserId)
-                if (mine?.id && !cancelled) {
-                  nextOwnerCardId = String(mine.id)
-                  setOwnerCardId(nextOwnerCardId)
-                }
-              }
-              return
-            }
-
-            const authRes = await fetch("/api/auth/instagram/me", {
-              method: "GET",
-              cache: "no-store",
-              credentials: "include",
-            })
-            const authJson = (await authRes.json().catch(() => null)) as any
-
-            const payload = {
-              connected: Boolean(authJson?.connected),
-              igUserId: typeof authJson?.igUserId === "string" ? authJson.igUserId : null,
-            }
-
-            setAuthCache(payload)
-            applyAuthResult(payload)
-
-            if (payload.connected && payload.igUserId) {
-              const mine = cardsRef.current.find((c) => (c as any)?.igUserId === payload.igUserId)
-              if (mine?.id && !cancelled) {
-                nextOwnerCardId = String(mine.id)
-                setOwnerCardId(nextOwnerCardId)
-              }
-            }
-          } catch {
-            // swallow
-          }
-
-          return
-        }
         const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
-        if (!ownerIgUserId || !meCardId) return
+        if (!meCardId) return
 
         nextOwnerCardId = meCardId
         if (!cancelled) setOwnerCardId(meCardId)
-        if (!cancelled) {
-          setPinMyCardDisabled(false)
-          setPinMyCardHint(null)
-          setNeedsAuth(false)
-        }
+
+        if (!ownerIgUserId) return
 
         const statsRes = await fetch(`/api/creators/${encodeURIComponent(ownerIgUserId)}/stats`, {
           method: "GET",
@@ -976,12 +941,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
   const pinned = useMemo(() => {
-    if (!myCardFirst || !ownerLookupDone || !ownerCardId) return filtered
+    if (!ownerLookupDone || !ownerCardId) return filtered
     const mine = filtered.find((c) => c.id === ownerCardId)
     if (!mine) return filtered
     const others = filtered.filter((c) => c.id !== ownerCardId)
     return [mine, ...others]
-  }, [filtered, myCardFirst, ownerCardId, ownerLookupDone])
+  }, [filtered, ownerCardId, ownerLookupDone])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
