@@ -32,44 +32,67 @@ function clampNumber(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n))
 }
 
+function hashStringToInt(seed: string) {
+  let h = 2166136261
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+function mulberry32(a: number) {
+  return function () {
+    let t = (a += 0x6D2B79F5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fav = useFavorites()
 
+  const [authChecked, setAuthChecked] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const canRenderMatchmaking = authChecked && isLoggedIn
+
+  const [cards, setCards] = useState<CreatorCard[]>(initialCards)
+  const [favOpen, setFavOpen] = useState(false)
+
+  const [q, setQ] = useState("")
+  const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
+  const [platform, setPlatform] = useState<Platform | "any">("any")
+  const [budget, setBudget] = useState<BudgetRange>("any")
+  const [customBudget, setCustomBudget] = useState("")
+  const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
+
   const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
   const uiCopy = useMemo(() => getCopy(locale), [locale])
 
-  /** =========================
-   * ✅ AUTH STATE（修正重點）
-   * ========================= */
-  const [authChecked, setAuthChecked] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-
+  /* ---------------- AUTH CHECK ---------------- */
   useEffect(() => {
     let cancelled = false
 
     ;(async () => {
       try {
         const res = await fetch("/api/creator-card/me", {
-          method: "GET",
-          credentials: "include",
           cache: "no-store",
+          credentials: "include",
         })
+        const json = await res.json().catch(() => null)
 
-        /**
-         * ✅ 只要不是 401 / 403，就代表「已登入 Supabase」
-         * ❌ 不再用 me.ok 判斷（那是業務資料，不是登入）
-         */
-        const authed = res.status !== 401 && res.status !== 403
-
-        if (cancelled) return
-        setIsLoggedIn(authed)
-        setAuthChecked(true)
+        if (!cancelled) {
+          setIsLoggedIn(Boolean(res.ok && json?.ok === true))
+          setAuthChecked(true)
+        }
       } catch {
-        if (cancelled) return
-        setIsLoggedIn(false)
-        setAuthChecked(true)
+        if (!cancelled) {
+          setIsLoggedIn(false)
+          setAuthChecked(true)
+        }
       }
     })()
 
@@ -78,136 +101,112 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
   }, [])
 
-  const canRenderMatchmaking = authChecked && isLoggedIn
-
-  /** =========================
-   * DATA STATE
-   * ========================= */
-  const [cards, setCards] = useState<CreatorCard[]>(initialCards)
-  const [favOpen, setFavOpen] = useState(false)
-
+  /* ---------------- URL -> STATE ---------------- */
   useEffect(() => {
-    setCards(initialCards)
-  }, [initialCards])
+    if (!canRenderMatchmaking) return
 
-  /** =========================
-   * UI STATES（保留原邏輯）
-   * ========================= */
-  const [q, setQ] = useState("")
-  const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
-  const [platform, setPlatform] = useState<Platform | "any">("any")
-  const [budget, setBudget] = useState<BudgetRange>("any")
-  const [customBudget, setCustomBudget] = useState<string>("")
-  const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
+    const nextQ = (searchParams.get("q") ?? "").slice(0, 120)
+    const nextPlatform = (searchParams.get("platform") ?? "any") as Platform | "any"
+    const nextBudget = (searchParams.get("budget") ?? "any") as BudgetRange
 
-  /** =========================
-   * LOGIN GATE UI
-   * ========================= */
-  if (!authChecked) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center text-white/70">
-        {locale === "zh-TW" ? "載入中…" : "Loading…"}
-      </div>
-    )
-  }
+    setQ(nextQ)
+    setPlatform(nextPlatform)
+    setBudget(nextBudget)
+  }, [canRenderMatchmaking, searchParams])
 
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-8 text-center max-w-md">
-          <div className="text-xl font-semibold text-white">
-            {locale === "zh-TW" ? "請先登入" : "Please log in"}
-          </div>
-          <div className="mt-2 text-white/60 text-sm">
-            {locale === "zh-TW"
-              ? "登入後即可查看創作者配對結果"
-              : "Log in to see matchmaking results"}
-          </div>
+  /* ---------------- STATE -> URL ---------------- */
+  useEffect(() => {
+    if (!canRenderMatchmaking) return
 
-          <button
-            className="mt-5 w-full rounded-xl bg-white text-black font-semibold py-3"
-            onClick={() => {
-              const nextPath = `/${locale}/matchmaking`
-              window.location.href = `/api/auth/login?next=${encodeURIComponent(nextPath)}`
-            }}
-          >
-            {locale === "zh-TW" ? "使用 Google 登入" : "Sign in with Google"}
-          </button>
-        </div>
-      </div>
-    )
-  }
+    const params = new URLSearchParams()
+    if (q.trim()) params.set("q", q.trim())
+    if (platform !== "any") params.set("platform", platform)
+    if (budget !== "any") params.set("budget", budget)
 
-  /** =========================
-   * MAIN UI（已登入）
-   * ========================= */
+    router.replace(params.toString() ? `?${params}` : "?", { scroll: false })
+  }, [canRenderMatchmaking, q, platform, budget, router])
+
+  /* ---------------- UI ---------------- */
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
       <div className="pt-6 sm:pt-8">
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
-          <h1 className="text-2xl font-semibold text-white">
+          <h1 className="text-[clamp(20px,4.2vw,28px)] font-semibold text-white/90">
             {uiCopy.matchmaking.pageHeadline}
           </h1>
-          <p className="mt-1 text-white/60 text-sm">
+          <p className="mt-1 text-sm text-white/60">
             {uiCopy.matchmaking.pageSubheadline}
           </p>
         </div>
 
-        <div className="relative mt-4">
-          <FiltersBar
-            locale={locale}
-            search={q}
-            onSearch={setQ}
-            platform={platform}
-            onPlatform={setPlatform}
-            budget={budget}
-            onBudget={(v) => {
-              setBudget(v)
-              if (v !== "custom") setCustomBudget("")
-            }}
-            customBudget={customBudget}
-            onCustomBudget={setCustomBudget}
-            onClearCustomBudget={() => {
-              setBudget("any")
-              setCustomBudget("")
-            }}
-            selectedTypes={selectedTypes}
-            onToggleType={(t) =>
-              setSelectedTypes((prev) =>
-                prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
-              )
-            }
-            onClearTypes={() => setSelectedTypes([])}
-            sort={sort}
-            onSort={setSort}
-            favoritesCount={fav.count}
-            onOpenFavorites={() => setFavOpen(true)}
-          />
-        </div>
-
-        <CreatorGrid>
-          {cards.map((c) => (
-            <MatchmakingCreatorCard
-              key={c.id}
-              creator={{
-                id: c.id,
-                name: c.displayName,
-                avatarUrl: c.avatarUrl,
-                topics: c.category ? [c.category] : [],
-                platforms: [],
-                collabTypes: [],
-                deliverables: c.deliverables ?? [],
-                minPrice: c.minPrice ?? undefined,
-                stats: {},
-                contact: c.contact,
-                href: c.profileUrl,
+        {/* AUTH GATE */}
+        {!authChecked ? (
+          <div className="text-center mt-20 text-white/70">
+            {locale === "zh-TW" ? "載入中…" : "Loading…"}
+          </div>
+        ) : !isLoggedIn ? (
+          <div className="text-center mt-20">
+            <p className="text-white/80 mb-4">
+              {locale === "zh-TW" ? "請先登入" : "Please log in"}
+            </p>
+            <button
+              className="rounded-xl bg-white text-black px-5 py-3 font-semibold"
+              onClick={() => {
+                window.location.href = `/api/auth/login?next=/${locale}/matchmaking`
               }}
-              locale={locale}
-              isFav={fav.isFav(c.id)}
-              onToggleFav={() => fav.toggleFav(c.id)}
-            />
-          ))}
-        </CreatorGrid>
+            >
+              {locale === "zh-TW" ? "前往登入" : "Go to login"}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="relative">
+              <FiltersBar
+                locale={locale}
+                search={q}
+                onSearch={(value: string) => setQ(value)}  {/* ✅ 關鍵修正 */}
+                platform={platform}
+                onPlatform={setPlatform}
+                budget={budget}
+                onBudget={(v) => {
+                  setBudget(v)
+                  if (v !== "custom") setCustomBudget("")
+                }}
+                customBudget={customBudget}
+                onCustomBudget={setCustomBudget}
+                selectedTypes={selectedTypes}
+                onToggleType={(t: TypeKey) =>
+                  setSelectedTypes((prev) =>
+                    prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+                  )
+                }
+                onClearTypes={() => setSelectedTypes([])}
+                sort={sort}
+                onSort={(v) => setSort(v)}
+                favoritesCount={fav.count}
+                onOpenFavorites={() => setFavOpen(true)}
+              />
+            </div>
+
+            <CreatorGrid>
+              {cards.map((c) => (
+                <MatchmakingCreatorCard
+                  key={c.id}
+                  creator={{
+                    id: c.id,
+                    name: c.displayName,
+                    avatarUrl: c.avatarUrl,
+                    topics: [c.category],
+                    href: c.profileUrl,
+                  }}
+                  locale={locale}
+                  isFav={fav.isFav(c.id)}
+                  onToggleFav={() => fav.toggleFav(c.id)}
+                />
+              ))}
+            </CreatorGrid>
+          </>
+        )}
       </div>
 
       <FavoritesDrawer
