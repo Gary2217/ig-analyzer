@@ -85,7 +85,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const json = await res.json().catch(() => null)
 
         if (!cancelled) {
-          setIsLoggedIn(Boolean(res.ok && json?.ok === true))
+          // Treat any 2xx as logged-in for matchmaking gating.
+          // This endpoint may return ok:false due to profile/schema issues (e.g. schema_missing_user_id),
+          // which should not block access to the matchmaking page UI.
+          setIsLoggedIn(Boolean(res.ok))
           setAuthChecked(true)
         }
       } catch {
