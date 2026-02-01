@@ -258,7 +258,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [favOpen, setFavOpen] = useState(false)
 
   if (typeof window !== "undefined") {
-    console.log("[debug] MatchmakingClient mounted")
+    const qp = new URLSearchParams(window.location.search)
+    if (qp.get("debugOwner") === "1") {
+      console.log("[debug] MatchmakingClient mounted")
+    }
   }
 
   const debugOwner = useMemo(() => {
@@ -850,16 +853,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     console.log("[debug] ownerCardId:", ownerCardId)
   }, [debugOwner, ownerCardId])
 
-  const debugOwnerLastKeyRef = useRef<string>("")
-  useEffect(() => {
-    if (!debugOwner) return
-    const first5 = finalCards.slice(0, 5).map((c) => c.id)
-    const key = `${ownerCardId ?? ""}|${first5.join(",")}`
-    if (debugOwnerLastKeyRef.current === key) return
-    debugOwnerLastKeyRef.current = key
-    console.log("[debug] finalCards first5:", first5)
-  }, [debugOwner, ownerCardId, finalCards])
-
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
     if (budget === "custom") {
@@ -1072,6 +1065,22 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     () => creators.filter((c) => fav.favoriteIds.has(c.id)),
     [creators, fav.favoriteIds]
   )
+
+  // TEMP DEBUG (remove after verification): prove which array is rendered in the grid.
+  // The final render uses: finalCards.map(...)
+  const debugRenderLastKeyRef = useRef<string>("")
+  if (debugOwner) {
+    const renderCards = finalCards
+    const renderFirst5 = renderCards.slice(0, 5).map((c) => c.id)
+    const finalFirst5 = finalCards.slice(0, 5).map((c) => c.id)
+    const key = `${renderFirst5.join(",")}|${finalFirst5.join(",")}`
+    if (debugRenderLastKeyRef.current !== key) {
+      debugRenderLastKeyRef.current = key
+      console.log("[debug] render variable:", "finalCards")
+      console.log("[debug] renderCards(finalCards) first5:", renderFirst5)
+      console.log("[debug] finalCards first5:", finalFirst5)
+    }
+  }
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
