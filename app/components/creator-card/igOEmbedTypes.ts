@@ -10,6 +10,10 @@ export type OEmbedSuccess = {
   mediaType?: string
   title?: string
   source?: "oembed" | "og"
+  html?: string
+  authorName?: string
+  providerName?: string
+  mediaId?: string
   data?: {
     thumbnail_url?: string
     thumbnail_width?: number
@@ -18,6 +22,8 @@ export type OEmbedSuccess = {
     author_name?: string
     provider_name?: string
     type?: string
+    html?: string
+    media_id?: string
   }
   [k: string]: any
 }

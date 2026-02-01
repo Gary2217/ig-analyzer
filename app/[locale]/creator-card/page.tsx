@@ -46,52 +46,17 @@ function buildInstagramDirectMediaUrl(url: string): string | null {
 async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: string | null; mediaType: string | null }> {
   const directMediaUrl = buildInstagramDirectMediaUrl(normalizedUrl)
 
+  const inferredType =
+    normalizedUrl.includes("/reel/") ? "reel" :
+    normalizedUrl.includes("/tv/") ? "video" :
+    normalizedUrl.includes("/p/") ? "image" : null
+
   if (directMediaUrl) {
-    const proxyThumbUrl = `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}` 
-    try {
-      const tRes = await fetch(proxyThumbUrl, { cache: "no-store" })
-      if (tRes.ok) {
-        const inferredType =
-          normalizedUrl.includes("/reel/") ? "reel" :
-          normalizedUrl.includes("/tv/") ? "video" : "image"
-
-        // Optional: improve mediaType via oEmbed, best-effort
-        let oembedType: string | null = null
-        try {
-          const oData = await fetchOEmbedStrict(normalizedUrl)
-          if (oData.ok === true) {
-            const anyData = oData as any
-            oembedType = (anyData.mediaType as string | undefined) ?? null
-          }
-        } catch {}
-
-        return {
-          // IMPORTANT: return the PROXY URL for UI rendering
-          thumbnailUrl: proxyThumbUrl,
-          mediaType: oembedType ?? inferredType,
-        }
-      }
-    } catch {
-      // ignore and continue
-    }
+    const proxyThumbUrl = `/api/ig/thumbnail?url=${encodeURIComponent(directMediaUrl)}`
+    return { thumbnailUrl: proxyThumbUrl, mediaType: inferredType }
   }
 
-  // Fallback: oEmbed (best-effort) => proxy the returned thumbnail URL for UI rendering
-  try {
-    const data = await fetchOEmbedStrict(normalizedUrl)
-    if (data.ok === true) {
-      const anyData = data as any
-      const rawThumb =
-        (typeof anyData.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ??
-        (typeof anyData.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null)
-
-      const proxyThumbUrl = rawThumb ? `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}` : null
-      const mediaType = (anyData.mediaType as string | undefined) ?? null
-      return { thumbnailUrl: proxyThumbUrl, mediaType }
-    }
-  } catch {}
-
-  return { thumbnailUrl: null, mediaType: null }
+  return { thumbnailUrl: null, mediaType: inferredType }
 }
 
 // Strict fetch helper: NEVER returns null, always returns explicit ok/error shape
@@ -305,6 +270,11 @@ type FeaturedItem = {
   text?: string
   isAdded?: boolean
   thumbnailUrl?: string | null
+  igMediaId?: string
+  igEmbedHtml?: string
+  igAuthorName?: string
+  igProviderName?: string
+  igEmbedSource?: "oembed" | "og"
 }
 
 function IgEmbedPreview({ url }: { url: string }) {
@@ -474,17 +444,13 @@ function SortableFeaturedTile(props: {
   onTextChange: (id: string, text: string, title?: string) => void
   onIgUrlChange: (id: string, url: string) => void
   onIgThumbnailClick?: (url: string) => void
-  igOEmbedCache: Record<string, OEmbedState>
-  onIgOEmbedFetch: (url: string, data: OEmbedState) => void
-  runIgOEmbedLimited: (task: () => Promise<void>) => Promise<void>
-  stopIgOEmbedRef: React.MutableRefObject<boolean>
+  fetchAndApplyIgOEmbedForItem: (opts: { itemId: string; normalizedUrl: string; mediaIdFromUrl: string | null }) => void
   setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
   markDirty: () => void
   suppressClick: boolean
 }) {
   const { item, t, activeLocale, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
-  const attemptedRef = useRef<Set<string>>(new Set())
 
   const itemType = item.type || "media"
 
@@ -560,149 +526,19 @@ function SortableFeaturedTile(props: {
   if (itemType === "ig") {
     // Normalize URL for consistent cache keys (remove trailing slash)
     const normalizedUrl = item.url ? item.url.trim().replace(/\/$/, "") : ""
-    const isValidIgUrl = normalizedUrl && (normalizedUrl.includes("instagram.com/p/") || normalizedUrl.includes("instagram.com/reel/") || normalizedUrl.includes("instagram.com/tv/"))
+    const extracted = normalizedUrl ? extractInstagramShortcode(normalizedUrl) : null
+    const isValidIgUrl = Boolean(extracted)
     const isAdded = item.isAdded ?? false
-    const oembedData = props.igOEmbedCache[normalizedUrl]
     const persistedThumb = normalizeIgThumbnailUrlOrNull(item.thumbnailUrl)
     const hasPersistedThumb = Boolean(persistedThumb)
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
-    const [manualRetryStatus, setManualRetryStatus] = useState<"idle" | "loading" | "rate_limited" | "error">("idle")
 
     // Reset thumbnail error when URL changes
     useEffect(() => {
       setThumbnailLoadError(false)
       setRetryKey(0)
-      setManualRetryStatus("idle")
     }, [normalizedUrl])
-
-    const manualRetryThumb = useCallback(async () => {
-      if (!isValidIgUrl || !normalizedUrl) return
-      if (hasPersistedThumb && !thumbnailLoadError) return
-      if (props.stopIgOEmbedRef.current) return
-
-      setManualRetryStatus("loading")
-      try {
-        await props.runIgOEmbedLimited(async () => {
-          if (props.stopIgOEmbedRef.current) return
-
-          const response = await fetchOEmbedStrict(normalizedUrl)
-          if (response.ok === false) {
-            const httpStatus = response.error?.status
-            if (httpStatus === 429) {
-              props.stopIgOEmbedRef.current = true
-              props.onIgOEmbedFetch(normalizedUrl, {
-                status: "rate_limited",
-                retryAtMs: Date.now(),
-                errorMessage: response.error?.message ?? "Rate limited",
-              })
-              setManualRetryStatus("rate_limited")
-              return
-            }
-
-            props.onIgOEmbedFetch(normalizedUrl, {
-              status: "error",
-              httpStatus,
-              errorMessage: response.error?.message ?? "Preview unavailable",
-            })
-            setManualRetryStatus("error")
-            return
-          }
-
-          const anyData = response as any
-          const rawThumb =
-            (typeof anyData.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ?? 
-            (typeof anyData.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null)
-          const proxyThumbUrl = rawThumb ? `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}` : null
-          const nextThumb = normalizeIgThumbnailUrlOrNull(proxyThumbUrl)
-          const mediaType = (anyData.mediaType as FeaturedItem["mediaType"] | undefined) ?? undefined
-
-          setFeaturedItems((prev) =>
-            prev.map((x) => (x.id === item.id ? { ...x, thumbnailUrl: nextThumb, mediaType: mediaType ?? x.mediaType } : x))
-          )
-          markDirty()
-
-          props.onIgOEmbedFetch(normalizedUrl, {
-            status: "success",
-            data: response,
-          })
-          setThumbnailLoadError(false)
-          setRetryKey((prev) => prev + 1)
-          setManualRetryStatus("idle")
-        })
-      } catch (e: any) {
-        props.onIgOEmbedFetch(normalizedUrl, {
-          status: "error",
-          errorMessage: e?.message ?? "Network error",
-        })
-        setManualRetryStatus("error")
-      }
-    }, [hasPersistedThumb, isValidIgUrl, item.id, markDirty, normalizedUrl, props, setFeaturedItems, thumbnailLoadError])
-
-    // Fetch oEmbed data for thumbnail using strict fetch
-    const fetchOEmbed = useCallback(async () => {
-      if (!isValidIgUrl || !normalizedUrl) return
-      if (props.stopIgOEmbedRef.current) return
-      if (hasPersistedThumb) return
-
-      // Set loading state
-      props.onIgOEmbedFetch(normalizedUrl, {
-        status: "loading",
-      })
-
-      try {
-        await props.runIgOEmbedLimited(async () => {
-          if (props.stopIgOEmbedRef.current) return
-          const response = await fetchOEmbedStrict(normalizedUrl)
-
-          if (response.ok === false) {
-            const httpStatus = response.error?.status
-            if (httpStatus === 429) {
-              props.stopIgOEmbedRef.current = true
-              props.onIgOEmbedFetch(normalizedUrl, {
-                status: "rate_limited",
-                retryAtMs: Date.now(),
-                errorMessage: response.error?.message ?? "Rate limited",
-              })
-              return
-            }
-            // Error response
-            props.onIgOEmbedFetch(normalizedUrl, {
-              status: "error",
-              httpStatus,
-              errorMessage: response.error?.message ?? "Preview unavailable",
-            })
-          } else {
-            // Success response
-            props.onIgOEmbedFetch(normalizedUrl, {
-              status: "success",
-              data: response,
-            })
-          }
-        })
-      } catch (e: any) {
-        // Should not happen with fetchOEmbedStrict, but handle just in case
-        props.onIgOEmbedFetch(normalizedUrl, {
-          status: "error",
-          errorMessage: e?.message ?? "Network error",
-        })
-      }
-    }, [normalizedUrl, isValidIgUrl, props, hasPersistedThumb])
-
-    useEffect(() => {
-      if (!normalizedUrl) return
-      if (!isValidIgUrl) return
-      if (props.stopIgOEmbedRef.current) return
-      if (hasPersistedThumb) return
-
-      // If we already have success/error for this URL, don't refetch automatically
-      const st = props.igOEmbedCache[normalizedUrl]?.status
-      if (st === "success" || st === "error" || st === "rate_limited" || st === "loading") return
-
-      if (attemptedRef.current.has(normalizedUrl)) return
-      attemptedRef.current.add(normalizedUrl)
-      fetchOEmbed()
-    }, [normalizedUrl, isValidIgUrl, fetchOEmbed])
 
     return (
       <div
@@ -763,91 +599,19 @@ function SortableFeaturedTile(props: {
           </>
         )}
 
-        {/* Show loading skeleton while fetching oEmbed */}
-        {normalizedUrl && isValidIgUrl && oembedData?.status === "loading" ? (
+        {normalizedUrl && isValidIgUrl ? (
           <a
             href={normalizedUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: 'auto' }}
+            style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 animate-pulse">
-              <div className="h-12 w-12 rounded-full bg-white/10" />
-              <div className="h-3 w-24 rounded bg-white/10" />
-            </div>
-          </a>
-        ) : normalizedUrl && isValidIgUrl && (oembedData?.status === "error" || oembedData?.status === "rate_limited") ? (
-          <a
-            href={normalizedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 p-6 text-center"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <svg className="w-10 h-10 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-            <span className="text-xs leading-tight text-white/70 break-words">
-              {activeLocale === "zh-TW"
-                ? "無法載入預覽，點擊在 Instagram 開啟"
-                : "Preview unavailable. Open on Instagram."}
-            </span>
-            <span className="text-[11px] leading-tight text-white/40 break-words">
-              {t("results.mediaKit.featured.tapToOpen")}
-            </span>
-          </a>
-        ) : normalizedUrl && isValidIgUrl && (!hasPersistedThumb || thumbnailLoadError) && !props.stopIgOEmbedRef.current ? (
-          <div className="pt-1">
-            <div className="min-h-[44px] flex flex-col gap-2">
-              <button
-                type="button"
-                className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10 hover:border-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ minHeight: "44px" }}
-                disabled={manualRetryStatus === "loading"}
-                onPointerDownCapture={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                }}
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  manualRetryThumb()
-                }}
-              >
-                {manualRetryStatus === "loading" ? (activeLocale === "zh-TW" ? "抓取中…" : "Retrying…") : "重新抓縮圖 / Retry thumbnail"}
-              </button>
-
-              {manualRetryStatus === "rate_limited" ? (
-                <div className="text-[11px] leading-tight text-white/60">
-                  {activeLocale === "zh-TW"
-                    ? "Instagram 暫時限制請求，已顯示現有內容"
-                    : "Instagram rate-limited; showing existing content"}
-                </div>
-              ) : null}
-
-              {manualRetryStatus === "error" ? (
-                <div className="text-[11px] leading-tight text-white/60">
-                  {activeLocale === "zh-TW" ? "暫時無法抓取縮圖" : "Thumbnail unavailable"}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : normalizedUrl && isValidIgUrl && (persistedThumb || (oembedData?.status === "success" && oembedData.data.ok === true && (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url))) ? (
-          <a
-            href={normalizedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {!thumbnailLoadError ? (
+            {hasPersistedThumb && !thumbnailLoadError ? (
               <img
                 key={retryKey}
-                src={persistedThumb || (oembedData?.status === "success" ? (oembedData.data.thumbnailUrl || oembedData.data.data?.thumbnail_url) : undefined) || ""}
+                src={persistedThumb || ""}
                 alt="Instagram post thumbnail"
                 className="w-full h-full object-cover block"
                 loading="lazy"
@@ -858,45 +622,16 @@ function SortableFeaturedTile(props: {
                 }}
               />
             ) : (
-              <div className="relative w-full h-full flex flex-col items-center justify-center gap-3 p-6">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setThumbnailLoadError(false)
-                    setRetryKey(prev => prev + 1)
-                  }}
-                  className="absolute top-2 right-2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
-                  style={{ minWidth: "44px", minHeight: "44px" }}
-                  title="Retry loading thumbnail"
-                >
-                  <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-                <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6">
-                  <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-                  </svg>
-                  <div className="text-xs text-center text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
+                </svg>
+                <div className="text-sm font-semibold text-white/80" style={{ minHeight: "44px", display: "flex", alignItems: "center" }}>
+                  {t("creatorCard.featured.openOnInstagram")}
                 </div>
+                <div className="text-xs text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
               </div>
             )}
-          </a>
-        ) : normalizedUrl && isValidIgUrl ? (
-          <a
-            href={normalizedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer flex flex-col items-center justify-center gap-3 p-6 text-center"
-            style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
-            </svg>
-            <div className="text-xs text-center text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
           </a>
         ) : null}
         
@@ -906,8 +641,12 @@ function SortableFeaturedTile(props: {
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              setFeaturedItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, isAdded: true } : x)))
+              const mediaIdFromUrl = extracted?.code ? String(extracted.code) : null
+              setFeaturedItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, isAdded: true, igMediaId: mediaIdFromUrl ?? x.igMediaId } : x)))
               markDirty()
+
+              // Explicit action: fetch oEmbed once on Add (never during render/hydration)
+              props.fetchAndApplyIgOEmbedForItem({ itemId: item.id, normalizedUrl, mediaIdFromUrl })
             }}
             className="w-full px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors"
           >
@@ -1339,6 +1078,9 @@ export default function CreatorCardPage() {
   const [igModalUrl, setIgModalUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>({})
 
+  const igOEmbedByMediaIdRef = useRef<Record<string, OEmbedSuccess>>({})
+  const igOEmbedInFlightByUrlRef = useRef<Set<string>>(new Set())
+
   const stopIgOEmbedRef = useRef(false)
   const igOEmbedInFlightRef = useRef(0)
   const igOEmbedQueueRef = useRef<Array<() => void>>([])
@@ -1371,6 +1113,107 @@ export default function CreatorCardPage() {
       igOEmbedQueueRef.current.push(run)
     })
   }, [])
+
+  const fetchAndApplyIgOEmbedForItem = useCallback(
+    async (opts: { itemId: string; normalizedUrl: string; mediaIdFromUrl: string | null }) => {
+      const { itemId, normalizedUrl, mediaIdFromUrl } = opts
+      if (!normalizedUrl) return
+      if (stopIgOEmbedRef.current) return
+
+      try {
+        const cachedByUrl = igOEmbedCache[normalizedUrl]
+        const cachedSuccessByUrl =
+          cachedByUrl?.status === "success" && (cachedByUrl as any).data?.ok === true
+            ? ((cachedByUrl as any).data as OEmbedSuccess)
+            : null
+        const cachedByMediaId = mediaIdFromUrl ? igOEmbedByMediaIdRef.current[mediaIdFromUrl] : null
+
+        const applyEmbed = (o: OEmbedSuccess) => {
+          const anyData = o as any
+          const rawThumb =
+            (typeof anyData.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ??
+            (typeof anyData.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null)
+          const proxyThumbUrl = rawThumb ? `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}` : null
+          const nextThumb = normalizeIgThumbnailUrlOrNull(proxyThumbUrl)
+          const nextMediaType = (anyData.mediaType as FeaturedItem["mediaType"] | undefined) ?? undefined
+          const nextMediaId =
+            (typeof anyData.mediaId === "string" ? anyData.mediaId : null) ??
+            (typeof anyData.data?.media_id === "string" ? anyData.data.media_id : null) ??
+            mediaIdFromUrl
+          const nextSource = typeof anyData.source === "string" ? (anyData.source as any) : undefined
+          const nextHtml = typeof anyData.html === "string" ? anyData.html : undefined
+          const nextAuthor =
+            typeof anyData.authorName === "string"
+              ? anyData.authorName
+              : typeof anyData.data?.author_name === "string"
+                ? anyData.data.author_name
+                : undefined
+          const nextProvider =
+            typeof anyData.providerName === "string"
+              ? anyData.providerName
+              : typeof anyData.data?.provider_name === "string"
+                ? anyData.data.provider_name
+                : undefined
+
+          setFeaturedItems((prev) =>
+            prev.map((x) =>
+              x.id === itemId
+                ? {
+                    ...x,
+                    thumbnailUrl: nextThumb ?? x.thumbnailUrl,
+                    mediaType: nextMediaType ?? x.mediaType,
+                    igMediaId: typeof nextMediaId === "string" ? nextMediaId : x.igMediaId,
+                    igEmbedSource: nextSource,
+                    igEmbedHtml: nextHtml,
+                    igAuthorName: nextAuthor,
+                    igProviderName: nextProvider,
+                  }
+                : x
+            )
+          )
+          markDirty()
+        }
+
+        if (cachedSuccessByUrl) {
+          applyEmbed(cachedSuccessByUrl)
+          return
+        }
+        if (cachedByMediaId) {
+          applyEmbed(cachedByMediaId)
+          return
+        }
+
+        if (igOEmbedInFlightByUrlRef.current.has(normalizedUrl)) return
+        igOEmbedInFlightByUrlRef.current.add(normalizedUrl)
+
+        await runIgOEmbedLimited(async () => {
+          const r = await fetchOEmbedStrict(normalizedUrl)
+          if (r.ok === true) {
+            const s = r as OEmbedSuccess
+            setIgOEmbedCache((prev) => ({ ...prev, [normalizedUrl]: { status: "success", data: s } }))
+            const anyS = s as any
+            const resolvedMediaId =
+              (typeof anyS.mediaId === "string" ? anyS.mediaId : null) ??
+              (typeof anyS.data?.media_id === "string" ? anyS.data.media_id : null) ??
+              mediaIdFromUrl
+            if (resolvedMediaId) igOEmbedByMediaIdRef.current[resolvedMediaId] = s
+            applyEmbed(s)
+            return
+          }
+
+          const httpStatus = (r as any)?.error?.status
+          if (httpStatus === 429) {
+            stopIgOEmbedRef.current = true
+          }
+        })
+      } catch {
+        // swallow
+      } finally {
+        igOEmbedInFlightByUrlRef.current.delete(opts.normalizedUrl)
+      }
+    },
+    [igOEmbedCache, markDirty, runIgOEmbedLimited]
+  )
 
   const [__overlayMounted, set__overlayMounted] = useState(false)
   useEffect(() => {
@@ -2257,6 +2100,11 @@ export default function CreatorCardPage() {
         title: item.title || "",
         text: item.text || "",
         thumbnailUrl: item.type === "ig" ? normalizeIgThumbnailUrlOrNull(item.thumbnailUrl) : (typeof item.thumbnailUrl === "string" ? item.thumbnailUrl : null),
+        igMediaId: typeof item.igMediaId === "string" ? item.igMediaId : undefined,
+        igEmbedHtml: typeof item.igEmbedHtml === "string" ? item.igEmbedHtml : undefined,
+        igAuthorName: typeof item.igAuthorName === "string" ? item.igAuthorName : undefined,
+        igProviderName: typeof item.igProviderName === "string" ? item.igProviderName : undefined,
+        igEmbedSource: item.igEmbedSource === "oembed" || item.igEmbedSource === "og" ? item.igEmbedSource : undefined,
       }))
       
       setFeaturedItems(restoredItems)
@@ -2490,6 +2338,11 @@ export default function CreatorCardPage() {
               url: x.url || "",
               caption: x.caption || "",
               thumbnailUrl: x.thumbnailUrl ?? null,
+              igMediaId: x.igMediaId || undefined,
+              igEmbedHtml: x.igEmbedHtml || undefined,
+              igAuthorName: x.igAuthorName || undefined,
+              igProviderName: x.igProviderName || undefined,
+              igEmbedSource: x.igEmbedSource || undefined,
               order: idx,
             }
           }
@@ -2521,6 +2374,11 @@ export default function CreatorCardPage() {
               url: x.url || "",
               caption: x.caption || "",
               thumbnailUrl: x.thumbnailUrl ?? null,
+              igMediaId: x.igMediaId || undefined,
+              igEmbedHtml: x.igEmbedHtml || undefined,
+              igAuthorName: x.igAuthorName || undefined,
+              igProviderName: x.igProviderName || undefined,
+              igEmbedSource: x.igEmbedSource || undefined,
               order: idx,
             }
           }
@@ -2626,6 +2484,11 @@ export default function CreatorCardPage() {
               url: x.url || "",
               caption: x.caption || "",
               thumbnailUrl: x.thumbnailUrl || undefined,
+              igMediaId: x.igMediaId || undefined,
+              igEmbedHtml: x.igEmbedHtml || undefined,
+              igAuthorName: x.igAuthorName || undefined,
+              igProviderName: x.igProviderName || undefined,
+              igEmbedSource: x.igEmbedSource || undefined,
               order: idx,
             }
           }
@@ -2744,6 +2607,11 @@ export default function CreatorCardPage() {
               url: x.url || "",
               caption: x.caption || "",
               thumbnailUrl: x.thumbnailUrl || undefined,
+              igMediaId: x.igMediaId || undefined,
+              igEmbedHtml: x.igEmbedHtml || undefined,
+              igAuthorName: x.igAuthorName || undefined,
+              igProviderName: x.igProviderName || undefined,
+              igEmbedSource: x.igEmbedSource || undefined,
               order: idx,
             }
           }
@@ -3662,19 +3530,6 @@ export default function CreatorCardPage() {
                                         ok: true 
                                       } 
                                     })
-                                    
-                                    // Write-through cache on oEmbed success
-                                    setIgOEmbedCache(prev => ({
-                                      ...prev,
-                                      [normalized]: { 
-                                        status: "success", 
-                                        data: { 
-                                          ok: true, 
-                                          thumbnailUrl: preview.thumbnailUrl || undefined, 
-                                          mediaType: preview.mediaType || undefined 
-                                        } as OEmbedSuccess
-                                      }
-                                    }))
                                   } catch (e) {
                                     setPendingIg({ url: normalized, status: "error" })
                                   }
@@ -3880,7 +3735,18 @@ export default function CreatorCardPage() {
                                           return existingUrl === normalizedUrl
                                         })
 
-                                        if (isDuplicate) {
+                                        const extracted = extractInstagramShortcode(normalizedUrl)
+                                        const mediaIdFromUrl = extracted?.code ? String(extracted.code) : null
+                                        const isMediaIdDup =
+                                          Boolean(mediaIdFromUrl) &&
+                                          featuredItems.some((x) => {
+                                            if (x.type !== "ig") return false
+                                            if (x.igMediaId && x.igMediaId === mediaIdFromUrl) return true
+                                            const xCode = extractInstagramShortcode(String(x.url || "")?.trim() || "")?.code
+                                            return Boolean(xCode) && String(xCode) === mediaIdFromUrl
+                                          })
+
+                                        if (isDuplicate || isMediaIdDup) {
                                           showToast(activeLocale === "zh-TW" ? "已新增過這則貼文" : "This post is already added")
                                           return
                                         }
@@ -3892,19 +3758,6 @@ export default function CreatorCardPage() {
                                           const preview = await resolveIgPreview(normalizedUrl)
                                           thumbnailUrl = normalizeIgThumbnailUrlOrNull(preview.thumbnailUrl)
                                           mediaType = (preview.mediaType || undefined) as FeaturedItem["mediaType"] | undefined
-
-                                          // Write-through cache on success
-                                          setIgOEmbedCache(prev => ({
-                                            ...prev,
-                                            [normalizedUrl]: {
-                                              status: "success",
-                                              data: {
-                                                ok: true,
-                                                thumbnailUrl: thumbnailUrl ?? undefined,
-                                                mediaType,
-                                              } as any,
-                                            },
-                                          }))
                                         } catch {
                                           // Proceed without thumbnail; left-side card should show fallback
                                         }
@@ -3921,6 +3774,7 @@ export default function CreatorCardPage() {
                                           isAdded: true,
                                           thumbnailUrl,
                                           mediaType,
+                                          igMediaId: mediaIdFromUrl ?? undefined,
                                         }
 
                                         setFeaturedItems(prev => {
@@ -3931,6 +3785,82 @@ export default function CreatorCardPage() {
 
                                         setPendingIg({ ...pendingIg, status: "added", oembed: { ...(pendingIg as any)?.oembed, thumbnailUrl, mediaType } })
                                         markDirty()
+
+                                        // Fetch oEmbed ONLY on add, best-effort; persist fields into the item for DB caching.
+                                        // Dedupe: if we already cached by URL or mediaId, reuse cached response without refetching.
+                                        try {
+                                          const cachedByUrl = igOEmbedCache[normalizedUrl]
+                                          const cachedSuccessByUrl = cachedByUrl?.status === "success" && (cachedByUrl as any).data?.ok === true ? ((cachedByUrl as any).data as OEmbedSuccess) : null
+                                          const cachedByMediaId = mediaIdFromUrl ? igOEmbedByMediaIdRef.current[mediaIdFromUrl] : null
+
+                                          const applyEmbed = (o: OEmbedSuccess) => {
+                                            const anyData = o as any
+                                            const rawThumb =
+                                              (typeof anyData.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ??
+                                              (typeof anyData.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null)
+                                            const proxyThumbUrl = rawThumb ? `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}` : null
+                                            const nextThumb = normalizeIgThumbnailUrlOrNull(proxyThumbUrl) ?? thumbnailUrl
+                                            const nextMediaType = (anyData.mediaType as FeaturedItem["mediaType"] | undefined) ?? mediaType
+                                            const nextMediaId =
+                                              (typeof anyData.mediaId === "string" ? anyData.mediaId : null) ??
+                                              (typeof anyData.data?.media_id === "string" ? anyData.data.media_id : null) ??
+                                              mediaIdFromUrl
+                                            const nextSource = typeof anyData.source === "string" ? (anyData.source as any) : undefined
+                                            const nextHtml = typeof anyData.html === "string" ? anyData.html : undefined
+                                            const nextAuthor = typeof anyData.authorName === "string" ? anyData.authorName : (typeof anyData.data?.author_name === "string" ? anyData.data.author_name : undefined)
+                                            const nextProvider = typeof anyData.providerName === "string" ? anyData.providerName : (typeof anyData.data?.provider_name === "string" ? anyData.data.provider_name : undefined)
+
+                                            setFeaturedItems((prev) =>
+                                              prev.map((x) =>
+                                                x.id === id
+                                                  ? {
+                                                      ...x,
+                                                      thumbnailUrl: nextThumb,
+                                                      mediaType: nextMediaType,
+                                                      igMediaId: typeof nextMediaId === "string" ? nextMediaId : x.igMediaId,
+                                                      igEmbedSource: nextSource,
+                                                      igEmbedHtml: nextHtml,
+                                                      igAuthorName: nextAuthor,
+                                                      igProviderName: nextProvider,
+                                                    }
+                                                  : x
+                                              )
+                                            )
+                                            markDirty()
+                                          }
+
+                                          if (cachedSuccessByUrl) {
+                                            applyEmbed(cachedSuccessByUrl)
+                                          } else if (cachedByMediaId) {
+                                            applyEmbed(cachedByMediaId)
+                                          } else if (!igOEmbedInFlightByUrlRef.current.has(normalizedUrl) && !stopIgOEmbedRef.current) {
+                                            igOEmbedInFlightByUrlRef.current.add(normalizedUrl)
+                                            await runIgOEmbedLimited(async () => {
+                                              const r = await fetchOEmbedStrict(normalizedUrl)
+                                              if (r.ok === true) {
+                                                const s = r as OEmbedSuccess
+                                                setIgOEmbedCache((prev) => ({ ...prev, [normalizedUrl]: { status: "success", data: s } }))
+                                                const anyS = s as any
+                                                const resolvedMediaId =
+                                                  (typeof anyS.mediaId === "string" ? anyS.mediaId : null) ??
+                                                  (typeof anyS.data?.media_id === "string" ? anyS.data.media_id : null) ??
+                                                  mediaIdFromUrl
+                                                if (resolvedMediaId) igOEmbedByMediaIdRef.current[resolvedMediaId] = s
+                                                applyEmbed(s)
+                                                return
+                                              }
+
+                                              const httpStatus = (r as any)?.error?.status
+                                              if (httpStatus === 429) {
+                                                stopIgOEmbedRef.current = true
+                                              }
+                                            })
+                                          }
+                                        } catch {
+                                          // swallow
+                                        } finally {
+                                          igOEmbedInFlightByUrlRef.current.delete(normalizedUrl)
+                                        }
 
                                         // Reset after delay
                                         setTimeout(() => {
@@ -4001,16 +3931,29 @@ export default function CreatorCardPage() {
                                       markDirty()
                                     }}
                                     onIgUrlChange={(id, url) => {
-                                      setFeaturedItems((prev) => prev.map((x) => (x.id === id ? { ...x, url } : x)))
+                                      setFeaturedItems((prev) =>
+                                        prev.map((x) => {
+                                          if (x.id !== id) return x
+                                          if (x.type !== "ig") return { ...x, url }
+                                          // Treat URL change as a replace: keep tile visible but require explicit Add again.
+                                          return {
+                                            ...x,
+                                            url,
+                                            isAdded: false,
+                                            thumbnailUrl: null,
+                                            mediaType: undefined,
+                                            igMediaId: undefined,
+                                            igEmbedHtml: undefined,
+                                            igAuthorName: undefined,
+                                            igProviderName: undefined,
+                                            igEmbedSource: undefined,
+                                          }
+                                        })
+                                      )
                                       markDirty()
                                     }}
                                     onIgThumbnailClick={(url) => setIgModalUrl(url)}
-                                    igOEmbedCache={igOEmbedCache}
-                                    onIgOEmbedFetch={(url, data) => {
-                                      setIgOEmbedCache((prev) => ({ ...prev, [url]: data }))
-                                    }}
-                                    runIgOEmbedLimited={runIgOEmbedLimited}
-                                    stopIgOEmbedRef={stopIgOEmbedRef}
+                                    fetchAndApplyIgOEmbedForItem={fetchAndApplyIgOEmbedForItem}
                                     setFeaturedItems={setFeaturedItems}
                                     markDirty={markDirty}
                                   />

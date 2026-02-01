@@ -16,6 +16,10 @@ type OEmbedSuccessResponse = {
   thumbnailUrl: string
   mediaType: "image" | "video" | "reel" | "unknown"
   title?: string
+  html?: string
+  authorName?: string
+  providerName?: string
+  mediaId?: string
   source: "oembed" | "og"
   data: {
     thumbnail_url: string
@@ -24,6 +28,8 @@ type OEmbedSuccessResponse = {
     author_name: string
     provider_name: string
     type?: string
+    html?: string
+    media_id?: string
   }
 }
 
@@ -40,6 +46,21 @@ type OEmbedResponse = OEmbedSuccessResponse | OEmbedErrorResponse
 function isHtmlishBody(body: string): boolean {
   const s = body.trim().slice(0, 500).toLowerCase()
   return s.includes("<html") || s.includes("<!doctype") || s.includes("<head")
+}
+
+function extractMediaIdFromInstagramUrl(url: string): string | null {
+  try {
+    const u = new URL(url)
+    const parts = u.pathname.split("/").filter(Boolean)
+    if (parts.length < 2) return null
+    const kind = parts[0]
+    const code = parts[1]
+    if (!code) return null
+    if (kind !== "p" && kind !== "reel" && kind !== "tv") return null
+    return code
+  } catch {
+    return null
+  }
 }
 
 // Helper function to detect media type from URL and oEmbed data
@@ -180,11 +201,16 @@ export async function GET(request: NextRequest) {
       }
       const ogData = await scrapeOgImage(url)
       if (ogData) {
+        const fallbackMediaId = extractMediaIdFromInstagramUrl(url)
         const successResponse: OEmbedSuccessResponse = {
           ok: true,
           thumbnailUrl: ogData.thumbnailUrl,
           mediaType: detectMediaType(url),
           title: ogData.title,
+          html: undefined,
+          authorName: ogData.title,
+          providerName: "Instagram",
+          mediaId: fallbackMediaId ?? undefined,
           source: "og",
           data: {
             thumbnail_url: ogData.thumbnailUrl,
@@ -192,6 +218,8 @@ export async function GET(request: NextRequest) {
             thumbnail_height: 640,
             author_name: ogData.title || "",
             provider_name: "Instagram",
+            html: undefined,
+            media_id: fallbackMediaId ?? undefined,
           },
         }
 
@@ -252,11 +280,16 @@ export async function GET(request: NextRequest) {
       }
       const ogData = await scrapeOgImage(url)
       if (ogData) {
+        const fallbackMediaId = extractMediaIdFromInstagramUrl(url)
         const successResponse: OEmbedSuccessResponse = {
           ok: true,
           thumbnailUrl: ogData.thumbnailUrl,
           mediaType: detectMediaType(url),
           title: ogData.title,
+          html: undefined,
+          authorName: ogData.title,
+          providerName: "Instagram",
+          mediaId: fallbackMediaId ?? undefined,
           source: "og",
           data: {
             thumbnail_url: ogData.thumbnailUrl,
@@ -264,6 +297,8 @@ export async function GET(request: NextRequest) {
             thumbnail_height: 640,
             author_name: ogData.title || "",
             provider_name: "Instagram",
+            html: undefined,
+            media_id: fallbackMediaId ?? undefined,
           },
         }
 
@@ -386,11 +421,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Return normalized response
+    // Use URL shortcode as stable mediaId for deduplication (upstream media_id can be an internal numeric id)
+    const mediaId = extractMediaIdFromInstagramUrl(url)
+
     const successResponse: OEmbedSuccessResponse = {
       ok: true,
       thumbnailUrl: data.thumbnail_url,
       mediaType: detectMediaType(url, data.type),
       title: data.author_name,
+      html: typeof data.html === "string" ? data.html : undefined,
+      authorName: typeof data.author_name === "string" ? data.author_name : undefined,
+      providerName: typeof data.provider_name === "string" ? data.provider_name : "Instagram",
+      mediaId: mediaId ?? undefined,
       source: "oembed",
       data: {
         thumbnail_url: data.thumbnail_url,
@@ -399,6 +441,8 @@ export async function GET(request: NextRequest) {
         author_name: data.author_name || "",
         provider_name: data.provider_name || "Instagram",
         type: data.type,
+        html: typeof data.html === "string" ? data.html : undefined,
+        media_id: typeof (data as any)?.media_id === "string" ? String((data as any).media_id) : (mediaId ?? undefined),
       },
     }
 
