@@ -163,6 +163,14 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
                 search={q}
                 onSearch={(value: string) => setQ(value)}
                 platform={platform}
+                platformOptions={
+                  [
+                    { value: "any", label: "Any" },
+                    { value: "instagram", label: "Instagram" },
+                    { value: "tiktok", label: "TikTok" },
+                    { value: "youtube", label: "YouTube" },
+                  ] as Array<{ value: Platform | "any"; label: string }>
+                }
                 onPlatform={setPlatform}
                 budget={budget}
                 onBudget={(v) => {
@@ -171,7 +179,17 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
                 }}
                 customBudget={customBudget}
                 onCustomBudget={setCustomBudget}
+                onClearCustomBudget={() => setCustomBudget("")}
                 selectedTypes={selectedTypes}
+                typeOptions={
+                  [
+                    { value: "post", label: "Post" },
+                    { value: "reel", label: "Reel" },
+                    { value: "story", label: "Story" },
+                    { value: "shorts", label: "Shorts" },
+                    { value: "live", label: "Live" },
+                  ] as Array<{ value: TypeKey; label: string }>
+                }
                 onToggleType={(t: TypeKey) =>
                   setSelectedTypes((prev) =>
                     prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
@@ -210,7 +228,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         locale={locale}
         open={favOpen}
         onClose={() => setFavOpen(false)}
-        favorites={cards.filter((c) => fav.favoriteIds.has(c.id))}
+        favorites={cards.filter((c) => fav.favoriteIds.has(c.id)) as unknown as any[]}
         onClearAll={fav.clearAll}
       />
     </div>
