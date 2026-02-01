@@ -257,6 +257,16 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
 
+  const debugOwner = useMemo(() => {
+    try {
+      if (typeof window === "undefined") return false
+      const qp = new URLSearchParams(window.location.search)
+      return qp.get("debugOwner") === "1"
+    } catch {
+      return false
+    }
+  }, [])
+
   const statsCacheRef = useRef(
     new Map<
       string,
@@ -460,6 +470,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           credentials: "include",
         })
         const meJson = (await meRes.json().catch(() => null)) as any
+
+        if (debugOwner) {
+          console.log("[debug] /api/creator-card/me response status:", meRes.status)
+          console.log("[debug] /api/creator-card/me json:", meJson)
+        }
+
         if (!meRes.ok || meJson?.ok !== true) return
 
         const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
@@ -611,6 +627,13 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
               ? (c as any).engagementRate
               : undefined
 
+      const rawMinPrice =
+        typeof (c as any).minPrice === "number" && Number.isFinite((c as any).minPrice)
+          ? (c as any).minPrice
+          : typeof (c as any).min_price === "number" && Number.isFinite((c as any).min_price)
+            ? (c as any).min_price
+            : undefined
+
       return {
         id: c.id,
         creatorId: creatorIdStr ?? undefined,
@@ -621,7 +644,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
         collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
         deliverables,
-        minPrice: typeof (c as any).minPrice === "number" && Number.isFinite((c as any).minPrice) ? Math.max(0, Math.floor((c as any).minPrice)) : undefined,
+        minPrice: typeof rawMinPrice === "number" ? Math.max(0, Math.floor(rawMinPrice)) : undefined,
         stats: {
           followers: rawFollowers,
           engagementRate: rawER,
@@ -814,6 +837,24 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
   const finalCards = useMemo(() => pinOwnerCardFirst(filtered, ownerCardId), [filtered, ownerCardId])
+
+  const debugOwnerLastOwnerCardIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!debugOwner) return
+    if (debugOwnerLastOwnerCardIdRef.current === ownerCardId) return
+    debugOwnerLastOwnerCardIdRef.current = ownerCardId
+    console.log("[debug] ownerCardId:", ownerCardId)
+  }, [debugOwner, ownerCardId])
+
+  const debugOwnerLastKeyRef = useRef<string>("")
+  useEffect(() => {
+    if (!debugOwner) return
+    const first5 = finalCards.slice(0, 5).map((c) => c.id)
+    const key = `${ownerCardId ?? ""}|${first5.join(",")}`
+    if (debugOwnerLastKeyRef.current === key) return
+    debugOwnerLastKeyRef.current = key
+    console.log("[debug] finalCards first5:", first5)
+  }, [debugOwner, ownerCardId, finalCards])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
