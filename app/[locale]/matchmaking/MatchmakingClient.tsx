@@ -96,6 +96,15 @@ function toNumericString(v: unknown): string | null {
   return null
 }
 
+function dedupeCardsById(items: CreatorCard[]) {
+  const map = new Map<string, CreatorCard>()
+  for (const it of items) {
+    if (!it || typeof it.id !== "string") continue
+    if (!map.has(it.id)) map.set(it.id, it)
+  }
+  return Array.from(map.values())
+}
+
 function computeEngagementRatePct(input: {
   engagementRatePct?: number | null
   followers?: number | null
@@ -241,6 +250,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [ownerCreatorId, setOwnerCreatorId] = useState<string | null>(null)
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
+  const [ownerCard, setOwnerCard] = useState<CreatorCard | null>(null)
 
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
   const [favOpen, setFavOpen] = useState(false)
@@ -274,8 +284,8 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
   useEffect(() => {
-    setCards(initialCards)
-  }, [initialCards])
+    setCards(dedupeCardsById([...(ownerCard ? [ownerCard] : []), ...initialCards]))
+  }, [initialCards, ownerCard])
 
   /* ---------------- AUTH CHECK ---------------- */
   useEffect(() => {
@@ -294,11 +304,81 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const resolvedOwnerUserId = typeof card?.user_id === "string" ? card.user_id : typeof card?.userId === "string" ? card.userId : null
         const resolvedOwnerCardId = typeof card?.id === "string" ? card.id : null
 
+        const maybeOwnerCard: CreatorCard | null = (() => {
+          if (!card || typeof card !== "object") return null
+          const id = typeof card.id === "string" ? card.id : null
+          if (!id) return null
+
+          const displayNameRaw =
+            typeof card.displayName === "string"
+              ? card.displayName
+              : typeof card.display_name === "string"
+                ? card.display_name
+                : typeof card.ig_username === "string"
+                  ? card.ig_username
+                  : id
+          const displayName = String(displayNameRaw || id)
+
+          const avatarUrl = (() => {
+            const raw =
+              typeof card.profile_image_url === "string"
+                ? card.profile_image_url
+                : typeof card.profileImageUrl === "string"
+                  ? card.profileImageUrl
+                  : ""
+            const s = String(raw || "").trim()
+            return s ? s : svgAvatarDataUrl(String(id), displayName)
+          })()
+
+          const categoryRaw =
+            typeof card.niche === "string"
+              ? card.niche
+              : typeof card.category === "string"
+                ? card.category
+                : locale === "zh-TW"
+                  ? "創作者"
+                  : "Creator"
+
+          const deliverables = Array.isArray(card.deliverables)
+            ? (card.deliverables as unknown[]).filter((x): x is string => typeof x === "string")
+            : []
+
+          const minPrice =
+            typeof card.minPrice === "number"
+              ? card.minPrice
+              : typeof card.min_price === "number"
+                ? card.min_price
+                : null
+
+          const contact = typeof card.contact === "string" ? card.contact : null
+
+          return {
+            id,
+            creatorId: typeof card.creator_id === "string" ? card.creator_id : typeof card.creatorId === "string" ? card.creatorId : null,
+            userId: typeof card.user_id === "string" ? card.user_id : typeof card.userId === "string" ? card.userId : null,
+            igUserId: typeof card.ig_user_id === "string" ? card.ig_user_id : typeof card.igUserId === "string" ? card.igUserId : null,
+            displayName,
+            avatarUrl,
+            category: String(categoryRaw || ""),
+            deliverables,
+            minPrice,
+            contact,
+            followerCount: 0,
+            engagementRate: null,
+            isVerified: false,
+            profileUrl: `/${locale}/creator-card`,
+          }
+        })()
+
         if (!cancelled) {
           setIsLoggedIn(Boolean(res.ok))
           setOwnerCreatorId(resolvedOwnerCreatorId)
           setOwnerUserId(resolvedOwnerUserId)
           setOwnerCardId(resolvedOwnerCardId)
+          setOwnerCard(maybeOwnerCard)
+          if (maybeOwnerCard) {
+            setCards((prev) => dedupeCardsById([maybeOwnerCard, ...prev]))
+          }
           setAuthChecked(true)
         }
       } catch {
@@ -307,6 +387,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           setOwnerCreatorId(null)
           setOwnerUserId(null)
           setOwnerCardId(null)
+          setOwnerCard(null)
           setAuthChecked(true)
         }
       }
