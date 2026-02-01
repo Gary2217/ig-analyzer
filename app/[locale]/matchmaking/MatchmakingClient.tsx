@@ -43,7 +43,7 @@ function hashStringToInt(seed: string) {
 
 function mulberry32(a: number) {
   return function () {
-    let t = (a += 0x6D2B79F5)
+    let t = (a += 0x6d2b79f5)
     t = Math.imul(t ^ (t >>> 15), t | 1)
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
@@ -134,9 +134,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           <h1 className="text-[clamp(20px,4.2vw,28px)] font-semibold text-white/90">
             {uiCopy.matchmaking.pageHeadline}
           </h1>
-          <p className="mt-1 text-sm text-white/60">
-            {uiCopy.matchmaking.pageSubheadline}
-          </p>
+          <p className="mt-1 text-sm text-white/60">{uiCopy.matchmaking.pageSubheadline}</p>
         </div>
 
         {/* AUTH GATE */}
@@ -146,9 +144,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           </div>
         ) : !isLoggedIn ? (
           <div className="text-center mt-20">
-            <p className="text-white/80 mb-4">
-              {locale === "zh-TW" ? "請先登入" : "Please log in"}
-            </p>
+            <p className="text-white/80 mb-4">{locale === "zh-TW" ? "請先登入" : "Please log in"}</p>
             <button
               className="rounded-xl bg-white text-black px-5 py-3 font-semibold"
               onClick={() => {
@@ -161,10 +157,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         ) : (
           <>
             <div className="relative">
+              {/* ✅ 關鍵修正：註解不要放在 props 同一行尾巴 */}
               <FiltersBar
                 locale={locale}
                 search={q}
-                onSearch={(value: string) => setQ(value)}  {/* ✅ 關鍵修正 */}
+                onSearch={(value: string) => setQ(value)}
                 platform={platform}
                 onPlatform={setPlatform}
                 budget={budget}
