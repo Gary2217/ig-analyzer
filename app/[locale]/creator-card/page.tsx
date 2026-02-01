@@ -42,6 +42,74 @@ function buildInstagramDirectMediaUrl(url: string): string | null {
   }
 }
 
+function getLocalDateYYYYMMDD() {
+  const d = new Date()
+  const yyyy = String(d.getFullYear())
+  const mm = String(d.getMonth() + 1).padStart(2, "0")
+  const dd = String(d.getDate()).padStart(2, "0")
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function buildCcPinCardPayload(rawCard: unknown) {
+  const card = rawCard && typeof rawCard === "object" ? (rawCard as Record<string, unknown>) : null
+  if (!card) return null
+
+  const id = typeof card.id === "string" ? card.id : null
+  if (!id) return null
+
+  const igUserId =
+    typeof (card as any).ig_user_id === "string"
+      ? String((card as any).ig_user_id)
+      : typeof (card as any).igUserId === "string"
+        ? String((card as any).igUserId)
+        : null
+
+  const igUsername =
+    typeof (card as any).ig_username === "string"
+      ? String((card as any).ig_username)
+      : typeof (card as any).igUsername === "string"
+        ? String((card as any).igUsername)
+        : null
+
+  const profileImageUrl =
+    typeof (card as any).profileImageUrl === "string"
+      ? String((card as any).profileImageUrl)
+      : typeof (card as any).profile_image_url === "string"
+        ? String((card as any).profile_image_url)
+        : null
+
+  const minPrice =
+    typeof (card as any).minPrice === "number" && Number.isFinite((card as any).minPrice)
+      ? Math.floor((card as any).minPrice)
+      : typeof (card as any).min_price === "number" && Number.isFinite((card as any).min_price)
+        ? Math.floor((card as any).min_price)
+        : null
+
+  return {
+    id,
+    ig_user_id: igUserId,
+    ig_username: igUsername,
+    profile_image_url: profileImageUrl,
+    niche: typeof (card as any).niche === "string" ? String((card as any).niche) : null,
+    deliverables: Array.isArray((card as any).deliverables) ? (card as any).deliverables : null,
+    min_price: minPrice,
+    contact: typeof (card as any).contact === "string" ? String((card as any).contact) : null,
+    is_public: typeof (card as any).is_public === "boolean" ? (card as any).is_public : null,
+  }
+}
+
+function persistDailyPin(rawCard: unknown) {
+  try {
+    if (typeof window === "undefined") return
+    const payloadCard = buildCcPinCardPayload(rawCard)
+    if (!payloadCard) return
+    const expires = getLocalDateYYYYMMDD()
+    window.localStorage.setItem("cc_pin_v1", JSON.stringify({ cardId: payloadCard.id, expires, card: payloadCard }))
+  } catch {
+    // swallow
+  }
+}
+
 // Resolve IG preview: uses direct media URL + /api/ig/thumbnail proxy as critical path, oEmbed optional for accuracy
 async function resolveIgPreview(normalizedUrl: string): Promise<{ thumbnailUrl: string | null; mediaType: string | null }> {
   const directMediaUrl = buildInstagramDirectMediaUrl(normalizedUrl)
@@ -2548,6 +2616,7 @@ export default function CreatorCardPage() {
               console.error("[CreatorCard Save] ❌ No card data available for localStorage")
             }
           } else {
+            persistDailyPin(persistedCard)
             // Store the persisted card (already has both snake_case and camelCase from API)
             const draftJson = JSON.stringify(persistedCard)
             localStorage.setItem("creator_card_draft_v1", draftJson)

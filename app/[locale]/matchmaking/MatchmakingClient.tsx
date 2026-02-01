@@ -18,6 +18,7 @@ import type {
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
 const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
+const CC_PIN_KEY = "cc_pin_v1"
 
 interface MatchmakingClientProps {
   locale: Locale
@@ -251,6 +252,161 @@ function pinOwnerCardFirst<T extends { id: string }>(cards: T[], ownerCardId: st
   return [owner, ...rest]
 }
 
+function getLocalDateYYYYMMDD() {
+  const d = new Date()
+  const yyyy = String(d.getFullYear())
+  const mm = String(d.getMonth() + 1).padStart(2, "0")
+  const dd = String(d.getDate()).padStart(2, "0")
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function buildCcPinCardPayload(rawCard: unknown) {
+  const card = rawCard && typeof rawCard === "object" ? (rawCard as Record<string, unknown>) : null
+  if (!card) return null
+  const id = typeof card.id === "string" ? card.id : null
+  if (!id) return null
+
+  const igUserId =
+    typeof (card as any).ig_user_id === "string"
+      ? String((card as any).ig_user_id)
+      : typeof (card as any).igUserId === "string"
+        ? String((card as any).igUserId)
+        : null
+
+  const igUsername =
+    typeof (card as any).ig_username === "string"
+      ? String((card as any).ig_username)
+      : typeof (card as any).igUsername === "string"
+        ? String((card as any).igUsername)
+        : null
+
+  const profileImageUrl =
+    typeof (card as any).profileImageUrl === "string"
+      ? String((card as any).profileImageUrl)
+      : typeof (card as any).profile_image_url === "string"
+        ? String((card as any).profile_image_url)
+        : null
+
+  const minPrice =
+    typeof (card as any).minPrice === "number" && Number.isFinite((card as any).minPrice)
+      ? Math.floor((card as any).minPrice)
+      : typeof (card as any).min_price === "number" && Number.isFinite((card as any).min_price)
+        ? Math.floor((card as any).min_price)
+        : null
+
+  return {
+    id,
+    ig_user_id: igUserId,
+    ig_username: igUsername,
+    profile_image_url: profileImageUrl,
+    niche: typeof (card as any).niche === "string" ? String((card as any).niche) : null,
+    deliverables: Array.isArray((card as any).deliverables) ? (card as any).deliverables : null,
+    min_price: minPrice,
+    contact: typeof (card as any).contact === "string" ? String((card as any).contact) : null,
+    is_public: typeof (card as any).is_public === "boolean" ? (card as any).is_public : null,
+  }
+}
+
+function writeCcPin(cardId: string, rawCard: unknown) {
+  try {
+    if (typeof window === "undefined") return
+    const payloadCard = buildCcPinCardPayload(rawCard)
+    if (!payloadCard) return
+    const expires = getLocalDateYYYYMMDD()
+    window.localStorage.setItem(CC_PIN_KEY, JSON.stringify({ cardId, expires, card: payloadCard }))
+  } catch {
+    // swallow
+  }
+}
+
+function readCcPin(): { cardId: string; card: Record<string, unknown> } | null {
+  try {
+    if (typeof window === "undefined") return null
+    const raw = window.localStorage.getItem(CC_PIN_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as any
+    const expires = typeof parsed?.expires === "string" ? String(parsed.expires) : ""
+    const today = getLocalDateYYYYMMDD()
+    if (expires !== today) {
+      try {
+        window.localStorage.removeItem(CC_PIN_KEY)
+      } catch {
+        // swallow
+      }
+      return null
+    }
+
+    const cardId = typeof parsed?.cardId === "string" ? String(parsed.cardId) : ""
+    const card = parsed?.card && typeof parsed.card === "object" ? (parsed.card as Record<string, unknown>) : null
+    if (!cardId || !card) {
+      try {
+        window.localStorage.removeItem(CC_PIN_KEY)
+      } catch {
+        // swallow
+      }
+      return null
+    }
+
+    return { cardId, card }
+  } catch {
+    try {
+      if (typeof window !== "undefined") window.localStorage.removeItem(CC_PIN_KEY)
+    } catch {
+      // swallow
+    }
+    return null
+  }
+}
+
+function adaptPinnedCardToMatchmakingCard(raw: Record<string, unknown>, localePrefix: string): CreatorCard | null {
+  const id = typeof raw.id === "string" ? raw.id : null
+  if (!id) return null
+
+  const igUserId =
+    typeof (raw as any).ig_user_id === "string" ? String((raw as any).ig_user_id) : typeof (raw as any).igUserId === "string" ? String((raw as any).igUserId) : null
+  const igUsername =
+    typeof (raw as any).ig_username === "string"
+      ? String((raw as any).ig_username).trim()
+      : typeof (raw as any).igUsername === "string"
+        ? String((raw as any).igUsername).trim()
+        : ""
+
+  const displayName = igUsername || id
+
+  const rawPiu =
+    typeof (raw as any).profileImageUrl === "string"
+      ? String((raw as any).profileImageUrl).trim()
+      : typeof (raw as any).profile_image_url === "string"
+        ? String((raw as any).profile_image_url).trim()
+        : ""
+  const avatarUrl = rawPiu ? rawPiu : svgAvatarDataUrl(String(id), displayName)
+
+  const category = typeof (raw as any).niche === "string" && String((raw as any).niche).trim() ? String((raw as any).niche).trim() : "Creator"
+  const deliverables = Array.isArray((raw as any).deliverables) ? ((raw as any).deliverables as string[]) : []
+  const minPrice =
+    typeof (raw as any).minPrice === "number" && Number.isFinite((raw as any).minPrice)
+      ? Math.floor((raw as any).minPrice)
+      : typeof (raw as any).min_price === "number" && Number.isFinite((raw as any).min_price)
+        ? Math.floor((raw as any).min_price)
+        : null
+  const contact = typeof (raw as any).contact === "string" ? String((raw as any).contact) : null
+
+  return {
+    id,
+    igUserId,
+    displayName,
+    avatarUrl,
+    category,
+    deliverables,
+    minPrice,
+    contact,
+    followerCount: 0,
+    engagementRate: null,
+    isVerified: false,
+    profileUrl: `${localePrefix}/card/${id}`,
+  }
+}
+
 export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -291,6 +447,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [customBudget, setCustomBudget] = useState<string>("")
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
+  const ccPinInjectedIdRef = useRef<string | null>(null)
 
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
@@ -343,6 +500,22 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   useEffect(() => {
     setCards(initialCards)
   }, [initialCards])
+
+  useEffect(() => {
+    const pin = readCcPin()
+    if (!pin) return
+    const adapted = adaptPinnedCardToMatchmakingCard(pin.card, localePrefix)
+    if (!adapted) return
+
+    setOwnerCardId((prev) => (prev ? prev : pin.cardId))
+    setCards((prev) => {
+      const already = prev.some((c) => c.id === pin.cardId)
+      if (already) return prev
+      ccPinInjectedIdRef.current = pin.cardId
+      return [adapted, ...prev]
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Initialize from URL query params on first client render
   useEffect(() => {
@@ -442,10 +615,21 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           if (raw) {
             const cached = JSON.parse(raw) as any
             if (cached?.done) {
-              shouldPersistOwnerLookup = false
               const cachedOwnerCardId = typeof cached?.ownerCardId === "string" ? cached.ownerCardId : null
-              if (!cancelled && cachedOwnerCardId) setOwnerCardId(cachedOwnerCardId)
-              return
+              const pin = readCcPin()
+              const pinCardId = pin?.cardId ?? null
+
+              if (cachedOwnerCardId && (!pinCardId || pinCardId === cachedOwnerCardId)) {
+                shouldPersistOwnerLookup = false
+                if (!cancelled) setOwnerCardId(cachedOwnerCardId)
+                return
+              }
+
+              if (!cachedOwnerCardId) {
+                // Cache says done but no id stored; continue with /me.
+              } else {
+                // Cache id differs from today's pin token; continue with /me to refresh truth.
+              }
             }
           }
           window.sessionStorage.setItem(
@@ -471,6 +655,14 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
         nextOwnerCardId = meCardId
         if (!cancelled) setOwnerCardId(meCardId)
+
+        writeCcPin(meCardId, meJson?.card)
+
+        if (ccPinInjectedIdRef.current && ccPinInjectedIdRef.current !== meCardId) {
+          const staleId = ccPinInjectedIdRef.current
+          ccPinInjectedIdRef.current = null
+          setCards((prev) => prev.filter((c) => c.id !== staleId))
+        }
 
         if (!cancelled) {
           const rawCard = meJson?.card && typeof meJson.card === "object" ? (meJson.card as any) : null
