@@ -257,6 +257,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
 
+  if (typeof window !== "undefined") {
+    console.log("[debug] MatchmakingClient mounted")
+  }
+
   const debugOwner = useMemo(() => {
     try {
       if (typeof window === "undefined") return false
