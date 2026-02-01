@@ -257,22 +257,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
 
-  if (typeof window !== "undefined") {
-    const qp = new URLSearchParams(window.location.search)
-    if (qp.get("debugOwner") === "1") {
-      console.log("[debug] MatchmakingClient mounted")
-    }
-  }
-
-  const debugOwner = useMemo(() => {
-    try {
-      if (typeof window === "undefined") return false
-      const qp = new URLSearchParams(window.location.search)
-      return qp.get("debugOwner") === "1"
-    } catch {
-      return false
-    }
-  }, [])
+  const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
 
   const statsCacheRef = useRef(
     new Map<
@@ -478,11 +463,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         })
         const meJson = (await meRes.json().catch(() => null)) as any
 
-        if (debugOwner) {
-          console.log("[debug] /api/creator-card/me response status:", meRes.status)
-          console.log("[debug] /api/creator-card/me json:", meJson)
-        }
-
         if (!meRes.ok || meJson?.ok !== true) return
 
         const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
@@ -491,6 +471,56 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
         nextOwnerCardId = meCardId
         if (!cancelled) setOwnerCardId(meCardId)
+
+        if (!cancelled) {
+          const rawCard = meJson?.card && typeof meJson.card === "object" ? (meJson.card as any) : null
+          if (rawCard) {
+            const displayName =
+              typeof rawCard.ig_username === "string" && rawCard.ig_username.trim()
+                ? String(rawCard.ig_username).trim()
+                : typeof meJson?.me?.igUsername === "string" && meJson.me.igUsername.trim()
+                  ? String(meJson.me.igUsername).trim()
+                  : meCardId
+
+            const avatarUrl =
+              typeof rawCard.profileImageUrl === "string" && rawCard.profileImageUrl.trim()
+                ? String(rawCard.profileImageUrl).trim()
+                : typeof rawCard.profile_image_url === "string" && rawCard.profile_image_url.trim()
+                  ? String(rawCard.profile_image_url).trim()
+                  : svgAvatarDataUrl(String(meCardId), displayName)
+
+            const category = typeof rawCard.niche === "string" && rawCard.niche.trim() ? String(rawCard.niche).trim() : "Creator"
+            const deliverables = Array.isArray(rawCard.deliverables) ? (rawCard.deliverables as string[]) : []
+            const minPrice =
+              typeof rawCard.minPrice === "number" && Number.isFinite(rawCard.minPrice)
+                ? Math.floor(rawCard.minPrice)
+                : typeof rawCard.min_price === "number" && Number.isFinite(rawCard.min_price)
+                  ? Math.floor(rawCard.min_price)
+                  : null
+            const contact = typeof rawCard.contact === "string" ? rawCard.contact : null
+
+            const ownerCard: CreatorCard = {
+              id: meCardId,
+              igUserId: ownerIgUserId,
+              displayName,
+              avatarUrl,
+              category,
+              deliverables,
+              minPrice,
+              contact,
+              followerCount: 0,
+              engagementRate: null,
+              isVerified: false,
+              profileUrl: `${localePrefix}/card/${meCardId}`,
+            }
+
+            setCards((prev) => {
+              const alreadyPresent = prev.some((c) => c.id === meCardId)
+              if (alreadyPresent) return prev
+              return [ownerCard, ...prev]
+            })
+          }
+        }
 
         if (!ownerIgUserId) return
 
@@ -845,14 +875,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
   const finalCards = useMemo(() => pinOwnerCardFirst(filtered, ownerCardId), [filtered, ownerCardId])
 
-  const debugOwnerLastOwnerCardIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (!debugOwner) return
-    if (debugOwnerLastOwnerCardIdRef.current === ownerCardId) return
-    debugOwnerLastOwnerCardIdRef.current = ownerCardId
-    console.log("[debug] ownerCardId:", ownerCardId)
-  }, [debugOwner, ownerCardId])
-
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
     if (budget === "custom") {
@@ -1065,22 +1087,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     () => creators.filter((c) => fav.favoriteIds.has(c.id)),
     [creators, fav.favoriteIds]
   )
-
-  // TEMP DEBUG (remove after verification): prove which array is rendered in the grid.
-  // The final render uses: finalCards.map(...)
-  const debugRenderLastKeyRef = useRef<string>("")
-  if (debugOwner) {
-    const renderCards = finalCards
-    const renderFirst5 = renderCards.slice(0, 5).map((c) => c.id)
-    const finalFirst5 = finalCards.slice(0, 5).map((c) => c.id)
-    const key = `${renderFirst5.join(",")}|${finalFirst5.join(",")}`
-    if (debugRenderLastKeyRef.current !== key) {
-      debugRenderLastKeyRef.current = key
-      console.log("[debug] render variable:", "finalCards")
-      console.log("[debug] renderCards(finalCards) first5:", renderFirst5)
-      console.log("[debug] finalCards first5:", finalFirst5)
-    }
-  }
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
