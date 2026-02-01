@@ -23,7 +23,7 @@ interface MatchmakingClientProps {
   initialCards: CreatorCard[]
 }
 
-type CreatorWithId = CreatorCardData & { creatorId?: string }
+type CreatorWithId = CreatorCardData & { creatorId?: string; isOwner?: boolean }
 
 function clampNumber(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n))
@@ -522,6 +522,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         href: c.isDemo ? "#" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
         creatorId: creatorIdStr ?? undefined,
+        isOwner: Boolean(
+          (ownerCardId && c.id === ownerCardId) ||
+            (ownerUserId && typeof (c as any).userId === "string" && (c as any).userId === ownerUserId) ||
+            (ownerCreatorId && creatorIdStr === ownerCreatorId),
+        ),
       }
     })
   }, [canRenderMatchmaking, cardsWithDemos, ownerCreatorId, ownerUserId, ownerCardId])
@@ -641,11 +646,15 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return false
   }
 
-  const filteredCreators = useMemo(() => {
+  const finalCreators = useMemo(() => {
     if (!canRenderMatchmaking) return []
+
+    const owner = creators.find((c) => c.isOwner)
+    const candidates = creators.filter((c) => !c.isOwner)
+
     const qq = q.trim().toLowerCase()
 
-    let out = creators.filter((c) => {
+    let out = candidates.filter((c) => {
       const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")}`.toLowerCase()
       const okQ = !qq || hay.includes(qq)
       const okPlatform = platformMatch(platform, c.platforms)
@@ -685,7 +694,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       out = [...out]
     }
 
-    return out
+    return owner ? [owner, ...out] : out
   }, [canRenderMatchmaking, creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
   const selectedBudgetMax = useMemo(() => {
@@ -700,7 +709,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
 
   const visibleCreatorIds = useMemo(() => {
     if (!canRenderMatchmaking) return []
-    const ids = filteredCreators.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
+    const ids = finalCreators.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
     const uniqueOrdered: string[] = []
@@ -711,7 +720,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     return uniqueOrdered
-  }, [canRenderMatchmaking, filteredCreators])
+  }, [canRenderMatchmaking, finalCreators])
 
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
@@ -958,7 +967,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             </div>
 
             <CreatorGrid>
-              {filteredCreators.map((c) => {
+              {finalCreators.map((c) => {
                 const creatorId = c.creatorId
                 const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
                 const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
