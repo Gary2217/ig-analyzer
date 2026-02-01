@@ -84,6 +84,18 @@ function roundTo2(n: number) {
   return Math.round(n * 100) / 100
 }
 
+function toNumericString(v: unknown): string | null {
+  if (typeof v === "string") {
+    const s = v.trim()
+    return /^\d+$/.test(s) ? s : null
+  }
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const s = String(Math.floor(v))
+    return /^\d+$/.test(s) ? s : null
+  }
+  return null
+}
+
 function computeEngagementRatePct(input: {
   engagementRatePct?: number | null
   followers?: number | null
@@ -226,6 +238,10 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const canRenderMatchmaking = authChecked && isLoggedIn
 
+  const [ownerCreatorId, setOwnerCreatorId] = useState<string | null>(null)
+  const [ownerUserId, setOwnerUserId] = useState<string | null>(null)
+  const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
+
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
   const [favOpen, setFavOpen] = useState(false)
 
@@ -271,15 +287,26 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
           cache: "no-store",
           credentials: "include",
         })
-        await res.json().catch(() => null)
+        const json = (await res.json().catch(() => null)) as any
+
+        const card = json?.card
+        const resolvedOwnerCreatorId = toNumericString(card?.creator_id) ?? toNumericString(card?.creatorId)
+        const resolvedOwnerUserId = typeof card?.user_id === "string" ? card.user_id : typeof card?.userId === "string" ? card.userId : null
+        const resolvedOwnerCardId = typeof card?.id === "string" ? card.id : null
 
         if (!cancelled) {
           setIsLoggedIn(Boolean(res.ok))
+          setOwnerCreatorId(resolvedOwnerCreatorId)
+          setOwnerUserId(resolvedOwnerUserId)
+          setOwnerCardId(resolvedOwnerCardId)
           setAuthChecked(true)
         }
       } catch {
         if (!cancelled) {
           setIsLoggedIn(false)
+          setOwnerCreatorId(null)
+          setOwnerUserId(null)
+          setOwnerCardId(null)
           setAuthChecked(true)
         }
       }
@@ -432,7 +459,12 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
 
-      const creatorIdStr = typeof c.igUserId === "string" && /^\d+$/.test(c.igUserId) ? c.igUserId : null
+      const creatorIdStr =
+        toNumericString((c as any).creatorId) ??
+        toNumericString((c as any).igUserId) ??
+        (ownerCreatorId && ((ownerCardId && c.id === ownerCardId) || (ownerUserId && (c as any).userId === ownerUserId))
+          ? ownerCreatorId
+          : null)
       const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
 
       const rawHandle = typeof c.displayName === "string" ? c.displayName.trim().replace(/^@/, "") : ""
@@ -492,7 +524,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         creatorId: creatorIdStr ?? undefined,
       }
     })
-  }, [canRenderMatchmaking, cardsWithDemos])
+  }, [canRenderMatchmaking, cardsWithDemos, ownerCreatorId, ownerUserId, ownerCardId])
 
   const creatorFormatsById = useMemo(() => {
     const map = new Map<string, FormatKey[]>()
