@@ -79,7 +79,6 @@ export function CreatorCard({
   locale,
   isFav,
   onToggleFav,
-  isMyCard,
   statsLoading,
   statsError,
   onRetryStats,
@@ -89,7 +88,6 @@ export function CreatorCard({
   locale: Locale
   isFav: boolean
   onToggleFav: () => void
-  isMyCard?: boolean
   statsLoading?: boolean
   statsError?: boolean
   onRetryStats?: () => void
@@ -248,90 +246,34 @@ export function CreatorCard({
 
   return (
     <div
-      className={`group relative rounded-2xl border bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full ${
-        isMyCard ? "border-sky-400/40 ring-1 ring-sky-400/30" : "border-white/10"
-      }`}
+      className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full"
     >
       {isPopular && !isEmpty ? (
-        <div className="absolute top-3 right-14 z-30">
-          <span className="inline-flex items-center rounded-full bg-black/55 backdrop-blur border border-amber-200/30 px-2 py-1 text-[10px] font-semibold text-amber-100 shadow-sm whitespace-nowrap">
+        <div className="absolute top-2 left-2 z-10">
+          <div className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-200/90 whitespace-nowrap">
             {mm.popularBadge}
-          </span>
+          </div>
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={onToggleFav}
-        disabled={isEmpty}
-        className={`absolute right-3 top-3 z-30 grid place-items-center h-9 w-9 rounded-full border border-white/20 bg-black/60 text-sm text-white shadow-sm backdrop-blur transition-opacity opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 ${
-          isEmpty ? "opacity-40" : "hover:bg-black/70"
-        }`}
-        aria-label={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
-        title={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
-      >
-        {isFav ? "★" : "☆"}
-      </button>
-
-      {isEmpty ? (
-        <div className="block">
-          <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
+      <Link href={creator.href} className="block flex-1 relative z-0">
+        <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
+          {creator.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={creator.avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+          ) : (
             <div className="h-full w-full bg-gradient-to-br from-white/10 to-white/5" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-          </div>
-
-          <div className="p-3 sm:p-4 min-w-0">
-            <div className="h-4 w-40 max-w-full rounded bg-white/10" />
-            <div className="mt-2 h-3 w-28 max-w-full rounded bg-white/10" />
-
-            <div className="mt-3 h-11 w-full rounded-xl bg-white/10" />
-
-            <div className="mt-3 rounded-xl bg-white/5 border border-white/10 px-3 py-3">
-              <div className="text-xs text-white/50 truncate">{mm.profileNotSet}</div>
-              <div className="mt-2 h-6 w-24 rounded bg-white/10" />
-              <div className="mt-2 h-4 w-16 rounded bg-white/10" />
-            </div>
-          </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
         </div>
-      ) : (
-        <div className="flex flex-col h-full">
-          <Link href={creator.href} className="block flex-1 relative z-0">
-            <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
-              {creator.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={creator.avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-              ) : (
-                <div className="h-full w-full bg-gradient-to-br from-white/10 to-white/5" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-            </div>
 
-            <div className="p-3 sm:p-4 min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                {isMyCard ? (
-                  <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-200/90 whitespace-nowrap">
-                    {mm.myCardBadge}
-                  </span>
-                ) : null}
-
-                {profileComplete ? (
-                  <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-400/25 text-emerald-100/85 whitespace-nowrap">
-                    {mm.badgeProfileComplete}
-                  </span>
-                ) : null}
-
-                {withinBudget ? (
-                  <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-300/20 text-cyan-100/85 whitespace-nowrap">
-                    {mm.withinBudgetLabel}
-                  </span>
-                ) : null}
-
-                <div className="text-sm sm:text-[15px] font-semibold text-white/90 truncate min-w-0">{creator.name}</div>
-              </div>
-
-              <div className="mt-0.5 text-xs text-white/55 truncate min-w-0 [overflow-wrap:anywhere]">
-                {shouldShowHandle && creator.handle ? `@${creator.handle}` : ""}
-              </div>
+        <div className="p-3 sm:p-4 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-white/90 truncate min-w-0">{creator.name}</div>
+              {shouldShowHandle ? (
+                <div className="text-xs text-white/50 truncate min-w-0">@{creator.handle}</div>
+              ) : null}
 
               <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
                 {displayChips.length ? (
@@ -401,71 +343,71 @@ export function CreatorCard({
                 <div className="mt-2 text-[11px] text-white/55 truncate min-w-0">{mm.highEngagementLabel}</div>
               ) : null}
             </div>
-          </Link>
-
-          <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3 relative z-20 pointer-events-auto">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (!contactItems.length) {
-                  setShowContact(false)
-                  setCtaToast("沒有提供聯絡方式 / No contact info provided")
-                  if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
-                  ctaToastTimerRef.current = window.setTimeout(() => {
-                    setCtaToast(null)
-                    ctaToastTimerRef.current = null
-                  }, 1600)
-                  return
-                }
-
-                setCtaToast(null)
-                setShowContact((v) => !v)
-              }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
-            >
-              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{mm.ctaStartCollaboration}</span>
-            </button>
-
-            <div aria-live="polite" className="sr-only">
-              {ctaToast ?? ""}
-            </div>
-            {ctaToast ? (
-              <div className="mt-2">
-                <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-3 py-2 text-xs text-slate-200 shadow-lg break-words [overflow-wrap:anywhere]">
-                  {ctaToast}
-                </div>
-              </div>
-            ) : null}
-
-            {showContact && contactItems.length ? (
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/80 transition-opacity duration-200 opacity-100 min-w-0">
-                {contactItems.map((it) => (
-                  <span
-                    key={it.key}
-                    className={`max-w-full overflow-hidden rounded-full bg-white/10 px-3 py-1 ${it.className}`}
-                    title={it.value}
-                  >
-                    {it.href ? (
-                      <a
-                        href={it.href}
-                        onClick={(e) => e.stopPropagation()}
-                        className="block max-w-[220px] sm:max-w-[260px] truncate underline underline-offset-2 decoration-white/20 hover:decoration-white/50"
-                        aria-label={it.ariaLabel}
-                      >
-                        {it.value}
-                      </a>
-                    ) : (
-                      <span className="block max-w-[220px] sm:max-w-[260px] truncate">{it.value}</span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            ) : null}
           </div>
         </div>
-      )}
+      </Link>
+
+      <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3 relative z-20 pointer-events-auto">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (!contactItems.length) {
+              setShowContact(false)
+              setCtaToast("沒有提供聯絡方式 / No contact info provided")
+              if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
+              ctaToastTimerRef.current = window.setTimeout(() => {
+                setCtaToast(null)
+                ctaToastTimerRef.current = null
+              }, 1600)
+              return
+            }
+
+            setCtaToast(null)
+            setShowContact((v) => !v)
+          }}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
+        >
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{mm.ctaStartCollaboration}</span>
+        </button>
+
+        <div aria-live="polite" className="sr-only">
+          {ctaToast ?? ""}
+        </div>
+        {ctaToast ? (
+          <div className="mt-2">
+            <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-3 py-2 text-xs text-slate-200 shadow-lg break-words [overflow-wrap:anywhere]">
+              {ctaToast}
+            </div>
+          </div>
+        ) : null}
+
+        {showContact && contactItems.length ? (
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/80 transition-opacity duration-200 opacity-100 min-w-0">
+            {contactItems.map((it) => (
+              <span
+                key={it.key}
+                className={`max-w-full overflow-hidden rounded-full bg-white/10 px-3 py-1 ${it.className}`}
+                title={it.value}
+              >
+                {it.href ? (
+                  <a
+                    href={it.href}
+                    onClick={(e) => e.stopPropagation()}
+                    className="block max-w-[220px] sm:max-w-[260px] truncate underline underline-offset-2 decoration-white/20 hover:decoration-white/50"
+                    aria-label={it.ariaLabel}
+                  >
+                    {it.value}
+                  </a>
+                ) : (
+                  <span className="block max-w-[220px] sm:max-w-[260px] truncate">{it.value}</span>
+                )}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

@@ -29,15 +29,9 @@ type Props = {
   sort: "best_match" | "followers_desc" | "er_desc"
   onSort: (v: "best_match" | "followers_desc" | "er_desc") => void
 
-  myCardFirst: boolean
-  onMyCardFirst: (v: boolean) => void
-  myCardFirstDisabled?: boolean
-  myCardFirstHint?: string | null
-
   favoritesCount: number
   onOpenFavorites: () => void
 
-  total: number
   statsUpdating?: boolean
 }
 
@@ -155,23 +149,6 @@ export function FiltersBar(props: Props) {
 
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
-                  <label className="inline-flex items-center gap-2 text-xs sm:text-sm text-white/70 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={props.myCardFirst}
-                      onChange={(e) => props.onMyCardFirst(e.target.checked)}
-                      disabled={props.myCardFirstDisabled}
-                      className="h-4 w-4 rounded border-white/20 bg-white/5"
-                    />
-                    <span className="min-w-0 truncate">{mm.myCardFirstToggle}</span>
-                  </label>
-                  {props.myCardFirstHint ? (
-                    <div className="text-xs sm:text-sm text-white/45 min-w-0 truncate">{props.myCardFirstHint}</div>
-                  ) : null}
-                  <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
-                    {mm.totalCreators(props.total)}
-                  </div>
-
                   {props.statsUpdating ? (
                     <div className="flex items-center gap-2 text-xs sm:text-sm text-white/50 min-w-0">
                       <div className="h-3 w-3 rounded-full border border-white/20 border-t-white/60 animate-spin shrink-0" />

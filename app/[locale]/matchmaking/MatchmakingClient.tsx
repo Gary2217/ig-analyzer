@@ -17,40 +17,7 @@ import type {
   TypeKey,
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
-
-const AUTH_CACHE_KEY = "ig_auth_cache_v1"
-const AUTH_TTL = 24 * 60 * 60 * 1000
 const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
-
-function getAuthCache(): { connected: boolean; igUserId: string | null } | null {
-  try {
-    const raw = localStorage.getItem(AUTH_CACHE_KEY)
-    if (!raw) return null
-
-    const data = JSON.parse(raw) as any
-
-    if (Date.now() - data.ts > AUTH_TTL) {
-      localStorage.removeItem(AUTH_CACHE_KEY)
-      return null
-    }
-
-    return data
-  } catch {
-    return null
-  }
-}
-
-function setAuthCache(payload: { connected: boolean; igUserId: string | null }) {
-  try {
-    localStorage.setItem(
-      AUTH_CACHE_KEY,
-      JSON.stringify({
-        ...payload,
-        ts: Date.now(),
-      }),
-    )
-  } catch {}
-}
 
 interface MatchmakingClientProps {
   locale: Locale
@@ -275,9 +242,9 @@ function safeParseContact(input: unknown): {
   }
 }
 
-function pinOwnerCardFirst(cards: CreatorCard[], ownerCardId: string | null) {
+function pinOwnerCardFirst<T extends { id: string }>(cards: T[], ownerCardId: string | null) {
   if (!ownerCardId) return cards
-  const idx = cards.findIndex((c) => String(c?.id ?? "") === ownerCardId)
+  const idx = cards.findIndex((c) => c.id === ownerCardId)
   if (idx <= 0) return cards
   const owner = cards[idx]
   const rest = cards.filter((_, i) => i !== idx)
@@ -321,12 +288,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
-  const [myCardFirst, setMyCardFirst] = useState(true)
   const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
-  const [ownerLookupDone, setOwnerLookupDone] = useState(false)
-  const [pinMyCardDisabled, setPinMyCardDisabled] = useState(false)
-  const [pinMyCardHint, setPinMyCardHint] = useState<string | null>(null)
-  const [needsAuth, setNeedsAuth] = useState(false)
 
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
@@ -335,44 +297,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     cardsRef.current = cards
   }, [cards])
 
-  const ownerCardIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    ownerCardIdRef.current = ownerCardId
-  }, [ownerCardId])
-
-  useEffect(() => {
-    if (!ownerCardId) return
-    setMyCardFirst(true)
-  }, [ownerCardId])
-
-  useEffect(() => {
-    if (!ownerCardId) return
-    setCards((prev) => {
-      const next = pinOwnerCardFirst(prev, ownerCardId)
-      return next === prev ? prev : next
-    })
-  }, [ownerCardId, cards])
-
-  useEffect(() => {
-    if (!ownerCardId) return
-    const cached = getAuthCache()
-    if (cached) applyAuthResult(cached)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerCardId])
-
   const ownerLookupStartedRef = useRef(false)
-
-  function applyAuthResult(data: { connected: boolean; igUserId: string | null }) {
-    const igUserId = data.igUserId
-    const connected = data.connected
-
-    const hasCard = Boolean(ownerCardIdRef.current) || cardsRef.current.some((c) => c.igUserId && c.igUserId === igUserId)
-    if (!hasCard) return
-
-    setNeedsAuth(false)
-    setPinMyCardDisabled(false)
-    setPinMyCardHint(null)
-  }
 
   useEffect(() => {
     try {
@@ -498,56 +423,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     router.replace(qs ? `?${qs}` : "?", { scroll: false })
   }, [q, platform, budget, selectedTypes, router])
 
-  useEffect(() => {
-    let cancelled = false
-
-    const cached = getAuthCache()
-
-    if (cached) {
-      applyAuthResult(cached)
-      return
-    }
-
-    fetch("/api/auth/instagram/me", {
-      credentials: "include",
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return
-
-        const payload = {
-          connected: Boolean(data?.connected),
-          igUserId: data?.igUserId ?? null,
-        }
-
-        setAuthCache(payload)
-        applyAuthResult(payload)
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetch("/api/auth/instagram/me", {
-        credentials: "include",
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          setAuthCache({
-            connected: Boolean(data?.connected),
-            igUserId: data?.igUserId ?? null,
-          })
-        })
-        .catch(() => {})
-    }, 5000)
-
-    return () => clearTimeout(timer)
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -568,7 +443,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
               shouldPersistOwnerLookup = false
               const cachedOwnerCardId = typeof cached?.ownerCardId === "string" ? cached.ownerCardId : null
               if (!cancelled && cachedOwnerCardId) setOwnerCardId(cachedOwnerCardId)
-              if (!cancelled) setOwnerLookupDone(true)
               return
             }
           }
@@ -674,7 +548,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             // swallow
           }
         }
-        if (!cancelled) setOwnerLookupDone(true)
       }
     })()
 
@@ -940,13 +813,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return out
   }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
-  const pinned = useMemo(() => {
-    if (!ownerLookupDone || !ownerCardId) return filtered
-    const mine = filtered.find((c) => c.id === ownerCardId)
-    if (!mine) return filtered
-    const others = filtered.filter((c) => c.id !== ownerCardId)
-    return [mine, ...others]
-  }, [filtered, ownerCardId, ownerLookupDone])
+  const finalCards = useMemo(() => pinOwnerCardFirst(filtered, ownerCardId), [filtered, ownerCardId])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
@@ -958,7 +825,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   }, [budget, customBudget])
 
   const visibleCreatorIds = useMemo(() => {
-    const ids = pinned.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
+    const ids = finalCards.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
     const uniqueOrdered: string[] = []
@@ -969,7 +836,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     }
 
     return uniqueOrdered
-  }, [pinned])
+  }, [finalCards])
 
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
@@ -1211,36 +1078,17 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             else if (v === "er_desc") setSort("er_desc")
             else setSort("best_match")
           }}
-          myCardFirst={myCardFirst}
-          onMyCardFirst={setMyCardFirst}
-          myCardFirstDisabled={pinMyCardDisabled}
-          myCardFirstHint={pinMyCardHint}
           favoritesCount={fav.count}
           onOpenFavorites={() => setFavOpen(true)}
-          total={filtered.length}
           statsUpdating={statsPrefetchRunning}
         />
-
-        {needsAuth ? (
-          <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-3">
-            <div className="flex items-center gap-3 text-xs sm:text-sm text-white/70">
-              <div className="min-w-0 truncate">Pin your card by verifying Instagram</div>
-              <a
-                href="/api/auth/instagram"
-                className="shrink-0 inline-flex items-center h-8 px-3 rounded-md border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
-              >
-                Verify IG
-              </a>
-            </div>
-          </div>
-        ) : null}
 
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
           <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
         </div>
 
         <CreatorGrid>
-          {pinned.map((c) => {
+          {finalCards.map((c) => {
             const creatorId = c.creatorId
             const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
             const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
@@ -1254,7 +1102,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
                 locale={locale}
                 isFav={fav.isFav(c.id)}
                 onToggleFav={() => fav.toggleFav(c.id)}
-                isMyCard={Boolean(ownerCardId && c.id === ownerCardId)}
                 statsLoading={loading}
                 statsError={error}
                 selectedBudgetMax={selectedBudgetMax}
