@@ -1572,7 +1572,15 @@ export default function CreatorCardPage() {
         const json = (asRecord(jsonRaw) as unknown as CreatorCardMeResponse) ?? null
         if (cancelled) return
 
-        if (!res.ok || !json?.ok) {
+        const isEmptyCardState =
+          res.ok &&
+          res.status === 200 &&
+          json?.ok === false &&
+          (json?.error === "not_found" || json?.error === "no_card" || json?.card == null)
+
+        const effectiveOk = res.ok && (json?.ok === true || isEmptyCardState)
+
+        if (!effectiveOk) {
           // Do NOT infer site session from creator-card/me.
           // Site session is authoritative via /api/me (SiteSessionProvider).
           if (res.status === 200 && json?.error === "not_logged_in") {
@@ -1604,7 +1612,7 @@ export default function CreatorCardPage() {
         setLoadErrorKind(null)
         setLoadError(null)
 
-        const card = asRecord(json?.card) ?? null
+        const card = isEmptyCardState ? null : asRecord(json?.card) ?? null
 
         const dbUpdatedAtMs = parseEpochMsFromUnknown((card as any)?.updated_at)
         dbUpdatedAtMsRef.current = dbUpdatedAtMs
