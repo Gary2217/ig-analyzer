@@ -206,7 +206,7 @@ export async function POST(req: Request) {
     // Atomic legacy claim (server-side) to avoid races. This only claims rows with user_id IS NULL.
     // If the function does not exist (older env), we safely fall back to current select logic.
     try {
-      const claim = await supabaseServer
+      const claim = await authed
         .rpc("claim_creator_card_legacy", { p_ig_user_id: igUserId, p_user_id: user.id })
         .maybeSingle()
 

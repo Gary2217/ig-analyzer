@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 
     if (!data && cookieIgUserId) {
       try {
-        const claim = await supabaseServer
+        const claim = await authed
           .rpc("claim_creator_card_legacy", { p_ig_user_id: cookieIgUserId, p_user_id: user.id })
           .maybeSingle()
 
