@@ -2866,7 +2866,7 @@ export default function CreatorCardPage() {
           <h1 className="text-2xl font-bold text-slate-100">{t("creatorCardEditor.title")}</h1>
           <div className="mt-1 text-sm text-slate-300 min-w-0 break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.subtitle")}</div>
           {loadErrorKind === "not_logged_in" && hasLocalDraft ? (
-            <div className="mt-2 inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-white/70 whitespace-nowrap">
+            <div className="mt-2 inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-white/70 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
               {activeLocale === "zh-TW" ? "本機草稿（未同步）" : "Local draft (not synced)"}
             </div>
           ) : null}
@@ -2912,7 +2912,7 @@ export default function CreatorCardPage() {
       ) : null}
 
       {loadErrorKind === "not_logged_in" ? (
-        <div className="mt-4 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+        <div className="mt-4 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100 min-w-0">
           <div className="font-semibold min-w-0 break-words [overflow-wrap:anywhere]">
             {activeLocale === "zh-TW"
               ? "你目前尚未登入，所以資料無法從雲端載入。請先登入以同步並避免貼文遺失。"
@@ -2922,7 +2922,7 @@ export default function CreatorCardPage() {
             <Button
               type="button"
               variant="primary"
-              className="min-h-[44px]"
+              className="min-h-[44px] w-full sm:w-auto"
               onClick={() => {
                 const nextPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : `/${activeLocale}/creator-card`
                 const url = `/api/auth/instagram?provider=instagram&locale=${encodeURIComponent(activeLocale)}&next=${encodeURIComponent(nextPath)}`
@@ -2934,7 +2934,7 @@ export default function CreatorCardPage() {
             <Button
               type="button"
               variant="outline"
-              className="min-h-[44px]"
+              className="min-h-[44px] w-full sm:w-auto"
               onClick={handleRetryLoad}
             >
               {activeLocale === "zh-TW" ? "重新嘗試載入" : "Retry loading"}

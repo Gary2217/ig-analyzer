@@ -203,6 +203,36 @@ export async function POST(req: Request) {
       )
     }
 
+    // Atomic legacy claim (server-side) to avoid races. This only claims rows with user_id IS NULL.
+    // If the function does not exist (older env), we safely fall back to current select logic.
+    try {
+      const claim = await supabaseServer
+        .rpc("claim_creator_card_legacy", { p_ig_user_id: igUserId, p_user_id: user.id })
+        .maybeSingle()
+
+      if (!(claim as any)?.error && (claim as any)?.data) {
+        if (shouldDebug()) {
+          const claimedId = typeof ((claim as any)?.data as any)?.id === "string" ? String(((claim as any).data as any).id) : null
+          console.log("[creator-card/upsert] legacy card claimed", { id: claimedId })
+        }
+      } else {
+        const claimErr = (claim as any)?.error
+        if (claimErr && shouldDebug()) {
+          console.log("[creator-card/upsert] legacy claim rpc skipped/failed", {
+            message: typeof claimErr?.message === "string" ? claimErr.message : "unknown",
+            code: typeof claimErr?.code === "string" ? claimErr.code : null,
+          })
+        }
+      }
+    } catch (e0: unknown) {
+      if (shouldDebug()) {
+        const errObj0 = asRecord(e0)
+        console.log("[creator-card/upsert] legacy claim unexpected error", {
+          message: typeof errObj0?.message === "string" ? errObj0.message : "unknown",
+        })
+      }
+    }
+
     // Best-effort schema guard: do not fail if query permissions are limited.
     const schemaGuard = await checkMinPriceColumnBestEffort(igUserId)
     if (!schemaGuard.ok && schemaGuard.missing) {

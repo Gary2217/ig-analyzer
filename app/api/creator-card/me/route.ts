@@ -92,48 +92,37 @@ export async function GET(req: NextRequest) {
 
     if (!data && cookieIgUserId) {
       try {
-        const legacyRes = await fetchCardByIgUserIdForClaim(supabaseServer, cookieIgUserId)
-        const legacyRow = (legacyRes as any)?.data
-        const legacyErr = (legacyRes as any)?.error
-        if (legacyErr) {
+        const claim = await supabaseServer
+          .rpc("claim_creator_card_legacy", { p_ig_user_id: cookieIgUserId, p_user_id: user.id })
+          .maybeSingle()
+
+        if (!(claim as any)?.error && (claim as any)?.data) {
+          data = (claim as any).data
+          error = null
           if (shouldDebug()) {
-            console.log("[creator-card/me] legacy lookup failed", {
-              message: typeof legacyErr?.message === "string" ? legacyErr.message : "unknown",
-              code: typeof legacyErr?.code === "string" ? legacyErr.code : null,
+            const claimedId = typeof (data as any)?.id === "string" ? String((data as any).id) : null
+            console.log("[creator-card/me] legacy card claimed", { id: claimedId })
+          }
+        } else {
+          const claimErr = (claim as any)?.error
+          if (claimErr && shouldDebug()) {
+            console.log("[creator-card/me] legacy claim rpc failed", {
+              message: typeof claimErr?.message === "string" ? claimErr.message : "unknown",
+              code: typeof claimErr?.code === "string" ? claimErr.code : null,
             })
           }
-        } else if (legacyRow && typeof legacyRow === "object") {
-          const legacyUserId = typeof (legacyRow as any).user_id === "string" ? String((legacyRow as any).user_id) : null
-          const legacyId = typeof (legacyRow as any).id === "string" ? String((legacyRow as any).id) : null
 
-          if (!legacyUserId && legacyId) {
-            const claimRes = await supabaseServer
-              .from("creator_cards")
-              .update({ user_id: user.id, updated_at: new Date().toISOString() })
-              .eq("id", legacyId)
-              .is("user_id", null)
-              .select("*, portfolio")
-              .maybeSingle()
-
-            if (!(claimRes as any)?.error && (claimRes as any)?.data) {
-              data = (claimRes as any).data
-              error = null
-              if (shouldDebug()) {
-                console.log("[creator-card/me] legacy card claimed", { id: legacyId })
-              }
-            } else {
-              if (shouldDebug()) {
-                console.log("[creator-card/me] legacy claim skipped/failed", {
-                  id: legacyId,
-                  message:
-                    typeof (claimRes as any)?.error?.message === "string" ? String((claimRes as any).error.message) : null,
-                })
-              }
-              const r3 = await fetchCardByUserId(supabaseServer)
-              data = (r3 as any)?.data
-              error = (r3 as any)?.error
+          const legacyRes = await fetchCardByIgUserIdForClaim(supabaseServer, cookieIgUserId)
+          const legacyRow = (legacyRes as any)?.data
+          const legacyErr = (legacyRes as any)?.error
+          if (legacyErr) {
+            if (shouldDebug()) {
+              console.log("[creator-card/me] legacy lookup failed", {
+                message: typeof legacyErr?.message === "string" ? legacyErr.message : "unknown",
+                code: typeof legacyErr?.code === "string" ? legacyErr.code : null,
+              })
             }
-          } else {
+          } else if (legacyRow && typeof legacyRow === "object") {
             data = legacyRow
             error = null
           }
