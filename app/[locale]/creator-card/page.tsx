@@ -29,6 +29,85 @@ import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "..
 
 // Strict oEmbed types live in a shared module (see igOEmbedTypes.ts)
 
+type ApiDebugEntry = {
+  key: string
+  method: string
+  url: string
+  count: number
+  ts: number[]
+}
+
+function readUrlString(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input
+  if (input instanceof URL) return input.toString()
+  return (input as Request).url
+}
+
+function readMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  const m1 = typeof init?.method === "string" ? init.method : ""
+  if (m1) return m1
+  const m2 = typeof input === "object" && input && "method" in input ? String((input as any).method || "") : ""
+  return m2 || "GET"
+}
+
+function urlIsApi(url: string): boolean {
+  if (!url) return false
+  if (url.startsWith("/api/")) return true
+  try {
+    const u = new URL(url)
+    return u.pathname.startsWith("/api/")
+  } catch {
+    return false
+  }
+}
+
+function installApiDebugFetchTracerOnce(enabled: boolean) {
+  if (!enabled) return
+  if (typeof window === "undefined") return
+
+  const g = globalThis as any
+  if (g.__apiDebugTracerInstalled) return
+  if (typeof g.fetch !== "function") return
+
+  const originalFetch = g.fetch.bind(globalThis)
+  g.__apiDebugTracerInstalled = true
+  g.__apiDebugTracerOriginalFetch = originalFetch
+
+  if (!g.__apiDebugTracerStore) {
+    g.__apiDebugTracerStore = {
+      entries: {} as Record<string, ApiDebugEntry>,
+    }
+  }
+
+  g.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      const url = readUrlString(input)
+      if (typeof url === "string" && urlIsApi(url)) {
+        const method = readMethod(input, init).toUpperCase()
+        const key = `${method} ${url}`
+        const now = Date.now()
+        const store = g.__apiDebugTracerStore as { entries: Record<string, ApiDebugEntry> }
+        const prev = store.entries[key]
+        const nextTs = prev?.ts ? [...prev.ts.slice(-4), now] : [now]
+        store.entries[key] = {
+          key,
+          method,
+          url,
+          count: (prev?.count ?? 0) + 1,
+          ts: nextTs,
+        }
+        try {
+          window.dispatchEvent(new CustomEvent("__apiDebugTracerUpdate"))
+        } catch {
+        }
+      }
+    } catch {
+    }
+
+    return originalFetch(input as any, init)
+  }
+}
+
 // Helper to extract shortcode and build direct media URL
 function buildInstagramDirectMediaUrl(url: string): string | null {
   try {
@@ -907,6 +986,59 @@ export default function CreatorCardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const returnTo = searchParams.get("returnTo")
+  const debugApiEnabled = searchParams.get("debugApi") === "1"
+
+  const [apiDebugEntries, setApiDebugEntries] = useState<ApiDebugEntry[]>([])
+
+  useEffect(() => {
+    installApiDebugFetchTracerOnce(debugApiEnabled)
+  }, [debugApiEnabled])
+
+  useEffect(() => {
+    if (!debugApiEnabled) return
+    if (typeof window === "undefined") return
+
+    const read = () => {
+      const g = globalThis as any
+      const store = g.__apiDebugTracerStore as { entries?: Record<string, ApiDebugEntry> } | undefined
+      const entriesObj = store?.entries ?? {}
+      const entries = Object.values(entriesObj)
+      entries.sort((a, b) => (b.count - a.count) || a.key.localeCompare(b.key))
+      setApiDebugEntries(entries)
+    }
+
+    const onUpdate = () => read()
+    window.addEventListener("__apiDebugTracerUpdate", onUpdate as any)
+    read()
+    return () => window.removeEventListener("__apiDebugTracerUpdate", onUpdate as any)
+  }, [debugApiEnabled])
+
+  const apiDebugPanel = debugApiEnabled ? (
+    <div className="fixed bottom-2 right-2 z-[9999] w-[min(360px,calc(100vw-16px))] max-h-[40vh] overflow-auto rounded-lg border border-white/15 bg-black/70 px-3 py-2 text-[11px] text-white/85 backdrop-blur">
+      <div className="font-semibold">API Debug</div>
+      <div className="mt-1 space-y-1">
+        {apiDebugEntries.length === 0 ? (
+          <div className="text-white/60">(no /api calls)</div>
+        ) : (
+          apiDebugEntries.map((e: ApiDebugEntry) => (
+            <div key={e.key} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate">
+                    {e.method} {e.url}
+                  </div>
+                </div>
+                <div className="shrink-0 tabular-nums">{e.count}</div>
+              </div>
+              <div className="mt-0.5 text-white/60 tabular-nums whitespace-nowrap">
+                {e.ts.slice(-5).map((ts: number) => new Date(ts).toLocaleTimeString()).join(" · ")}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  ) : null
 
   const isMobile = useIsMobileMax640()
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
@@ -2944,6 +3076,7 @@ export default function CreatorCardPage() {
       <div aria-live="polite" className="sr-only">
         {toast ?? ""}
       </div>
+      {apiDebugPanel}
       {toast ? (
         <div className="fixed top-[calc(env(safe-area-inset-top)+12px)] inset-x-0 z-[80] flex justify-center px-4">
           <div className="max-w-[560px] w-full">
