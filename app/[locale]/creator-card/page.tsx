@@ -989,6 +989,7 @@ export default function CreatorCardPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const saveInFlightRef = useRef(false)
+  const saveNonceRef = useRef(0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadErrorKind, setLoadErrorKind] = useState<
     "not_connected" | "supabase_invalid_key" | "not_logged_in" | "load_failed" | null
@@ -2503,17 +2504,23 @@ export default function CreatorCardPage() {
     if (saving) return
     if (saveInFlightRef.current) return
 
+    saveNonceRef.current += 1
+    const saveNonce = saveNonceRef.current
+    const isLatest = () => saveNonceRef.current === saveNonce
+
     if (featuredUploadingIds.size > 0) {
       showToast(t("creatorCard.form.featured.uploadingWait"))
       return
     }
 
     saveInFlightRef.current = true
-    setSaving(true)
-    setSaveError(null)
-    setSaveAuthKind(null)
-    setSaveOk(false)
-    showToast(t("creatorCardEditor.actions.saving"), 6000)
+    if (isLatest()) {
+      setSaving(true)
+      setSaveError(null)
+      setSaveAuthKind(null)
+      setSaveOk(false)
+      showToast(t("creatorCardEditor.actions.saving"), 6000)
+    }
     try {
       const nextProfileImageUrl = await (async () => {
         if (profileImageFile) {
@@ -2609,6 +2616,7 @@ export default function CreatorCardPage() {
       const text = json ? null : await res.text().catch(() => null)
 
       if (!res.ok || !json?.ok) {
+        if (!isLatest()) return
         const errObj = asRecord(jsonRaw) ?? (asRecord(json) as any) ?? null
         const errCode = typeof errObj?.code === "string" ? String(errObj.code) : null
         const errMessage = typeof errObj?.message === "string" ? String(errObj.message) : null
@@ -2664,6 +2672,8 @@ export default function CreatorCardPage() {
         showToast(baseMsg)
         return
       }
+
+      if (!isLatest()) return
 
       setSaveOk(true)
       showToast(t("creatorCardEditor.success.saved"))
@@ -2801,11 +2811,14 @@ export default function CreatorCardPage() {
       postSaveSyncRef.current = true
       window.setTimeout(() => setRefetchTick((x) => x + 1), 0)
     } catch {
+      if (!isLatest()) return
       setSaveError(t("creatorCardEditor.errors.saveFailed"))
       showToast(t("creatorCardEditor.errors.saveFailed"))
     } finally {
-      saveInFlightRef.current = false
-      setSaving(false)
+      if (isLatest()) {
+        saveInFlightRef.current = false
+        setSaving(false)
+      }
     }
   }, [audienceProfiles, baseCard, clearDirty, collaborationNiches, deliverables, featuredItems, fileToDataUrl, igProfile?.profile_picture_url, introDraft, minPrice, pastCollaborations, profileImageFile, saving, serializedContact, showToast, t, themeTypes])
 
