@@ -6,7 +6,7 @@ let mePromise: Promise<{ status: number; data: any }> | null = null
 let meCache: { status: number; data: any } | null = null
 let meCacheAt = 0
 
-const DEFAULT_TTL_MS = 60_000
+const DEFAULT_TTL_MS = 300_000
 
 async function fetchInstagramMeOnce(): Promise<{ status: number; data: any }> {
   const now = Date.now()
@@ -83,6 +83,10 @@ export function useInstagramMe(options?: { enabled?: boolean }) {
     }
   }, [enabled])
 
+  const revalidate = useCallback(async () => {
+    return run()
+  }, [run])
+
   const refetch = useCallback(async () => {
     meCache = null
     meCacheAt = 0
@@ -97,5 +101,5 @@ export function useInstagramMe(options?: { enabled?: boolean }) {
     run()
   }, [enabled, run])
 
-  return { loading, status, data, error, refetch }
+  return { loading, status, data, error, revalidate, refetch }
 }

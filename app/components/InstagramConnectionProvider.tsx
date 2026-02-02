@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useMemo } from "react"
+import { usePathname } from "next/navigation"
 import { useInstagramConnectionStatus, type InstagramConnectionStatus } from "@/app/hooks/useInstagramConnectionStatus"
 
 type InstagramConnectionContextValue = {
@@ -17,8 +18,22 @@ type InstagramConnectionContextValue = {
 
 const InstagramConnectionContext = createContext<InstagramConnectionContextValue | null>(null)
 
+function isIgDependentPathname(pathname: string): boolean {
+  const p = String(pathname || "")
+  // Note: pathname includes locale prefix (e.g. /en/creator-card)
+  return (
+    /\/(creator-card)(\/|$)/i.test(p) ||
+    /\/(post-analysis)(\/|$)/i.test(p) ||
+    /\/(results)(\/|$)/i.test(p) ||
+    /\/(matchmaking)(\/|$)/i.test(p)
+  )
+}
+
 export function InstagramConnectionProvider({ children }: { children: React.ReactNode }) {
-  const v = useInstagramConnectionStatus({ enabled: true, igDependent: false })
+  const pathname = usePathname() || ""
+  const shouldRevalidateOnEvents = isIgDependentPathname(pathname)
+
+  const v = useInstagramConnectionStatus({ enabled: true, igDependent: false, revalidateOnEvents: shouldRevalidateOnEvents })
 
   const value = useMemo<InstagramConnectionContextValue>(
     () => ({

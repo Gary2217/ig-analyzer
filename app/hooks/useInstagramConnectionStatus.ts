@@ -35,9 +35,11 @@ export type InstagramConnectionStatus = "connected" | "needs_reauth" | "unknown"
 export function useInstagramConnectionStatus(options?: {
   enabled?: boolean
   igDependent?: boolean
+  revalidateOnEvents?: boolean
 }) {
   const enabled = options?.enabled !== false
   const igDependent = options?.igDependent === true
+  const revalidateOnEvents = options?.revalidateOnEvents !== false
 
   const meQuery = useInstagramMe({ enabled })
 
@@ -100,16 +102,19 @@ export function useInstagramConnectionStatus(options?: {
     setDismissedAt(now)
   }, [])
 
+  const meRevalidateRef = useRef<null | (() => Promise<any>)>(null)
   const meRefetchRef = useRef<null | (() => Promise<any>)>(null)
   useEffect(() => {
+    meRevalidateRef.current = typeof (meQuery as any).revalidate === "function" ? (meQuery as any).revalidate : null
     meRefetchRef.current = typeof meQuery.refetch === "function" ? meQuery.refetch : null
-  }, [meQuery.refetch])
+  }, [meQuery.refetch, (meQuery as any).revalidate])
 
   const didOAuthRevalidateRef = useRef(false)
   const lastEventRevalidateAtRef = useRef(0)
   const eventTimerRef = useRef<number | null>(null)
 
   const revalidate = useCallback(async () => {
+    // Explicit caller intent: bypass the 5-min stale window.
     return await meRefetchRef.current?.()
   }, [])
 
@@ -136,7 +141,13 @@ export function useInstagramConnectionStatus(options?: {
 
       eventTimerRef.current = window.setTimeout(() => {
         eventTimerRef.current = null
-        meRefetchRef.current?.()
+        if (reason === "oauth") {
+          // OAuth return should reflect the new auth state immediately.
+          meRefetchRef.current?.()
+          return
+        }
+        // focus/visibility should respect the stale window to avoid unnecessary calls.
+        meRevalidateRef.current?.()
       }, 0)
     },
     [enabled]
@@ -157,23 +168,31 @@ export function useInstagramConnectionStatus(options?: {
 
     if (likelyOAuthReturn) triggerRevalidateOnce("oauth")
 
-    const onFocus = () => triggerRevalidateOnce("focus")
+    const onFocus = () => {
+      if (!revalidateOnEvents) return
+      triggerRevalidateOnce("focus")
+    }
     const onVisibility = () => {
+      if (!revalidateOnEvents) return
       if (document.visibilityState === "visible") triggerRevalidateOnce("visibility")
     }
 
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisibility)
+    if (revalidateOnEvents) {
+      window.addEventListener("focus", onFocus)
+      document.addEventListener("visibilitychange", onVisibility)
+    }
 
     return () => {
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisibility)
+      if (revalidateOnEvents) {
+        window.removeEventListener("focus", onFocus)
+        document.removeEventListener("visibilitychange", onVisibility)
+      }
       if (eventTimerRef.current != null) {
         window.clearTimeout(eventTimerRef.current)
         eventTimerRef.current = null
       }
     }
-  }, [enabled, triggerRevalidateOnce])
+  }, [enabled, revalidateOnEvents, triggerRevalidateOnce])
 
   return {
     isConnected,
