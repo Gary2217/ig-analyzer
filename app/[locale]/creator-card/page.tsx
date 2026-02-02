@@ -23,6 +23,7 @@ import { normalizeIgThumbnailUrlOrNull, useCreatorCardPreviewData } from "../../
 import { CreatorCardPreviewShell } from "@/app/components/creator-card/CreatorCardPreviewShell"
 import { CardMobilePreviewShell } from "@/app/components/creator-card/CardMobilePreviewShell"
 import { useInstagramConnection } from "@/app/components/InstagramConnectionProvider"
+import { useSiteSessionContext } from "@/app/components/SiteSessionProvider"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "../../components/creator-card/igOEmbedTypes"
 
@@ -993,6 +994,7 @@ export default function CreatorCardPage() {
     "not_connected" | "supabase_invalid_key" | "not_logged_in" | "load_failed" | null
   >(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveAuthKind, setSaveAuthKind] = useState<null | "need_site_signin" | "need_ig_verify">(null)
   const [saveOk, setSaveOk] = useState(false)
   const [hasLocalDraft, setHasLocalDraft] = useState(false)
   const [saveFlash, setSaveFlash] = useState(false)
@@ -1021,8 +1023,9 @@ export default function CreatorCardPage() {
 
   const igConn = useInstagramConnection()
   const isInstagramConnected = igConn.isConnected
-  const effectiveNotLoggedIn = loadErrorKind === "not_logged_in" && !igConn.isConnected
-  const shouldShowNotLoggedInBanner = effectiveNotLoggedIn
+  const siteSession = useSiteSessionContext()
+  const isSiteSignedIn = siteSession.isSignedIn
+  const shouldShowNotLoggedInBanner = !siteSession.loading && !siteSession.isSignedIn
 
   const igMe = igConn.igMe as unknown
   const igMeObj = asRecord(igMe)
@@ -1570,9 +1573,13 @@ export default function CreatorCardPage() {
         if (cancelled) return
 
         if (!res.ok || !json?.ok) {
+          // Do NOT infer site session from creator-card/me.
+          // Site session is authoritative via /api/me (SiteSessionProvider).
           if (res.status === 200 && json?.error === "not_logged_in") {
-            setLoadErrorKind("not_logged_in")
-            setLoadError(null)
+            if (!isBackgroundRefresh) {
+              setLoadErrorKind(null)
+              setLoadError(null)
+            }
             return
           }
 
@@ -2427,14 +2434,18 @@ export default function CreatorCardPage() {
     markDirty()
   }, [minPriceDraft, markDirty])
 
-  const isNotLoggedIn = effectiveNotLoggedIn
+  const isNotLoggedIn = !isSiteSignedIn
 
   const handleSave = useCallback(async () => {
     if (isNotLoggedIn) {
       showToast(
-        activeLocale === "zh-TW"
-          ? "你目前尚未登入，無法儲存到雲端。請先登入以同步並避免貼文遺失。"
-          : "You are not logged in, so we can’t save to the cloud. Please sign in to sync and avoid losing posts.",
+        isInstagramConnected
+          ? activeLocale === "zh-TW"
+            ? "你已連結 Instagram，但尚未登入本站，因此無法儲存名片資料。請先登入以同步與保存。"
+            : "You’ve connected Instagram, but you’re not signed in to this site, so we can’t save your creator card. Please sign in to sync and save."
+          : activeLocale === "zh-TW"
+            ? "未登入或登入已過期，請重新驗證以繼續儲存名片資料。"
+            : "You’re not signed in or your session expired. Please re-verify to save your creator card.",
       )
       return
     }
@@ -2449,6 +2460,7 @@ export default function CreatorCardPage() {
     saveInFlightRef.current = true
     setSaving(true)
     setSaveError(null)
+    setSaveAuthKind(null)
     setSaveOk(false)
     showToast(t("creatorCardEditor.actions.saving"), 6000)
     try {
@@ -2564,7 +2576,21 @@ export default function CreatorCardPage() {
         })
 
         if (res.status === 401) {
-          setSaveError(t("creatorCardEditor.errors.notAuthenticated"))
+          if (igConn.isConnected) {
+            setSaveAuthKind("need_site_signin")
+            setSaveError(
+              activeLocale === "zh-TW"
+                ? "你已連結 Instagram，但尚未登入本站，因此無法儲存名片資料。請先登入以同步與保存。"
+                : "You’ve connected Instagram, but you’re not signed in to this site, so we can’t save your creator card. Please sign in to sync and save.",
+            )
+          } else {
+            setSaveAuthKind("need_ig_verify")
+            setSaveError(
+              activeLocale === "zh-TW"
+                ? "未登入或登入已過期，請重新驗證以繼續儲存名片資料。"
+                : "You’re not signed in or your session expired. Please re-verify to save your creator card.",
+            )
+          }
           showToast(t("creatorCardEditor.errors.saveFailed"))
           return
         }
@@ -2885,7 +2911,7 @@ export default function CreatorCardPage() {
                 saving ||
                 loading ||
                 loadErrorKind === "not_connected" ||
-                effectiveNotLoggedIn ||
+                isNotLoggedIn ||
                 loadErrorKind === "supabase_invalid_key" ||
                 featuredUploadingIds.size > 0
               }
@@ -2917,9 +2943,13 @@ export default function CreatorCardPage() {
       {shouldShowNotLoggedInBanner ? (
         <div className="mt-4 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100 min-w-0">
           <div className="font-semibold min-w-0 break-words [overflow-wrap:anywhere]">
-            {activeLocale === "zh-TW"
-              ? "你目前尚未登入，所以資料無法從雲端載入。請先登入以同步並避免貼文遺失。"
-              : "You are not logged in, so your data can’t be loaded from the cloud. Please sign in to sync and avoid losing posts."}
+            {isInstagramConnected
+              ? activeLocale === "zh-TW"
+                ? "你已連結 Instagram，但尚未登入本站，因此無法儲存名片資料。請先登入以同步與保存。"
+                : "You’ve connected Instagram, but you’re not signed in to this site, so we can’t save your creator card. Please sign in to sync and save."
+              : activeLocale === "zh-TW"
+                ? "未登入或登入已過期，請重新驗證以繼續儲存名片資料。"
+                : "You’re not signed in or your session expired. Please re-verify to save your creator card."}
           </div>
           <div className="mt-3 flex flex-col sm:flex-row gap-2">
             <Button
@@ -2932,7 +2962,13 @@ export default function CreatorCardPage() {
                 window.location.href = url
               }}
             >
-              {activeLocale === "zh-TW" ? "登入以同步" : "Sign in to sync"}
+              {isInstagramConnected
+                ? activeLocale === "zh-TW"
+                  ? "登入本站"
+                  : "Sign in"
+                : activeLocale === "zh-TW"
+                  ? "重新登入驗證"
+                  : "Re-verify"}
             </Button>
             <Button
               type="button"
@@ -2959,7 +2995,34 @@ export default function CreatorCardPage() {
         </div>
       ) : null}
       {saveError ? (
-        <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">{saveError}</div>
+        <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200 min-w-0">
+          <div className="min-w-0 break-words [overflow-wrap:anywhere]">{saveError}</div>
+          {saveAuthKind ? (
+            <div className="mt-3 flex flex-col sm:flex-row gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                className="min-h-[44px] w-full sm:w-auto"
+                onClick={() => {
+                  const nextPath =
+                    typeof window !== "undefined"
+                      ? window.location.pathname + window.location.search
+                      : `/${activeLocale}/creator-card`
+                  const url = `/api/auth/instagram?provider=instagram&locale=${encodeURIComponent(activeLocale)}&next=${encodeURIComponent(nextPath)}`
+                  window.location.href = url
+                }}
+              >
+                {saveAuthKind === "need_site_signin"
+                  ? activeLocale === "zh-TW"
+                    ? "登入本站"
+                    : "Sign in"
+                  : activeLocale === "zh-TW"
+                    ? "重新登入驗證"
+                    : "Re-verify"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {saveOk ? (
         <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{t("creatorCardEditor.success.saved")}</div>
@@ -4731,7 +4794,7 @@ export default function CreatorCardPage() {
                                     variant="primary"
                                     className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
                                     onClick={handleSave}
-                                    disabled={saving || loading || loadErrorKind === "not_connected" || effectiveNotLoggedIn || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
+                                    disabled={saving || loading || loadErrorKind === "not_connected" || isNotLoggedIn || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
                                   >
                                     {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}

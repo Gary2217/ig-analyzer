@@ -194,8 +194,11 @@ export async function POST(req: Request) {
     )
 
     const me = await getIGMe(req)
-    const igUserId = cookieIgUserId ? cookieIgUserId : null
-    const igUsername = me?.username ? String(me.username) : null
+    const meObj = me && typeof me === "object" ? (me as Record<string, unknown>) : null
+    const meOk = meObj?.ok === true
+    const meIgUserId = typeof meObj?.igUserId === "string" ? String(meObj.igUserId) : null
+    const igUserId = (cookieIgUserId || meIgUserId || "").trim() || null
+    const igUsername = meObj?.username ? String(meObj.username) : null
     if (!igUserId) {
       return NextResponse.json(
         { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
@@ -203,8 +206,17 @@ export async function POST(req: Request) {
       )
     }
 
+    // If the IG /me endpoint does not confirm ok, treat as not connected.
+    // This prevents treating stale cookies as authenticated.
+    if (!meOk) {
+      return NextResponse.json(
+        { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
+        { status: 403 },
+      )
+    }
+
     // Atomic legacy claim (server-side) to avoid races. This only claims rows with user_id IS NULL.
-    // If the function does not exist (older env), we safely fall back to current select logic.
+    // Only available when the caller has an app session (Supabase user).
     try {
       const claim = await authed
         .rpc("claim_creator_card_legacy", { p_ig_user_id: igUserId, p_user_id: user.id })
@@ -212,7 +224,8 @@ export async function POST(req: Request) {
 
       if (!(claim as any)?.error && (claim as any)?.data) {
         if (shouldDebug()) {
-          const claimedId = typeof ((claim as any)?.data as any)?.id === "string" ? String(((claim as any).data as any).id) : null
+          const claimedId =
+            typeof ((claim as any)?.data as any)?.id === "string" ? String(((claim as any).data as any).id) : null
           console.log("[creator-card/upsert] legacy card claimed", { id: claimedId })
         }
       } else {
