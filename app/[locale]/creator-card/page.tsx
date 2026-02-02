@@ -1021,9 +1021,66 @@ export default function CreatorCardPage() {
 
   const meQuery = useInstagramMe({ enabled: true })
 
+  const isInstagramConnected = useMemo(() => {
+    const raw = meQuery.data as unknown
+    const obj = asRecord(raw)
+    if (!obj) return false
+
+    const ok = obj.ok === true
+    const connected = obj.connected === true
+    const hasToken = obj.hasToken === true || obj.has_token === true
+    return ok && (connected || hasToken)
+  }, [meQuery.data])
+
+  const shouldShowNotLoggedInBanner = loadErrorKind === "not_logged_in" && !isInstagramConnected
+
   const igMe = meQuery.data as unknown
   const igMeObj = asRecord(igMe)
   const igProfile = (asRecord(igMeObj?.profile) ?? igMeObj) as unknown as InstagramProfileLite
+
+  useEffect(() => {
+    if (!isInstagramConnected) return
+    if (loadErrorKind !== "not_logged_in") return
+
+    setLoadErrorKind(null)
+    setLoadError(null)
+    setRefetchTick((x) => x + 1)
+  }, [isInstagramConnected, loadErrorKind])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const revalidate = () => {
+      meQuery.refetch?.()
+      setRefetchTick((x) => x + 1)
+    }
+
+    const search = window.location.search || ""
+    const params = new URLSearchParams(search)
+    const likelyOAuthReturn =
+      params.has("code") ||
+      params.has("state") ||
+      params.has("oauth") ||
+      params.has("provider") ||
+      params.has("from")
+
+    if (likelyOAuthReturn) {
+      revalidate()
+    }
+
+    const onFocus = () => revalidate()
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") revalidate()
+    }
+
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+
+    return () => {
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [meQuery, setRefetchTick])
 
   const displayUsername = useMemo(() => {
     const raw = typeof igProfile?.username === "string" ? String(igProfile.username).trim() : ""
@@ -2865,7 +2922,7 @@ export default function CreatorCardPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-100">{t("creatorCardEditor.title")}</h1>
           <div className="mt-1 text-sm text-slate-300 min-w-0 break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.subtitle")}</div>
-          {loadErrorKind === "not_logged_in" && hasLocalDraft ? (
+          {shouldShowNotLoggedInBanner && hasLocalDraft ? (
             <div className="mt-2 inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-white/70 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
               {activeLocale === "zh-TW" ? "本機草稿（未同步）" : "Local draft (not synced)"}
             </div>
@@ -2911,7 +2968,7 @@ export default function CreatorCardPage() {
         </div>
       ) : null}
 
-      {loadErrorKind === "not_logged_in" ? (
+      {shouldShowNotLoggedInBanner ? (
         <div className="mt-4 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100 min-w-0">
           <div className="font-semibold min-w-0 break-words [overflow-wrap:anywhere]">
             {activeLocale === "zh-TW"
