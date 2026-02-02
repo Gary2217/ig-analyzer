@@ -38,6 +38,22 @@ export function SiteSessionProvider({ children }: { children: React.ReactNode })
     return obj?.ok === true
   }, [q.data])
 
+  // One-shot cache bust after OAuth return (server sets a short-lived cookie).
+  useEffect(() => {
+    if (typeof document === "undefined") return
+    if (!isIgDependent) return
+    const raw = String(document.cookie || "")
+    if (!raw.includes("site_oauth_return=1")) return
+
+    try {
+      document.cookie = "site_oauth_return=; Max-Age=0; path=/"
+    } catch {
+      // swallow
+    }
+
+    refetch?.()
+  }, [isIgDependent, refetch])
+
   // Event-driven refresh on IG-dependent routes only.
   // - OAuth return => force refetch
   // - focus/visibility => stale-window respecting revalidate

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { supabaseServer } from "@/lib/supabase/server"
+import { createServerClient } from "@supabase/ssr"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -173,6 +174,9 @@ export async function GET(req: NextRequest) {
   const appId = process.env.META_APP_ID || process.env.INSTAGRAM_APP_ID || process.env.META_CLIENT_ID
   const appSecret =
     process.env.META_APP_SECRET || process.env.INSTAGRAM_APP_SECRET || process.env.META_CLIENT_SECRET
+
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim()
+  const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim()
 
   const GRAPH_BASE = "https://graph.facebook.com"
   const GRAPH_VERSION = "v21.0"
@@ -512,6 +516,83 @@ export async function GET(req: NextRequest) {
     if (pageId && igId) {
       res.cookies.set("ig_page_id", pageId, baseCookieOptions)
       res.cookies.set("ig_ig_id", igId, baseCookieOptions)
+    }
+
+    // Best-effort: establish Supabase app session (sb-* cookies) so /api/me reflects signed-in state.
+    // This does NOT change any routes/redirects, and failures do not block IG connection.
+    try {
+      if (supabaseUrl && supabaseAnonKey && igId) {
+        const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()
+        if (serviceRoleKey) {
+          const email = `ig_${igId}@instagram.local`
+
+          // 1) Generate a magiclink token server-side (admin)
+          const admin: any = supabaseServer
+          const linkRes: any = await admin?.auth?.admin?.generateLink?.({
+            type: "magiclink",
+            email,
+            options: { redirectTo: `${origin}${nextPath}` },
+          })
+
+          const linkData = linkRes?.data ?? null
+          const tokenHash =
+            (typeof linkData?.properties?.hashed_token === "string" && linkData.properties.hashed_token) ||
+            (typeof linkData?.properties?.hashedToken === "string" && linkData.properties.hashedToken) ||
+            null
+
+          if (tokenHash) {
+            // 2) Verify token to obtain session tokens
+            const verifyRes = await fetch(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/verify`, {
+              method: "POST",
+              headers: {
+                apikey: supabaseAnonKey,
+                Authorization: `Bearer ${supabaseAnonKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ type: "magiclink", token_hash: tokenHash }),
+            })
+
+            const verifyJson: any = await verifyRes.json().catch(() => null)
+            const accessToken = typeof verifyJson?.access_token === "string" ? verifyJson.access_token : null
+            const refreshToken = typeof verifyJson?.refresh_token === "string" ? verifyJson.refresh_token : null
+
+            if (accessToken && refreshToken) {
+              // 3) Set sb-* cookies on the same redirect response
+              const authed = createServerClient(supabaseUrl, supabaseAnonKey, {
+                cookies: {
+                  getAll() {
+                    return req.cookies.getAll()
+                  },
+                  setAll(cookiesToSet) {
+                    try {
+                      cookiesToSet.forEach(({ name, value, options }) => {
+                        res.cookies.set(name, value, options)
+                      })
+                    } catch {
+                      // swallow
+                    }
+                  },
+                },
+              })
+
+              await authed.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+
+              // One-shot flag to force client SSOT refetch after redirect without relying on URL params
+              res.cookies.set("site_oauth_return", "1", {
+                ...baseCookieOptions,
+                httpOnly: false,
+                maxAge: 60,
+              })
+            }
+          }
+        }
+      }
+    } catch (e0) {
+      if (process.env.IG_OAUTH_DEBUG === "1") {
+        console.log("[IG_OAUTH_DEBUG] supabase session bootstrap failed", {
+          message: (e0 as any)?.message ?? String(e0),
+        })
+      }
     }
 
     logRedirectResponse(res)
