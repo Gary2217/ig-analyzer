@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import { ChevronLeft, ChevronRight, Plus, Sparkles, X, GripVertical } from "lucide-react"
 
@@ -188,6 +188,31 @@ declare global {
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
+
+const CreatorCardPhoto = memo(function CreatorCardPhoto({ url, alt }: { url: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    setLoaded(false)
+  }, [url])
+
+  return (
+    <>
+      {!loaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
+      <Image
+        src={url}
+        alt={alt}
+        fill
+        sizes="(max-width: 640px) 90vw, 400px"
+        unoptimized
+        className={"object-cover" + (!loaded ? " opacity-0" : " opacity-100")}
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        referrerPolicy="no-referrer"
+      />
+    </>
+  )
+})
 
 // Sortable preview item component
 function SortablePreviewItem({
@@ -824,25 +849,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const sectionRing = (key: NonNullable<CreatorCardPreviewProps["highlightSection"]>) =>
     highlightSection === key ? "ring-2 ring-white/18" : ""
 
-  const Photo = ({ url }: { url: string }) => {
-    const [loaded, setLoaded] = useState(false)
-    return (
-      <>
-        {!loaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
-        <Image
-          src={url}
-          alt={resolvedDisplayName ? t("alt.avatar").replace("{name}", resolvedDisplayName) : ""}
-          fill
-          sizes="(max-width: 640px) 90vw, 400px"
-          unoptimized
-          className={"object-cover" + (!loaded ? " opacity-0" : " opacity-100")}
-          onLoad={() => setLoaded(true)}
-          onError={() => setLoaded(true)}
-          referrerPolicy="no-referrer"
-        />
-      </>
-    )
-  }
+  const photoAlt = resolvedDisplayName ? t("alt.avatar").replace("{name}", resolvedDisplayName) : ""
 
   return (
     <div className="rounded-2xl border border-white/8 bg-[#0b1220]/40 backdrop-blur-sm">
@@ -877,16 +884,14 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               <button
                 type="button"
                 onClick={() => effectivePhotoUrl && setOpenAvatarUrl(effectivePhotoUrl)}
-                className="rounded-xl border border-white/10 bg-black/20 overflow-hidden min-w-0 w-full transition-opacity hover:opacity-80 cursor-pointer"
-                disabled={!effectivePhotoUrl}
+                className="relative block h-[160px] w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
               >
-                <div className="relative aspect-[3/4] w-full">
-                  {effectivePhotoUrl ? (
-                    <Photo key={effectivePhotoUrl} url={effectivePhotoUrl} />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-sm text-white/50">—</div>
-                  )}
-                </div>
+                {effectivePhotoUrl ? <CreatorCardPhoto url={effectivePhotoUrl} alt={photoAlt} /> : null}
+                {!effectivePhotoUrl ? (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-xs font-medium text-white/50">{t("creatorCardEditor.common.noImage")}</div>
+                  </div>
+                ) : null}
               </button>
 
               {photoUploadEnabled ? (
