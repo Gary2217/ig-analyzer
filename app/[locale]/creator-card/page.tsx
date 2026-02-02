@@ -1231,6 +1231,37 @@ export default function CreatorCardPage() {
   useEffect(() => {
     set__overlayMounted(true)
   }, [])
+
+  const runBackgroundUpsert = useCallback(async (payload: any) => {
+    try {
+      const res = await fetch("/api/creator-card/upsert", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      })
+
+      const jsonRaw: unknown = await res.clone().json().catch(() => null)
+      const jsonObj = asRecord(jsonRaw)
+      const ok = res.ok && jsonObj?.ok === true
+      if (ok) return
+
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[creator-card] background upsert failed", {
+          status: res.status,
+          error: typeof jsonObj?.error === "string" ? String(jsonObj.error) : null,
+          message: typeof jsonObj?.message === "string" ? String(jsonObj.message) : null,
+        })
+      }
+    } catch (e: unknown) {
+      if (process.env.NODE_ENV !== "production") {
+        const errObj = asRecord(e)
+        console.error("[creator-card] background upsert threw", {
+          message: typeof errObj?.message === "string" ? String(errObj.message) : "unknown",
+        })
+      }
+    }
+  }, [])
   
   // Initialize featured carousel scroll state
   useEffect(() => {
@@ -1997,12 +2028,7 @@ export default function CreatorCardPage() {
           }
 
           setTimeout(() => {
-            fetch("/api/creator-card/upsert", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify(payload),
-            }).catch(() => null)
+            runBackgroundUpsert(payload)
           }, 0)
         }
 
