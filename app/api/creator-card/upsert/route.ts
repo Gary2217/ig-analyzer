@@ -308,7 +308,7 @@ export async function POST(req: Request) {
     if (!existing.data) {
       const byIg = await supabaseServer
         .from("creator_cards")
-        .select("id, handle, user_id, ig_user_id, updated_at")
+        .select("id, handle, user_id, ig_user_id, ig_username, updated_at")
         .eq("ig_user_id", igUserIdStr)
         .order("updated_at", { ascending: false })
         .limit(10)
@@ -349,41 +349,96 @@ export async function POST(req: Request) {
           const newestUserId = typeof newest?.user_id === "string" ? String(newest.user_id) : null
           const newestOwnerKind = newestUserId == null ? "null" : newestUserId === user.id ? "self" : "other"
 
-          if (ccDebug) {
-            console.log("[creator-card/upsert] not_owner", {
-              at: new Date().toISOString(),
-              source: ccDebugSrc,
-              userId: user.id,
-              igUserId: igUserIdStr,
-              totalMatchesByIg,
-              usableMatches,
-              ownedByOtherMatches,
-              newestMatch: {
-                id: typeof newest?.id === "string" ? newest.id : null,
-                user_id: newestUserId ?? "null",
-                updated_at: typeof newest?.updated_at === "string" ? newest.updated_at : null,
+          const newestId = typeof newest?.id === "string" ? newest.id : null
+          const newestIgUsername = typeof newest?.ig_username === "string" ? String(newest.ig_username) : null
+
+          const canReclaim = (() => {
+            // IG /me already confirmed ok for this ig_user_id earlier (meOk). Only allow reclaim with a confirmed IG session.
+            if (!meOk) return false
+            if (!newestId) return false
+            if (typeof igUsername === "string" && igUsername.trim() && typeof newestIgUsername === "string" && newestIgUsername.trim()) {
+              return newestIgUsername.trim().toLowerCase() === igUsername.trim().toLowerCase()
+            }
+            // If DB row has no ig_username (or request has none), fall back to ig_user_id proof.
+            return true
+          })()
+
+          if (canReclaim && newestId) {
+            const reclaimRes = await supabaseServer
+              .from("creator_cards")
+              .update({ user_id: user.id, updated_at: new Date().toISOString() })
+              .eq("id", newestId)
+              .eq("ig_user_id", igUserIdStr)
+              .select("id, handle, user_id, ig_user_id")
+              .maybeSingle()
+
+            if (reclaimRes.error) {
+              if (ccDebug) {
+                console.error("[creator-card/upsert] reclaim failed", {
+                  at: new Date().toISOString(),
+                  source: ccDebugSrc,
+                  userId: user.id,
+                  igUserId: igUserIdStr,
+                  targetId: newestId,
+                  message:
+                    typeof (reclaimRes.error as any)?.message === "string"
+                      ? String((reclaimRes.error as any).message).slice(0, 300)
+                      : "unknown",
+                  code: typeof (reclaimRes.error as any)?.code === "string" ? String((reclaimRes.error as any).code) : null,
+                })
+              }
+              return NextResponse.json(
+                { ok: false, error: "upsert_failed", message: "reclaim_failed" },
+                { status: 500 },
+              )
+            }
+
+            if (reclaimRes.data) {
+              existing = reclaimRes as any
+            } else {
+              return NextResponse.json(
+                { ok: false, error: "upsert_failed", message: "reclaim_no_row" },
+                { status: 500 },
+              )
+            }
+          } else {
+            if (ccDebug) {
+              console.log("[creator-card/upsert] not_owner", {
+                at: new Date().toISOString(),
+                source: ccDebugSrc,
+                userId: user.id,
+                igUserId: igUserIdStr,
+                totalMatchesByIg,
+                usableMatches,
+                ownedByOtherMatches,
+                newestMatch: {
+                  id: newestId,
+                  user_id: newestUserId ?? "null",
+                  updated_at: typeof newest?.updated_at === "string" ? newest.updated_at : null,
+                },
+              })
+            }
+
+            return NextResponse.json(
+              {
+                ok: false,
+                error: "forbidden",
+                message: "not_owner",
+                ...(ccDebug
+                  ? {
+                      debug: {
+                        igUserId: igUserIdStr,
+                        totalMatchesByIg,
+                        usableMatches,
+                        newestOwnerKind,
+                      },
+                    }
+                  : null),
               },
-            })
+              { status: 403 },
+            )
           }
 
-          return NextResponse.json(
-            {
-              ok: false,
-              error: "forbidden",
-              message: "not_owner",
-              ...(ccDebug
-                ? {
-                    debug: {
-                      igUserId: igUserIdStr,
-                      totalMatchesByIg,
-                      usableMatches,
-                      newestOwnerKind,
-                    },
-                  }
-                : null),
-            },
-            { status: 403 },
-          )
         }
       }
     }
