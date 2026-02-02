@@ -199,7 +199,8 @@ export async function POST(req: Request) {
     const meIgUserId = typeof meObj?.igUserId === "string" ? String(meObj.igUserId) : null
     const igUserId = (cookieIgUserId || meIgUserId || "").trim() || null
     const igUsername = meObj?.username ? String(meObj.username) : null
-    if (!igUserId) {
+    const igUserIdStr = typeof igUserId === "string" ? igUserId.trim() : ""
+    if (!igUserIdStr) {
       return NextResponse.json(
         { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
         { status: 403 },
@@ -247,7 +248,7 @@ export async function POST(req: Request) {
     }
 
     // Best-effort schema guard: do not fail if query permissions are limited.
-    const schemaGuard = await checkMinPriceColumnBestEffort(igUserId)
+    const schemaGuard = await checkMinPriceColumnBestEffort(igUserIdStr)
     if (!schemaGuard.ok && schemaGuard.missing) {
       console.error("[creator-card/upsert] schema guard", { message: schemaGuard.message })
       return NextResponse.json(
@@ -288,7 +289,7 @@ export async function POST(req: Request) {
       const usableByIg = await supabaseServer
         .from("creator_cards")
         .select("id, handle, user_id, ig_user_id")
-        .eq("ig_user_id", igUserId)
+        .eq("ig_user_id", igUserIdStr)
         .or(`user_id.is.null,user_id.eq.${user.id}`)
         .order("updated_at", { ascending: false })
         .limit(1)
@@ -304,7 +305,7 @@ export async function POST(req: Request) {
         const anyByIg = await supabaseServer
           .from("creator_cards")
           .select("id")
-          .eq("ig_user_id", igUserId)
+          .eq("ig_user_id", igUserIdStr)
           .limit(1)
           .maybeSingle()
 
@@ -313,6 +314,14 @@ export async function POST(req: Request) {
         }
 
         if (anyByIg.data) {
+          if (shouldDebug()) {
+            const anyId = typeof (anyByIg.data as any)?.id === "string" ? String((anyByIg.data as any).id) : null
+            console.log("[creator-card/upsert] forbidden not_owner", {
+              igUserId: igUserIdStr,
+              userId: user.id,
+              anyId,
+            })
+          }
           return NextResponse.json(
             { ok: false, error: "forbidden", message: "not_owner" },
             { status: 403 },
@@ -387,7 +396,7 @@ export async function POST(req: Request) {
 
     const dbWrite: Record<string, unknown> = {
       user_id: user.id,
-      ig_user_id: igUserId,
+      ig_user_id: igUserIdStr,
       ig_username: igUsername,
       handle,
       profile_image_url: profileImageUrl,
