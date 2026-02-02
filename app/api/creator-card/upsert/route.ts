@@ -294,159 +294,25 @@ export async function POST(req: Request) {
     let base = proposed ? slugify(proposed) : slugify(igUsername || "creator")
     if (!base) base = "creator"
 
-    let existing = await supabaseServer
+    const existingByIg = await supabaseServer
       .from("creator_cards")
-      .select("id, handle, user_id, ig_user_id")
-      .eq("user_id", user.id)
+      .select("id, handle, user_id, ig_user_id, updated_at")
+      .eq("ig_user_id", igUserIdStr)
       .limit(1)
       .maybeSingle()
 
-    if (existing.error) {
-      return toSupabaseErrorResponse(existing.error, "select existing by user_id")
+    if (existingByIg.error) {
+      return toSupabaseErrorResponse(existingByIg.error, "select existing by ig_user_id")
     }
 
-    if (!existing.data) {
-      const byIg = await supabaseServer
-        .from("creator_cards")
-        .select("id, handle, user_id, ig_user_id, ig_username, updated_at")
-        .eq("ig_user_id", igUserIdStr)
-        .order("updated_at", { ascending: false })
-        .limit(10)
+    const existingId = typeof (existingByIg.data as any)?.id === "string" ? String((existingByIg.data as any).id) : null
+    const existingHandle = typeof (existingByIg.data as any)?.handle === "string" ? String((existingByIg.data as any).handle) : ""
+    const existingUserId = typeof (existingByIg.data as any)?.user_id === "string" ? String((existingByIg.data as any).user_id) : null
 
-      if (byIg.error) {
-        if (ccDebug) {
-          console.error("[creator-card/upsert] debug query error", {
-            at: new Date().toISOString(),
-            source: ccDebugSrc,
-            where: "select by ig_user_id",
-            userId: user.id,
-            igUserId: igUserIdStr,
-            message: typeof (byIg.error as any)?.message === "string" ? String((byIg.error as any).message).slice(0, 300) : "unknown",
-            code: typeof (byIg.error as any)?.code === "string" ? String((byIg.error as any).code) : null,
-          })
-          return NextResponse.json(
-            { ok: false, error: "upsert_failed", message: "debug_select_by_ig_failed" },
-            { status: 500 },
-          )
-        }
-        return toSupabaseErrorResponse(byIg.error, "select by ig_user_id")
-      }
+    const wantsNewHandle = Boolean(proposed) && slugify(proposed) !== (existingHandle || "")
+    let handle = wantsNewHandle ? base : existingHandle || base
 
-      const rows = Array.isArray(byIg.data) ? byIg.data : []
-      if (rows.length > 0) {
-        const usable = rows.find((r: any) => {
-          const uid = typeof r?.user_id === "string" ? String(r.user_id) : null
-          return uid == null || uid === user.id
-        })
-
-        if (usable) {
-          existing = { data: usable, error: null } as any
-        } else {
-          const totalMatchesByIg = rows.length
-          const usableMatches = 0
-          const ownedByOtherMatches = rows.length
-          const newest = rows[0] as any
-          const newestUserId = typeof newest?.user_id === "string" ? String(newest.user_id) : null
-          const newestOwnerKind = newestUserId == null ? "null" : newestUserId === user.id ? "self" : "other"
-
-          const newestId = typeof newest?.id === "string" ? newest.id : null
-          const newestIgUsername = typeof newest?.ig_username === "string" ? String(newest.ig_username) : null
-
-          const canReclaim = (() => {
-            // IG /me already confirmed ok for this ig_user_id earlier (meOk). Only allow reclaim with a confirmed IG session.
-            if (!meOk) return false
-            if (!newestId) return false
-            if (typeof igUsername === "string" && igUsername.trim() && typeof newestIgUsername === "string" && newestIgUsername.trim()) {
-              return newestIgUsername.trim().toLowerCase() === igUsername.trim().toLowerCase()
-            }
-            // If DB row has no ig_username (or request has none), fall back to ig_user_id proof.
-            return true
-          })()
-
-          if (canReclaim && newestId) {
-            const reclaimRes = await supabaseServer
-              .from("creator_cards")
-              .update({ user_id: user.id, updated_at: new Date().toISOString() })
-              .eq("id", newestId)
-              .eq("ig_user_id", igUserIdStr)
-              .select("id, handle, user_id, ig_user_id")
-              .maybeSingle()
-
-            if (reclaimRes.error) {
-              if (ccDebug) {
-                console.error("[creator-card/upsert] reclaim failed", {
-                  at: new Date().toISOString(),
-                  source: ccDebugSrc,
-                  userId: user.id,
-                  igUserId: igUserIdStr,
-                  targetId: newestId,
-                  message:
-                    typeof (reclaimRes.error as any)?.message === "string"
-                      ? String((reclaimRes.error as any).message).slice(0, 300)
-                      : "unknown",
-                  code: typeof (reclaimRes.error as any)?.code === "string" ? String((reclaimRes.error as any).code) : null,
-                })
-              }
-              return NextResponse.json(
-                { ok: false, error: "upsert_failed", message: "reclaim_failed" },
-                { status: 500 },
-              )
-            }
-
-            if (reclaimRes.data) {
-              existing = reclaimRes as any
-            } else {
-              return NextResponse.json(
-                { ok: false, error: "upsert_failed", message: "reclaim_no_row" },
-                { status: 500 },
-              )
-            }
-          } else {
-            if (ccDebug) {
-              console.log("[creator-card/upsert] not_owner", {
-                at: new Date().toISOString(),
-                source: ccDebugSrc,
-                userId: user.id,
-                igUserId: igUserIdStr,
-                totalMatchesByIg,
-                usableMatches,
-                ownedByOtherMatches,
-                newestMatch: {
-                  id: newestId,
-                  user_id: newestUserId ?? "null",
-                  updated_at: typeof newest?.updated_at === "string" ? newest.updated_at : null,
-                },
-              })
-            }
-
-            return NextResponse.json(
-              {
-                ok: false,
-                error: "forbidden",
-                message: "not_owner",
-                ...(ccDebug
-                  ? {
-                      debug: {
-                        igUserId: igUserIdStr,
-                        totalMatchesByIg,
-                        usableMatches,
-                        newestOwnerKind,
-                      },
-                    }
-                  : null),
-              },
-              { status: 403 },
-            )
-          }
-
-        }
-      }
-    }
-
-    const wantsNewHandle = Boolean(proposed) && slugify(proposed) !== (existing.data?.handle || "")
-    let handle = wantsNewHandle ? base : existing.data?.handle || base
-
-    if (!existing.data || wantsNewHandle) {
+    if (!existingId || wantsNewHandle) {
       let candidate = base
       for (let i = 0; i < 5; i++) {
         const check = await supabaseServer
@@ -460,7 +326,7 @@ export async function POST(req: Request) {
           return toSupabaseErrorResponse(check.error, "check handle uniqueness")
         }
 
-        if (!check.data || (existing.data && check.data.id === existing.data.id)) {
+        if (!check.data || (existingId && check.data.id === existingId)) {
           handle = candidate
           break
         }
@@ -527,49 +393,108 @@ export async function POST(req: Request) {
       audience_profiles: audienceProfiles,
       updated_at: new Date().toISOString(),
     }
-    if (!existing.data?.id) {
-      const finalByIg = await supabaseServer
-        .from("creator_cards")
-        .select("id, user_id")
-        .eq("ig_user_id", igUserIdStr)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
 
-      if (finalByIg.error) {
-        return toSupabaseErrorResponse(finalByIg.error, "final idempotency check by ig_user_id")
+    const isUniqueViolation = (err: unknown) => {
+      const e = asRecord(err)
+      const code = typeof e?.code === "string" ? String(e.code) : null
+      const message = typeof e?.message === "string" ? String(e.message) : ""
+      return code === "23505" || message.toLowerCase().includes("duplicate key")
+    }
+
+    const authorizeExisting = (ownerUserId: string | null) => {
+      if (ownerUserId == null || ownerUserId === user.id) {
+        return { ok: true as const, reclaim: false as const }
+      }
+      if (meOk) {
+        return { ok: true as const, reclaim: true as const }
+      }
+      return { ok: false as const, reclaim: false as const }
+    }
+
+    const updateById = async (id: string, opts: { reclaim: boolean }) => {
+      const payload = opts.reclaim ? { ...dbWrite, user_id: user.id } : dbWrite
+      return await supabaseServer.from("creator_cards").update(payload).eq("id", id).select("*").maybeSingle()
+    }
+
+    let data: any = null
+    let error: any = null
+
+    if (existingId) {
+      const authz = authorizeExisting(existingUserId)
+      if (!authz.ok) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "forbidden",
+            message: "not_owner",
+            ...(ccDebug
+              ? {
+                  debug: {
+                    igUserId: igUserIdStr,
+                    ownerKind: "other",
+                    meOk,
+                  },
+                }
+              : null),
+          },
+          { status: 403 }
+        )
       }
 
-      const finalUserId = typeof (finalByIg.data as any)?.user_id === "string" ? String((finalByIg.data as any).user_id) : null
-      const finalId = typeof (finalByIg.data as any)?.id === "string" ? String((finalByIg.data as any).id) : null
+      const res = await updateById(existingId, { reclaim: authz.reclaim })
+      data = (res as any).data
+      error = (res as any).error
+    } else {
+      const insertRes = await supabaseServer.from("creator_cards").insert(dbWrite).select("*").maybeSingle()
+      if (!(insertRes as any).error) {
+        data = (insertRes as any).data
+      } else if (isUniqueViolation((insertRes as any).error)) {
+        const after = await supabaseServer
+          .from("creator_cards")
+          .select("id, handle, user_id, ig_user_id, updated_at")
+          .eq("ig_user_id", igUserIdStr)
+          .limit(1)
+          .maybeSingle()
 
-      if (finalId && finalUserId && finalUserId !== user.id) {
-        if (shouldDebug()) {
-          console.log("[creator-card/upsert] idempotency short-circuit (insert race)", {
-            at: new Date().toISOString(),
-            igUserId: igUserIdStr,
-            userId: user.id,
-            existingOwner: finalUserId,
-            existingId: finalId,
-          })
+        if (after.error) {
+          return toSupabaseErrorResponse(after.error, "reselect existing by ig_user_id after unique violation")
         }
-        return NextResponse.json({ ok: true })
+
+        const afterId = typeof (after.data as any)?.id === "string" ? String((after.data as any).id) : null
+        const afterOwner = typeof (after.data as any)?.user_id === "string" ? String((after.data as any).user_id) : null
+        if (!afterId) {
+          return NextResponse.json({ ok: false, error: "upsert_failed", message: "insert_race_no_row" }, { status: 500 })
+        }
+
+        const authz = authorizeExisting(afterOwner)
+        if (!authz.ok) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "forbidden",
+              message: "not_owner",
+              ...(ccDebug
+                ? {
+                    debug: {
+                      igUserId: igUserIdStr,
+                      ownerKind: "other",
+                      meOk,
+                      raced: true,
+                    },
+                  }
+                : null),
+            },
+            { status: 403 }
+          )
+        }
+
+        const res = await updateById(afterId, { reclaim: authz.reclaim })
+        data = (res as any).data
+        error = (res as any).error
+      } else {
+        error = (insertRes as any).error
       }
     }
-
-    const query = supabaseServer.from("creator_cards")
-    const runUpsert = async (p: Record<string, unknown>) => {
-      return existing.data?.id
-        ? await query
-            .update(p)
-            .eq("id", existing.data.id)
-            .or(`user_id.is.null,user_id.eq.${user.id}`)
-            .select("*")
-            .maybeSingle()
-        : await query.insert(p).select("*").maybeSingle()
-    }
-
-    const { data, error } = await runUpsert(dbWrite)
 
     if (error) {
       return toSupabaseErrorResponse(error, "upsert")
