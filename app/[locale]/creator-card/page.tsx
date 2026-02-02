@@ -1032,28 +1032,55 @@ export default function CreatorCardPage() {
     return ok && (connected || hasToken)
   }, [meQuery.data])
 
-  const shouldShowNotLoggedInBanner = loadErrorKind === "not_logged_in" && !isInstagramConnected
+  const effectiveNotLoggedIn = loadErrorKind === "not_logged_in" && !isInstagramConnected
+  const shouldShowNotLoggedInBanner = effectiveNotLoggedIn
 
   const igMe = meQuery.data as unknown
   const igMeObj = asRecord(igMe)
   const igProfile = (asRecord(igMeObj?.profile) ?? igMeObj) as unknown as InstagramProfileLite
 
+  const meRefetchRef = useRef<null | (() => Promise<any>)>(null)
   useEffect(() => {
-    if (!isInstagramConnected) return
-    if (loadErrorKind !== "not_logged_in") return
+    meRefetchRef.current = typeof meQuery.refetch === "function" ? meQuery.refetch : null
+  }, [meQuery.refetch])
 
-    setLoadErrorKind(null)
-    setLoadError(null)
-    setRefetchTick((x) => x + 1)
-  }, [isInstagramConnected, loadErrorKind])
+  const didOAuthRevalidateRef = useRef(false)
+  const lastEventRevalidateAtRef = useRef<number>(0)
+  const eventRevalidateTimerRef = useRef<number | null>(null)
+
+  const triggerRevalidateOnce = useCallback(
+    (reason: "oauth" | "focus" | "visibility") => {
+      if (typeof window === "undefined") return
+
+      if (reason === "oauth") {
+        if (didOAuthRevalidateRef.current) return
+        didOAuthRevalidateRef.current = true
+      }
+
+      const now = Date.now()
+      // Throttle event-driven revalidations (focus/visibility) to avoid bursts.
+      if (reason !== "oauth") {
+        if (now - lastEventRevalidateAtRef.current < 5000) return
+        lastEventRevalidateAtRef.current = now
+      }
+
+      if (eventRevalidateTimerRef.current != null) {
+        window.clearTimeout(eventRevalidateTimerRef.current)
+        eventRevalidateTimerRef.current = null
+      }
+
+      // Defer into next tick to avoid doing refetch during React commit.
+      eventRevalidateTimerRef.current = window.setTimeout(() => {
+        eventRevalidateTimerRef.current = null
+        meRefetchRef.current?.()
+        setRefetchTick((x) => x + 1)
+      }, 0)
+    },
+    [setRefetchTick]
+  )
 
   useEffect(() => {
     if (typeof window === "undefined") return
-
-    const revalidate = () => {
-      meQuery.refetch?.()
-      setRefetchTick((x) => x + 1)
-    }
 
     const search = window.location.search || ""
     const params = new URLSearchParams(search)
@@ -1065,12 +1092,12 @@ export default function CreatorCardPage() {
       params.has("from")
 
     if (likelyOAuthReturn) {
-      revalidate()
+      triggerRevalidateOnce("oauth")
     }
 
-    const onFocus = () => revalidate()
+    const onFocus = () => triggerRevalidateOnce("focus")
     const onVisibility = () => {
-      if (document.visibilityState === "visible") revalidate()
+      if (document.visibilityState === "visible") triggerRevalidateOnce("visibility")
     }
 
     window.addEventListener("focus", onFocus)
@@ -1079,8 +1106,12 @@ export default function CreatorCardPage() {
     return () => {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
+      if (eventRevalidateTimerRef.current != null) {
+        window.clearTimeout(eventRevalidateTimerRef.current)
+        eventRevalidateTimerRef.current = null
+      }
     }
-  }, [meQuery, setRefetchTick])
+  }, [triggerRevalidateOnce])
 
   const displayUsername = useMemo(() => {
     const raw = typeof igProfile?.username === "string" ? String(igProfile.username).trim() : ""
@@ -2481,7 +2512,7 @@ export default function CreatorCardPage() {
     markDirty()
   }, [minPriceDraft, markDirty])
 
-  const isNotLoggedIn = loadErrorKind === "not_logged_in"
+  const isNotLoggedIn = effectiveNotLoggedIn
 
   const handleSave = useCallback(async () => {
     if (isNotLoggedIn) {
@@ -2939,7 +2970,7 @@ export default function CreatorCardPage() {
                 saving ||
                 loading ||
                 loadErrorKind === "not_connected" ||
-                loadErrorKind === "not_logged_in" ||
+                effectiveNotLoggedIn ||
                 loadErrorKind === "supabase_invalid_key" ||
                 featuredUploadingIds.size > 0
               }
@@ -4785,7 +4816,7 @@ export default function CreatorCardPage() {
                                     variant="primary"
                                     className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
                                     onClick={handleSave}
-                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "not_logged_in" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
+                                    disabled={saving || loading || loadErrorKind === "not_connected" || effectiveNotLoggedIn || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
                                   >
                                     {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
