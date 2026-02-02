@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:onedrive": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\build-onedrive.ps1",
     "start": "next start",
     "lint": "eslint"
   },

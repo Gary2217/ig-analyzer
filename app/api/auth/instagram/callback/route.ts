@@ -332,6 +332,10 @@ export async function GET(req: NextRequest) {
     const res = redirectTo(nextPath)
     res.headers.set("Cache-Control", "no-store")
 
+    let supabaseSessionSetAttempted = false
+    let supabaseSessionSetSucceeded = false
+    let supabaseSessionFailStep: string | null = null
+
     res.cookies.set("ig_connected", "1", { ...baseCookieOptions, httpOnly: false })
     res.cookies.set("ig_access_token", longLivedToken, baseCookieOptions)
 
@@ -524,6 +528,7 @@ export async function GET(req: NextRequest) {
       if (supabaseUrl && supabaseAnonKey && igId) {
         const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()
         if (serviceRoleKey) {
+          supabaseSessionSetAttempted = true
           const email = `ig_${igId}@instagram.local`
 
           // 1) Generate a magiclink token server-side (admin)
@@ -534,23 +539,58 @@ export async function GET(req: NextRequest) {
             options: { redirectTo: `${origin}${nextPath}` },
           })
 
+          if (!linkRes || !linkRes.data) {
+            supabaseSessionFailStep = "generate_link_missing"
+          }
+
           const linkData = linkRes?.data ?? null
-          const tokenHash =
+          const tokenHashDirect =
+            (typeof linkData?.hashed_token === "string" && linkData.hashed_token) ||
+            (typeof linkData?.hashedToken === "string" && linkData.hashedToken) ||
             (typeof linkData?.properties?.hashed_token === "string" && linkData.properties.hashed_token) ||
             (typeof linkData?.properties?.hashedToken === "string" && linkData.properties.hashedToken) ||
             null
 
+          let tokenHash: string | null = tokenHashDirect
+
+          if (!tokenHash) {
+            const actionLink =
+              (typeof linkData?.action_link === "string" && linkData.action_link) ||
+              (typeof linkData?.properties?.action_link === "string" && linkData.properties.action_link) ||
+              (typeof linkData?.properties?.actionLink === "string" && linkData.properties.actionLink) ||
+              null
+
+            if (actionLink) {
+              try {
+                const u = new URL(actionLink)
+                const th = u.searchParams.get("token_hash")
+                if (th) tokenHash = th
+              } catch {
+                // swallow
+              }
+            }
+          }
+
+          if (!tokenHash) {
+            supabaseSessionFailStep = "token_hash_missing"
+          }
+
           if (tokenHash) {
             // 2) Verify token to obtain session tokens
+            const verifyKey = serviceRoleKey || supabaseAnonKey
             const verifyRes = await fetch(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/verify`, {
               method: "POST",
               headers: {
-                apikey: supabaseAnonKey,
-                Authorization: `Bearer ${supabaseAnonKey}`,
+                apikey: verifyKey,
+                Authorization: `Bearer ${verifyKey}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({ type: "magiclink", token_hash: tokenHash }),
             })
+
+            if (!verifyRes.ok) {
+              supabaseSessionFailStep = `verify_non_200:${verifyRes.status}`
+            }
 
             const verifyJson: any = await verifyRes.json().catch(() => null)
             const accessToken = typeof verifyJson?.access_token === "string" ? verifyJson.access_token : null
@@ -575,7 +615,14 @@ export async function GET(req: NextRequest) {
                 },
               })
 
-              await authed.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+              try {
+                await authed.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+              } catch (e1) {
+                supabaseSessionFailStep = "set_session_throw"
+                throw e1
+              }
+
+              supabaseSessionSetSucceeded = true
 
               // One-shot flag to force client SSOT refetch after redirect without relying on URL params
               res.cookies.set("site_oauth_return", "1", {
@@ -583,8 +630,21 @@ export async function GET(req: NextRequest) {
                 httpOnly: false,
                 maxAge: 60,
               })
+            } else {
+              // verify returned non-session payload (or parsing failed)
+              if (supabaseSessionFailStep == null) {
+                supabaseSessionFailStep = "verify_missing_tokens"
+              }
             }
           }
+        } else {
+          supabaseSessionSetAttempted = true
+          supabaseSessionFailStep = "no_service_role"
+        }
+      } else {
+        // Not enough env/identity to attempt
+        if (process.env.IG_OAUTH_DEBUG === "1") {
+          supabaseSessionFailStep = "missing_env_or_igid"
         }
       }
     } catch (e0) {
@@ -595,7 +655,41 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    if (process.env.IG_OAUTH_DEBUG === "1") {
+      try {
+        res.headers.set(
+          "X-Debug-Supabase-Session",
+          supabaseSessionSetAttempted
+            ? supabaseSessionSetSucceeded
+              ? "succeeded"
+              : "failed"
+            : "not_attempted",
+        )
+
+        if (supabaseSessionFailStep) {
+          res.headers.set("X-Debug-Supabase-FailStep", supabaseSessionFailStep)
+        }
+      } catch {
+        // swallow
+      }
+    }
+
     logRedirectResponse(res)
+
+    if (process.env.IG_OAUTH_DEBUG === "1") {
+      try {
+        const setCookie = res.headers.get("set-cookie") || ""
+        const hasSb = /\bsb-[^=]+=/.test(setCookie)
+        debugLog("callback response set-cookie has sb-* =", hasSb)
+        try {
+          res.headers.set("X-Debug-Supabase-SetCookie", hasSb ? "true" : "false")
+        } catch {
+          // swallow
+        }
+      } catch {
+        // swallow
+      }
+    }
 
     clearCookies(res)
     return res
