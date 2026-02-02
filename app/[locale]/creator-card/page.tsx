@@ -437,6 +437,7 @@ function SortableFeaturedTile(props: {
   item: FeaturedItem
   t: (key: string) => string
   activeLocale: "zh-TW" | "en"
+  isReadOnly: boolean
   onReplace: (id: string) => void
   onRemove: (id: string) => void
   onEdit: (id: string) => void
@@ -449,7 +450,7 @@ function SortableFeaturedTile(props: {
   markDirty: () => void
   suppressClick: boolean
 }) {
-  const { item, t, activeLocale, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
+  const { item, t, activeLocale, isReadOnly, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
 
   const itemType = item.type || "media"
@@ -648,7 +649,11 @@ function SortableFeaturedTile(props: {
               // Explicit action: fetch oEmbed once on Add (never during render/hydration)
               props.fetchAndApplyIgOEmbedForItem({ itemId: item.id, normalizedUrl, mediaIdFromUrl })
             }}
-            className="w-full px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors"
+            disabled={isReadOnly}
+            className={
+              "w-full px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg transition-colors min-h-[44px] " +
+              (isReadOnly ? "opacity-60 cursor-not-allowed" : "hover:from-purple-500/40 hover:to-pink-500/40")
+            }
           >
             {t("creatorCard.featured.addPost")}
           </button>
@@ -985,10 +990,11 @@ export default function CreatorCardPage() {
   const saveInFlightRef = useRef(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadErrorKind, setLoadErrorKind] = useState<
-    "not_connected" | "supabase_invalid_key" | "load_failed" | null
+    "not_connected" | "supabase_invalid_key" | "not_logged_in" | "load_failed" | null
   >(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
+  const [hasLocalDraft, setHasLocalDraft] = useState(false)
   const [saveFlash, setSaveFlash] = useState(false)
   const saveFlashTimerRef = useRef<number | null>(null)
 
@@ -1561,6 +1567,12 @@ export default function CreatorCardPage() {
         if (cancelled) return
 
         if (!res.ok || !json?.ok) {
+          if (res.status === 200 && json?.error === "not_logged_in") {
+            setLoadErrorKind("not_logged_in")
+            setLoadError(null)
+            return
+          }
+
           if (res.status === 401) {
             setLoadErrorKind("not_connected")
             setLoadError(t("creatorCardEditor.errors.notConnected"))
@@ -2412,7 +2424,17 @@ export default function CreatorCardPage() {
     markDirty()
   }, [minPriceDraft, markDirty])
 
+  const isNotLoggedIn = loadErrorKind === "not_logged_in"
+
   const handleSave = useCallback(async () => {
+    if (isNotLoggedIn) {
+      showToast(
+        activeLocale === "zh-TW"
+          ? "你目前尚未登入，無法儲存到雲端。請先登入以同步並避免貼文遺失。"
+          : "You are not logged in, so we can’t save to the cloud. Please sign in to sync and avoid losing posts.",
+      )
+      return
+    }
     if (saving) return
     if (saveInFlightRef.current) return
 
@@ -2843,6 +2865,11 @@ export default function CreatorCardPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-100">{t("creatorCardEditor.title")}</h1>
           <div className="mt-1 text-sm text-slate-300 min-w-0 break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.subtitle")}</div>
+          {loadErrorKind === "not_logged_in" && hasLocalDraft ? (
+            <div className="mt-2 inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-white/70 whitespace-nowrap">
+              {activeLocale === "zh-TW" ? "本機草稿（未同步）" : "Local draft (not synced)"}
+            </div>
+          ) : null}
         </div>
 
         <div className="shrink-0 flex items-center gap-2">
@@ -2851,7 +2878,14 @@ export default function CreatorCardPage() {
               variant="primary"
               className="ring-1 ring-white/15 hover:ring-white/25"
               onClick={handleSave}
-              disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
+              disabled={
+                saving ||
+                loading ||
+                loadErrorKind === "not_connected" ||
+                loadErrorKind === "not_logged_in" ||
+                loadErrorKind === "supabase_invalid_key" ||
+                featuredUploadingIds.size > 0
+              }
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
               {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
@@ -2874,6 +2908,38 @@ export default function CreatorCardPage() {
         <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           <div className="font-semibold">{t("creatorCardEditor.errors.supabaseInvalidKey.title")}</div>
           <div className="mt-1 text-amber-100/80">{t("creatorCardEditor.errors.supabaseInvalidKey.body")}</div>
+        </div>
+      ) : null}
+
+      {loadErrorKind === "not_logged_in" ? (
+        <div className="mt-4 rounded-xl border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+          <div className="font-semibold min-w-0 break-words [overflow-wrap:anywhere]">
+            {activeLocale === "zh-TW"
+              ? "你目前尚未登入，所以資料無法從雲端載入。請先登入以同步並避免貼文遺失。"
+              : "You are not logged in, so your data can’t be loaded from the cloud. Please sign in to sync and avoid losing posts."}
+          </div>
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              className="min-h-[44px]"
+              onClick={() => {
+                const nextPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : `/${activeLocale}/creator-card`
+                const url = `/api/auth/instagram?provider=instagram&locale=${encodeURIComponent(activeLocale)}&next=${encodeURIComponent(nextPath)}`
+                window.location.href = url
+              }}
+            >
+              {activeLocale === "zh-TW" ? "登入以同步" : "Sign in to sync"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-[44px]"
+              onClick={handleRetryLoad}
+            >
+              {activeLocale === "zh-TW" ? "重新嘗試載入" : "Retry loading"}
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -3653,8 +3719,12 @@ export default function CreatorCardPage() {
                                   <button
                                     type="button"
                                     onClick={() => setIsAddIgOpen(true)}
-                                    className="block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 hover:border-white/20 transition-colors cursor-pointer"
-                                    style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px", pointerEvents: 'auto' }}
+                                    disabled={isNotLoggedIn}
+                                    className={
+                                      "block relative w-full overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 transition-colors " +
+                                      (isNotLoggedIn ? "opacity-60 cursor-not-allowed" : "hover:border-white/20 cursor-pointer")
+                                    }
+                                    style={{ aspectRatio: "4 / 5", maxHeight: "260px", minHeight: "44px", pointerEvents: isNotLoggedIn ? "none" : "auto" }}
                                     aria-label={activeLocale === "zh-TW" ? "新增貼文" : "Add Post"}
                                   >
                                     {pendingIg?.status === "loading" ? (
@@ -3878,7 +3948,7 @@ export default function CreatorCardPage() {
                                           }
                                         }, 100)
                                         }}
-                                        disabled={pendingIg.status === "loading" || !newIgUrl.trim()}
+                                        disabled={isNotLoggedIn || pendingIg.status === "loading" || !newIgUrl.trim()}
                                         className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{ minHeight: "44px" }}
                                       >
@@ -3901,10 +3971,11 @@ export default function CreatorCardPage() {
                                     item={item}
                                     t={t}
                                     activeLocale={activeLocale}
-                                    suppressClick={suppressFeaturedTileClick}
+                                    isReadOnly={isNotLoggedIn}
                                     onReplace={(id) => {
+                                      if (!featuredReplaceInputRef.current) return
                                       pendingFeaturedReplaceIdRef.current = id
-                                      featuredReplaceInputRef.current?.click()
+                                      featuredReplaceInputRef.current.click()
                                     }}
                                     onEdit={(id) => {
                                       openEditFeatured(id)
@@ -3956,6 +4027,7 @@ export default function CreatorCardPage() {
                                     fetchAndApplyIgOEmbedForItem={fetchAndApplyIgOEmbedForItem}
                                     setFeaturedItems={setFeaturedItems}
                                     markDirty={markDirty}
+                                    suppressClick={suppressFeaturedTileClick}
                                   />
                                 </div>
                               ))}
@@ -4656,7 +4728,7 @@ export default function CreatorCardPage() {
                                     variant="primary"
                                     className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
                                     onClick={handleSave}
-                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
+                                    disabled={saving || loading || loadErrorKind === "not_connected" || loadErrorKind === "not_logged_in" || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
                                   >
                                     {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}

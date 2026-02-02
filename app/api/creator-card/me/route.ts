@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
+import { cookies } from "next/headers"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -17,6 +18,10 @@ const JSON_HEADERS = {
   "Expires": "0",
 }
 
+function shouldDebug() {
+  return process.env.NODE_ENV !== "production" || process.env.CREATOR_CARD_DEBUG === "1"
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authed = await createAuthedClient()
@@ -26,15 +31,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "not_logged_in" }, { status: 200, headers: JSON_HEADERS })
     }
 
-    const fetchCard = async (client: any) => {
+    const fetchCardByUserId = async (client: any) => {
       return await client.from("creator_cards").select("*, portfolio").eq("user_id", user.id).limit(1).maybeSingle()
+    }
+
+    const cookieStore = await cookies()
+    const cookieIgUserId = (
+      cookieStore.get("ig_user_id")?.value ??
+      cookieStore.get("igUserId")?.value ??
+      ""
+    ).trim()
+
+    const fetchCardByIgUserIdForClaim = async (client: any, igUserId: string) => {
+      return await client
+        .from("creator_cards")
+        .select("*, portfolio")
+        .eq("ig_user_id", igUserId)
+        .or(`user_id.is.null,user_id.eq.${user.id}`)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
     }
 
     let data: any = null
     let error: any = null
 
     {
-      const r = await fetchCard(authed)
+      const r = await fetchCardByUserId(authed)
       data = (r as any)?.data
       error = (r as any)?.error
     }
@@ -53,7 +76,7 @@ export async function GET(req: NextRequest) {
       }
 
       if (!missingUserIdColumn && (code === "42501" || msg.toLowerCase().includes("permission denied"))) {
-        const r2 = await fetchCard(supabaseServer)
+        const r2 = await fetchCardByUserId(supabaseServer)
         data = (r2 as any)?.data
         error = (r2 as any)?.error
       }
@@ -65,6 +88,64 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500, headers: JSON_HEADERS })
       }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500, headers: JSON_HEADERS })
+    }
+
+    if (!data && cookieIgUserId) {
+      try {
+        const legacyRes = await fetchCardByIgUserIdForClaim(supabaseServer, cookieIgUserId)
+        const legacyRow = (legacyRes as any)?.data
+        const legacyErr = (legacyRes as any)?.error
+        if (legacyErr) {
+          if (shouldDebug()) {
+            console.log("[creator-card/me] legacy lookup failed", {
+              message: typeof legacyErr?.message === "string" ? legacyErr.message : "unknown",
+              code: typeof legacyErr?.code === "string" ? legacyErr.code : null,
+            })
+          }
+        } else if (legacyRow && typeof legacyRow === "object") {
+          const legacyUserId = typeof (legacyRow as any).user_id === "string" ? String((legacyRow as any).user_id) : null
+          const legacyId = typeof (legacyRow as any).id === "string" ? String((legacyRow as any).id) : null
+
+          if (!legacyUserId && legacyId) {
+            const claimRes = await supabaseServer
+              .from("creator_cards")
+              .update({ user_id: user.id, updated_at: new Date().toISOString() })
+              .eq("id", legacyId)
+              .is("user_id", null)
+              .select("*, portfolio")
+              .maybeSingle()
+
+            if (!(claimRes as any)?.error && (claimRes as any)?.data) {
+              data = (claimRes as any).data
+              error = null
+              if (shouldDebug()) {
+                console.log("[creator-card/me] legacy card claimed", { id: legacyId })
+              }
+            } else {
+              if (shouldDebug()) {
+                console.log("[creator-card/me] legacy claim skipped/failed", {
+                  id: legacyId,
+                  message:
+                    typeof (claimRes as any)?.error?.message === "string" ? String((claimRes as any).error.message) : null,
+                })
+              }
+              const r3 = await fetchCardByUserId(supabaseServer)
+              data = (r3 as any)?.data
+              error = (r3 as any)?.error
+            }
+          } else {
+            data = legacyRow
+            error = null
+          }
+        }
+      } catch (e2: unknown) {
+        if (shouldDebug()) {
+          const errObj2 = asRecord(e2)
+          console.log("[creator-card/me] legacy claim unexpected error", {
+            message: typeof errObj2?.message === "string" ? errObj2.message : "unknown",
+          })
+        }
+      }
     }
 
     if (!data) {
