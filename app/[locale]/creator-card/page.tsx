@@ -2536,7 +2536,7 @@ export default function CreatorCardPage() {
         return s ? s : undefined
       })()
 
-      const nextAudience = introDraft.trim() ? introDraft : (baseCard?.audience ?? "")
+      const nextAudience = baseCard?.audience ?? ""
 
       const payload: any = {
         handle: baseCard?.handle ?? undefined,
@@ -4938,7 +4938,7 @@ export default function CreatorCardPage() {
                       })(),
                       displayName: displayName,
                       username: displayUsername || null,
-                      aboutText: introDraft.trim() || baseCard?.audience || null,
+                      aboutText: baseCard?.audience ?? null,
                       primaryNiche: baseCard?.niche ?? null,
                       minPrice: minPrice ?? null,
                       contact: previewContact,

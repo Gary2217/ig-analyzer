@@ -168,6 +168,11 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
   const [engagementRatePct, setEngagementRatePct] = useState<number | null>(null)
 
   const igConn = useOptionalInstagramConnection()
+  const igMeOk = (() => {
+    const ctxMe = igConn?.igMe as unknown
+    const ctxMeObj = isRecord(ctxMe) ? (ctxMe as Record<string, unknown>) : null
+    return ctxMeObj?.ok === true
+  })()
 
   useEffect(() => {
     if (!enabled) return
@@ -284,7 +289,7 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
       cancelled = true
       controller.abort()
     }
-  }, [creatorCard, enabled, igConn?.igMe])
+  }, [creatorCard, enabled, igMeOk])
 
   const followers = igProfile?.followers_count ?? null
   const following = igProfile?.follows_count ?? null
