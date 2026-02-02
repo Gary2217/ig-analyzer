@@ -237,16 +237,20 @@ export function MobileCreatorCardLayout({
       )}
 
       {/* About Section */}
-      {aboutText && (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 min-w-0">
-          <div className="text-xs font-semibold text-white/55 mb-2">
-            {t("results.mediaKit.about.title")}
-          </div>
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-4 min-w-0">
+        <div className="text-xs font-semibold text-white/55 mb-2">
+          {t("results.mediaKit.about.title")}
+        </div>
+        {aboutText ? (
           <p className="text-sm text-white/85 leading-relaxed break-words whitespace-pre-wrap">
             {aboutText}
           </p>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-white/40 leading-relaxed break-words whitespace-pre-wrap">
+            {isZhTW ? "點擊「新增」後顯示介紹" : "Click Add to show your introduction"}
+          </p>
+        )}
+      </div>
 
       {/* Brands - Moved directly under About */}
       {brands.length > 0 && (

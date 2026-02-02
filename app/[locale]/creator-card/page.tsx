@@ -911,6 +911,22 @@ function toggleInArray(values: string[], value: string) {
   return [...values, value]
 }
 
+function stripDebugApiFromUrl(input: string): string {
+  try {
+    const u = new URL(input, typeof window !== "undefined" ? window.location.origin : "http://localhost")
+    u.searchParams.delete("debugApi")
+    return `${u.pathname}${u.search}${u.hash}`
+  } catch {
+    try {
+      const u2 = new URL(input)
+      u2.searchParams.delete("debugApi")
+      return `${u2.pathname}${u2.search}${u2.hash}`
+    } catch {
+      return input
+    }
+  }
+}
+
 function selectedSummary(labels: string[], locale: string, t: (k: string) => string): { text: string; title: string } {
   const joiner = locale === "zh-TW" ? "、" : ", "
   const safe = labels.map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean)
@@ -2967,15 +2983,16 @@ export default function CreatorCardPage() {
 
   const handleBack = () => {
     if (returnTo) {
+      const cleanReturnTo = stripDebugApiFromUrl(returnTo)
       // If returning to results after save, add ccUpdated timestamp and preserve hash
-      if (returnTo.includes("/results")) {
+      if (cleanReturnTo.includes("/results")) {
         try {
           const ccUpdated = typeof window !== "undefined" 
             ? (window.sessionStorage.getItem("creatorCardUpdated") || window.localStorage.getItem("creatorCardUpdated") || Date.now().toString())
             : Date.now().toString()
           
           // Split by hash to preserve it
-          const [base, hash] = returnTo.split("#")
+          const [base, hash] = cleanReturnTo.split("#")
           const url = new URL(base, window.location.origin)
           url.searchParams.set("ccUpdated", ccUpdated)
           const finalUrl = hash ? `${url.pathname}${url.search}#${hash}` : `${url.pathname}${url.search}`
@@ -2983,11 +3000,11 @@ export default function CreatorCardPage() {
           return
         } catch {
           // Fallback to simple approach if URL parsing fails
-          router.push(returnTo)
+          router.push(cleanReturnTo)
           return
         }
       }
-      router.push(returnTo)
+      router.push(cleanReturnTo)
       return
     }
     router.back()

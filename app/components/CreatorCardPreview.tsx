@@ -951,17 +951,20 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               </div>
             </div>
 
-            {/* Right: bio (only if exists) */}
-            {bioText ? (
-              <div className="min-w-0 w-full sm:max-w-[560px] rounded-2xl border border-white/10 bg-black/20 px-4 py-3 sm:py-4 overflow-hidden">
-                <div className="text-[10px] tracking-widest font-semibold text-white/55 mb-2">
-                  {t("results.mediaKit.about.title")}
-                </div>
+            <div className="min-w-0 w-full sm:max-w-[560px] rounded-2xl border border-white/10 bg-black/20 px-4 py-3 sm:py-4 overflow-hidden">
+              <div className="text-[10px] tracking-widest font-semibold text-white/55 mb-2">
+                {t("results.mediaKit.about.title")}
+              </div>
+              {bioText ? (
                 <p className="text-sm leading-relaxed text-white/85 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
                   {bioText}
                 </p>
-              </div>
-            ) : null}
+              ) : (
+                <p className="text-sm leading-relaxed text-white/40 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
+                  {props.locale === "zh-TW" ? "點擊「新增」後顯示介紹" : "Click Add to show your introduction"}
+                </p>
+              )}
+            </div>
           </div>
 
           {showStatsRow ? (
