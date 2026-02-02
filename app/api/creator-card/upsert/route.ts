@@ -207,6 +207,14 @@ export async function POST(req: Request) {
       )
     }
 
+    if (shouldDebug()) {
+      console.log("[creator-card/upsert] request", {
+        at: new Date().toISOString(),
+        userId: user.id,
+        igUserId: igUserIdStr,
+      })
+    }
+
     // If the IG /me endpoint does not confirm ok, treat as not connected.
     // This prevents treating stale cookies as authenticated.
     if (!meOk) {
@@ -413,6 +421,35 @@ export async function POST(req: Request) {
       theme_types: themeTypes,
       audience_profiles: audienceProfiles,
       updated_at: new Date().toISOString(),
+    }
+    if (!existing.data?.id) {
+      const finalByIg = await supabaseServer
+        .from("creator_cards")
+        .select("id, user_id")
+        .eq("ig_user_id", igUserIdStr)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (finalByIg.error) {
+        return toSupabaseErrorResponse(finalByIg.error, "final idempotency check by ig_user_id")
+      }
+
+      const finalUserId = typeof (finalByIg.data as any)?.user_id === "string" ? String((finalByIg.data as any).user_id) : null
+      const finalId = typeof (finalByIg.data as any)?.id === "string" ? String((finalByIg.data as any).id) : null
+
+      if (finalId && finalUserId && finalUserId !== user.id) {
+        if (shouldDebug()) {
+          console.log("[creator-card/upsert] idempotency short-circuit (insert race)", {
+            at: new Date().toISOString(),
+            igUserId: igUserIdStr,
+            userId: user.id,
+            existingOwner: finalUserId,
+            existingId: finalId,
+          })
+        }
+        return NextResponse.json({ ok: true })
+      }
     }
 
     const query = supabaseServer.from("creator_cards")

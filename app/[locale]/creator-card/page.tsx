@@ -2930,7 +2930,7 @@ export default function CreatorCardPage() {
           <div className="relative">
             <Button
               variant="primary"
-              className="ring-1 ring-white/15 hover:ring-white/25"
+              className="ring-1 ring-white/15 hover:ring-white/25 min-h-[44px] sm:min-h-0"
               onClick={handleSave}
               disabled={
                 saving ||
@@ -4817,7 +4817,7 @@ export default function CreatorCardPage() {
                                   <Button
                                     type="button"
                                     variant="primary"
-                                    className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                                    className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px] sm:min-h-0"
                                     onClick={handleSave}
                                     disabled={saving || loading || loadErrorKind === "not_connected" || isNotLoggedIn || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
                                   >
