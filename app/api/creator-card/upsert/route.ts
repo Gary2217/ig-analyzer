@@ -285,27 +285,33 @@ export async function POST(req: Request) {
     }
 
     if (!existing.data) {
-      const byIg = await supabaseServer
+      const byIgList = await supabaseServer
         .from("creator_cards")
         .select("id, handle, user_id, ig_user_id")
         .eq("ig_user_id", igUserId)
         .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .limit(5)
 
-      if (byIg.error) {
-        return toSupabaseErrorResponse(byIg.error, "select existing by ig_user_id")
+      if (byIgList.error) {
+        return toSupabaseErrorResponse(byIgList.error, "select existing list by ig_user_id")
       }
 
-      const otherUserId = typeof (byIg.data as any)?.user_id === "string" ? String((byIg.data as any).user_id) : null
-      if (otherUserId && otherUserId !== user.id) {
+      const rows: any[] = Array.isArray(byIgList.data) ? (byIgList.data as any[]) : []
+      const pick = rows.find((r) => {
+        const uid = typeof r?.user_id === "string" ? String(r.user_id) : null
+        return !uid || uid === user.id
+      })
+
+      if (!pick && rows.length > 0) {
         return NextResponse.json(
           { ok: false, error: "forbidden", message: "not_owner" },
           { status: 403 },
         )
       }
 
-      existing = byIg
+      if (pick) {
+        existing = { data: pick, error: null } as any
+      }
     }
 
     const wantsNewHandle = Boolean(proposed) && slugify(proposed) !== (existing.data?.handle || "")
