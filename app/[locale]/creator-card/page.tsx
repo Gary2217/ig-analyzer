@@ -1600,6 +1600,10 @@ export default function CreatorCardPage() {
           return
         }
 
+        // If the request eventually succeeds, ensure any previous load error is cleared.
+        setLoadErrorKind(null)
+        setLoadError(null)
+
         const card = asRecord(json?.card) ?? null
 
         const dbUpdatedAtMs = parseEpochMsFromUnknown((card as any)?.updated_at)
@@ -2033,7 +2037,20 @@ export default function CreatorCardPage() {
         setShowNewCardHint(isLikelyEmpty)
         hasLoadedRef.current = true
         if (postSaveSyncRef.current) postSaveSyncRef.current = false
-      } catch {
+      } catch (e: any) {
+        const isAbort =
+          e?.name === "AbortError" ||
+          (typeof DOMException !== "undefined" && e instanceof DOMException && e.name === "AbortError")
+
+        // Route transitions / cancellations / timeouts should not permanently lock the UI into a load_failed state.
+        if (cancelled || isAbort) {
+          if (isBackgroundRefresh && postSaveSyncRef.current) {
+            postSaveSyncRef.current = false
+            showToast(t("creatorCardEditor.success.syncDelayed"))
+          }
+          return
+        }
+
         if (!isBackgroundRefresh) {
           setLoadErrorKind("load_failed")
           setLoadError(t("creatorCardEditor.errors.loadFailed"))
