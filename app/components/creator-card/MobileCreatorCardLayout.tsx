@@ -82,19 +82,19 @@ export function MobileCreatorCardLayout({
         {/* Circular Avatar */}
         <div className="shrink-0">
           {profileImageUrl ? (
-            <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 bg-black/20">
+            <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/10 bg-black/20">
               <Image
                 src={profileImageUrl}
                 alt={displayName || username || "Profile"}
                 fill
                 className="object-cover"
-                sizes="64px"
+                sizes="80px"
                 unoptimized
                 referrerPolicy="no-referrer"
               />
             </div>
           ) : (
-            <div className="w-16 h-16 rounded-full border-2 border-white/10 bg-black/20 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full border-2 border-white/10 bg-black/20 flex items-center justify-center">
               <span className="text-white/30 text-xs">—</span>
             </div>
           )}

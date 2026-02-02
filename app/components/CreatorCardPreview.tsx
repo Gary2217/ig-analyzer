@@ -878,13 +878,13 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
         {/* Desktop/Tablet Layout (>= sm breakpoint) */}
         <div className="hidden sm:flex flex-col gap-5 sm:gap-6 min-w-0">
           {/* Header grid: avatar/name left, bio right */}
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(160px,200px)_minmax(0,1fr)] gap-4 sm:gap-5 min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(200px,260px)_minmax(0,1fr)] gap-4 sm:gap-5 min-w-0">
             {/* Left: avatar/photo + name/handle */}
-            <div className="min-w-0 sm:min-w-[160px]">
+            <div className="min-w-0 sm:min-w-[200px]">
               <button
                 type="button"
                 onClick={() => effectivePhotoUrl && setOpenAvatarUrl(effectivePhotoUrl)}
-                className="relative block h-[160px] w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                className="relative block h-[200px] w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
               >
                 {effectivePhotoUrl ? <CreatorCardPhoto url={effectivePhotoUrl} alt={photoAlt} /> : null}
                 {!effectivePhotoUrl ? (
