@@ -1,6 +1,8 @@
 import { LocaleProvider } from "./components/locale-provider"
 import AppHeader from "./components/app-header"
 import { loadMessages, type Locale } from "../lib/i18n"
+import { InstagramConnectionProvider } from "../components/InstagramConnectionProvider"
+import GlobalReauthPrompt from "../components/GlobalReauthPrompt"
 
 export default async function LocaleLayout({
   children,
@@ -17,11 +19,14 @@ export default async function LocaleLayout({
 
   return (
     <LocaleProvider locale={locale} messages={messages}>
-      <div className="w-full flex flex-col">
-        <AppHeader locale={locale} />
+      <InstagramConnectionProvider>
+        <div className="w-full flex flex-col">
+          <AppHeader locale={locale} />
+          <GlobalReauthPrompt locale={locale} />
 
-        <div className="flex-1">{children}</div>
-      </div>
+          <div className="flex-1">{children}</div>
+        </div>
+      </InstagramConnectionProvider>
     </LocaleProvider>
   )
 }

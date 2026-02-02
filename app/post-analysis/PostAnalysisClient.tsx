@@ -10,6 +10,7 @@ import { Info, Lock, HelpCircle } from "lucide-react"
 import { useRefetchTick } from "../lib/useRefetchTick"
 import { getPostMetrics } from "../lib/postMetrics"
 import { useAuthNavigation } from "../lib/useAuthNavigation"
+import { useInstagramConnection } from "@/app/components/InstagramConnectionProvider"
 
 const isValidPostUrl = (s: string) => /instagram\.com|threads\.net/i.test((s || "").trim())
 
@@ -194,6 +195,8 @@ export default function PostAnalysisClient() {
   const pathname = usePathname() || ""
   const searchParams = useSearchParams()
 
+  const igConn = useInstagramConnection()
+
   const refetchTick = useRefetchTick({ enabled: true, throttleMs: 900 })
   const [manualRefreshTick, setManualRefreshTick] = useState(0)
 
@@ -365,7 +368,7 @@ export default function PostAnalysisClient() {
   const [hasAnalysis, setHasAnalysis] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<any | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [isConnected, setIsConnected] = useState(false)
+  const isConnected = igConn.isConnected
   const [officialPost, setOfficialPost] = useState<any | null>(null)
   const [officialLoading, setOfficialLoading] = useState(false)
   const [officialError, setOfficialError] = useState<null | { status: number; code?: string }>(null)
@@ -1550,38 +1553,8 @@ export default function PostAnalysisClient() {
     }
   }
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const controller = new AbortController()
-    const timeoutId = window.setTimeout(() => controller.abort(), 8_000)
-    let cancelled = false
-
-    fetch("/api/auth/instagram/me", {
-      method: "GET",
-      cache: "no-store",
-      credentials: "include",
-      signal: controller.signal,
-    })
-      .then((res) => {
-        if (cancelled) return
-        setIsConnected(res.ok)
-      })
-      .catch(() => {
-        if (cancelled) return
-        // ignore network errors; treat as not connected
-        setIsConnected(false)
-      })
-      .finally(() => {
-        window.clearTimeout(timeoutId)
-      })
-
-    return () => {
-      cancelled = true
-      controller.abort()
-      window.clearTimeout(timeoutId)
-    }
-  }, [pathname, refetchTick, manualRefreshTick])
+  // IG connection state comes from the global InstagramConnectionProvider.
+  // This avoids duplicate /api/auth/instagram/me requests and centralizes revalidation.
 
   useEffect(() => {
     if (typeof window === "undefined") return

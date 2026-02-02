@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useOptionalInstagramConnection } from "@/app/components/InstagramConnectionProvider"
 
 type IgProfile = {
   followers_count?: number
@@ -166,6 +167,8 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
   const [igProfile, setIgProfile] = useState<IgProfile | null>(null)
   const [engagementRatePct, setEngagementRatePct] = useState<number | null>(null)
 
+  const igConn = useOptionalInstagramConnection()
+
   useEffect(() => {
     if (!enabled) return
     if (creatorCard) return
@@ -195,18 +198,33 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
           } catch {}
         }
 
-        // Now fetch IG profile and stats in parallel
-        const [igRes, statsRes] = await Promise.all([
-          fetch("/api/auth/instagram/me", { signal: controller.signal }),
-          creatorId ? fetch(`/api/creators/${creatorId}/stats`, { signal: controller.signal }) : Promise.resolve(null),
-        ])
+        const ctxMe = igConn?.igMe as unknown
+        const ctxMeObj = isRecord(ctxMe) ? (ctxMe as Record<string, unknown>) : null
+        const ctxOk = ctxMeObj?.ok === true
+
+        // Prefer provider-cached /api/auth/instagram/me to avoid duplicate calls.
+        const igRes = ctxOk ? null : await fetch("/api/auth/instagram/me", { signal: controller.signal })
+        const statsRes = creatorId ? await fetch(`/api/creators/${creatorId}/stats`, { signal: controller.signal }) : null
 
         if (cancelled) return
 
         let igData: IgProfile | null = null
         let statsData: number | null = null
 
-        if (igRes.ok) {
+        if (ctxOk) {
+          const profile = isRecord((ctxMeObj as any)?.profile)
+            ? ((ctxMeObj as any).profile as any)
+            : (ctxMeObj as any)
+          const followersCount = finiteNumOrNull(profile?.followers_count)
+          const followsCount = finiteNumOrNull(profile?.follows_count)
+          const mediaCount = finiteNumOrNull(profile?.media_count)
+          igData = {
+            followers_count: followersCount ?? undefined,
+            follows_count: followsCount ?? undefined,
+            media_count: mediaCount ?? undefined,
+            profile_picture_url: typeof profile?.profile_picture_url === "string" ? profile.profile_picture_url : undefined,
+          }
+        } else if (igRes && igRes.ok) {
           try {
             const json = await igRes.json()
             const profile = isRecord(json) && isRecord(json.profile) ? json.profile : isRecord(json) ? json : null
@@ -266,7 +284,7 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
       cancelled = true
       controller.abort()
     }
-  }, [enabled, creatorCard])
+  }, [creatorCard, enabled, igConn?.igMe])
 
   const followers = igProfile?.followers_count ?? null
   const following = igProfile?.follows_count ?? null

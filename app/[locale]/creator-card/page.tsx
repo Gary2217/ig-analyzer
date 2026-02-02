@@ -19,10 +19,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
-import { useInstagramMe } from "../../lib/useInstagramMe"
 import { normalizeIgThumbnailUrlOrNull, useCreatorCardPreviewData } from "../../components/creator-card/useCreatorCardPreviewData"
 import { CreatorCardPreviewShell } from "@/app/components/creator-card/CreatorCardPreviewShell"
 import { CardMobilePreviewShell } from "@/app/components/creator-card/CardMobilePreviewShell"
+import { useInstagramConnection } from "@/app/components/InstagramConnectionProvider"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "../../components/creator-card/igOEmbedTypes"
 
@@ -1019,99 +1019,14 @@ export default function CreatorCardPage() {
   const [introAppliedHint, setIntroAppliedHint] = useState(false)
   const introAppliedHintTimerRef = useRef<number | null>(null)
 
-  const meQuery = useInstagramMe({ enabled: true })
-
-  const isInstagramConnected = useMemo(() => {
-    const raw = meQuery.data as unknown
-    const obj = asRecord(raw)
-    if (!obj) return false
-
-    const ok = obj.ok === true
-    const connected = obj.connected === true
-    const hasToken = obj.hasToken === true || obj.has_token === true
-    return ok && (connected || hasToken)
-  }, [meQuery.data])
-
-  const effectiveNotLoggedIn = loadErrorKind === "not_logged_in" && !isInstagramConnected
+  const igConn = useInstagramConnection()
+  const isInstagramConnected = igConn.isConnected
+  const effectiveNotLoggedIn = loadErrorKind === "not_logged_in" && !igConn.isConnected
   const shouldShowNotLoggedInBanner = effectiveNotLoggedIn
 
-  const igMe = meQuery.data as unknown
+  const igMe = igConn.igMe as unknown
   const igMeObj = asRecord(igMe)
   const igProfile = (asRecord(igMeObj?.profile) ?? igMeObj) as unknown as InstagramProfileLite
-
-  const meRefetchRef = useRef<null | (() => Promise<any>)>(null)
-  useEffect(() => {
-    meRefetchRef.current = typeof meQuery.refetch === "function" ? meQuery.refetch : null
-  }, [meQuery.refetch])
-
-  const didOAuthRevalidateRef = useRef(false)
-  const lastEventRevalidateAtRef = useRef<number>(0)
-  const eventRevalidateTimerRef = useRef<number | null>(null)
-
-  const triggerRevalidateOnce = useCallback(
-    (reason: "oauth" | "focus" | "visibility") => {
-      if (typeof window === "undefined") return
-
-      if (reason === "oauth") {
-        if (didOAuthRevalidateRef.current) return
-        didOAuthRevalidateRef.current = true
-      }
-
-      const now = Date.now()
-      // Throttle event-driven revalidations (focus/visibility) to avoid bursts.
-      if (reason !== "oauth") {
-        if (now - lastEventRevalidateAtRef.current < 5000) return
-        lastEventRevalidateAtRef.current = now
-      }
-
-      if (eventRevalidateTimerRef.current != null) {
-        window.clearTimeout(eventRevalidateTimerRef.current)
-        eventRevalidateTimerRef.current = null
-      }
-
-      // Defer into next tick to avoid doing refetch during React commit.
-      eventRevalidateTimerRef.current = window.setTimeout(() => {
-        eventRevalidateTimerRef.current = null
-        meRefetchRef.current?.()
-        setRefetchTick((x) => x + 1)
-      }, 0)
-    },
-    [setRefetchTick]
-  )
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const search = window.location.search || ""
-    const params = new URLSearchParams(search)
-    const likelyOAuthReturn =
-      params.has("code") ||
-      params.has("state") ||
-      params.has("oauth") ||
-      params.has("provider") ||
-      params.has("from")
-
-    if (likelyOAuthReturn) {
-      triggerRevalidateOnce("oauth")
-    }
-
-    const onFocus = () => triggerRevalidateOnce("focus")
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") triggerRevalidateOnce("visibility")
-    }
-
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisibility)
-
-    return () => {
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisibility)
-      if (eventRevalidateTimerRef.current != null) {
-        window.clearTimeout(eventRevalidateTimerRef.current)
-        eventRevalidateTimerRef.current = null
-      }
-    }
-  }, [triggerRevalidateOnce])
 
   const displayUsername = useMemo(() => {
     const raw = typeof igProfile?.username === "string" ? String(igProfile.username).trim() : ""
