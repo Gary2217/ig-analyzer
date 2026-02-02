@@ -285,32 +285,39 @@ export async function POST(req: Request) {
     }
 
     if (!existing.data) {
-      const byIgList = await supabaseServer
+      const usableByIg = await supabaseServer
         .from("creator_cards")
         .select("id, handle, user_id, ig_user_id")
         .eq("ig_user_id", igUserId)
+        .or(`user_id.is.null,user_id.eq.${user.id}`)
         .order("updated_at", { ascending: false })
-        .limit(5)
+        .limit(1)
+        .maybeSingle()
 
-      if (byIgList.error) {
-        return toSupabaseErrorResponse(byIgList.error, "select existing list by ig_user_id")
+      if (usableByIg.error) {
+        return toSupabaseErrorResponse(usableByIg.error, "select usable by ig_user_id")
       }
 
-      const rows: any[] = Array.isArray(byIgList.data) ? (byIgList.data as any[]) : []
-      const pick = rows.find((r) => {
-        const uid = typeof r?.user_id === "string" ? String(r.user_id) : null
-        return !uid || uid === user.id
-      })
+      if (usableByIg.data) {
+        existing = usableByIg as any
+      } else {
+        const anyByIg = await supabaseServer
+          .from("creator_cards")
+          .select("id")
+          .eq("ig_user_id", igUserId)
+          .limit(1)
+          .maybeSingle()
 
-      if (!pick && rows.length > 0) {
-        return NextResponse.json(
-          { ok: false, error: "forbidden", message: "not_owner" },
-          { status: 403 },
-        )
-      }
+        if (anyByIg.error) {
+          return toSupabaseErrorResponse(anyByIg.error, "select any by ig_user_id")
+        }
 
-      if (pick) {
-        existing = { data: pick, error: null } as any
+        if (anyByIg.data) {
+          return NextResponse.json(
+            { ok: false, error: "forbidden", message: "not_owner" },
+            { status: 403 },
+          )
+        }
       }
     }
 
