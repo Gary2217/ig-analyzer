@@ -11,6 +11,15 @@ function shouldDebug() {
   return process.env.NODE_ENV !== "production" || process.env.CREATOR_CARD_DEBUG === "1"
 }
 
+function isCcDebugEnabled(req: Request) {
+  return (req.headers.get("x-cc-debug") ?? "").trim() === "1"
+}
+
+function ccDebugSource(req: Request) {
+  const s = (req.headers.get("x-cc-debug-source") ?? "").trim()
+  return s ? s.slice(0, 40) : null
+}
+
 function normalizeMinPriceToIntOrNull(v: unknown): number | null {
   if (v == null) return null
   if (typeof v === "number") {
@@ -168,6 +177,9 @@ async function getIGMe(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const ccDebug = isCcDebugEnabled(req)
+    const ccDebugSrc = ccDebugSource(req)
+
     const authed = await createAuthedClient()
     const userRes = await authed.auth.getUser()
     const user = userRes?.data?.user ?? null
@@ -228,7 +240,7 @@ export async function POST(req: Request) {
     // Only available when the caller has an app session (Supabase user).
     try {
       const claim = await authed
-        .rpc("claim_creator_card_legacy", { p_ig_user_id: igUserId, p_user_id: user.id })
+        .rpc("claim_creator_card_legacy", { p_ig_user_id: igUserIdStr, p_user_id: user.id })
         .maybeSingle()
 
       if (!(claim as any)?.error && (claim as any)?.data) {
@@ -294,44 +306,82 @@ export async function POST(req: Request) {
     }
 
     if (!existing.data) {
-      const usableByIg = await supabaseServer
+      const byIg = await supabaseServer
         .from("creator_cards")
-        .select("id, handle, user_id, ig_user_id")
+        .select("id, handle, user_id, ig_user_id, updated_at")
         .eq("ig_user_id", igUserIdStr)
-        .or(`user_id.is.null,user_id.eq.${user.id}`)
         .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .limit(10)
 
-      if (usableByIg.error) {
-        return toSupabaseErrorResponse(usableByIg.error, "select usable by ig_user_id")
+      if (byIg.error) {
+        if (ccDebug) {
+          console.error("[creator-card/upsert] debug query error", {
+            at: new Date().toISOString(),
+            source: ccDebugSrc,
+            where: "select by ig_user_id",
+            userId: user.id,
+            igUserId: igUserIdStr,
+            message: typeof (byIg.error as any)?.message === "string" ? String((byIg.error as any).message).slice(0, 300) : "unknown",
+            code: typeof (byIg.error as any)?.code === "string" ? String((byIg.error as any).code) : null,
+          })
+          return NextResponse.json(
+            { ok: false, error: "upsert_failed", message: "debug_select_by_ig_failed" },
+            { status: 500 },
+          )
+        }
+        return toSupabaseErrorResponse(byIg.error, "select by ig_user_id")
       }
 
-      if (usableByIg.data) {
-        existing = usableByIg as any
-      } else {
-        const anyByIg = await supabaseServer
-          .from("creator_cards")
-          .select("id")
-          .eq("ig_user_id", igUserIdStr)
-          .limit(1)
-          .maybeSingle()
+      const rows = Array.isArray(byIg.data) ? byIg.data : []
+      if (rows.length > 0) {
+        const usable = rows.find((r: any) => {
+          const uid = typeof r?.user_id === "string" ? String(r.user_id) : null
+          return uid == null || uid === user.id
+        })
 
-        if (anyByIg.error) {
-          return toSupabaseErrorResponse(anyByIg.error, "select any by ig_user_id")
-        }
+        if (usable) {
+          existing = { data: usable, error: null } as any
+        } else {
+          const totalMatchesByIg = rows.length
+          const usableMatches = 0
+          const ownedByOtherMatches = rows.length
+          const newest = rows[0] as any
+          const newestUserId = typeof newest?.user_id === "string" ? String(newest.user_id) : null
+          const newestOwnerKind = newestUserId == null ? "null" : newestUserId === user.id ? "self" : "other"
 
-        if (anyByIg.data) {
-          if (shouldDebug()) {
-            const anyId = typeof (anyByIg.data as any)?.id === "string" ? String((anyByIg.data as any).id) : null
-            console.log("[creator-card/upsert] forbidden not_owner", {
-              igUserId: igUserIdStr,
+          if (ccDebug) {
+            console.log("[creator-card/upsert] not_owner", {
+              at: new Date().toISOString(),
+              source: ccDebugSrc,
               userId: user.id,
-              anyId,
+              igUserId: igUserIdStr,
+              totalMatchesByIg,
+              usableMatches,
+              ownedByOtherMatches,
+              newestMatch: {
+                id: typeof newest?.id === "string" ? newest.id : null,
+                user_id: newestUserId ?? "null",
+                updated_at: typeof newest?.updated_at === "string" ? newest.updated_at : null,
+              },
             })
           }
+
           return NextResponse.json(
-            { ok: false, error: "forbidden", message: "not_owner" },
+            {
+              ok: false,
+              error: "forbidden",
+              message: "not_owner",
+              ...(ccDebug
+                ? {
+                    debug: {
+                      igUserId: igUserIdStr,
+                      totalMatchesByIg,
+                      usableMatches,
+                      newestOwnerKind,
+                    },
+                  }
+                : null),
+            },
             { status: 403 },
           )
         }

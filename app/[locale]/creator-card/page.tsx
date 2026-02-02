@@ -1367,9 +1367,15 @@ export default function CreatorCardPage() {
 
   const runBackgroundUpsert = useCallback(async (payload: any) => {
     try {
+      const headers: Record<string, string> = { "content-type": "application/json" }
+      if (debugApiEnabled) {
+        headers["x-cc-debug"] = "1"
+        headers["x-cc-debug-source"] = "background"
+      }
+
       const res = await fetch("/api/creator-card/upsert", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         credentials: "include",
         body: JSON.stringify(payload),
       })
@@ -1394,7 +1400,7 @@ export default function CreatorCardPage() {
         })
       }
     }
-  }, [])
+  }, [debugApiEnabled])
   
   // Initialize featured carousel scroll state
   useEffect(() => {
@@ -2736,9 +2742,14 @@ export default function CreatorCardPage() {
       }
 
       const url = "/api/creator-card/upsert"
+      const headers: Record<string, string> = { "content-type": "application/json" }
+      if (debugApiEnabled) {
+        headers["x-cc-debug"] = "1"
+        headers["x-cc-debug-source"] = "user-save"
+      }
       const res = await fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         credentials: "include",
         body: JSON.stringify(payload),
       })
