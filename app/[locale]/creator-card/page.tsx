@@ -1163,6 +1163,53 @@ export default function CreatorCardPage() {
   const avatarUploadInputRef = useRef<HTMLInputElement | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
 
+  const uploadAvatar = useCallback(
+    async (file: File) => {
+      if (avatarUploading) return
+
+      try {
+        setAvatarUploading(true)
+        const fd = new FormData()
+        fd.append("file", file)
+        console.log("[creator-card avatar] FormData keys", { keys: Array.from(fd.keys()) })
+
+        const res = await fetch("/api/creator-card/avatar/upload", {
+          method: "POST",
+          credentials: "same-origin",
+          body: fd,
+        })
+
+        const resCt = res.headers.get("content-type") || ""
+        const json: any = await res.json().catch(() => null)
+        const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
+
+        if (!res.ok || json?.ok !== true || !avatarUrl) {
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[creator-card avatar] upload failed", {
+              status: res.status,
+              responseContentType: resCt,
+              body: json,
+            })
+          }
+          showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
+          return
+        }
+
+        setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
+        markDirty()
+        showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
+      } catch (e: unknown) {
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[creator-card avatar] upload failed", { message: e instanceof Error ? e.message : String(e) })
+        }
+        showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
+      } finally {
+        setAvatarUploading(false)
+      }
+    },
+    [activeLocale, avatarUploading, markDirty, showToast]
+  )
+
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
   const dbUpdatedAtMsRef = useRef<number>(0)
@@ -3319,31 +3366,7 @@ export default function CreatorCardPage() {
                               return
                             }
 
-                            try {
-                              setAvatarUploading(true)
-                              const fd = new FormData()
-                              fd.append("file", file)
-                              console.log("[creator-card avatar] FormData keys", { keys: Array.from(fd.keys()) })
-                              const res = await fetch("/api/creator-card/avatar/upload", {
-                                method: "POST",
-                                credentials: "same-origin",
-                                body: fd,
-                              })
-                              const json: any = await res.json().catch(() => null)
-                              const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
-                              if (!res.ok || json?.ok !== true || !avatarUrl) {
-                                showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
-                                return
-                              }
-
-                              setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
-                              markDirty()
-                              showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
-                            } catch {
-                              showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
-                            } finally {
-                              setAvatarUploading(false)
-                            }
+                            await uploadAvatar(file)
                           }}
                         />
 
@@ -4687,31 +4710,7 @@ export default function CreatorCardPage() {
                                       return
                                     }
 
-                                    try {
-                                      setAvatarUploading(true)
-                                      const fd = new FormData()
-                                      fd.append("file", file)
-                                      console.log("[creator-card avatar] FormData keys", { keys: Array.from(fd.keys()) })
-                                      const res = await fetch("/api/creator-card/avatar/upload", {
-                                        method: "POST",
-                                        credentials: "same-origin",
-                                        body: fd,
-                                      })
-                                      const json: any = await res.json().catch(() => null)
-                                      const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
-                                      if (!res.ok || json?.ok !== true || !avatarUrl) {
-                                        showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
-                                        return
-                                      }
-
-                                      setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
-                                      markDirty()
-                                      showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
-                                    } catch {
-                                      showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
-                                    } finally {
-                                      setAvatarUploading(false)
-                                    }
+                                    await uploadAvatar(file)
                                   }}
                                 />
 
