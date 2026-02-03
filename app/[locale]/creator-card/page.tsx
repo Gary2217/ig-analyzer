@@ -50,7 +50,7 @@ function readMethod(input: RequestInfo | URL, init?: RequestInit): string {
   return m2 || "GET"
 }
 
-function urlIsApi(url: string): boolean {
+function urlIsApi(url: string | null): boolean {
   if (!url) return false
   if (url.startsWith("/api/")) return true
   try {
@@ -62,9 +62,45 @@ function urlIsApi(url: string): boolean {
 }
 
 function normalizeIgCacheKey(raw: string): string {
-  return String(raw || "")
-    .trim()
-    .replace(/\/+$/, "")
+  const input = String(raw || "").trim()
+  if (!input) return ""
+
+  // Ensure URL parsing works even if scheme is missing.
+  const fixed = /^https?:\/\//i.test(input) ? input : `https://${input.replace(/^\/\//, "")}`
+  try {
+    const u = new URL(fixed)
+
+    // Only normalize instagram.com URLs. For unexpected input, fall back to trimmed string.
+    const host = u.hostname.replace(/^www\./i, "")
+    if (!host.endsWith("instagram.com")) return input.replace(/\/+$/, "")
+
+    // Strip tracking query params.
+    const toDelete: string[] = []
+    u.searchParams.forEach((_, key) => {
+      const k = key.toLowerCase()
+      if (k.startsWith("utm_")) toDelete.push(key)
+      if (k === "igshid" || k === "fbclid") toDelete.push(key)
+    })
+    for (const k of toDelete) u.searchParams.delete(k)
+
+    // Keep result stable.
+    u.hash = ""
+
+    // Normalize trailing slash.
+    u.pathname = u.pathname.replace(/\/+$/, "") + "/"
+
+    const s = u.toString()
+    return s.replace(/\/+$/, "")
+  } catch {
+    return input.replace(/\/+$/, "")
+  }
+}
+
+function shouldSkipOEmbedFetchByCache(cache: OEmbedState | undefined, nowMs: number): boolean {
+  if (!cache) return false
+  if (cache.status !== "rate_limited" && cache.status !== "error") return false
+  const retryAtMs = typeof (cache as any)?.retryAtMs === "number" ? (cache as any).retryAtMs : 0
+  return retryAtMs > nowMs
 }
 
 function installApiDebugFetchTracerOnce(enabled: boolean) {
@@ -625,6 +661,7 @@ function SortableFeaturedTile(props: {
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
     const oembedState = normalizedUrl ? igOEmbedCache[normalizedUrl] : undefined
+    const shouldHideThumbnail = oembedState?.status === "rate_limited" || oembedState?.status === "error"
     const oembedHelperText =
       oembedState?.status === "rate_limited"
         ? (typeof (oembedState as any)?.errorMessage === "string" && (oembedState as any).errorMessage
@@ -705,7 +742,7 @@ function SortableFeaturedTile(props: {
             style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {hasPersistedThumb && !thumbnailLoadError ? (
+            {!shouldHideThumbnail && hasPersistedThumb && !thumbnailLoadError ? (
               <img
                 key={retryKey}
                 src={persistedThumb || ""}
@@ -714,16 +751,15 @@ function SortableFeaturedTile(props: {
                 loading="lazy"
                 referrerPolicy="no-referrer"
                 decoding="async"
-                onError={() => {
-                  setThumbnailLoadError(true)
-                }}
+                onLoad={() => setThumbnailLoadError(false)}
+                onError={() => setThumbnailLoadError(true)}
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
                 <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
                 </svg>
-                <div className="text-xs text-white/60 leading-tight">{oembedHelperText ?? t("creatorCard.featured.previewUnavailable")}</div>
+                <div className="text-xs text-white/60 leading-tight break-words [overflow-wrap:anywhere]">{oembedHelperText ?? t("creatorCard.featured.previewUnavailable")}</div>
               </div>
             )}
           </a>
@@ -1259,6 +1295,7 @@ export default function CreatorCardPage() {
   const [editingFeaturedCollabTypeCustom, setEditingFeaturedCollabTypeCustom] = useState("")
   const [igModalUrl, setIgModalUrl] = useState<string | null>(null)
   const [igOEmbedCache, setIgOEmbedCache] = useState<Record<string, OEmbedState>>({})
+  const igOEmbedCacheRef = useRef<Record<string, OEmbedState>>({})
 
   const igOEmbedByMediaIdRef = useRef<Record<string, OEmbedSuccess>>({})
   const igOEmbedInFlightByUrlRef = useRef<Set<string>>(new Set())
@@ -1267,6 +1304,10 @@ export default function CreatorCardPage() {
 
   const igOEmbedInFlightRef = useRef(0)
   const igOEmbedQueueRef = useRef<Array<() => void>>([])
+
+  useEffect(() => {
+    igOEmbedCacheRef.current = igOEmbedCache
+  }, [igOEmbedCache])
   const runIgOEmbedLimited = useCallback(async (task: () => Promise<void>) => {
     return await new Promise<void>((resolve, reject) => {
       const run = () => {
@@ -1298,10 +1339,16 @@ export default function CreatorCardPage() {
 
       try {
         const nowMs = Date.now()
-        const cachedByUrl = igOEmbedCache[normalizedUrl]
-        if (cachedByUrl?.status === "rate_limited") {
-          const retryAtMs = typeof (cachedByUrl as any)?.retryAtMs === "number" ? (cachedByUrl as any).retryAtMs : 0
-          if (retryAtMs > nowMs) return
+        const cachedByUrl = igOEmbedCacheRef.current[normalizedUrl]
+        if (shouldSkipOEmbedFetchByCache(cachedByUrl, nowMs)) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[creator-card] skip oEmbed fetch due to negative cache", {
+              url: normalizedUrl,
+              status: cachedByUrl?.status,
+              retryAtMs: (cachedByUrl as any)?.retryAtMs,
+            })
+          }
+          return
         }
 
         const cachedSuccessByUrl =
@@ -1368,12 +1415,14 @@ export default function CreatorCardPage() {
         if (igOEmbedInFlightByUrlRef.current.has(normalizedUrl)) return
         igOEmbedInFlightByUrlRef.current.add(normalizedUrl)
 
+        igOEmbedCacheRef.current[normalizedUrl] = { status: "loading" } as any
         setIgOEmbedCache((prev) => ({ ...prev, [normalizedUrl]: { status: "loading" } }))
 
         await runIgOEmbedLimited(async () => {
           const r = await fetchOEmbedStrict(normalizedUrl)
           if (r.ok === true) {
             const s = r as OEmbedSuccess
+            igOEmbedCacheRef.current[normalizedUrl] = { status: "success", data: s } as any
             setIgOEmbedCache((prev) => ({ ...prev, [normalizedUrl]: { status: "success", data: s } }))
             const anyS = s as any
             const resolvedMediaId =
@@ -1387,31 +1436,60 @@ export default function CreatorCardPage() {
 
           const httpStatus = (r as any)?.error?.status
           if (httpStatus === 429) {
-            setIgOEmbedCache((prev) => ({
-              ...prev,
-              [normalizedUrl]: {
-                status: "rate_limited",
-                retryAtMs: Date.now() + 90 * 1000,
-                errorMessage:
-                  activeLocale === "zh-TW"
-                    ? "Instagram 預覽暫時無法使用，但連結仍有效。"
-                    : "Instagram preview is temporarily unavailable. The link is still valid.",
-              } as any,
-            }))
-            return
-          }
-
-          setIgOEmbedCache((prev) => ({
-            ...prev,
-            [normalizedUrl]: {
-              status: "error",
-              httpStatus: typeof httpStatus === "number" ? httpStatus : 0,
+            const nextEntry: any = {
+              status: "rate_limited",
+              retryAtMs: Date.now() + 90 * 1000,
               errorMessage:
                 activeLocale === "zh-TW"
                   ? "Instagram 預覽暫時無法使用，但連結仍有效。"
                   : "Instagram preview is temporarily unavailable. The link is still valid.",
-            },
+            }
+            igOEmbedCacheRef.current[normalizedUrl] = nextEntry
+            setIgOEmbedCache((prev) => ({
+              ...prev,
+              [normalizedUrl]: nextEntry,
+            }))
+
+            setFeaturedItems((prev) =>
+              prev.map((x) =>
+                (x.type === "ig" && normalizeIgCacheKey(x.url) === normalizedUrl)
+                  ? {
+                      ...x,
+                      thumbnailUrl: null,
+                      mediaType: x.mediaType,
+                    }
+                  : x
+              )
+            )
+            return
+          }
+
+          const nextErrEntry: any = {
+            status: "error",
+            httpStatus: typeof httpStatus === "number" ? httpStatus : 0,
+            retryAtMs: Date.now() + 90 * 1000,
+            errorMessage:
+              activeLocale === "zh-TW"
+                ? "Instagram 預覽暫時無法使用，但連結仍有效。"
+                : "Instagram preview is temporarily unavailable. The link is still valid.",
+          }
+          igOEmbedCacheRef.current[normalizedUrl] = nextErrEntry
+          setIgOEmbedCache((prev) => ({
+            ...prev,
+            [normalizedUrl]: nextErrEntry,
           }))
+
+          setFeaturedItems((prev) =>
+            prev.map((x) =>
+              (x.type === "ig" && normalizeIgCacheKey(x.url) === normalizedUrl)
+                ? {
+                    ...x,
+                    thumbnailUrl: null,
+                    mediaType: x.mediaType,
+                  }
+                : x
+            )
+          )
         })
       } catch {
         // swallow
@@ -1419,7 +1497,7 @@ export default function CreatorCardPage() {
         igOEmbedInFlightByUrlRef.current.delete(normalizedUrl)
       }
     },
-    [activeLocale, igOEmbedCache, markDirty, runIgOEmbedLimited]
+    [activeLocale, markDirty, runIgOEmbedLimited]
   )
 
   const [__overlayMounted, set__overlayMounted] = useState(false)
