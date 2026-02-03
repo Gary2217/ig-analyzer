@@ -44,6 +44,7 @@ interface MobileCreatorCardLayoutProps {
     id: string
     url: string
     thumbnailUrl?: string | null
+    igRateLimited?: boolean
     caption?: string | null
     mediaType?: "image" | "video" | "reel" | "unknown" | null
     brand?: string | null
@@ -204,6 +205,13 @@ export function MobileCreatorCardLayout({
                   style={{ height: '60vh', maxHeight: '520px', minHeight: '360px' }}
                 >
                   <div className="w-full h-full rounded-2xl border border-white/10 bg-black/20 overflow-hidden relative">
+                    {item.igRateLimited ? (
+                      <div className="absolute left-3 top-3 z-10 pointer-events-none">
+                        <div className="inline-flex items-center rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-semibold text-emerald-200/90 whitespace-normal break-words [overflow-wrap:anywhere]">
+                          {isZhTW ? "正常：IG 限流" : "OK: IG rate limit"}
+                        </div>
+                      </div>
+                    ) : null}
                     {(() => {
                       // Negative-cache (rate_limited/error) sets thumbnailUrl to null.
                       if (item.thumbnailUrl === null) return null

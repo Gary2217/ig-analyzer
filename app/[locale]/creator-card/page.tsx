@@ -196,6 +196,17 @@ async function fetchOEmbedStrict(url: string): Promise<OEmbedResponse> {
     
     clearTimeout(timeoutId)
 
+    // 429 is handled upstream (converted into a cached rate_limited state with TTL).
+    if (res.status === 429) {
+      return {
+        ok: false,
+        error: {
+          status: 429,
+          message: "rate_limited",
+        },
+      } as OEmbedError
+    }
+
     let json: any = null
     try {
       json = await res.json()
@@ -760,6 +771,13 @@ function SortableFeaturedTile(props: {
             style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
+            {oembedState?.status === "rate_limited" ? (
+              <div className="absolute left-2 top-2 z-10 pointer-events-none">
+                <div className="inline-flex items-center rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-semibold text-emerald-200/90 whitespace-normal break-words [overflow-wrap:anywhere]">
+                  {activeLocale === "zh-TW" ? "正常：IG 限流" : "OK: IG rate limit"}
+                </div>
+              </div>
+            ) : null}
             {shouldRenderThumb ? (
               <img
                 key={retryKey}
@@ -1468,6 +1486,26 @@ export default function CreatorCardPage() {
               ...prev,
               [normalizedUrl]: nextEntry,
             }))
+
+            if (process.env.NODE_ENV !== "production") {
+              const retryInSec = Math.max(0, Math.ceil((Number(nextEntry.retryAtMs) - Date.now()) / 1000))
+              console.info(`[IG oembed] rate limited (expected) url=${normalizedUrl} retryIn=${retryInSec}`)
+            }
+
+            setFeaturedItems((prev) =>
+              prev.map((x) => {
+                if (x.type !== "ig") return x
+                if (normalizeIgCacheKey(x.url) !== normalizedUrl) return x
+
+                const hasThumb = typeof x.thumbnailUrl === "string" && x.thumbnailUrl.trim().length > 0
+                return {
+                  ...x,
+                  igRateLimited: true,
+                  // Only force helper (thumb=null) if we didn't already have a usable thumb.
+                  thumbnailUrl: hasThumb ? x.thumbnailUrl : null,
+                }
+              })
+            )
             return
           }
 
