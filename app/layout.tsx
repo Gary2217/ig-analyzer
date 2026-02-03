@@ -8,12 +8,7 @@ const geistSans = localFont({
   display: "swap",
   src: [
     {
-      path: "./fonts/geist-latin.woff2",
-      style: "normal",
-      weight: "100 900",
-    },
-    {
-      path: "./fonts/geist-latin-ext.woff2",
+      path: "./fonts/geist-sans-variable.woff2",
       style: "normal",
       weight: "100 900",
     },
@@ -25,12 +20,7 @@ const geistMono = localFont({
   display: "swap",
   src: [
     {
-      path: "./fonts/geist-mono-latin.woff2",
-      style: "normal",
-      weight: "100 900",
-    },
-    {
-      path: "./fonts/geist-mono-latin-ext.woff2",
+      path: "./fonts/geist-mono-variable.woff2",
       style: "normal",
       weight: "100 900",
     },
