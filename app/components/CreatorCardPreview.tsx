@@ -926,7 +926,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 onClick={() => effectivePhotoUrl && setOpenAvatarUrl(effectivePhotoUrl)}
                 className="relative block h-[200px] w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
               >
-                {effectivePhotoUrl ? <CreatorCardPhoto url={effectivePhotoUrl} alt={photoAlt} /> : null}
+                <CreatorCardPhoto url={effectivePhotoUrl} alt={photoAlt} />
                 {!effectivePhotoUrl ? (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-xs font-medium text-white/50">{t("creatorCardEditor.common.noImage")}</div>

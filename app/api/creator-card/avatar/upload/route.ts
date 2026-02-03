@@ -256,7 +256,13 @@ export async function POST(req: NextRequest) {
         oldAvatarUrl = typeof (row as any).avatar_url === "string" ? String((row as any).avatar_url) : ""
         const owner = typeof (row as any).user_id === "string" ? String((row as any).user_id) : null
         if (cardId && owner == null) {
-          await supabase.from("creator_cards").update({ user_id: user.id }).eq("id", cardId)
+          try {
+            await supabase.from("creator_cards").update({ user_id: user.id }).eq("id", cardId)
+          } catch (e: unknown) {
+            const errObj = asRecord(e)
+            const msg = typeof errObj?.message === "string" ? errObj.message : "db_error"
+            console.warn("[creator-card avatar] db claim user_id failed", { requestId, cardId, message: msg })
+          }
         }
       }
     }
@@ -272,17 +278,25 @@ export async function POST(req: NextRequest) {
         candidate = `${base}-${Math.floor(1000 + Math.random() * 9000)}`
       }
 
-      const inserted = await supabase
-        .from("creator_cards")
-        .insert({
-          user_id: user.id,
-          ig_user_id: igUserId,
-          ig_username: igUsername || null,
-          handle: candidate,
-          updated_at: new Date().toISOString(),
-        })
-        .select("id")
-        .maybeSingle()
+      let inserted: any
+      try {
+        inserted = await supabase
+          .from("creator_cards")
+          .insert({
+            user_id: user.id,
+            ig_user_id: igUserId,
+            ig_username: igUsername || null,
+            handle: candidate,
+            updated_at: new Date().toISOString(),
+          })
+          .select("id")
+          .maybeSingle()
+      } catch (e: unknown) {
+        const errObj = asRecord(e)
+        const msg = typeof errObj?.message === "string" ? errObj.message : "create_card_failed"
+        console.error("[creator-card avatar] create card failed", { requestId, message: msg })
+        return withRequestId(NextResponse.json({ ok: false, error: "create_card_failed", requestId }, { status: 500 }), requestId)
+      }
 
       if ((inserted as any)?.error) {
         console.error("[creator-card avatar] create card failed", {
@@ -341,12 +355,20 @@ export async function POST(req: NextRequest) {
       return withRequestId(NextResponse.json({ ok: false, error: "public_url_failed", requestId }, { status: 500 }), requestId)
     }
 
-    const updated = await supabase
-      .from("creator_cards")
-      .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
-      .eq("id", cardId)
-      .select("id")
-      .maybeSingle()
+    let updated: any
+    try {
+      updated = await supabase
+        .from("creator_cards")
+        .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+        .eq("id", cardId)
+        .select("id")
+        .maybeSingle()
+    } catch (e: unknown) {
+      const errObj = asRecord(e)
+      const msg = typeof errObj?.message === "string" ? errObj.message : "db_update_failed"
+      console.error("[creator-card avatar] db update failed", { requestId, message: msg })
+      return withRequestId(NextResponse.json({ ok: false, error: "db_update_failed", requestId }, { status: 500 }), requestId)
+    }
 
     if ((updated as any)?.error) {
       console.error("[creator-card avatar] db update failed", {
