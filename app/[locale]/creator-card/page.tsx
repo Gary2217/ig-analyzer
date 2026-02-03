@@ -3306,6 +3306,8 @@ export default function CreatorCardPage() {
                             if (!file) return
                             e.currentTarget.value = ""
 
+                            console.log("[creator-card avatar] selected file", { name: file.name, type: file.type, size: file.size })
+
                             if (avatarUploading) return
                             if (file.size > 5 * 1024 * 1024) {
                               showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
@@ -3321,9 +3323,10 @@ export default function CreatorCardPage() {
                               setAvatarUploading(true)
                               const fd = new FormData()
                               fd.append("file", file)
+                              console.log("[creator-card avatar] FormData keys", { keys: Array.from(fd.keys()) })
                               const res = await fetch("/api/creator-card/avatar/upload", {
                                 method: "POST",
-                                credentials: "include",
+                                credentials: "same-origin",
                                 body: fd,
                               })
                               const json: any = await res.json().catch(() => null)
@@ -4671,6 +4674,8 @@ export default function CreatorCardPage() {
                                     if (!file) return
                                     e.currentTarget.value = ""
 
+                                    console.log("[creator-card avatar] selected file", { name: file.name, type: file.type, size: file.size })
+
                                     if (avatarUploading) return
                                     if (file.size > 5 * 1024 * 1024) {
                                       showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
@@ -4686,9 +4691,10 @@ export default function CreatorCardPage() {
                                       setAvatarUploading(true)
                                       const fd = new FormData()
                                       fd.append("file", file)
+                                      console.log("[creator-card avatar] FormData keys", { keys: Array.from(fd.keys()) })
                                       const res = await fetch("/api/creator-card/avatar/upload", {
                                         method: "POST",
-                                        credentials: "include",
+                                        credentials: "same-origin",
                                         body: fd,
                                       })
                                       const json: any = await res.json().catch(() => null)

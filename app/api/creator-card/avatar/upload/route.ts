@@ -110,6 +110,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "not_logged_in" }, { status: 401 })
     }
 
+    const ct = req.headers.get("content-type") || ""
+    console.log("[creator-card avatar] upload request", { contentType: ct })
+    if (!ct.toLowerCase().includes("multipart/form-data")) {
+      return NextResponse.json({ ok: false, error: "invalid_content_type" }, { status: 415 })
+    }
+
     const c = await cookies()
     const igUserId = pickCookieTrim(c, "ig_user_id", "igUserId", "ig_ig_id", "ig_id")
     const igUsername = pickCookieTrim(c, "ig_username", "igUsername", "ig_handle", "igHandle")
@@ -119,10 +125,30 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData()
-    const file = formData.get("file")
+
+    const keys = Array.from(formData.keys())
+    console.log("[creator-card avatar] formData keys", { keys })
+    for (const k of keys) {
+      const v = formData.get(k)
+      if (v instanceof File) {
+        console.log("[creator-card avatar] formData file", {
+          key: k,
+          name: v.name,
+          type: v.type,
+          size: v.size,
+        })
+      } else {
+        console.log("[creator-card avatar] formData field", {
+          key: k,
+          type: typeof v,
+        })
+      }
+    }
+
+    const file = formData.get("file") ?? formData.get("avatar") ?? formData.get("image")
 
     if (!file || !(file instanceof File)) {
-      return NextResponse.json({ ok: false, error: "missing_file" }, { status: 400 })
+      return NextResponse.json({ ok: false, error: "file_missing" }, { status: 400 })
     }
 
     const type = (file.type || "").toLowerCase()
