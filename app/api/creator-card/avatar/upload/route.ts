@@ -154,7 +154,15 @@ export async function POST(req: NextRequest) {
       return withRequestId(NextResponse.json({ ok: false, error: "missing_ig_user_id", requestId }, { status: 400 }), requestId)
     }
 
-    const formData = await req.formData()
+    let formData: FormData
+    try {
+      formData = await req.formData()
+    } catch (e: unknown) {
+      const errObj = asRecord(e)
+      const msg = typeof errObj?.message === "string" ? errObj.message : "formdata_parse_failed"
+      console.error("[creator-card avatar] formData parse failed", { requestId, message: msg })
+      return withRequestId(NextResponse.json({ ok: false, error: "invalid_multipart", requestId }, { status: 400 }), requestId)
+    }
 
     const keys = Array.from(formData.keys())
     console.log("[creator-card avatar] formData keys", { requestId, keys })
@@ -197,6 +205,7 @@ export async function POST(req: NextRequest) {
 
     const bucketOk = await ensureBucketPublic(supabase)
     if (!bucketOk.ok) {
+      console.error("[creator-card avatar] bucket setup failed", { requestId, error: (bucketOk as any).error })
       return withRequestId(NextResponse.json({ ok: false, error: "bucket_setup_failed", requestId }, { status: 500 }), requestId)
     }
 
@@ -208,6 +217,10 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if ((findByUser as any)?.error) {
+      console.error("[creator-card avatar] db lookup by user failed", {
+        requestId,
+        message: typeof (findByUser as any).error?.message === "string" ? (findByUser as any).error.message : "db_error",
+      })
       return withRequestId(NextResponse.json({ ok: false, error: "db_error", requestId }, { status: 500 }), requestId)
     }
 
@@ -225,6 +238,10 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if ((findByIg as any)?.error) {
+        console.error("[creator-card avatar] db lookup by ig failed", {
+          requestId,
+          message: typeof (findByIg as any).error?.message === "string" ? (findByIg as any).error.message : "db_error",
+        })
         return withRequestId(NextResponse.json({ ok: false, error: "db_error", requestId }, { status: 500 }), requestId)
       }
 
@@ -263,6 +280,10 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if ((inserted as any)?.error) {
+        console.error("[creator-card avatar] create card failed", {
+          requestId,
+          message: typeof (inserted as any).error?.message === "string" ? (inserted as any).error.message : "create_card_failed",
+        })
         return withRequestId(NextResponse.json({ ok: false, error: "create_card_failed", requestId }, { status: 500 }), requestId)
       }
 
@@ -283,7 +304,15 @@ export async function POST(req: NextRequest) {
         })
       : null
 
-    const buffer = Buffer.from(await file.arrayBuffer())
+    let buffer: Buffer
+    try {
+      buffer = Buffer.from(await file.arrayBuffer())
+    } catch (e: unknown) {
+      const errObj = asRecord(e)
+      const msg = typeof errObj?.message === "string" ? errObj.message : "file_read_failed"
+      console.error("[creator-card avatar] file read failed", { requestId, message: msg, fileType: file.type, fileSize: file.size })
+      return withRequestId(NextResponse.json({ ok: false, error: "file_read_failed", requestId }, { status: 500 }), requestId)
+    }
 
     const upload = await supabase.storage
       .from(BUCKET)
@@ -295,6 +324,7 @@ export async function POST(req: NextRequest) {
 
     if ((upload as any)?.error) {
       const msg = typeof (upload as any).error?.message === "string" ? (upload as any).error.message : "upload_failed"
+      console.error("[creator-card avatar] storage upload failed", { requestId, message: msg, bucket: BUCKET, objectPath })
       return withRequestId(NextResponse.json({ ok: false, error: "upload_failed", message: msg, requestId }, { status: 500 }), requestId)
     }
 
@@ -302,6 +332,7 @@ export async function POST(req: NextRequest) {
     const avatarUrl = (pub as any)?.data?.publicUrl ? String((pub as any).data.publicUrl) : ""
 
     if (!avatarUrl) {
+      console.error("[creator-card avatar] public url failed", { requestId, bucket: BUCKET, objectPath })
       return withRequestId(NextResponse.json({ ok: false, error: "public_url_failed", requestId }, { status: 500 }), requestId)
     }
 
@@ -313,6 +344,10 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if ((updated as any)?.error) {
+      console.error("[creator-card avatar] db update failed", {
+        requestId,
+        message: typeof (updated as any).error?.message === "string" ? (updated as any).error.message : "db_update_failed",
+      })
       return withRequestId(NextResponse.json({ ok: false, error: "db_update_failed", requestId }, { status: 500 }), requestId)
     }
 
@@ -321,12 +356,12 @@ export async function POST(req: NextRequest) {
         const del = await supabase.storage.from(BUCKET).remove([oldObjectPath])
         if ((del as any)?.error) {
           const msg = typeof (del as any).error?.message === "string" ? (del as any).error.message : "delete_failed"
-          console.warn("[creator-card avatar] old avatar delete failed", { cardId, oldObjectPath, message: msg })
+          console.warn("[creator-card avatar] old avatar delete failed", { requestId, cardId, oldObjectPath, message: msg })
         }
       } catch (e: unknown) {
         const errObj = asRecord(e)
         const msg = typeof errObj?.message === "string" ? errObj.message : "delete_failed"
-        console.warn("[creator-card avatar] old avatar delete failed", { cardId, oldObjectPath, message: msg })
+        console.warn("[creator-card avatar] old avatar delete failed", { requestId, cardId, oldObjectPath, message: msg })
       }
     }
 
