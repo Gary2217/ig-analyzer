@@ -17,17 +17,13 @@ function normalizeImgSrc(value: unknown, fallback: string): string {
   return fallback
 }
 
-function shouldRenderFeaturedThumb(url: string | null | undefined, isNegative: boolean): boolean {
-  if (typeof url !== "string") return false
-  const u = url.trim()
-  if (!u) return false
-  if (u.startsWith("/api/ig/thumbnail?")) return true
-  if (/^(data:|blob:)/i.test(u)) return true
-  // Only block direct CDN loads when we are in a negative-cache state.
-  if (isNegative && /^https?:\/\//i.test(u)) return false
-  // In success/normal path, allow existing persisted https thumbs.
-  if (!isNegative && /^https?:\/\//i.test(u)) return true
-  return false
+function normalizeThumbForRender(url: string): string {
+  const u = String(url || "").trim()
+  if (!u) return ""
+  if (u.startsWith("/api/ig/thumbnail?")) return u
+  if (/^(data:|blob:)/i.test(u)) return u
+  if (/^https?:\/\//i.test(u)) return `/api/ig/thumbnail?url=${encodeURIComponent(u)}`
+  return u
 }
 
 interface MobileCreatorCardLayoutProps {
@@ -209,9 +205,12 @@ export function MobileCreatorCardLayout({
                 >
                   <div className="w-full h-full rounded-2xl border border-white/10 bg-black/20 overflow-hidden relative">
                     {(() => {
-                      const thumb = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl.trim() : ""
-                      const isNegative = item.thumbnailUrl === null
-                      if (!shouldRenderFeaturedThumb(thumb, isNegative)) return null
+                      // Negative-cache (rate_limited/error) sets thumbnailUrl to null.
+                      if (item.thumbnailUrl === null) return null
+
+                      const rawThumb = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl : ""
+                      const thumb = normalizeThumbForRender(rawThumb)
+                      if (!thumb) return null
                       return (
                       <>
                         <Image

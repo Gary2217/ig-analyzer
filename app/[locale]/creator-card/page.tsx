@@ -665,6 +665,20 @@ function SortableFeaturedTile(props: {
     const [retryKey, setRetryKey] = useState(0)
     const oembedState = normalizedUrl ? igOEmbedCache[normalizedUrl] : undefined
     const shouldHideThumbnail = oembedState?.status === "rate_limited" || oembedState?.status === "error"
+
+    const oembedSuccessThumbSrc = (() => {
+      if (oembedState?.status !== "success") return null
+      const anyData = (oembedState as any)?.data
+      const rawThumb: string | null =
+        (typeof anyData?.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ??
+        (typeof anyData?.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null) ??
+        (typeof anyData?.thumbnail_url === "string" ? anyData.thumbnail_url : null)
+      if (!rawThumb) return null
+      return `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}`
+    })()
+
+    const finalThumbSrc = resolvedThumbSrc ?? oembedSuccessThumbSrc
+    const shouldRenderThumb = !shouldHideThumbnail && Boolean(finalThumbSrc) && !thumbnailLoadError
     const oembedHelperText =
       oembedState?.status === "rate_limited"
         ? (typeof (oembedState as any)?.errorMessage === "string" && (oembedState as any).errorMessage
@@ -745,10 +759,10 @@ function SortableFeaturedTile(props: {
             style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {!shouldHideThumbnail && hasResolvedThumb && !thumbnailLoadError ? (
+            {shouldRenderThumb ? (
               <img
                 key={retryKey}
-                src={resolvedThumbSrc || ""}
+                src={finalThumbSrc || ""}
                 alt="Instagram post thumbnail"
                 className="w-full h-full object-cover block"
                 loading="lazy"
@@ -2222,42 +2236,48 @@ export default function CreatorCardPage() {
 
         // Merge thumbnails from localStorage draft BEFORE setting state
         const mergedFromLocalDraft = mergeThumbsFromLocalDraft(nextFeaturedItems)
-        
-        setFeaturedItems((prev) => {
-          for (const item of prev) {
-            if (typeof item.url === "string" && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url)
-          }
-          
-          // Further merge thumbnailUrl from existing state if still missing
-          const merged = mergedFromLocalDraft.map(apiItem => {
-            if (apiItem.type === "ig" && !apiItem.thumbnailUrl) {
-              const normalizedUrl = apiItem.url.trim().replace(/\/$/, "")
-              const existing = prev.find(p => p.type === "ig" && p.url.trim().replace(/\/$/, "") === normalizedUrl)
-              if (existing?.thumbnailUrl) {
-                return { ...apiItem, thumbnailUrl: existing.thumbnailUrl }
+
+        // IMPORTANT: don't clobber local edits (e.g. just-clicked "Add") during background refresh.
+        // Only hydrate featuredItems when drafts are allowed to hydrate.
+        if (shouldHydrateDrafts) {
+          setFeaturedItems((prev) => {
+            for (const item of prev) {
+              if (typeof item.url === "string" && item.url.startsWith("blob:")) URL.revokeObjectURL(item.url)
+            }
+
+            // Further merge thumbnailUrl from existing state if still missing
+            const merged = mergedFromLocalDraft.map((apiItem) => {
+              if (apiItem.type === "ig" && !apiItem.thumbnailUrl) {
+                const normalizedUrl = apiItem.url.trim().replace(/\/$/, "")
+                const existing = prev.find(
+                  (p) => p.type === "ig" && p.url.trim().replace(/\/$/, "") === normalizedUrl
+                )
+                if (existing?.thumbnailUrl) {
+                  return { ...apiItem, thumbnailUrl: existing.thumbnailUrl }
+                }
+              }
+              return apiItem
+            })
+
+            return merged
+          })
+
+          // Seed igOEmbedCache from merged items with thumbnails
+          setIgOEmbedCache((prev) => {
+            const next = { ...prev }
+            for (const it of mergedFromLocalDraft) {
+              if (it.type !== "ig") continue
+              const normalizedUrl = (it.url || "").trim().replace(/\/$/, "")
+              if (!normalizedUrl || !it.thumbnailUrl) continue
+              if (next[normalizedUrl]?.status === "success") continue
+              next[normalizedUrl] = {
+                status: "success",
+                data: { ok: true, thumbnailUrl: it.thumbnailUrl },
               }
             }
-            return apiItem
+            return next
           })
-          
-          return merged
-        })
-        
-        // Seed igOEmbedCache from merged items with thumbnails
-        setIgOEmbedCache((prev) => {
-          const next = { ...prev }
-          for (const it of mergedFromLocalDraft) {
-            if (it.type !== "ig") continue
-            const normalizedUrl = (it.url || "").trim().replace(/\/$/, "")
-            if (!normalizedUrl || !it.thumbnailUrl) continue
-            if (next[normalizedUrl]?.status === "success") continue
-            next[normalizedUrl] = {
-              status: "success",
-              data: { ok: true, thumbnailUrl: it.thumbnailUrl },
-            }
-          }
-          return next
-        })
+        }
 
         if (shouldBackfillFeaturedToDb) {
           didBackfillFeaturedRef.current = true
