@@ -656,8 +656,11 @@ function SortableFeaturedTile(props: {
     const isValidIgUrl = Boolean(extracted)
     const mediaIdFromUrl = extracted?.code ? String(extracted.code) : null
     const isAdded = item.isAdded ?? Boolean(normalizedUrl)
-    const persistedThumb = normalizeIgThumbnailUrlOrNull(item.thumbnailUrl)
-    const hasPersistedThumb = Boolean(persistedThumb)
+    const rawThumb = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl.trim() : ""
+    const persistedThumbProxy = normalizeIgThumbnailUrlOrNull(rawThumb)
+    // For success-path rendering, allow existing persisted https thumbs as long as we are not in a negative-cache state.
+    const resolvedThumbSrc = persistedThumbProxy ?? (rawThumb ? rawThumb : null)
+    const hasResolvedThumb = Boolean(resolvedThumbSrc)
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
     const oembedState = normalizedUrl ? igOEmbedCache[normalizedUrl] : undefined
@@ -742,10 +745,10 @@ function SortableFeaturedTile(props: {
             style={{ aspectRatio: "4 / 5", maxHeight: "260px", pointerEvents: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {!shouldHideThumbnail && hasPersistedThumb && !thumbnailLoadError ? (
+            {!shouldHideThumbnail && hasResolvedThumb && !thumbnailLoadError ? (
               <img
                 key={retryKey}
-                src={persistedThumb || ""}
+                src={resolvedThumbSrc || ""}
                 alt="Instagram post thumbnail"
                 className="w-full h-full object-cover block"
                 loading="lazy"
@@ -4257,7 +4260,7 @@ export default function CreatorCardPage() {
 
                                   <div>
                                     {/* Add button below preview tile */}
-                                    {pendingIg && pendingIg.status !== "added" ? (
+                                    {pendingIg?.status !== "added" ? (
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -4325,7 +4328,11 @@ export default function CreatorCardPage() {
                                             return nextItems
                                           })
 
-                                          setPendingIg({ ...pendingIg, status: "added", oembed: { ...(pendingIg as any)?.oembed, thumbnailUrl, mediaType } })
+                                          setPendingIg({
+                                            url: (pendingIg?.url || normalizedUrl) as string,
+                                            status: "added",
+                                            oembed: { ...(pendingIg as any)?.oembed, thumbnailUrl, mediaType },
+                                          })
                                           markDirty()
 
                                           // Fetch oEmbed best-effort (cached + 429-safe); no retries unless URL changes.
@@ -4355,11 +4362,11 @@ export default function CreatorCardPage() {
                                             }
                                           }, 100)
                                         }}
-                                        disabled={isNotLoggedIn || pendingIg.status === "loading" || !newIgUrl.trim()}
+                                        disabled={isNotLoggedIn || pendingIg?.status === "loading" || !newIgUrl.trim()}
                                         className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{ minHeight: "44px" }}
                                       >
-                                        {pendingIg.status === "loading"
+                                        {pendingIg?.status === "loading"
                                           ? (activeLocale === "zh-TW" ? "載入中..." : "Loading...")
                                           : (activeLocale === "zh-TW" ? "新增" : "Add")}
                                       </button>

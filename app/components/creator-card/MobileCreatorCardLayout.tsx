@@ -17,14 +17,16 @@ function normalizeImgSrc(value: unknown, fallback: string): string {
   return fallback
 }
 
-function shouldRenderFeaturedThumb(url: string | null | undefined): boolean {
+function shouldRenderFeaturedThumb(url: string | null | undefined, isNegative: boolean): boolean {
   if (typeof url !== "string") return false
   const u = url.trim()
   if (!u) return false
   if (u.startsWith("/api/ig/thumbnail?")) return true
   if (/^(data:|blob:)/i.test(u)) return true
-  // Block direct fbcdn/instagram CDN loads to avoid ERR_CONNECTION_CLOSED spam when rate-limited.
-  if (/^https?:\/\//i.test(u)) return false
+  // Only block direct CDN loads when we are in a negative-cache state.
+  if (isNegative && /^https?:\/\//i.test(u)) return false
+  // In success/normal path, allow existing persisted https thumbs.
+  if (!isNegative && /^https?:\/\//i.test(u)) return true
   return false
 }
 
@@ -208,7 +210,8 @@ export function MobileCreatorCardLayout({
                   <div className="w-full h-full rounded-2xl border border-white/10 bg-black/20 overflow-hidden relative">
                     {(() => {
                       const thumb = typeof item.thumbnailUrl === "string" ? item.thumbnailUrl.trim() : ""
-                      if (!shouldRenderFeaturedThumb(thumb)) return null
+                      const isNegative = item.thumbnailUrl === null
+                      if (!shouldRenderFeaturedThumb(thumb, isNegative)) return null
                       return (
                       <>
                         <Image
