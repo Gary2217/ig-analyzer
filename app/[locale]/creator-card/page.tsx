@@ -1163,6 +1163,38 @@ export default function CreatorCardPage() {
   const avatarUploadInputRef = useRef<HTMLInputElement | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
 
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return
+    const w = window as any
+    if (!w || typeof w.fetch !== "function") return
+    if (w.__creatorCardAvatarFetchPatched) return
+    w.__creatorCardAvatarFetchPatched = true
+
+    const origFetch = w.fetch.bind(w)
+    w.fetch = (input: any, init?: any) => {
+      const url = typeof input === "string" ? input : input?.url
+      if (typeof url === "string" && url.includes("/api/creator-card/avatar/upload")) {
+        const h = init?.headers
+        const contentType =
+          (h && typeof h.get === "function" ? h.get("content-type") : undefined) ??
+          (h && typeof h.get === "function" ? h.get("Content-Type") : undefined) ??
+          (h && typeof h === "object" ? (h["content-type"] ?? h["Content-Type"]) : undefined)
+        console.debug("[fetch trace] avatar/upload called", {
+          url,
+          method: init?.method,
+          contentType,
+          hasBody: !!init?.body,
+          stack: new Error().stack,
+        })
+      }
+      return origFetch(input, init)
+    }
+
+    return () => {
+      // do not unpatch; avoid flapping during hot reload
+    }
+  }, [])
+
   const uploadAvatar = useCallback(
     async (file: File) => {
       if (avatarUploading) return
@@ -1175,7 +1207,12 @@ export default function CreatorCardPage() {
         setAvatarUploading(true)
         const fd = new FormData()
         fd.append("file", file)
-        console.log("[creator-card avatar] FormData keys", { keys: Array.from(fd.keys()) })
+        const formDataKeys = Array.from(fd.keys())
+        console.debug("[creator-card avatar] sending fetch", {
+          url: "/api/creator-card/avatar/upload",
+          hasFile: !!file,
+          formDataKeys,
+        })
 
         const res = await fetch("/api/creator-card/avatar/upload", {
           method: "POST",
@@ -1184,6 +1221,12 @@ export default function CreatorCardPage() {
         })
 
         const resCt = res.headers.get("content-type") || ""
+        const reqId = res.headers.get("x-request-id") || ""
+        console.debug("[creator-card avatar] fetch returned", {
+          status: res.status,
+          responseContentType: resCt,
+          requestId: reqId,
+        })
         const json: any = await res.json().catch(() => null)
         const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
 
@@ -1192,6 +1235,7 @@ export default function CreatorCardPage() {
             console.log("[creator-card avatar] upload failed", {
               status: res.status,
               responseContentType: resCt,
+              requestId: reqId || (typeof json?.requestId === "string" ? json.requestId : ""),
               body: json,
             })
           }

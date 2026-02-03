@@ -79,6 +79,26 @@ function inferExt(file: File) {
   return "jpg"
 }
 
+function makeRequestId() {
+  try {
+    const g = (globalThis as any)
+    const maybeCrypto = g?.crypto
+    if (maybeCrypto && typeof maybeCrypto.randomUUID === "function") {
+      return String(maybeCrypto.randomUUID())
+    }
+  } catch {
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function withRequestId(res: NextResponse, requestId: string) {
+  try {
+    res.headers.set("x-request-id", requestId)
+  } catch {
+  }
+  return res
+}
+
 async function ensureBucketPublic(supabase: ReturnType<typeof createServiceClient>) {
   try {
     const res = await supabase.storage.getBucket(BUCKET)
@@ -103,17 +123,27 @@ async function ensureBucketPublic(supabase: ReturnType<typeof createServiceClien
 
 export async function POST(req: NextRequest) {
   try {
+    const requestId = makeRequestId()
+    const ct = req.headers.get("content-type") || ""
+    const ua = req.headers.get("user-agent") || ""
+    const pathname = (() => {
+      try {
+        return new URL(req.url).pathname
+      } catch {
+        return ""
+      }
+    })()
+    console.log("[creator-card avatar] upload request", { requestId, method: req.method, path: pathname, contentType: ct, userAgent: ua })
+
     const authed = await createAuthedClient()
     const userRes = await authed.auth.getUser()
     const user = userRes?.data?.user ?? null
     if (!user) {
-      return NextResponse.json({ ok: false, error: "not_logged_in" }, { status: 401 })
+      return withRequestId(NextResponse.json({ ok: false, error: "not_logged_in", requestId }, { status: 401 }), requestId)
     }
 
-    const ct = req.headers.get("content-type") || ""
-    console.log("[creator-card avatar] upload request", { contentType: ct })
     if (!ct.toLowerCase().includes("multipart/form-data")) {
-      return NextResponse.json({ ok: false, error: "invalid_content_type" }, { status: 415 })
+      return withRequestId(NextResponse.json({ ok: false, error: "invalid_content_type", requestId }, { status: 415 }), requestId)
     }
 
     const c = await cookies()
@@ -121,17 +151,18 @@ export async function POST(req: NextRequest) {
     const igUsername = pickCookieTrim(c, "ig_username", "igUsername", "ig_handle", "igHandle")
 
     if (!igUserId) {
-      return NextResponse.json({ ok: false, error: "missing_ig_user_id" }, { status: 400 })
+      return withRequestId(NextResponse.json({ ok: false, error: "missing_ig_user_id", requestId }, { status: 400 }), requestId)
     }
 
     const formData = await req.formData()
 
     const keys = Array.from(formData.keys())
-    console.log("[creator-card avatar] formData keys", { keys })
+    console.log("[creator-card avatar] formData keys", { requestId, keys })
     for (const k of keys) {
       const v = formData.get(k)
       if (v instanceof File) {
         console.log("[creator-card avatar] formData file", {
+          requestId,
           key: k,
           name: v.name,
           type: v.type,
@@ -139,6 +170,7 @@ export async function POST(req: NextRequest) {
         })
       } else {
         console.log("[creator-card avatar] formData field", {
+          requestId,
           key: k,
           type: typeof v,
         })
@@ -148,24 +180,24 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") ?? formData.get("avatar") ?? formData.get("image")
 
     if (!file || !(file instanceof File)) {
-      return NextResponse.json({ ok: false, error: "file_missing" }, { status: 400 })
+      return withRequestId(NextResponse.json({ ok: false, error: "file_missing", requestId }, { status: 400 }), requestId)
     }
 
     const type = (file.type || "").toLowerCase()
     const allowed = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"])
     if (!allowed.has(type)) {
-      return NextResponse.json({ ok: false, error: "invalid_file_type" }, { status: 400 })
+      return withRequestId(NextResponse.json({ ok: false, error: "invalid_file_type", requestId }, { status: 400 }), requestId)
     }
 
     if (file.size > MAX_BYTES) {
-      return NextResponse.json({ ok: false, error: "file_too_large_max_5mb" }, { status: 400 })
+      return withRequestId(NextResponse.json({ ok: false, error: "file_too_large_max_5mb", requestId }, { status: 400 }), requestId)
     }
 
     const supabase = createServiceClient()
 
     const bucketOk = await ensureBucketPublic(supabase)
     if (!bucketOk.ok) {
-      return NextResponse.json({ ok: false, error: "bucket_setup_failed" }, { status: 500 })
+      return withRequestId(NextResponse.json({ ok: false, error: "bucket_setup_failed", requestId }, { status: 500 }), requestId)
     }
 
     const findByUser = await supabase
@@ -176,7 +208,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if ((findByUser as any)?.error) {
-      return NextResponse.json({ ok: false, error: "db_error" }, { status: 500 })
+      return withRequestId(NextResponse.json({ ok: false, error: "db_error", requestId }, { status: 500 }), requestId)
     }
 
     let cardId = typeof (findByUser as any)?.data?.id === "string" ? String((findByUser as any).data.id) : ""
@@ -193,7 +225,7 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if ((findByIg as any)?.error) {
-        return NextResponse.json({ ok: false, error: "db_error" }, { status: 500 })
+        return withRequestId(NextResponse.json({ ok: false, error: "db_error", requestId }, { status: 500 }), requestId)
       }
 
       const row = (findByIg as any)?.data
@@ -231,12 +263,12 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if ((inserted as any)?.error) {
-        return NextResponse.json({ ok: false, error: "create_card_failed" }, { status: 500 })
+        return withRequestId(NextResponse.json({ ok: false, error: "create_card_failed", requestId }, { status: 500 }), requestId)
       }
 
       cardId = typeof (inserted as any)?.data?.id === "string" ? String((inserted as any).data.id) : ""
       if (!cardId) {
-        return NextResponse.json({ ok: false, error: "create_card_failed" }, { status: 500 })
+        return withRequestId(NextResponse.json({ ok: false, error: "create_card_failed", requestId }, { status: 500 }), requestId)
       }
     }
 
@@ -263,14 +295,14 @@ export async function POST(req: NextRequest) {
 
     if ((upload as any)?.error) {
       const msg = typeof (upload as any).error?.message === "string" ? (upload as any).error.message : "upload_failed"
-      return NextResponse.json({ ok: false, error: "upload_failed", message: msg }, { status: 500 })
+      return withRequestId(NextResponse.json({ ok: false, error: "upload_failed", message: msg, requestId }, { status: 500 }), requestId)
     }
 
     const pub = supabase.storage.from(BUCKET).getPublicUrl(objectPath)
     const avatarUrl = (pub as any)?.data?.publicUrl ? String((pub as any).data.publicUrl) : ""
 
     if (!avatarUrl) {
-      return NextResponse.json({ ok: false, error: "public_url_failed" }, { status: 500 })
+      return withRequestId(NextResponse.json({ ok: false, error: "public_url_failed", requestId }, { status: 500 }), requestId)
     }
 
     const updated = await supabase
@@ -281,7 +313,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if ((updated as any)?.error) {
-      return NextResponse.json({ ok: false, error: "db_update_failed" }, { status: 500 })
+      return withRequestId(NextResponse.json({ ok: false, error: "db_update_failed", requestId }, { status: 500 }), requestId)
     }
 
     if (oldObjectPath && oldObjectPath !== objectPath) {
@@ -298,10 +330,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, avatarUrl })
+    return withRequestId(NextResponse.json({ ok: true, avatarUrl }), requestId)
   } catch (e: unknown) {
+    const requestId = makeRequestId()
     const errObj = asRecord(e)
     const msg = typeof errObj?.message === "string" ? errObj.message : "unknown"
-    return NextResponse.json({ ok: false, error: "unexpected_error", message: msg.slice(0, 400) }, { status: 500 })
+    return withRequestId(
+      NextResponse.json({ ok: false, error: "unexpected_error", message: msg.slice(0, 400), requestId }, { status: 500 }),
+      requestId
+    )
   }
 }
