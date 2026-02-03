@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
           } catch (e: unknown) {
             const errObj = asRecord(e)
             const msg = typeof errObj?.message === "string" ? errObj.message : "db_error"
-            console.warn("[creator-card avatar] db claim user_id failed", { requestId, cardId, message: msg })
+            console.error("[creator-card avatar] db claim user_id failed", { requestId, cardId, message: msg })
           }
         }
       }
