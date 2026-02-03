@@ -3,6 +3,12 @@
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 
+const CREATOR_CARD_AVATAR_FALLBACK_SRC =
+  "data:image/svg+xml;charset=utf-8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6" stop-opacity="0.25"/><stop offset="1" stop-color="#ec4899" stop-opacity="0.25"/></linearGradient></defs><rect width="256" height="256" rx="128" fill="url(#g)"/><circle cx="128" cy="108" r="44" fill="#ffffff" fill-opacity="0.22"/><path d="M48 224c14-42 44-64 80-64s66 22 80 64" fill="#ffffff" fill-opacity="0.18"/></svg>`,
+  )
+
 interface MobileCreatorCardLayoutProps {
   t: (key: string) => string
   locale?: string
@@ -81,23 +87,23 @@ export function MobileCreatorCardLayout({
       <div className="flex items-center gap-3 min-w-0">
         {/* Circular Avatar */}
         <div className="shrink-0">
-          {profileImageUrl ? (
-            <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/10 bg-black/20">
-              <Image
-                src={profileImageUrl}
-                alt={displayName || username || "Profile"}
-                fill
-                className="object-cover"
-                sizes="80px"
-                unoptimized
-                referrerPolicy="no-referrer"
-              />
-            </div>
-          ) : (
-            <div className="w-20 h-20 rounded-full border-2 border-white/10 bg-black/20 flex items-center justify-center">
-              <span className="text-white/30 text-xs">—</span>
-            </div>
-          )}
+          <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/10 bg-black/20">
+            <img
+              src={(profileImageUrl ?? "").trim() || CREATOR_CARD_AVATAR_FALLBACK_SRC}
+              alt={displayName || username || "Profile"}
+              className="absolute inset-0 h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              crossOrigin="anonymous"
+              onError={(e) => {
+                const img = e.currentTarget
+                if (img.dataset.fallbackApplied === "1") return
+                img.dataset.fallbackApplied = "1"
+                img.src = CREATOR_CARD_AVATAR_FALLBACK_SRC
+              }}
+            />
+          </div>
         </div>
 
         {/* Username & Handle */}

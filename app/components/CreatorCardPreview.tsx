@@ -189,6 +189,12 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
+const CREATOR_CARD_AVATAR_FALLBACK_SRC =
+  "data:image/svg+xml;charset=utf-8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6" stop-opacity="0.25"/><stop offset="1" stop-color="#ec4899" stop-opacity="0.25"/></linearGradient></defs><rect width="256" height="256" rx="48" fill="url(#g)"/><circle cx="128" cy="108" r="44" fill="#ffffff" fill-opacity="0.22"/><path d="M48 224c14-42 44-64 80-64s66 22 80 64" fill="#ffffff" fill-opacity="0.18"/></svg>`,
+  )
+
 const CreatorCardPhoto = memo(function CreatorCardPhoto({ url, alt }: { url: string; alt: string }) {
   const [loaded, setLoaded] = useState(false)
 
@@ -199,16 +205,25 @@ const CreatorCardPhoto = memo(function CreatorCardPhoto({ url, alt }: { url: str
   return (
     <>
       {!loaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
-      <Image
-        src={url}
+      <img
+        src={url || CREATOR_CARD_AVATAR_FALLBACK_SRC}
         alt={alt}
-        fill
-        sizes="(max-width: 640px) 90vw, 400px"
-        unoptimized
-        className={"object-cover" + (!loaded ? " opacity-0" : " opacity-100")}
-        onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
+        className={"absolute inset-0 h-full w-full object-cover" + (!loaded ? " opacity-0" : " opacity-100")}
+        loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
+        onLoad={() => setLoaded(true)}
+        onError={(e) => {
+          const img = e.currentTarget
+          if (img.dataset.fallbackApplied === "1") {
+            setLoaded(true)
+            return
+          }
+          img.dataset.fallbackApplied = "1"
+          img.src = CREATOR_CARD_AVATAR_FALLBACK_SRC
+          setLoaded(true)
+        }}
       />
     </>
   )
