@@ -31,6 +31,41 @@ function slugify(input: string) {
 const BUCKET = "creator-card-avatars"
 const MAX_BYTES = 5 * 1024 * 1024
 
+function parseSupabasePublicObjectPathFromAvatarUrl(opts: {
+  avatarUrl: string
+  supabaseUrl: string
+  bucket: string
+  requiredPrefix: string
+}): string | null {
+  const { avatarUrl, supabaseUrl, bucket, requiredPrefix } = opts
+  const raw = (avatarUrl || "").trim()
+  if (!raw) return null
+
+  let u: URL
+  try {
+    u = new URL(raw)
+  } catch {
+    return null
+  }
+
+  let supa: URL
+  try {
+    supa = new URL((supabaseUrl || "").trim())
+  } catch {
+    return null
+  }
+
+  if (!u.hostname || u.hostname !== supa.hostname) return null
+
+  const publicPrefix = `/storage/v1/object/public/${bucket}/`
+  if (!u.pathname.startsWith(publicPrefix)) return null
+
+  const objectPath = u.pathname.slice(publicPrefix.length)
+  if (!objectPath.startsWith(requiredPrefix)) return null
+
+  return objectPath
+}
+
 function inferExt(file: File) {
   const t = (file.type || "").toLowerCase()
   if (t === "image/png") return "png"
@@ -109,7 +144,7 @@ export async function POST(req: NextRequest) {
 
     const findByUser = await supabase
       .from("creator_cards")
-      .select("id, user_id")
+      .select("id, user_id, avatar_url")
       .eq("user_id", user.id)
       .limit(1)
       .maybeSingle()
@@ -119,11 +154,12 @@ export async function POST(req: NextRequest) {
     }
 
     let cardId = typeof (findByUser as any)?.data?.id === "string" ? String((findByUser as any).data.id) : ""
+    let oldAvatarUrl = typeof (findByUser as any)?.data?.avatar_url === "string" ? String((findByUser as any).data.avatar_url) : ""
 
     if (!cardId) {
       const findByIg = await supabase
         .from("creator_cards")
-        .select("id, user_id")
+        .select("id, user_id, avatar_url")
         .eq("ig_user_id", igUserId)
         .or(`user_id.is.null,user_id.eq.${user.id}`)
         .order("updated_at", { ascending: false })
@@ -137,6 +173,7 @@ export async function POST(req: NextRequest) {
       const row = (findByIg as any)?.data
       if (row && typeof row === "object") {
         cardId = typeof (row as any).id === "string" ? String((row as any).id) : ""
+        oldAvatarUrl = typeof (row as any).avatar_url === "string" ? String((row as any).avatar_url) : ""
         const owner = typeof (row as any).user_id === "string" ? String((row as any).user_id) : null
         if (cardId && owner == null) {
           await supabase.from("creator_cards").update({ user_id: user.id }).eq("id", cardId)
@@ -179,6 +216,14 @@ export async function POST(req: NextRequest) {
 
     const ext = inferExt(file)
     const objectPath = `creator_cards/${cardId}/${Date.now()}.${ext}`
+    const oldObjectPath = oldAvatarUrl
+      ? parseSupabasePublicObjectPathFromAvatarUrl({
+          avatarUrl: oldAvatarUrl,
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "",
+          bucket: BUCKET,
+          requiredPrefix: `creator_cards/${cardId}/`,
+        })
+      : null
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
@@ -211,6 +256,20 @@ export async function POST(req: NextRequest) {
 
     if ((updated as any)?.error) {
       return NextResponse.json({ ok: false, error: "db_update_failed" }, { status: 500 })
+    }
+
+    if (oldObjectPath && oldObjectPath !== objectPath) {
+      try {
+        const del = await supabase.storage.from(BUCKET).remove([oldObjectPath])
+        if ((del as any)?.error) {
+          const msg = typeof (del as any).error?.message === "string" ? (del as any).error.message : "delete_failed"
+          console.warn("[creator-card avatar] old avatar delete failed", { cardId, oldObjectPath, message: msg })
+        }
+      } catch (e: unknown) {
+        const errObj = asRecord(e)
+        const msg = typeof errObj?.message === "string" ? errObj.message : "delete_failed"
+        console.warn("[creator-card avatar] old avatar delete failed", { cardId, oldObjectPath, message: msg })
+      }
     }
 
     return NextResponse.json({ ok: true, avatarUrl })
