@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 
+const upsertRateBuckets = new Map<string, { resetAt: number; count: number }>()
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null
   return value as Record<string, unknown>
@@ -236,6 +238,25 @@ export async function POST(req: Request) {
       )
     }
 
+    if (process.env.NODE_ENV === "production" && ccDebugSrc === "user-save") {
+      const key = `${user.id}:${igUserIdStr}`
+      const now = Date.now()
+      const windowMs = 60_000
+      const limit = 30
+      const bucket = upsertRateBuckets.get(key)
+      if (!bucket || bucket.resetAt <= now) {
+        upsertRateBuckets.set(key, { resetAt: now + windowMs, count: 1 })
+      } else {
+        bucket.count += 1
+        if (bucket.count > limit) {
+          return NextResponse.json(
+            { ok: false, error: "rate_limited", message: "too_many_requests" },
+            { status: 429 },
+          )
+        }
+      }
+    }
+
     // Atomic legacy claim (server-side) to avoid races. This only claims rows with user_id IS NULL.
     // Only available when the caller has an app session (Supabase user).
     try {
@@ -288,9 +309,27 @@ export async function POST(req: Request) {
     const body = asRecord(bodyUnknown)
     if (!body) return NextResponse.json({ ok: false, error: "bad_json" }, { status: 400 })
 
+    const handleRaw = (typeof body.handle === "string" ? body.handle.trim() : "").slice(0, 64)
+    const audienceRaw = (typeof body.audience === "string" ? body.audience.trim() : "").slice(0, 2000)
+    const nicheRaw = (typeof body.niche === "string" ? body.niche.trim() : "").slice(0, 128)
+    const featuredItemsRaw = (Array.isArray(body.featuredItems) ? body.featuredItems : []).slice(0, 50)
+    const portfolioRaw = (Array.isArray(body.portfolio) ? body.portfolio : []).slice(0, 50)
+
+    const featuredItemsSanitized = featuredItemsRaw.map((it) => {
+      const obj = asRecord(it)
+      if (!obj) return it
+      const url = typeof obj.url === "string" ? obj.url.trim().slice(0, 2048) : obj.url
+      const thumb = typeof obj.thumbnailUrl === "string" ? obj.thumbnailUrl.trim().slice(0, 2048) : obj.thumbnailUrl
+      return {
+        ...obj,
+        ...(url !== undefined ? { url } : null),
+        ...(thumb !== undefined ? { thumbnailUrl: thumb } : null),
+      }
+    })
+
     const completionPct = computeCompletion(body)
 
-    const proposed = String(body.handle ?? "").trim()
+    const proposed = handleRaw
     let base = proposed ? slugify(proposed) : slugify(igUsername || "creator")
     if (!base) base = "creator"
 
@@ -338,10 +377,16 @@ export async function POST(req: Request) {
     const themeTypes = normalizeStringArray(body.themeTypes, 20)
     const audienceProfiles = normalizeStringArray(body.audienceProfiles, 20)
 
-    const audience = String(body.audience ?? "").trim()
+    const audience = audienceRaw
 
     const profileImageUrl = (() => {
       const raw = typeof body.profileImageUrl === "string" ? String(body.profileImageUrl) : ""
+      const s = raw.trim()
+      return s ? s : null
+    })()
+
+    const avatarUrl = (() => {
+      const raw = typeof (body as any).avatarUrl === "string" ? String((body as any).avatarUrl) : ""
       const s = raw.trim()
       return s ? s : null
     })()
@@ -379,15 +424,16 @@ export async function POST(req: Request) {
       ig_username: igUsername,
       handle,
       profile_image_url: profileImageUrl,
-      niche: String(body.niche ?? "").trim() || null,
+      avatar_url: avatarUrl,
+      niche: nicheRaw || null,
       audience: audience || null,
       min_price: minPrice,
       contact: contactText,
       collaboration_niches: collaborationNiches,
       deliverables,
       past_collaborations: pastCollaborations,
-      portfolio: Array.isArray(body.portfolio) ? body.portfolio : [],
-      featured_items: Array.isArray(body.featuredItems) ? body.featuredItems : [],
+      portfolio: portfolioRaw,
+      featured_items: featuredItemsSanitized,
       is_public: Boolean(body.isPublic),
       theme_types: themeTypes,
       audience_profiles: audienceProfiles,
@@ -411,6 +457,29 @@ export async function POST(req: Request) {
       return { ok: false as const, reclaim: false as const }
     }
 
+    const reclaimViaRpc = async (id: string, source: string | null) => {
+      try {
+        const res = await supabaseServer
+          .rpc("reclaim_creator_card", {
+            p_creator_card_id: id,
+            p_ig_user_id: igUserIdStr,
+            p_new_user_id: user.id,
+            p_source: source,
+          })
+          .maybeSingle()
+
+        if ((res as any)?.error) {
+          return { ok: false as const, error: (res as any).error }
+        }
+        if (!(res as any)?.data) {
+          return { ok: false as const, error: { message: "reclaim_no_row" } }
+        }
+        return { ok: true as const }
+      } catch (e: unknown) {
+        return { ok: false as const, error: e }
+      }
+    }
+
     const updateById = async (id: string, opts: { reclaim: boolean }) => {
       const payload = opts.reclaim ? { ...dbWrite, user_id: user.id } : dbWrite
       return await supabaseServer.from("creator_cards").update(payload).eq("id", id).select("*").maybeSingle()
@@ -422,6 +491,17 @@ export async function POST(req: Request) {
     if (existingId) {
       const authz = authorizeExisting(existingUserId)
       if (!authz.ok) {
+        if (ccDebug) {
+          console.log("[creator-card/upsert] not_owner", {
+            at: new Date().toISOString(),
+            source: ccDebugSrc,
+            userId: user.id,
+            igUserId: igUserIdStr,
+            existingId,
+            ownerKind: "other",
+            meOk,
+          })
+        }
         return NextResponse.json(
           {
             ok: false,
@@ -441,7 +521,30 @@ export async function POST(req: Request) {
         )
       }
 
-      const res = await updateById(existingId, { reclaim: authz.reclaim })
+      if (authz.reclaim && ccDebug) {
+        console.log("[creator-card/upsert] reclaim", {
+          at: new Date().toISOString(),
+          source: ccDebugSrc,
+          userId: user.id,
+          igUserId: igUserIdStr,
+          existingId,
+          ownerKind: "other",
+          meOk,
+        })
+      }
+
+      if (authz.reclaim) {
+        const reclaim = await reclaimViaRpc(existingId, ccDebugSrc ?? null)
+        if (!reclaim.ok) {
+          const msg = typeof (reclaim as any)?.error?.message === "string" ? String((reclaim as any).error.message) : ""
+          return NextResponse.json(
+            { ok: false, error: "upsert_failed", message: msg === "reclaim_no_row" ? "reclaim_no_row" : "reclaim_failed" },
+            { status: 500 },
+          )
+        }
+      }
+
+      const res = await updateById(existingId, { reclaim: false })
       data = (res as any).data
       error = (res as any).error
     } else {
@@ -468,6 +571,18 @@ export async function POST(req: Request) {
 
         const authz = authorizeExisting(afterOwner)
         if (!authz.ok) {
+          if (ccDebug) {
+            console.log("[creator-card/upsert] not_owner", {
+              at: new Date().toISOString(),
+              source: ccDebugSrc,
+              userId: user.id,
+              igUserId: igUserIdStr,
+              existingId: afterId,
+              ownerKind: "other",
+              meOk,
+              raced: true,
+            })
+          }
           return NextResponse.json(
             {
               ok: false,
@@ -488,7 +603,31 @@ export async function POST(req: Request) {
           )
         }
 
-        const res = await updateById(afterId, { reclaim: authz.reclaim })
+        if (authz.reclaim && ccDebug) {
+          console.log("[creator-card/upsert] reclaim", {
+            at: new Date().toISOString(),
+            source: ccDebugSrc,
+            userId: user.id,
+            igUserId: igUserIdStr,
+            existingId: afterId,
+            ownerKind: "other",
+            meOk,
+            raced: true,
+          })
+        }
+
+        if (authz.reclaim) {
+          const reclaim = await reclaimViaRpc(afterId, ccDebugSrc ?? null)
+          if (!reclaim.ok) {
+            const msg = typeof (reclaim as any)?.error?.message === "string" ? String((reclaim as any).error.message) : ""
+            return NextResponse.json(
+              { ok: false, error: "upsert_failed", message: msg === "reclaim_no_row" ? "reclaim_no_row" : "reclaim_failed" },
+              { status: 500 },
+            )
+          }
+        }
+
+        const res = await updateById(afterId, { reclaim: false })
         data = (res as any).data
         error = (res as any).error
       } else {

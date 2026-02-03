@@ -26,6 +26,7 @@ export async function GET(req: Request) {
     const row = asRecord(data as unknown)
     const card = row ? {
       ...row,
+      avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
       minPrice:
         typeof (row as any).minPrice === "number"
           ? (row as any).minPrice

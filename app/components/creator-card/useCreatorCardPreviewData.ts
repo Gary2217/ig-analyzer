@@ -11,6 +11,7 @@ type IgProfile = {
 }
 
 type NormalizedCreatorCard = {
+  avatarUrl?: string | null
   profileImageUrl?: string | null
   displayName?: string | null
   username?: string | null
@@ -96,6 +97,7 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
   if (!isRecord(payload)) return null
   const base = isRecord(payload.card) ? payload.card : payload
 
+  const avatarUrl = pick<string>(base, "avatarUrl", "avatar_url")
   const profileImageUrl = pick<string>(base, "profileImageUrl", "profile_image_url")
   const displayName = pick<string>(base, "displayName", "display_name", "name")
   const username = pick<string>(base, "username", "handle")
@@ -144,7 +146,8 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
 
   return {
     ...base,
-    profileImageUrl,
+    avatarUrl: avatarUrl ?? null,
+    profileImageUrl: (avatarUrl ?? profileImageUrl) ?? null,
     displayName,
     username,
     aboutText,

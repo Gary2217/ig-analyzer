@@ -22,6 +22,7 @@ interface CreatorCardData {
   niche: string | null
   primary_niche: string | null
   profile_image_url: string | null
+  avatar_url?: string | null
   is_public: boolean
   about_text: string | null
   audience: string | null
@@ -176,7 +177,7 @@ function normalizeCreatorCardForPreview(card: CreatorCardData) {
     .filter(Boolean)
 
   return {
-    profileImageUrl: card.profile_image_url,
+    profileImageUrl: card.avatar_url || card.profile_image_url,
     displayName: card.display_name || card.ig_username,
     username: card.ig_username,
     aboutText: card.about_text || card.audience,

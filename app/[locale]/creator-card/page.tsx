@@ -307,6 +307,7 @@ type CreatorCardUpsertPayload = {
   handle?: string
   displayName?: string
   profileImageUrl?: string
+  avatarUrl?: string
   niche?: string
   audience?: string
   minPrice?: number | null
@@ -324,6 +325,7 @@ type CreatorCardPayload = {
   handle?: string | null
   displayName?: string | null
   profileImageUrl?: string | null
+  avatarUrl?: string | null
   niche?: string | null
   audience?: string | null
   minPrice?: number | null
@@ -1158,6 +1160,9 @@ export default function CreatorCardPage() {
 
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
 
+  const avatarUploadInputRef = useRef<HTMLInputElement | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
   const dbUpdatedAtMsRef = useRef<number>(0)
@@ -1757,6 +1762,10 @@ export default function CreatorCardPage() {
               profileImageUrl:
                 readString(card?.profileImageUrl) ??
                 readString(card?.profile_image_url) ??
+                null,
+              avatarUrl:
+                readString((card as any)?.avatarUrl) ??
+                readString((card as any)?.avatar_url) ??
                 null,
               niche: readString(card?.niche) ?? null,
               audience: readString(card?.audience) ?? null,
@@ -2636,6 +2645,7 @@ export default function CreatorCardPage() {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
         profileImageUrl: nextProfileImageUrl,
+        avatarUrl: typeof (baseCard as any)?.avatarUrl === "string" ? (baseCard as any).avatarUrl : undefined,
         niche: baseCard?.niche ?? undefined,
         audience: nextAudience || undefined,
         minPrice: minPrice,
@@ -2780,6 +2790,7 @@ export default function CreatorCardPage() {
       // Prepare updated card data for state update
       const updatedCardData = {
         profileImageUrl: nextProfileImageUrl ?? null,
+        avatarUrl: typeof (baseCard as any)?.avatarUrl === "string" ? (baseCard as any).avatarUrl : null,
         audience: nextAudience || null,
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
@@ -3284,6 +3295,67 @@ export default function CreatorCardPage() {
                   titleEn: "Basic Info",
                   render: () => (
                     <>
+                      <div className="min-w-0">
+                        <input
+                          ref={avatarUploadInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0] ?? null
+                            if (!file) return
+                            e.currentTarget.value = ""
+
+                            if (avatarUploading) return
+                            if (file.size > 5 * 1024 * 1024) {
+                              showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
+                              return
+                            }
+                            const okType = /^(image\/png|image\/jpeg|image\/jpg|image\/webp)$/i.test(file.type)
+                            if (!okType) {
+                              showToast(activeLocale === "zh-TW" ? "請上傳 PNG/JPG/WebP 圖片" : "Please upload a PNG/JPG/WebP image")
+                              return
+                            }
+
+                            try {
+                              setAvatarUploading(true)
+                              const fd = new FormData()
+                              fd.append("file", file)
+                              const res = await fetch("/api/creator-card/avatar/upload", {
+                                method: "POST",
+                                credentials: "include",
+                                body: fd,
+                              })
+                              const json: any = await res.json().catch(() => null)
+                              const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
+                              if (!res.ok || json?.ok !== true || !avatarUrl) {
+                                showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
+                                return
+                              }
+
+                              setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
+                              markDirty()
+                              showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
+                            } catch {
+                              showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
+                            } finally {
+                              setAvatarUploading(false)
+                            }
+                          }}
+                        />
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                          onClick={() => avatarUploadInputRef.current?.click()}
+                          disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+                        >
+                          {avatarUploading ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" /> : null}
+                          <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
+                        </Button>
+                      </div>
+
                       <div className="min-w-0">
                         <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
                         <div className="mt-2 relative">
@@ -4589,6 +4661,67 @@ export default function CreatorCardPage() {
                           render: () => (
                             <div className="space-y-4">
                               <div className="min-w-0">
+                                <input
+                                  ref={avatarUploadInputRef}
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0] ?? null
+                                    if (!file) return
+                                    e.currentTarget.value = ""
+
+                                    if (avatarUploading) return
+                                    if (file.size > 5 * 1024 * 1024) {
+                                      showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
+                                      return
+                                    }
+                                    const okType = /^(image\/png|image\/jpeg|image\/jpg|image\/webp)$/i.test(file.type)
+                                    if (!okType) {
+                                      showToast(activeLocale === "zh-TW" ? "請上傳 PNG/JPG/WebP 圖片" : "Please upload a PNG/JPG/WebP image")
+                                      return
+                                    }
+
+                                    try {
+                                      setAvatarUploading(true)
+                                      const fd = new FormData()
+                                      fd.append("file", file)
+                                      const res = await fetch("/api/creator-card/avatar/upload", {
+                                        method: "POST",
+                                        credentials: "include",
+                                        body: fd,
+                                      })
+                                      const json: any = await res.json().catch(() => null)
+                                      const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
+                                      if (!res.ok || json?.ok !== true || !avatarUrl) {
+                                        showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
+                                        return
+                                      }
+
+                                      setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
+                                      markDirty()
+                                      showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
+                                    } catch {
+                                      showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
+                                    } finally {
+                                      setAvatarUploading(false)
+                                    }
+                                  }}
+                                />
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                                  onClick={() => avatarUploadInputRef.current?.click()}
+                                  disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+                                >
+                                  {avatarUploading ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" /> : null}
+                                  <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
+                                </Button>
+                              </div>
+
+                              <div className="min-w-0">
                                 <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
                                 <div className="mt-2">
                                   <textarea
@@ -5032,9 +5165,10 @@ export default function CreatorCardPage() {
                     creatorCard: {
                       ...(previewData.creatorCard ?? {}),
                       profileImageUrl: (() => {
+                        const u0 = typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : ""
                         const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
                         const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                        const u = (u1 || u2).trim()
+                        const u = (u0 || u1 || u2).trim()
                         return u ? u : null
                       })(),
                       displayName: displayName,
@@ -5103,9 +5237,10 @@ export default function CreatorCardPage() {
                       onProfileImageFileChange={undefined}
                       username={displayUsername || null}
                       profileImageUrl={(() => {
+                        const u0 = typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : ""
                         const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
                         const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                        const u = (u1 || u2).trim()
+                        const u = (u0 || u1 || u2).trim()
                         return u ? u : null
                       })()}
                       displayName={displayName}
