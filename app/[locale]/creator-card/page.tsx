@@ -1163,56 +1163,14 @@ export default function CreatorCardPage() {
   const avatarUploadInputRef = useRef<HTMLInputElement | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
 
-  useEffect(() => {
-    if (process.env.NODE_ENV === "production") return
-    const w = window as any
-    if (!w || typeof w.fetch !== "function") return
-    if (w.__creatorCardAvatarFetchPatched) return
-    w.__creatorCardAvatarFetchPatched = true
-
-    const origFetch = w.fetch.bind(w)
-    w.fetch = (input: any, init?: any) => {
-      const url = typeof input === "string" ? input : input?.url
-      if (typeof url === "string" && url.includes("/api/creator-card/avatar/upload")) {
-        const h = init?.headers
-        const contentType =
-          (h && typeof h.get === "function" ? h.get("content-type") : undefined) ??
-          (h && typeof h.get === "function" ? h.get("Content-Type") : undefined) ??
-          (h && typeof h === "object" ? (h["content-type"] ?? h["Content-Type"]) : undefined)
-        console.debug("[fetch trace] avatar/upload called", {
-          url,
-          method: init?.method,
-          contentType,
-          hasBody: !!init?.body,
-          stack: new Error().stack,
-        })
-      }
-      return origFetch(input, init)
-    }
-
-    return () => {
-      // do not unpatch; avoid flapping during hot reload
-    }
-  }, [])
-
   const uploadAvatar = useCallback(
     async (file: File) => {
       if (avatarUploading) return
-
-      if (process.env.NODE_ENV !== "production") {
-        console.debug("[creator-card avatar] uploadAvatar called", { name: file.name, type: file.type, size: file.size })
-      }
 
       try {
         setAvatarUploading(true)
         const fd = new FormData()
         fd.append("file", file)
-        const formDataKeys = Array.from(fd.keys())
-        console.debug("[creator-card avatar] sending fetch", {
-          url: "/api/creator-card/avatar/upload",
-          hasFile: !!file,
-          formDataKeys,
-        })
 
         const res = await fetch("/api/creator-card/avatar/upload", {
           method: "POST",
@@ -1220,25 +1178,10 @@ export default function CreatorCardPage() {
           body: fd,
         })
 
-        const resCt = res.headers.get("content-type") || ""
-        const reqId = res.headers.get("x-request-id") || ""
-        console.debug("[creator-card avatar] fetch returned", {
-          status: res.status,
-          responseContentType: resCt,
-          requestId: reqId,
-        })
         const json: any = await res.json().catch(() => null)
         const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
 
         if (!res.ok || json?.ok !== true || !avatarUrl) {
-          if (process.env.NODE_ENV !== "production") {
-            console.log("[creator-card avatar] upload failed", {
-              status: res.status,
-              responseContentType: resCt,
-              requestId: reqId || (typeof json?.requestId === "string" ? json.requestId : ""),
-              body: json,
-            })
-          }
           showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
           return
         }
@@ -1247,9 +1190,6 @@ export default function CreatorCardPage() {
         markDirty()
         showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
       } catch (e: unknown) {
-        if (process.env.NODE_ENV !== "production") {
-          console.log("[creator-card avatar] upload failed", { message: e instanceof Error ? e.message : String(e) })
-        }
         showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
       } finally {
         setAvatarUploading(false)
@@ -3403,8 +3343,6 @@ export default function CreatorCardPage() {
                             if (!file) return
                             e.currentTarget.value = ""
 
-                            console.log("[creator-card avatar] selected file", { name: file.name, type: file.type, size: file.size })
-
                             if (avatarUploading) return
                             if (file.size > 5 * 1024 * 1024) {
                               showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
@@ -3423,15 +3361,16 @@ export default function CreatorCardPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                          className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px]"
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
                             avatarUploadInputRef.current?.click()
                           }}
+                          aria-busy={avatarUploading}
                           disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                         >
-                          {avatarUploading ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" /> : null}
+                          <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
                           <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
                         </Button>
                       </div>
@@ -4753,8 +4692,6 @@ export default function CreatorCardPage() {
                                     if (!file) return
                                     e.currentTarget.value = ""
 
-                                    console.log("[creator-card avatar] selected file", { name: file.name, type: file.type, size: file.size })
-
                                     if (avatarUploading) return
                                     if (file.size > 5 * 1024 * 1024) {
                                       showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
@@ -4773,15 +4710,16 @@ export default function CreatorCardPage() {
                                 <Button
                                   type="button"
                                   variant="outline"
-                                  className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                                  className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px]"
                                   onClick={(e) => {
                                     e.preventDefault()
                                     e.stopPropagation()
                                     avatarUploadInputRef.current?.click()
                                   }}
+                                  aria-busy={avatarUploading}
                                   disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                                 >
-                                  {avatarUploading ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" /> : null}
+                                  <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
                                   <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
                                 </Button>
                               </div>

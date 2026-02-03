@@ -72,12 +72,6 @@ export function MobileCreatorCardLayout({
     return () => window.clearTimeout(t)
   }, [avatarSrc])
 
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "production") {
-      console.debug("[creator-card mobile avatar src]", { raw: profileImageUrl, normalized: avatarSrc })
-    }
-  }, [avatarSrc, profileImageUrl])
-
   // Track scroll position for pagination
   useEffect(() => {
     const el = carouselRef.current

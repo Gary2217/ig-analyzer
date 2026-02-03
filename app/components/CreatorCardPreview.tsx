@@ -216,12 +216,6 @@ const CreatorCardPhoto = memo(function CreatorCardPhoto({ url, alt }: { url: unk
     return () => window.clearTimeout(t)
   }, [primarySrc])
 
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "production") {
-      console.debug("[creator-card avatar src]", { raw: url, normalized: primarySrc })
-    }
-  }, [primarySrc, url])
-
   return (
     <>
       <img

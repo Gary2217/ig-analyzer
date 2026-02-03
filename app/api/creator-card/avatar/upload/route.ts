@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
     const requestId = makeRequestId()
     const ct = req.headers.get("content-type") || ""
     const ua = req.headers.get("user-agent") || ""
+    const isProd = process.env.NODE_ENV === "production"
     const pathname = (() => {
       try {
         return new URL(req.url).pathname
@@ -133,7 +134,9 @@ export async function POST(req: NextRequest) {
         return ""
       }
     })()
-    console.log("[creator-card avatar] upload request", { requestId, method: req.method, path: pathname, contentType: ct, userAgent: ua })
+    if (!isProd) {
+      console.log("[creator-card avatar] upload request", { requestId, method: req.method, path: pathname, contentType: ct, userAgent: ua })
+    }
 
     const authed = await createAuthedClient()
     const userRes = await authed.auth.getUser()
@@ -164,24 +167,26 @@ export async function POST(req: NextRequest) {
       return withRequestId(NextResponse.json({ ok: false, error: "invalid_multipart", requestId }, { status: 400 }), requestId)
     }
 
-    const keys = Array.from(formData.keys())
-    console.log("[creator-card avatar] formData keys", { requestId, keys })
-    for (const k of keys) {
-      const v = formData.get(k)
-      if (v instanceof File) {
-        console.log("[creator-card avatar] formData file", {
-          requestId,
-          key: k,
-          name: v.name,
-          type: v.type,
-          size: v.size,
-        })
-      } else {
-        console.log("[creator-card avatar] formData field", {
-          requestId,
-          key: k,
-          type: typeof v,
-        })
+    if (!isProd) {
+      const keys = Array.from(formData.keys())
+      console.log("[creator-card avatar] formData keys", { requestId, keys })
+      for (const k of keys) {
+        const v = formData.get(k)
+        if (v instanceof File) {
+          console.log("[creator-card avatar] formData file", {
+            requestId,
+            key: k,
+            name: v.name,
+            type: v.type,
+            size: v.size,
+          })
+        } else {
+          console.log("[creator-card avatar] formData field", {
+            requestId,
+            key: k,
+            type: typeof v,
+          })
+        }
       }
     }
 
