@@ -66,6 +66,10 @@ export function MobileCreatorCardLayout({
   const avatarSrc = normalizeImgSrc(profileImageUrl, CREATOR_CARD_AVATAR_FALLBACK_SRC)
   const [avatarLoaded, setAvatarLoaded] = useState(false)
 
+  const featuredFallbackText = isZhTW
+    ? "Instagram 預覽暫時無法使用，但連結仍有效。"
+    : "Instagram preview is temporarily unavailable. The link is still valid."
+
   useEffect(() => {
     setAvatarLoaded(false)
     const t = window.setTimeout(() => setAvatarLoaded(true), 1200)
@@ -113,6 +117,9 @@ export function MobileCreatorCardLayout({
               referrerPolicy="no-referrer"
               crossOrigin="anonymous"
             />
+
+            {!avatarLoaded ? <div className="absolute inset-0 animate-pulse bg-white/5" /> : null}
+
             <img
               src={avatarSrc}
               alt={displayName || username || "Profile"}
@@ -185,7 +192,7 @@ export function MobileCreatorCardLayout({
                   type="button"
                   onClick={() => onOpenIg?.({ url: item.url, thumb: item.thumbnailUrl || undefined, caption: item.caption })}
                   className="shrink-0 w-full snap-start overflow-hidden focus:outline-none focus:ring-2 focus:ring-white/20 relative px-4"
-                  style={{ height: '60vh', maxHeight: '520px' }}
+                  style={{ height: '60vh', maxHeight: '520px', minHeight: '360px' }}
                 >
                   <div className="w-full h-full rounded-2xl border border-white/10 bg-black/20 overflow-hidden relative">
                     {item.thumbnailUrl ? (
@@ -210,10 +217,13 @@ export function MobileCreatorCardLayout({
                         )}
                       </>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/30">
-                        <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 24 24">
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-white/40 px-6">
+                        <svg className="w-12 h-12 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
                         </svg>
+                        <div className="text-center text-xs leading-tight text-white/60 break-words [overflow-wrap:anywhere]">
+                          {featuredFallbackText}
+                        </div>
                       </div>
                     )}
                   </div>

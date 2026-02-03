@@ -61,6 +61,12 @@ function urlIsApi(url: string): boolean {
   }
 }
 
+function normalizeIgCacheKey(raw: string): string {
+  return String(raw || "")
+    .trim()
+    .replace(/\/+$/, "")
+}
+
 function installApiDebugFetchTracerOnce(enabled: boolean) {
   if (!enabled) return
   if (typeof window === "undefined") return
@@ -528,11 +534,12 @@ function SortableFeaturedTile(props: {
   onIgUrlChange: (id: string, url: string) => void
   onIgThumbnailClick?: (url: string) => void
   fetchAndApplyIgOEmbedForItem: (opts: { itemId: string; normalizedUrl: string; mediaIdFromUrl: string | null }) => void
+  igOEmbedCache: Record<string, OEmbedState>
   setFeaturedItems: React.Dispatch<React.SetStateAction<FeaturedItem[]>>
   markDirty: () => void
   suppressClick: boolean
 }) {
-  const { item, t, activeLocale, isReadOnly, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, setFeaturedItems, markDirty, suppressClick } = props
+  const { item, t, activeLocale, isReadOnly, onReplace, onRemove, onEdit, onCaptionChange, onTextChange, onIgUrlChange, fetchAndApplyIgOEmbedForItem, igOEmbedCache, setFeaturedItems, markDirty, suppressClick } = props
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: item.id })
 
   const itemType = item.type || "media"
@@ -608,20 +615,54 @@ function SortableFeaturedTile(props: {
   // IG item rendering
   if (itemType === "ig") {
     // Normalize URL for consistent cache keys (remove trailing slash)
-    const normalizedUrl = item.url ? item.url.trim().replace(/\/$/, "") : ""
+    const normalizedUrl = normalizeIgCacheKey(item.url)
     const extracted = normalizedUrl ? extractInstagramShortcode(normalizedUrl) : null
     const isValidIgUrl = Boolean(extracted)
+    const mediaIdFromUrl = extracted?.code ? String(extracted.code) : null
     const isAdded = item.isAdded ?? Boolean(normalizedUrl)
     const persistedThumb = normalizeIgThumbnailUrlOrNull(item.thumbnailUrl)
     const hasPersistedThumb = Boolean(persistedThumb)
     const [thumbnailLoadError, setThumbnailLoadError] = useState(false)
     const [retryKey, setRetryKey] = useState(0)
+    const oembedState = normalizedUrl ? igOEmbedCache[normalizedUrl] : undefined
+    const oembedHelperText =
+      oembedState?.status === "rate_limited"
+        ? (typeof (oembedState as any)?.errorMessage === "string" && (oembedState as any).errorMessage
+            ? String((oembedState as any).errorMessage)
+            : (activeLocale === "zh-TW"
+                ? "Instagram 預覽暫時無法使用，但連結仍有效。"
+                : "Instagram preview is temporarily unavailable. The link is still valid."))
+        : null
 
     // Reset thumbnail error when URL changes
     useEffect(() => {
       setThumbnailLoadError(false)
       setRetryKey(0)
     }, [normalizedUrl])
+
+    // Best-effort oEmbed fetch: debounced, deduped, and cached by normalizedUrl.
+    // No automatic retries on 429 (rate-limited); only re-attempt if user changes the URL.
+    useEffect(() => {
+      if (!normalizedUrl) return
+      if (!isValidIgUrl) return
+      if (!isAdded) return
+      if (oembedState?.status === "success") return
+      if (oembedState?.status === "loading") return
+      if (oembedState?.status === "rate_limited") return
+      if (oembedState?.status === "error") return
+
+      const key = `tile:${item.id}`
+      const anyWindow = window as any
+      if (!anyWindow || typeof anyWindow.setTimeout !== "function") return
+
+      const handle = anyWindow.setTimeout(() => {
+        fetchAndApplyIgOEmbedForItem({ itemId: item.id, normalizedUrl, mediaIdFromUrl })
+      }, 650)
+
+      return () => {
+        anyWindow.clearTimeout(handle)
+      }
+    }, [fetchAndApplyIgOEmbedForItem, isAdded, isValidIgUrl, item.id, mediaIdFromUrl, normalizedUrl, oembedState?.status])
 
     return (
       <div
@@ -682,7 +723,7 @@ function SortableFeaturedTile(props: {
                 <svg className="w-12 h-12 text-white/30" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2m-.2 2A3.6 3.6 0 0 0 4 7.6v8.8C4 18.39 5.61 20 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6C20 5.61 18.39 4 16.4 4H7.6m9.65 1.5a1.25 1.25 0 0 1 1.25 1.25A1.25 1.25 0 0 1 17.25 8 1.25 1.25 0 0 1 16 6.75a1.25 1.25 0 0 1 1.25-1.25M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/>
                 </svg>
-                <div className="text-xs text-white/60 leading-tight">{t("creatorCard.featured.previewUnavailable")}</div>
+                <div className="text-xs text-white/60 leading-tight">{oembedHelperText ?? t("creatorCard.featured.previewUnavailable")}</div>
               </div>
             )}
           </a>
@@ -1222,19 +1263,13 @@ export default function CreatorCardPage() {
   const igOEmbedByMediaIdRef = useRef<Record<string, OEmbedSuccess>>({})
   const igOEmbedInFlightByUrlRef = useRef<Set<string>>(new Set())
 
-  const stopIgOEmbedRef = useRef(false)
+  const igOEmbedDebounceByItemRef = useRef<Record<string, NodeJS.Timeout | null>>({})
+
   const igOEmbedInFlightRef = useRef(0)
   const igOEmbedQueueRef = useRef<Array<() => void>>([])
   const runIgOEmbedLimited = useCallback(async (task: () => Promise<void>) => {
-    if (stopIgOEmbedRef.current) return
-
     return await new Promise<void>((resolve, reject) => {
       const run = () => {
-        if (stopIgOEmbedRef.current) {
-          resolve()
-          return
-        }
-
         igOEmbedInFlightRef.current += 1
         task()
           .then(resolve)
@@ -1257,12 +1292,18 @@ export default function CreatorCardPage() {
 
   const fetchAndApplyIgOEmbedForItem = useCallback(
     async (opts: { itemId: string; normalizedUrl: string; mediaIdFromUrl: string | null }) => {
-      const { itemId, normalizedUrl, mediaIdFromUrl } = opts
+      const { itemId, mediaIdFromUrl } = opts
+      const normalizedUrl = normalizeIgCacheKey(opts.normalizedUrl)
       if (!normalizedUrl) return
-      if (stopIgOEmbedRef.current) return
 
       try {
+        const nowMs = Date.now()
         const cachedByUrl = igOEmbedCache[normalizedUrl]
+        if (cachedByUrl?.status === "rate_limited") {
+          const retryAtMs = typeof (cachedByUrl as any)?.retryAtMs === "number" ? (cachedByUrl as any).retryAtMs : 0
+          if (retryAtMs > nowMs) return
+        }
+
         const cachedSuccessByUrl =
           cachedByUrl?.status === "success" && (cachedByUrl as any).data?.ok === true
             ? ((cachedByUrl as any).data as OEmbedSuccess)
@@ -1327,6 +1368,8 @@ export default function CreatorCardPage() {
         if (igOEmbedInFlightByUrlRef.current.has(normalizedUrl)) return
         igOEmbedInFlightByUrlRef.current.add(normalizedUrl)
 
+        setIgOEmbedCache((prev) => ({ ...prev, [normalizedUrl]: { status: "loading" } }))
+
         await runIgOEmbedLimited(async () => {
           const r = await fetchOEmbedStrict(normalizedUrl)
           if (r.ok === true) {
@@ -1344,16 +1387,39 @@ export default function CreatorCardPage() {
 
           const httpStatus = (r as any)?.error?.status
           if (httpStatus === 429) {
-            stopIgOEmbedRef.current = true
+            setIgOEmbedCache((prev) => ({
+              ...prev,
+              [normalizedUrl]: {
+                status: "rate_limited",
+                retryAtMs: Date.now() + 90 * 1000,
+                errorMessage:
+                  activeLocale === "zh-TW"
+                    ? "Instagram 預覽暫時無法使用，但連結仍有效。"
+                    : "Instagram preview is temporarily unavailable. The link is still valid.",
+              } as any,
+            }))
+            return
           }
+
+          setIgOEmbedCache((prev) => ({
+            ...prev,
+            [normalizedUrl]: {
+              status: "error",
+              httpStatus: typeof httpStatus === "number" ? httpStatus : 0,
+              errorMessage:
+                activeLocale === "zh-TW"
+                  ? "Instagram 預覽暫時無法使用，但連結仍有效。"
+                  : "Instagram preview is temporarily unavailable. The link is still valid.",
+            },
+          }))
         })
       } catch {
         // swallow
       } finally {
-        igOEmbedInFlightByUrlRef.current.delete(opts.normalizedUrl)
+        igOEmbedInFlightByUrlRef.current.delete(normalizedUrl)
       }
     },
-    [igOEmbedCache, markDirty, runIgOEmbedLimited]
+    [activeLocale, igOEmbedCache, markDirty, runIgOEmbedLimited]
   )
 
   const [__overlayMounted, set__overlayMounted] = useState(false)
@@ -1837,7 +1903,33 @@ export default function CreatorCardPage() {
             }
           : null
 
-        setBaseCard(nextBase)
+        setBaseCard((prev) => {
+          if (!nextBase) return nextBase
+          const prevAvatar = typeof (prev as any)?.avatarUrl === "string" ? String((prev as any).avatarUrl).trim() : ""
+          const prevProfile = typeof (prev as any)?.profileImageUrl === "string" ? String((prev as any).profileImageUrl).trim() : ""
+          const nextAvatar = typeof (nextBase as any)?.avatarUrl === "string" ? String((nextBase as any).avatarUrl).trim() : ""
+          const nextProfile = typeof (nextBase as any)?.profileImageUrl === "string" ? String((nextBase as any).profileImageUrl).trim() : ""
+
+          const merged: CreatorCardPayload = {
+            ...(prev ?? {}),
+            ...nextBase,
+            avatarUrl: nextAvatar || prevAvatar || null,
+            profileImageUrl: nextProfile || prevProfile || null,
+          }
+
+          if (process.env.NODE_ENV !== "production") {
+            if (prevAvatar && !merged.avatarUrl && !merged.profileImageUrl) {
+              console.error("[creator-card] avatar/profile image unexpectedly cleared during hydrate", {
+                prevAvatar: prevAvatar ? "(set)" : "(empty)",
+                prevProfile: prevProfile ? "(set)" : "(empty)",
+                nextAvatar: nextAvatar ? "(set)" : "(empty)",
+                nextProfile: nextProfile ? "(set)" : "(empty)",
+              })
+            }
+          }
+
+          return merged
+        })
 
         const shouldHydrateDrafts = !isBackgroundRefresh || !isDirtyRef.current || postSaveSyncRef.current
         if (shouldHydrateDrafts) {
@@ -2091,6 +2183,7 @@ export default function CreatorCardPage() {
           const nextHandle = typeof nextBase?.handle === "string" ? nextBase.handle : undefined
           const nextDisplayName = typeof nextBase?.displayName === "string" ? nextBase.displayName : undefined
           const nextProfileImageUrl = typeof nextBase?.profileImageUrl === "string" ? nextBase.profileImageUrl : undefined
+          const nextAvatarUrl = typeof (nextBase as any)?.avatarUrl === "string" ? String((nextBase as any).avatarUrl) : undefined
           const nextNiche = typeof nextBase?.niche === "string" ? nextBase.niche : undefined
           const nextAudience = typeof nextBase?.audience === "string" ? nextBase.audience : undefined
           const nextMinPrice = typeof nextBase?.minPrice === "number" && Number.isFinite(nextBase.minPrice) ? nextBase.minPrice : null
@@ -2152,6 +2245,7 @@ export default function CreatorCardPage() {
             handle: nextHandle,
             displayName: nextDisplayName,
             profileImageUrl: nextProfileImageUrl,
+            avatarUrl: nextAvatarUrl,
             niche: nextNiche,
             audience: nextAudience,
             minPrice: nextMinPrice,
@@ -2893,10 +2987,6 @@ export default function CreatorCardPage() {
           
           // If upsert didn't return card data, fetch from /me endpoint
           if (!persistedCard || Object.keys(persistedCard).length === 0) {
-            if (process.env.NODE_ENV !== "production") {
-              console.log("[CreatorCard Save] ⚠️ No card in upsert response, fetching from /me")
-            }
-            
             const meRes = await fetch("/api/creator-card/me", {
               method: "GET",
               cache: "no-store",
@@ -2910,29 +3000,13 @@ export default function CreatorCardPage() {
           }
           
           if (!persistedCard || Object.keys(persistedCard).length === 0) {
-            if (process.env.NODE_ENV !== "production") {
-              console.error("[CreatorCard Save] ❌ No card data available for localStorage")
-            }
           } else {
             // Store the persisted card (already has both snake_case and camelCase from API)
             const draftJson = JSON.stringify({ ...(persistedCard as any), draftUpdatedAt: Date.now() })
             localStorage.setItem("creator_card_draft_v1", draftJson)
             localStorage.setItem("creator_card_updated_at", String(Date.now()))
-            
-            if (process.env.NODE_ENV !== "production") {
-              console.log("[CreatorCard Save] ✅ localStorage written:", {
-                source: json?.card ? "upsert response" : "/me fetch",
-                size: draftJson.length,
-                keys: Object.keys(persistedCard).length,
-                hasAudience: !!(persistedCard.audience),
-                hasFeaturedItems: Array.isArray(persistedCard.featuredItems) || Array.isArray(persistedCard.featured_items),
-              })
-            }
           }
         } catch (err) {
-          if (process.env.NODE_ENV !== "production") {
-            console.error("[CreatorCard Save] ❌ localStorage write failed:", err)
-          }
         }
         
         // ALWAYS set timestamp after save success (even if localStorage failed)
@@ -3893,10 +3967,9 @@ export default function CreatorCardPage() {
                                   const trimmed = url.trim()
                                   if (!trimmed) {
                                     setPendingIg(null)
-                                    return
+                                    markDirty()
                                   }
                                   
-                                  // Normalize URL using utility function
                                   const normalized = normalizeInstagramUrl(trimmed)
                                   if (!normalized) {
                                     setPendingIg(null)
@@ -3906,19 +3979,19 @@ export default function CreatorCardPage() {
                                   setPendingIg({ url: normalized, status: "loading" })
                                   
                                   try {
-                                    // Resolve oEmbed preview (thumbnailUrl + mediaType)
+                                    // Resolve preview (thumbnailUrl + mediaType)
                                     const preview = await resolveIgPreview(normalized)
-                                    
-                                    setPendingIg({ 
-                                      url: normalized, 
-                                      status: "success", 
-                                      oembed: { 
-                                        thumbnailUrl: preview.thumbnailUrl || undefined, 
+
+                                    setPendingIg({
+                                      url: normalized,
+                                      status: "success",
+                                      oembed: {
+                                        thumbnailUrl: preview.thumbnailUrl || undefined,
                                         mediaType: preview.mediaType || undefined,
-                                        ok: true 
-                                      } 
+                                        ok: true,
+                                      },
                                     })
-                                  } catch (e) {
+                                  } catch {
                                     setPendingIg({ url: normalized, status: "error" })
                                   }
                                 }, 400)
@@ -4110,172 +4183,106 @@ export default function CreatorCardPage() {
                                       <button
                                         type="button"
                                         onClick={async () => {
-                                        // Normalize and validate URL
-                                        const urlToAdd = pendingIg?.url || newIgUrl.trim()
-                                        if (!urlToAdd) return
-                                        
-                                        const normalizedUrl = normalizeInstagramUrl(urlToAdd)
-                                        if (!normalizedUrl) {
-                                          showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
-                                          return
-                                        }
-                                        
-                                        // Check for duplicates
-                                        const isDuplicate = featuredItems.some(item => {
-                                          if (item.type !== "ig") return false
-                                          const existingUrl = item.url.trim().replace(/\/$/, "")
-                                          return existingUrl === normalizedUrl
-                                        })
+                                          // Normalize and validate URL
+                                          const urlToAdd = pendingIg?.url || newIgUrl.trim()
+                                          if (!urlToAdd) return
 
-                                        const extracted = extractInstagramShortcode(normalizedUrl)
-                                        const mediaIdFromUrl = extracted?.code ? String(extracted.code) : null
-                                        const isMediaIdDup =
-                                          Boolean(mediaIdFromUrl) &&
-                                          featuredItems.some((x) => {
-                                            if (x.type !== "ig") return false
-                                            if (x.igMediaId && x.igMediaId === mediaIdFromUrl) return true
-                                            const xCode = extractInstagramShortcode(String(x.url || "")?.trim() || "")?.code
-                                            return Boolean(xCode) && String(xCode) === mediaIdFromUrl
+                                          const normalizedUrl = normalizeInstagramUrl(urlToAdd)
+                                          if (!normalizedUrl) {
+                                            showToast(activeLocale === "zh-TW" ? "請輸入有效的 Instagram 貼文連結" : "Please enter a valid Instagram post link")
+                                            return
+                                          }
+
+                                          // Check for duplicates
+                                          const isDuplicate = featuredItems.some(item => {
+                                            if (item.type !== "ig") return false
+                                            const existingUrl = normalizeIgCacheKey(item.url)
+                                            return existingUrl === normalizeIgCacheKey(normalizedUrl)
                                           })
 
-                                        if (isDuplicate || isMediaIdDup) {
-                                          showToast(activeLocale === "zh-TW" ? "已新增過這則貼文" : "This post is already added")
-                                          return
-                                        }
-
-                                        // IMPORTANT: resolve preview FIRST, then store thumbnailUrl/mediaType in the item
-                                        let thumbnailUrl: string | null = null
-                                        let mediaType: FeaturedItem["mediaType"] | undefined
-                                        try {
-                                          const preview = await resolveIgPreview(normalizedUrl)
-                                          thumbnailUrl = normalizeIgThumbnailUrlOrNull(preview.thumbnailUrl)
-                                          mediaType = (preview.mediaType || undefined) as FeaturedItem["mediaType"] | undefined
-                                        } catch {
-                                          // Proceed without thumbnail; left-side card should show fallback
-                                        }
-
-                                        // Add new item
-                                        const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-                                        const newItem: FeaturedItem = {
-                                          id,
-                                          type: "ig",
-                                          url: normalizedUrl,
-                                          brand: "",
-                                          collabType: "",
-                                          caption: "",
-                                          isAdded: true,
-                                          thumbnailUrl,
-                                          mediaType,
-                                          igMediaId: mediaIdFromUrl ?? undefined,
-                                        }
-
-                                        setFeaturedItems(prev => {
-                                          const nextItems = [newItem, ...prev]
-                                          persistDraftNow(nextItems)
-                                          return nextItems
-                                        })
-
-                                        setPendingIg({ ...pendingIg, status: "added", oembed: { ...(pendingIg as any)?.oembed, thumbnailUrl, mediaType } })
-                                        markDirty()
-
-                                        // Fetch oEmbed ONLY on add, best-effort; persist fields into the item for DB caching.
-                                        // Dedupe: if we already cached by URL or mediaId, reuse cached response without refetching.
-                                        try {
-                                          const cachedByUrl = igOEmbedCache[normalizedUrl]
-                                          const cachedSuccessByUrl = cachedByUrl?.status === "success" && (cachedByUrl as any).data?.ok === true ? ((cachedByUrl as any).data as OEmbedSuccess) : null
-                                          const cachedByMediaId = mediaIdFromUrl ? igOEmbedByMediaIdRef.current[mediaIdFromUrl] : null
-
-                                          const applyEmbed = (o: OEmbedSuccess) => {
-                                            const anyData = o as any
-                                            const rawThumb =
-                                              (typeof anyData.thumbnailUrl === "string" ? anyData.thumbnailUrl : null) ??
-                                              (typeof anyData.data?.thumbnail_url === "string" ? anyData.data.thumbnail_url : null)
-                                            const proxyThumbUrl = rawThumb ? `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}` : null
-                                            const nextThumb = normalizeIgThumbnailUrlOrNull(proxyThumbUrl) ?? thumbnailUrl
-                                            const nextMediaType = (anyData.mediaType as FeaturedItem["mediaType"] | undefined) ?? mediaType
-                                            const nextMediaId =
-                                              (typeof anyData.mediaId === "string" ? anyData.mediaId : null) ??
-                                              (typeof anyData.data?.media_id === "string" ? anyData.data.media_id : null) ??
-                                              mediaIdFromUrl
-                                            const nextSource = typeof anyData.source === "string" ? (anyData.source as any) : undefined
-                                            const nextHtml = typeof anyData.html === "string" ? anyData.html : undefined
-                                            const nextAuthor = typeof anyData.authorName === "string" ? anyData.authorName : (typeof anyData.data?.author_name === "string" ? anyData.data.author_name : undefined)
-                                            const nextProvider = typeof anyData.providerName === "string" ? anyData.providerName : (typeof anyData.data?.provider_name === "string" ? anyData.data.provider_name : undefined)
-
-                                            setFeaturedItems((prev) =>
-                                              prev.map((x) =>
-                                                x.id === id
-                                                  ? {
-                                                      ...x,
-                                                      thumbnailUrl: nextThumb,
-                                                      mediaType: nextMediaType,
-                                                      igMediaId: typeof nextMediaId === "string" ? nextMediaId : x.igMediaId,
-                                                      igEmbedSource: nextSource,
-                                                      igEmbedHtml: nextHtml,
-                                                      igAuthorName: nextAuthor,
-                                                      igProviderName: nextProvider,
-                                                    }
-                                                  : x
-                                              )
-                                            )
-                                            markDirty()
-                                          }
-
-                                          if (cachedSuccessByUrl) {
-                                            applyEmbed(cachedSuccessByUrl)
-                                          } else if (cachedByMediaId) {
-                                            applyEmbed(cachedByMediaId)
-                                          } else if (!igOEmbedInFlightByUrlRef.current.has(normalizedUrl) && !stopIgOEmbedRef.current) {
-                                            igOEmbedInFlightByUrlRef.current.add(normalizedUrl)
-                                            await runIgOEmbedLimited(async () => {
-                                              const r = await fetchOEmbedStrict(normalizedUrl)
-                                              if (r.ok === true) {
-                                                const s = r as OEmbedSuccess
-                                                setIgOEmbedCache((prev) => ({ ...prev, [normalizedUrl]: { status: "success", data: s } }))
-                                                const anyS = s as any
-                                                const resolvedMediaId =
-                                                  (typeof anyS.mediaId === "string" ? anyS.mediaId : null) ??
-                                                  (typeof anyS.data?.media_id === "string" ? anyS.data.media_id : null) ??
-                                                  mediaIdFromUrl
-                                                if (resolvedMediaId) igOEmbedByMediaIdRef.current[resolvedMediaId] = s
-                                                applyEmbed(s)
-                                                return
-                                              }
-
-                                              const httpStatus = (r as any)?.error?.status
-                                              if (httpStatus === 429) {
-                                                stopIgOEmbedRef.current = true
-                                              }
+                                          const extracted = extractInstagramShortcode(normalizedUrl)
+                                          const mediaIdFromUrl = extracted?.code ? String(extracted.code) : null
+                                          const isMediaIdDup =
+                                            Boolean(mediaIdFromUrl) &&
+                                            featuredItems.some((x) => {
+                                              if (x.type !== "ig") return false
+                                              if (x.igMediaId && x.igMediaId === mediaIdFromUrl) return true
+                                              const xCode = extractInstagramShortcode(String(x.url || "")?.trim() || "")?.code
+                                              return Boolean(xCode) && String(xCode) === mediaIdFromUrl
                                             })
-                                          }
-                                        } catch {
-                                          // swallow
-                                        } finally {
-                                          igOEmbedInFlightByUrlRef.current.delete(normalizedUrl)
-                                        }
 
-                                        // Reset after delay
-                                        setTimeout(() => {
-                                          setPendingIg(null)
-                                          setNewIgUrl("")
-                                        }, 1500)
-
-                                        // Scroll to show newly added item
-                                        setTimeout(() => {
-                                          const el = featuredCarouselRef.current
-                                          if (!el) return
-                                          const items = el.querySelectorAll('[data-carousel-item]')
-                                          if (items.length > 1) {
-                                            items[1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+                                          if (isDuplicate || isMediaIdDup) {
+                                            showToast(activeLocale === "zh-TW" ? "已新增過這則貼文" : "This post is already added")
+                                            return
                                           }
-                                        }, 100)
+
+                                          // Resolve preview (thumbnailUrl + mediaType)
+                                          let thumbnailUrl: string | null = null
+                                          let mediaType: FeaturedItem["mediaType"] | undefined
+                                          try {
+                                            const preview = await resolveIgPreview(normalizedUrl)
+                                            thumbnailUrl = normalizeIgThumbnailUrlOrNull(preview.thumbnailUrl)
+                                            mediaType = (preview.mediaType || undefined) as FeaturedItem["mediaType"] | undefined
+                                          } catch {
+                                            // Proceed without thumbnail
+                                          }
+
+                                          const id = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+                                          const newItem: FeaturedItem = {
+                                            id,
+                                            type: "ig",
+                                            url: normalizedUrl,
+                                            brand: "",
+                                            collabType: "",
+                                            caption: "",
+                                            isAdded: true,
+                                            thumbnailUrl,
+                                            mediaType,
+                                            igMediaId: mediaIdFromUrl ?? undefined,
+                                          }
+
+                                          setFeaturedItems(prev => {
+                                            const nextItems = [newItem, ...prev]
+                                            persistDraftNow(nextItems)
+                                            return nextItems
+                                          })
+
+                                          setPendingIg({ ...pendingIg, status: "added", oembed: { ...(pendingIg as any)?.oembed, thumbnailUrl, mediaType } })
+                                          markDirty()
+
+                                          // Fetch oEmbed best-effort (cached + 429-safe); no retries unless URL changes.
+                                          try {
+                                            fetchAndApplyIgOEmbedForItem({
+                                              itemId: id,
+                                              normalizedUrl,
+                                              mediaIdFromUrl,
+                                            })
+                                          } catch {
+                                            // swallow – preview stays neutral
+                                          }
+
+                                          // Reset after delay
+                                          setTimeout(() => {
+                                            setPendingIg(null)
+                                            setNewIgUrl("")
+                                          }, 1500)
+
+                                          // Scroll to show newly added item
+                                          setTimeout(() => {
+                                            const el = featuredCarouselRef.current
+                                            if (!el) return
+                                            const items = el.querySelectorAll('[data-carousel-item]')
+                                            if (items.length > 1) {
+                                              items[1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+                                            }
+                                          }, 100)
                                         }}
                                         disabled={isNotLoggedIn || pendingIg.status === "loading" || !newIgUrl.trim()}
                                         className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-purple-500/30 to-pink-500/30 border border-white/20 rounded-lg hover:from-purple-500/40 hover:to-pink-500/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{ minHeight: "44px" }}
                                       >
-                                        {pendingIg.status === "loading" 
-                                          ? (activeLocale === "zh-TW" ? "載入中..." : "Loading...") 
+                                        {pendingIg.status === "loading"
+                                          ? (activeLocale === "zh-TW" ? "載入中..." : "Loading...")
                                           : (activeLocale === "zh-TW" ? "新增" : "Add")}
                                       </button>
                                     ) : (
@@ -4287,7 +4294,7 @@ export default function CreatorCardPage() {
                                 </div>
                               </div>
 
-                              {featuredItems.filter(item => item.type === "ig").map((item) => (
+                              {featuredItems.filter((item) => item.type === "ig").map((item) => (
                                 <div key={item.id} data-carousel-item className="snap-start shrink-0 w-full sm:w-[calc(50%-6px)]">
                                   <SortableFeaturedTile
                                     item={item}
@@ -4307,10 +4314,7 @@ export default function CreatorCardPage() {
                                         const picked = prev.find((x) => x.id === id)
                                         if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
                                         const nextItems = prev.filter((x) => x.id !== id)
-                                        
-                                        // Persist immediately to localStorage
                                         persistDraftNow(nextItems)
-                                        
                                         return nextItems
                                       })
                                       markDirty()
@@ -4328,7 +4332,6 @@ export default function CreatorCardPage() {
                                         prev.map((x) => {
                                           if (x.id !== id) return x
                                           if (x.type !== "ig") return { ...x, url }
-                                          // Treat URL change as a replace: keep tile visible but require explicit Add again.
                                           return {
                                             ...x,
                                             url,
@@ -4346,6 +4349,7 @@ export default function CreatorCardPage() {
                                       markDirty()
                                     }}
                                     onIgThumbnailClick={(url) => setIgModalUrl(url)}
+                                    igOEmbedCache={igOEmbedCache}
                                     fetchAndApplyIgOEmbedForItem={fetchAndApplyIgOEmbedForItem}
                                     setFeaturedItems={setFeaturedItems}
                                     markDirty={markDirty}
@@ -4355,8 +4359,8 @@ export default function CreatorCardPage() {
                               ))}
                             </div>
                           </div>
-                        </SortableContext>
-                      </DndContext>
+                      </SortableContext>
+                    </DndContext>
 
 
                       {featuredItems.filter(x => x.type === "ig").length === 0 ? (
