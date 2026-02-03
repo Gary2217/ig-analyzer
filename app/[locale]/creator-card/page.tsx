@@ -1167,6 +1167,10 @@ export default function CreatorCardPage() {
     async (file: File) => {
       if (avatarUploading) return
 
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("[creator-card avatar] uploadAvatar called", { name: file.name, type: file.type, size: file.size })
+      }
+
       try {
         setAvatarUploading(true)
         const fd = new FormData()
@@ -3349,6 +3353,8 @@ export default function CreatorCardPage() {
                           accept="image/png,image/jpeg,image/jpg,image/webp"
                           className="hidden"
                           onChange={async (e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
                             const file = e.target.files?.[0] ?? null
                             if (!file) return
                             e.currentTarget.value = ""
@@ -3374,7 +3380,11 @@ export default function CreatorCardPage() {
                           type="button"
                           variant="outline"
                           className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
-                          onClick={() => avatarUploadInputRef.current?.click()}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            avatarUploadInputRef.current?.click()
+                          }}
                           disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                         >
                           {avatarUploading ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" /> : null}
@@ -4693,6 +4703,8 @@ export default function CreatorCardPage() {
                                   accept="image/png,image/jpeg,image/jpg,image/webp"
                                   className="hidden"
                                   onChange={async (e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
                                     const file = e.target.files?.[0] ?? null
                                     if (!file) return
                                     e.currentTarget.value = ""
@@ -4718,7 +4730,11 @@ export default function CreatorCardPage() {
                                   type="button"
                                   variant="outline"
                                   className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
-                                  onClick={() => avatarUploadInputRef.current?.click()}
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    avatarUploadInputRef.current?.click()
+                                  }}
                                   disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                                 >
                                   {avatarUploading ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" /> : null}
