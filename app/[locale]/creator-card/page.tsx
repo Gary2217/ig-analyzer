@@ -678,7 +678,8 @@ function SortableFeaturedTile(props: {
     })()
 
     const finalThumbSrc = resolvedThumbSrc ?? oembedSuccessThumbSrc
-    const shouldRenderThumb = !shouldHideThumbnail && Boolean(finalThumbSrc) && !thumbnailLoadError
+    // If we already have a thumbnail (e.g. carried from Add), keep rendering it even when oEmbed is rate-limited/error.
+    const shouldRenderThumb = Boolean(finalThumbSrc) && !thumbnailLoadError && (!shouldHideThumbnail || Boolean(resolvedThumbSrc))
     const oembedHelperText =
       oembedState?.status === "rate_limited"
         ? (typeof (oembedState as any)?.errorMessage === "string" && (oembedState as any).errorMessage
@@ -1174,6 +1175,7 @@ export default function CreatorCardPage() {
   const [saving, setSaving] = useState(false)
   const saveInFlightRef = useRef(false)
   const saveNonceRef = useRef(0)
+  const isExplicitSaveRef = useRef(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadErrorKind, setLoadErrorKind] = useState<
     "not_connected" | "supabase_invalid_key" | "not_logged_in" | "load_failed" | null
@@ -1466,18 +1468,6 @@ export default function CreatorCardPage() {
               ...prev,
               [normalizedUrl]: nextEntry,
             }))
-
-            setFeaturedItems((prev) =>
-              prev.map((x) =>
-                (x.type === "ig" && normalizeIgCacheKey(x.url) === normalizedUrl)
-                  ? {
-                      ...x,
-                      thumbnailUrl: null,
-                      mediaType: x.mediaType,
-                    }
-                  : x
-              )
-            )
             return
           }
 
@@ -1495,18 +1485,6 @@ export default function CreatorCardPage() {
             ...prev,
             [normalizedUrl]: nextErrEntry,
           }))
-
-          setFeaturedItems((prev) =>
-            prev.map((x) =>
-              (x.type === "ig" && normalizeIgCacheKey(x.url) === normalizedUrl)
-                ? {
-                    ...x,
-                    thumbnailUrl: null,
-                    mediaType: x.mediaType,
-                  }
-                : x
-            )
-          )
         })
       } catch {
         // swallow
@@ -1522,12 +1500,19 @@ export default function CreatorCardPage() {
     set__overlayMounted(true)
   }, [])
 
-  const runBackgroundUpsert = useCallback(async (payload: any) => {
-    try {
+  const guardedUpsert = useCallback(
+    async (payload: any, debugSource: string) => {
+      if (!isExplicitSaveRef.current) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[creator-card] blocked non-explicit upsert", { source: debugSource })
+        }
+        return { ok: false as const, blocked: true as const }
+      }
+
       const headers: Record<string, string> = { "content-type": "application/json" }
       if (debugApiEnabled) {
         headers["x-cc-debug"] = "1"
-        headers["x-cc-debug-source"] = "background"
+        headers["x-cc-debug-source"] = debugSource
       }
 
       const res = await fetch("/api/creator-card/upsert", {
@@ -1536,6 +1521,17 @@ export default function CreatorCardPage() {
         credentials: "include",
         body: JSON.stringify(payload),
       })
+
+      return { ok: true as const, res }
+    },
+    [debugApiEnabled]
+  )
+
+  const runBackgroundUpsert = useCallback(async (payload: any) => {
+    try {
+      const r = await guardedUpsert(payload, "background")
+      if (!r.ok) return
+      const res = r.res
 
       const jsonRaw: unknown = await res.clone().json().catch(() => null)
       const jsonObj = asRecord(jsonRaw)
@@ -2280,90 +2276,9 @@ export default function CreatorCardPage() {
         }
 
         if (shouldBackfillFeaturedToDb) {
+          // Server writes must only happen on explicit Save.
+          // Keep this ref updated to avoid repeated attempts, but do not upsert here.
           didBackfillFeaturedRef.current = true
-          const nextHandle = typeof nextBase?.handle === "string" ? nextBase.handle : undefined
-          const nextDisplayName = typeof nextBase?.displayName === "string" ? nextBase.displayName : undefined
-          const nextProfileImageUrl = typeof nextBase?.profileImageUrl === "string" ? nextBase.profileImageUrl : undefined
-          const nextAvatarUrl = typeof (nextBase as any)?.avatarUrl === "string" ? String((nextBase as any).avatarUrl) : undefined
-          const nextNiche = typeof nextBase?.niche === "string" ? nextBase.niche : undefined
-          const nextAudience = typeof nextBase?.audience === "string" ? nextBase.audience : undefined
-          const nextMinPrice = typeof nextBase?.minPrice === "number" && Number.isFinite(nextBase.minPrice) ? nextBase.minPrice : null
-          const nextThemeTypes = Array.isArray(nextBase?.themeTypes) ? nextBase.themeTypes : []
-          const nextAudienceProfiles = Array.isArray(nextBase?.audienceProfiles) ? nextBase.audienceProfiles : []
-          const nextDeliverables = Array.isArray(nextBase?.deliverables) ? nextBase.deliverables : []
-          const nextCollaborationNiches = Array.isArray(nextBase?.collaborationNiches) ? nextBase.collaborationNiches : []
-          const nextPastCollaborations = Array.isArray(nextBase?.pastCollaborations) ? nextBase.pastCollaborations : []
-          const nextContact = typeof nextBase?.contact === "string" ? nextBase.contact : undefined
-          const nextIsPublic = typeof nextBase?.isPublic === "boolean" ? nextBase.isPublic : undefined
-
-          const nextPortfolio = nextFeaturedItems
-            .filter((x) => {
-              const itemType = x.type || "media"
-              return itemType === "media" && isPersistedUrl(x.url)
-            })
-            .map((x, idx) => ({
-              id: x.id,
-              url: x.url || "",
-              brand: x.brand || "",
-              collabType: x.collabType || "",
-              caption: x.caption || "",
-              order: idx,
-            }))
-
-          const nextFeaturedPayload = nextFeaturedItems.map((x, idx) => {
-            const itemType = x.type || "media"
-            if (itemType === "text") {
-              return {
-                id: x.id,
-                type: "text",
-                title: x.title || "",
-                text: x.text || "",
-                order: idx,
-              }
-            }
-            if (itemType === "ig") {
-              return {
-                id: x.id,
-                type: "ig",
-                url: x.url || "",
-                caption: x.caption || "",
-                thumbnailUrl: x.thumbnailUrl || undefined,
-                order: idx,
-              }
-            }
-            return {
-              id: x.id,
-              type: "media",
-              url: x.url || "",
-              brand: x.brand || "",
-              collabType: x.collabType || "",
-              caption: x.caption || "",
-              order: idx,
-            }
-          })
-
-          const payload: any = {
-            handle: nextHandle,
-            displayName: nextDisplayName,
-            profileImageUrl: nextProfileImageUrl,
-            avatarUrl: nextAvatarUrl,
-            niche: nextNiche,
-            audience: nextAudience,
-            minPrice: nextMinPrice,
-            themeTypes: normalizeStringArray(nextThemeTypes, 20),
-            audienceProfiles: normalizeStringArray(nextAudienceProfiles, 20),
-            contact: nextContact,
-            portfolio: nextPortfolio,
-            featuredItems: nextFeaturedPayload,
-            isPublic: nextIsPublic,
-            deliverables: normalizeStringArray(nextDeliverables, 50),
-            collaborationNiches: normalizeStringArray(nextCollaborationNiches, 20),
-            pastCollaborations: normalizeStringArray(nextPastCollaborations, 20),
-          }
-
-          setTimeout(() => {
-            runBackgroundUpsert(payload)
-          }, 0)
         }
 
         const primaryParts = (() => {
@@ -2937,18 +2852,21 @@ export default function CreatorCardPage() {
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
       }
 
-      const url = "/api/creator-card/upsert"
-      const headers: Record<string, string> = { "content-type": "application/json" }
-      if (debugApiEnabled) {
-        headers["x-cc-debug"] = "1"
-        headers["x-cc-debug-source"] = "user-save"
+      let upsertResult: Awaited<ReturnType<typeof guardedUpsert>>
+      isExplicitSaveRef.current = true
+      try {
+        upsertResult = await guardedUpsert(payload, "user-save")
+      } finally {
+        isExplicitSaveRef.current = false
       }
-      const res = await fetch(url, {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body: JSON.stringify(payload),
-      })
+      if (!upsertResult.ok) {
+        if (!isLatest()) return
+        setSaveError(t("creatorCardEditor.errors.saveFailed"))
+        showToast(t("creatorCardEditor.errors.saveFailed"))
+        return
+      }
+
+      const res = upsertResult.res
 
       const jsonRaw: unknown = await res.clone().json().catch(() => null)
       const json = (asRecord(jsonRaw) as unknown as CreatorCardUpsertResponse) ?? null
@@ -4321,9 +4239,20 @@ export default function CreatorCardPage() {
                                           let thumbnailUrl: string | null = null
                                           let mediaType: FeaturedItem["mediaType"] | undefined
                                           try {
-                                            const preview = await resolveIgPreview(normalizedUrl)
-                                            thumbnailUrl = normalizeIgThumbnailUrlOrNull(preview.thumbnailUrl)
-                                            mediaType = (preview.mediaType || undefined) as FeaturedItem["mediaType"] | undefined
+                                            const pendingThumb = typeof (pendingIg as any)?.oembed?.thumbnailUrl === "string"
+                                              ? String((pendingIg as any).oembed.thumbnailUrl).trim()
+                                              : ""
+                                            const pendingMediaType = typeof (pendingIg as any)?.oembed?.mediaType === "string"
+                                              ? String((pendingIg as any).oembed.mediaType).trim()
+                                              : ""
+                                            if (pendingThumb) {
+                                              thumbnailUrl = pendingThumb
+                                              mediaType = (pendingMediaType || undefined) as FeaturedItem["mediaType"] | undefined
+                                            } else {
+                                              const preview = await resolveIgPreview(normalizedUrl)
+                                              thumbnailUrl = preview.thumbnailUrl ? String(preview.thumbnailUrl) : null
+                                              mediaType = (preview.mediaType || undefined) as FeaturedItem["mediaType"] | undefined
+                                            }
                                           } catch {
                                             // Proceed without thumbnail
                                           }
