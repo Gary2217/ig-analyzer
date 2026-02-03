@@ -9,6 +9,14 @@ const CREATOR_CARD_AVATAR_FALLBACK_SRC =
     `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6" stop-opacity="0.25"/><stop offset="1" stop-color="#ec4899" stop-opacity="0.25"/></linearGradient></defs><rect width="256" height="256" rx="128" fill="url(#g)"/><circle cx="128" cy="108" r="44" fill="#ffffff" fill-opacity="0.22"/><path d="M48 224c14-42 44-64 80-64s66 22 80 64" fill="#ffffff" fill-opacity="0.18"/></svg>`,
   )
 
+function normalizeImgSrc(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback
+  const s = value.trim()
+  if (!s) return fallback
+  if (/^(https?:\/\/|data:|blob:)/i.test(s)) return s
+  return fallback
+}
+
 interface MobileCreatorCardLayoutProps {
   t: (key: string) => string
   locale?: string
@@ -55,6 +63,20 @@ export function MobileCreatorCardLayout({
   const isZhTW = locale === "zh-TW"
   const [activeIndex, setActiveIndex] = useState(0)
   const carouselRef = useRef<HTMLDivElement>(null)
+  const avatarSrc = normalizeImgSrc(profileImageUrl, CREATOR_CARD_AVATAR_FALLBACK_SRC)
+  const [avatarLoaded, setAvatarLoaded] = useState(false)
+
+  useEffect(() => {
+    setAvatarLoaded(false)
+    const t = window.setTimeout(() => setAvatarLoaded(true), 1200)
+    return () => window.clearTimeout(t)
+  }, [avatarSrc])
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[creator-card mobile avatar src]", { raw: profileImageUrl, normalized: avatarSrc })
+    }
+  }, [avatarSrc, profileImageUrl])
 
   // Track scroll position for pagination
   useEffect(() => {
@@ -89,18 +111,32 @@ export function MobileCreatorCardLayout({
         <div className="shrink-0">
           <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/10 bg-black/20">
             <img
-              src={(profileImageUrl ?? "").trim() || CREATOR_CARD_AVATAR_FALLBACK_SRC}
+              src={CREATOR_CARD_AVATAR_FALLBACK_SRC}
               alt={displayName || username || "Profile"}
               className="absolute inset-0 h-full w-full object-cover"
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
               crossOrigin="anonymous"
+            />
+            <img
+              src={avatarSrc}
+              alt={displayName || username || "Profile"}
+              className={"absolute inset-0 h-full w-full object-cover" + (!avatarLoaded ? " opacity-0" : " opacity-100")}
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              crossOrigin="anonymous"
+              onLoad={() => setAvatarLoaded(true)}
               onError={(e) => {
                 const img = e.currentTarget
-                if (img.dataset.fallbackApplied === "1") return
+                if (img.dataset.fallbackApplied === "1") {
+                  setAvatarLoaded(true)
+                  return
+                }
                 img.dataset.fallbackApplied = "1"
                 img.src = CREATOR_CARD_AVATAR_FALLBACK_SRC
+                setAvatarLoaded(true)
               }}
             />
           </div>
