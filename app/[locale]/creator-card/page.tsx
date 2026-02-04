@@ -1373,7 +1373,11 @@ export default function CreatorCardPage() {
 
         setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
         markDirty()
-        showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
+        showToast(
+          activeLocale === "zh-TW"
+            ? "頭貼已更新（已立即保存），其他內容記得按右上儲存"
+            : "Avatar updated (saved immediately). Remember to Save other edits."
+        )
       } catch (e: unknown) {
         showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
       } finally {
@@ -3592,21 +3596,41 @@ export default function CreatorCardPage() {
                           }}
                         />
 
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px]"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            avatarUploadInputRef.current?.click()
-                          }}
-                          aria-busy={avatarUploading}
-                          disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
-                        >
-                          <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
-                          <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
-                        </Button>
+                        <div className="flex items-center gap-3">
+                          <div className="shrink-0">
+                            <div className="relative h-12 w-12 overflow-hidden rounded-full border border-white/10 bg-slate-950/40">
+                              {currentAvatarSrc ? (
+                                <img
+                                  src={currentAvatarSrc}
+                                  alt={displayName || displayUsername || "Profile"}
+                                  className="absolute inset-0 h-full w-full object-cover"
+                                  loading="lazy"
+                                  decoding="async"
+                                  referrerPolicy="no-referrer"
+                                  crossOrigin="anonymous"
+                                />
+                              ) : (
+                                <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 to-pink-500/20" />
+                              )}
+                            </div>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px]"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              avatarUploadInputRef.current?.click()
+                            }}
+                            aria-busy={avatarUploading}
+                            disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
+                          >
+                            <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
+                            <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="min-w-0">
