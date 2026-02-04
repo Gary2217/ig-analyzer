@@ -1887,18 +1887,27 @@ export default function ResultsClient() {
   useEffect(() => {
     if (!isConnected) return
     if (!needsDataRefetch) return
+    if (mediaLen > 0 || hasFetchedMediaRef.current || __resultsMediaFetchedOnce) return
 
     const now = Date.now()
     if (now - lastRevalidateAtRef.current < 2500) return
     lastRevalidateAtRef.current = now
 
     setForceReloadTick((x) => x + 1)
-  }, [isConnected, needsDataRefetch, pathname, router])
+  }, [isConnected, mediaLen, needsDataRefetch, pathname, router])
 
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== "visible") return
       if (!isConnected) return
+      if (mediaLen > 0 || hasFetchedMediaRef.current || __resultsMediaFetchedOnce) {
+        dlog("[results] skip refetch: media already loaded", {
+          mediaLen,
+          hasFetchedMedia: hasFetchedMediaRef.current,
+          fetchedOnce: __resultsMediaFetchedOnce,
+        })
+        return
+      }
       if (!needsDataRefetch) return
 
       const now = Date.now()
@@ -1910,7 +1919,7 @@ export default function ResultsClient() {
 
     document.addEventListener("visibilitychange", onVis)
     return () => document.removeEventListener("visibilitychange", onVis)
-  }, [isConnected, needsDataRefetch])
+  }, [isConnected, mediaLen, needsDataRefetch])
 
   // -------------------------------------------------
   // DEV-ONLY: Verify Top Posts data source decision
@@ -2085,6 +2094,14 @@ export default function ResultsClient() {
   useEffect(() => {
     const onFocus = () => {
       if (!isConnected) return
+      if (mediaLen > 0 || hasFetchedMediaRef.current || __resultsMediaFetchedOnce) {
+        dlog("[results] skip refetch: media already loaded", {
+          mediaLen,
+          hasFetchedMedia: hasFetchedMediaRef.current,
+          fetchedOnce: __resultsMediaFetchedOnce,
+        })
+        return
+      }
       if (!needsDataRefetch) return
       const now = Date.now()
       if (now - lastRevalidateAtRef.current < 2500) return
@@ -2099,7 +2116,7 @@ export default function ResultsClient() {
     return () => {
       window.removeEventListener("focus", onFocus)
     }
-  }, [isConnected, needsDataRefetch])
+  }, [isConnected, mediaLen, needsDataRefetch])
 
   // -------------------------------------------------
   // DEV-ONLY: Observe media state length after normalize + setMedia
@@ -3140,12 +3157,16 @@ export default function ResultsClient() {
     if (typeof window === "undefined") return
 
     const onFocus = () => {
-      void reloadCreatorCard()
+      if (!isConnectedInstagram) return
+      if (selectedGoal !== "brandCollaborationProfile") return
+      safeReloadCreatorCard()
     }
 
     const onVis = () => {
       if (!document.hidden) {
-        void reloadCreatorCard()
+        if (!isConnectedInstagram) return
+        if (selectedGoal !== "brandCollaborationProfile") return
+        safeReloadCreatorCard()
       }
     }
 
@@ -3155,7 +3176,7 @@ export default function ResultsClient() {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVis)
     }
-  }, [reloadCreatorCard])
+  }, [isConnectedInstagram, safeReloadCreatorCard, selectedGoal])
 
   useEffect(() => {
     if (!isConnectedInstagram || !resolvedCreatorId) {
