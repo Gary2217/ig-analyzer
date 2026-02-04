@@ -1106,6 +1106,7 @@ export default function ResultsClient() {
   const dailySnapshotRequestSeqRef = useRef(0)
   const lastDailySnapshotPointsSourceRef = useRef<string>("")
   const hasRestoredResultsScrollRef = useRef(false)
+  const loggedMissingTopPostPreviewRef = useRef<Record<string, true>>({})
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
 
@@ -1918,6 +1919,25 @@ export default function ResultsClient() {
   const allowDemoProfile = !hasConnectedFlag && !hasRealProfile && !igMeLoading
 
   const recentPosts = igMe?.recent_media
+
+  const snapshotTopPosts = useMemo(() => {
+    if (!isRecord(dailySnapshotData)) return [] as unknown[]
+
+    const candidates = [
+      (dailySnapshotData as any).top_posts,
+      (dailySnapshotData as any).topPosts,
+      (dailySnapshotData as any).top_posts_7d,
+      (dailySnapshotData as any).topPosts7d,
+      (dailySnapshotData as any).top_performing_posts,
+      (dailySnapshotData as any).topPerformingPosts,
+      (dailySnapshotData as any).posts,
+    ]
+
+    for (const c of candidates) {
+      if (Array.isArray(c) && c.length > 0) return c
+    }
+    return [] as unknown[]
+  }, [dailySnapshotData])
 
   const needsDataRefetch = useMemo(() => {
     const hasProfile = Boolean(igProfile && (igProfile.username))
@@ -5858,6 +5878,18 @@ export default function ResultsClient() {
                         const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
                         const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
 
+                        const realIdOrPermalink = (() => {
+                          const idRaw = (real as any)?.id
+                          const idStr = typeof idRaw === "string" ? idRaw : typeof idRaw === "number" ? String(idRaw) : ""
+                          if (idStr.trim()) return idStr.trim()
+                          const pl = typeof (real as any)?.permalink === "string" ? String((real as any).permalink).trim() : ""
+                          if (pl) return pl
+                          const midRaw = (real as any)?.media_id ?? (real as any)?.mediaId
+                          const midStr = typeof midRaw === "string" ? midRaw : typeof midRaw === "number" ? String(midRaw) : ""
+                          if (midStr.trim()) return midStr.trim()
+                          return ""
+                        })()
+
                         const igHref =
                           (typeof real?.permalink === "string" && real.permalink ? real.permalink : "") ||
                           (typeof real?.ig_permalink === "string" && real.ig_permalink ? real.ig_permalink : "") ||
@@ -5865,30 +5897,112 @@ export default function ResultsClient() {
                             ? `https://www.instagram.com/p/${real.shortcode}/`
                             : "")
 
-                        const previewUrl = (() => {
-                          const mt = String(real.media_type ?? real.mediaType ?? "")
-                          const tu = typeof real.thumbnail_url === "string" ? String(real.thumbnail_url) : ""
-                          const mu = typeof real.media_url === "string" ? String(real.media_url) : ""
-                          const isVideoType = mt === "VIDEO" || mt === "REELS"
-                          const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
-                          const pick = isVideoType ? (tu || mu) : (mu || tu)
-                          if (pick && isLikelyVideoUrl(pick)) return tu || ""
-                          const rawUrl = pick || ""
-                          // Proxy through our endpoint to avoid CORS/CSP issues
-                          if (rawUrl && rawUrl.startsWith("http")) {
-                            return `/api/ig/thumbnail?url=${encodeURIComponent(rawUrl)}`
+                        const getIdAndPermalink = (it: unknown): { id: string; pl: string } => {
+                          if (!isRecord(it)) return { id: "", pl: "" }
+                          const idRaw = (it as any).id
+                          const id = typeof idRaw === "string" ? idRaw : typeof idRaw === "number" ? String(idRaw) : ""
+                          const pl = typeof (it as any).permalink === "string" ? String((it as any).permalink) : ""
+                          return { id, pl }
+                        }
+
+                        const findByIdOrPermalink = (list: unknown, key: string): unknown => {
+                          if (!key) return null
+                          if (!Array.isArray(list)) return null
+                          for (const it of list) {
+                            const x = getIdAndPermalink(it)
+                            if (x.id && x.id === key) return it
+                            if (x.pl && x.pl === key) return it
                           }
-                          return rawUrl
+                          return null
+                        }
+
+                        const snapshotMatchPost = findByIdOrPermalink(snapshotTopPosts, realIdOrPermalink)
+                        const recentMatchPost = findByIdOrPermalink(recentPosts, realIdOrPermalink)
+
+                        const previewUrl = (() => {
+                          const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
+
+                          const pickFrom = (it: unknown): { mt: string; tu: string; mu: string; id: string; pl: string } => {
+                            if (!isRecord(it)) return { mt: "", tu: "", mu: "", id: "", pl: "" }
+                            const mt = String((it as any).media_type ?? (it as any).mediaType ?? "")
+                            const tu = typeof (it as any).thumbnail_url === "string"
+                              ? String((it as any).thumbnail_url)
+                              : typeof (it as any).thumbnailUrl === "string"
+                                ? String((it as any).thumbnailUrl)
+                                : ""
+                            const mu = typeof (it as any).media_url === "string"
+                              ? String((it as any).media_url)
+                              : typeof (it as any).mediaUrl === "string"
+                                ? String((it as any).mediaUrl)
+                                : ""
+                            const idRaw = (it as any).id
+                            const id = typeof idRaw === "string" ? idRaw : typeof idRaw === "number" ? String(idRaw) : ""
+                            const pl = typeof (it as any).permalink === "string" ? String((it as any).permalink) : ""
+                            return { mt, tu, mu, id, pl }
+                          }
+
+                          const srcCandidates: unknown[] = [
+                            real,
+                            snapshotMatchPost,
+                            recentMatchPost,
+                            Array.isArray(snapshotTopPosts) ? snapshotTopPosts[index] : null,
+                            Array.isArray(recentPosts) ? recentPosts[index] : null,
+                          ]
+
+                          for (const cand of srcCandidates) {
+                            const { mt, tu, mu } = pickFrom(cand)
+                            const isVideoType = mt === "VIDEO" || mt === "REELS"
+
+                            const chosenRaw = (() => {
+                              // VIDEO/REELS: prefer thumbnail. Only use media_url if it's not a video file.
+                              if (isVideoType) {
+                                const t = (tu || "").trim()
+                                if (t) return t
+                                const m = (mu || "").trim()
+                                if (m && !isLikelyVideoUrl(m)) return m
+                                return ""
+                              }
+
+                              // IMAGE/CAROUSEL/etc: prefer media_url, fallback to thumbnail.
+                              const m = (mu || "").trim()
+                              if (m) return m
+                              const t = (tu || "").trim()
+                              if (t) return t
+                              return ""
+                            })()
+
+                            if (!chosenRaw) continue
+
+                            // Never return a video URL as an image.
+                            if (isLikelyVideoUrl(chosenRaw)) {
+                              const t = (tu || "").trim()
+                              if (!t || isLikelyVideoUrl(t)) continue
+                              if (t.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(t)}`
+                              return t
+                            }
+
+                            if (chosenRaw.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(chosenRaw)}`
+                            return chosenRaw
+                          }
+
+                          return ""
                         })()
 
                         if (__DEV__ && !previewUrl) {
-                          dlog("[top posts] missing previewUrl", {
-                            id: real?.id,
-                            media_type: real?.media_type,
-                            has_thumbnail_url: Boolean(real?.thumbnail_url),
-                            has_media_url: Boolean(real?.media_url),
-                            has_caption: Boolean(real?.caption),
-                          })
+                          const key = String(realIdOrPermalink || real?.id || index)
+                          if (!loggedMissingTopPostPreviewRef.current[key]) {
+                            loggedMissingTopPostPreviewRef.current[key] = true
+                            // eslint-disable-next-line no-console
+                            console.debug("[top posts] missing previewUrl", {
+                              realIdOrPermalink: realIdOrPermalink || null,
+                              has_real_tu: Boolean((real as any)?.thumbnail_url || (real as any)?.thumbnailUrl),
+                              has_real_mu: Boolean((real as any)?.media_url || (real as any)?.mediaUrl),
+                              has_snapshot_match: Boolean(snapshotMatchPost),
+                              has_recent_match: Boolean(recentMatchPost),
+                              has_snapshot_index: Boolean(Array.isArray(snapshotTopPosts) && Boolean(snapshotTopPosts[index])),
+                              has_recent_index: Boolean(Array.isArray(recentPosts) && Boolean(recentPosts[index])),
+                            })
+                          }
                         }
 
                         const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
