@@ -1326,6 +1326,18 @@ export default function CreatorCardPage() {
 
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
 
+  const [avatarPreviewBuster, setAvatarPreviewBuster] = useState<number>(0)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const raw = window.localStorage.getItem("creator_card_avatar_buster")
+      const n = raw ? Number(raw) : 0
+      if (Number.isFinite(n) && n > 0) setAvatarPreviewBuster(n)
+    } catch {
+    }
+  }, [])
+
   const avatarUploadInputRef = useRef<HTMLInputElement | null>(null)
   const [avatarUploading, setAvatarUploading] = useState(false)
 
@@ -1352,6 +1364,13 @@ export default function CreatorCardPage() {
           return
         }
 
+        const buster = Date.now()
+        setAvatarPreviewBuster(buster)
+        try {
+          if (typeof window !== "undefined") window.localStorage.setItem("creator_card_avatar_buster", String(buster))
+        } catch {
+        }
+
         setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
         markDirty()
         showToast(activeLocale === "zh-TW" ? "頭貼已更新，記得按右上儲存" : "Avatar updated — remember to Save")
@@ -1363,6 +1382,20 @@ export default function CreatorCardPage() {
     },
     [activeLocale, avatarUploading, markDirty, showToast]
   )
+
+  const currentAvatarSrc = useMemo(() => {
+    const u0 = typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : ""
+    const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
+    const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
+    const picked = (u0 || u1 || u2).trim()
+    if (!picked) return null
+
+    const shouldBust = avatarPreviewBuster > 0 && (picked === u0.trim() || picked === u1.trim())
+    if (!shouldBust) return picked
+
+    const sep = picked.includes("?") ? "&" : "?"
+    return `${picked}${sep}v=${avatarPreviewBuster}`
+  }, [avatarPreviewBuster, baseCard, igProfile?.profile_picture_url])
 
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
@@ -5334,13 +5367,7 @@ export default function CreatorCardPage() {
                     ...previewData,
                     creatorCard: {
                       ...(previewData.creatorCard ?? {}),
-                      profileImageUrl: (() => {
-                        const u0 = typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : ""
-                        const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
-                        const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                        const u = (u0 || u1 || u2).trim()
-                        return u ? u : null
-                      })(),
+                      profileImageUrl: currentAvatarSrc,
                       displayName: displayName,
                       username: displayUsername || null,
                       aboutText: baseCard?.audience ?? null,
@@ -5406,13 +5433,7 @@ export default function CreatorCardPage() {
                       photoUploadEnabled={false}
                       onProfileImageFileChange={undefined}
                       username={displayUsername || null}
-                      profileImageUrl={(() => {
-                        const u0 = typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : ""
-                        const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
-                        const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
-                        const u = (u0 || u1 || u2).trim()
-                        return u ? u : null
-                      })()}
+                      profileImageUrl={currentAvatarSrc}
                       displayName={displayName}
                       aboutText={baseCard?.audience ?? null}
                       primaryNiche={baseCard?.niche ?? null}
@@ -5420,10 +5441,10 @@ export default function CreatorCardPage() {
                       contact={previewContact}
                       featuredItems={featuredItems}
                       onReorderIgIds={(nextIgIds) => {
-                        setFeaturedItems(prev => {
-                          const igMap = new Map(prev.filter(x => x.type === "ig").map(x => [x.id, x]))
-                          const orderedIg = nextIgIds.map(id => igMap.get(id)).filter((x): x is FeaturedItem => x !== undefined)
-                          const nonIg = prev.filter(x => x.type !== "ig")
+                        setFeaturedItems((prev) => {
+                          const igMap = new Map(prev.filter((x) => x.type === "ig").map((x) => [x.id, x]))
+                          const orderedIg = nextIgIds.map((id) => igMap.get(id)).filter((x): x is FeaturedItem => x !== undefined)
+                          const nonIg = prev.filter((x) => x.type !== "ig")
                           const next = [...nonIg, ...orderedIg]
                           persistDraftNow(next)
                           markDirty()
