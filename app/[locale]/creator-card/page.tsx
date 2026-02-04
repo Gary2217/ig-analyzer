@@ -5307,47 +5307,6 @@ export default function CreatorCardPage() {
                               ))}
                             </Accordion>
                           </div>
-
-                          {isMobile ? (
-                            <div
-                              className="fixed left-0 right-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/80 backdrop-blur"
-                              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
-                            >
-                              <div className="mx-auto w-full max-w-6xl px-4 pt-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="shrink-0 text-[11px] font-semibold text-white/70 whitespace-nowrap">
-                                    {(() => {
-                                      const savedText = activeLocale === "zh-TW" ? "已儲存" : "Saved"
-                                      const savingText = activeLocale === "zh-TW" ? "儲存中…" : "Saving…"
-                                      const unsavedText = activeLocale === "zh-TW" ? "未儲存" : "Unsaved"
-                                      if (saving) return savingText
-                                      if (mobileSavedFlash) return savedText
-                                      if (isDirty) return unsavedText
-                                      return savedText
-                                    })()}
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="primary"
-                                    className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px] sm:min-h-0"
-                                    onClick={handleSave}
-                                    disabled={
-                                      saving ||
-                                      loading ||
-                                      loadErrorKind === "not_connected" ||
-                                      isNotLoggedIn ||
-                                      loadErrorKind === "supabase_invalid_key" ||
-                                      featuredUploadingIds.size > 0 ||
-                                      !isDirty
-                                    }
-                                  >
-                                    {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                                    {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ) : null}
                         </>
                       )
                     })()}
