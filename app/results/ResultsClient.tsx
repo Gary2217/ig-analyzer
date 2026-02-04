@@ -21,6 +21,9 @@ import { extractIgUserIdFromInsightsId } from "../lib/instagram"
 import { getPostMetrics } from "../lib/postMetrics"
 import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
 import { FollowersStatChips } from "./components/FollowersStatChips"
+import { useRefreshController } from "./hooks/useRefreshController"
+import { useResultsOrchestrator } from "./hooks/useResultsOrchestrator"
+import { ResultsDebugPanel } from "./components/ResultsDebugPanel"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints"
@@ -1316,6 +1319,32 @@ export default function ResultsClient() {
 
   const refetchTick = useRefetchTick({ enabled: isConnectedInstagram, throttleMs: 900 })
 
+  const { refreshSeq, fireRefresh, refreshDebug } = useRefreshController({ throttleMs: 10_000, enableFocus: true, enableVisibility: true })
+
+  const { orchestratorDebug } = useResultsOrchestrator({
+    isConnectedInstagram,
+    refreshSeq,
+    fetchMedia: async () => {
+      if (!isConnected) return
+      if (mediaLen > 0 || hasFetchedMediaRef.current || __resultsMediaFetchedOnce) return
+      if (!needsDataRefetch) return
+
+      const now = Date.now()
+      if (now - lastRevalidateAtRef.current < 2500) return
+      lastRevalidateAtRef.current = now
+
+      setForceReloadTick((x) => x + 1)
+    },
+    fetchTrend: async () => {
+      setForceReloadTick((x) => x + 1)
+    },
+    fetchSnapshot: async () => {
+      setForceReloadTick((x) => x + 1)
+    },
+    enableTrend: true,
+    enableSnapshot: true,
+  })
+
   useEffect(() => {
     if (!cookieConnected) return
     setIgMe((prev) => {
@@ -1901,30 +1930,7 @@ export default function ResultsClient() {
     setForceReloadTick((x) => x + 1)
   }, [isConnected, mediaLen, needsDataRefetch, pathname, router])
 
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState !== "visible") return
-      if (!isConnected) return
-      if (mediaLen > 0 || hasFetchedMediaRef.current || __resultsMediaFetchedOnce) {
-        dlog("[results] skip refetch: media already loaded", {
-          mediaLen,
-          hasFetchedMedia: hasFetchedMediaRef.current,
-          fetchedOnce: __resultsMediaFetchedOnce,
-        })
-        return
-      }
-      if (!needsDataRefetch) return
-
-      const now = Date.now()
-      if (now - lastRevalidateAtRef.current < 2500) return
-      lastRevalidateAtRef.current = now
-
-      setForceReloadTick((x) => x + 1)
-    }
-
-    document.addEventListener("visibilitychange", onVis)
-    return () => document.removeEventListener("visibilitychange", onVis)
-  }, [isConnected, mediaLen, needsDataRefetch])
+  // focus/visibility handling is centralized in useRefreshController + useResultsOrchestrator
 
   // -------------------------------------------------
   // DEV-ONLY: Verify Top Posts data source decision
@@ -2096,32 +2102,7 @@ export default function ResultsClient() {
     }
   }, [forceReloadTick, mediaLen])
 
-  useEffect(() => {
-    const onFocus = () => {
-      if (!isConnected) return
-      if (mediaLen > 0 || hasFetchedMediaRef.current || __resultsMediaFetchedOnce) {
-        dlog("[results] skip refetch: media already loaded", {
-          mediaLen,
-          hasFetchedMedia: hasFetchedMediaRef.current,
-          fetchedOnce: __resultsMediaFetchedOnce,
-        })
-        return
-      }
-      if (!needsDataRefetch) return
-      const now = Date.now()
-      if (now - lastRevalidateAtRef.current < 2500) return
-      lastRevalidateAtRef.current = now
-      setForceReloadTick((x) => x + 1)
-    }
-
-    if (typeof window === "undefined") return
-
-    window.addEventListener("focus", onFocus)
-
-    return () => {
-      window.removeEventListener("focus", onFocus)
-    }
-  }, [isConnected, mediaLen, needsDataRefetch])
+  // focus handling is centralized in useRefreshController
 
   // -------------------------------------------------
   // DEV-ONLY: Observe media state length after normalize + setMedia
@@ -2828,48 +2809,28 @@ export default function ResultsClient() {
       })
   }, [reloadCreatorCard])
 
-  useEffect(() => {
-    let lastSeenTimestamp = ""
-    
-    const checkForUpdates = () => {
-      if (typeof window === "undefined") return
-      
-      const storageTimestamp = sessionStorage.getItem("creatorCardUpdated") || localStorage.getItem("creatorCardUpdated") || ""
-      
-      debugCreatorCard("focus/visibility check", {
+  const checkCreatorCardUpdates = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const storageTimestamp = sessionStorage.getItem("creatorCardUpdated") || localStorage.getItem("creatorCardUpdated") || ""
+
+    debugCreatorCard("focus/visibility check", {
+      storageTimestamp,
+      lastSeenTimestamp: lastReloadKeyRef.current,
+    })
+
+    if (storageTimestamp && storageTimestamp !== lastReloadKeyRef.current) {
+      debugCreatorCard("storage timestamp changed → reload", {
         storageTimestamp,
-        lastSeenTimestamp,
       })
-      
-      // Only reload when storageTimestamp exists AND differs from lastSeenTimestamp
-      if (storageTimestamp && storageTimestamp !== lastSeenTimestamp) {
-        lastSeenTimestamp = storageTimestamp
-        debugCreatorCard("storage timestamp changed → reload", {
-          storageTimestamp,
-        })
-        reloadCreatorCardOnce(storageTimestamp)
-      }
-      // Otherwise do nothing (no safeReload fallback to prevent excessive refreshes)
-    }
-    
-    const onFocus = () => {
-      checkForUpdates()
-    }
-
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        checkForUpdates()
-      }
-    }
-
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisibility)
-
-    return () => {
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisibility)
+      reloadCreatorCardOnce(storageTimestamp)
     }
   }, [reloadCreatorCardOnce])
+
+  useEffect(() => {
+    if (refreshSeq <= 0) return
+    checkCreatorCardUpdates()
+  }, [checkCreatorCardUpdates, refreshSeq])
 
   const resolvedCreatorId = useMemo(() => {
     const igUserIdFromSnapshot = (() => {
@@ -3159,29 +3120,11 @@ export default function ResultsClient() {
   }, [selectedGoal, isConnectedInstagram])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const onFocus = () => {
-      if (!isConnectedInstagram) return
-      if (selectedGoal !== "brandCollaborationProfile") return
-      safeReloadCreatorCard()
-    }
-
-    const onVis = () => {
-      if (!document.hidden) {
-        if (!isConnectedInstagram) return
-        if (selectedGoal !== "brandCollaborationProfile") return
-        safeReloadCreatorCard()
-      }
-    }
-
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVis)
-    return () => {
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVis)
-    }
-  }, [isConnectedInstagram, safeReloadCreatorCard, selectedGoal])
+    if (refreshSeq <= 0) return
+    if (!isConnectedInstagram) return
+    if (selectedGoal !== "brandCollaborationProfile") return
+    safeReloadCreatorCard()
+  }, [isConnectedInstagram, refreshSeq, safeReloadCreatorCard, selectedGoal])
 
   useEffect(() => {
     if (!isConnectedInstagram || !resolvedCreatorId) {
@@ -4046,7 +3989,7 @@ export default function ResultsClient() {
           hasFetchedMeRef.current = false
           __resultsMeFetchedOnce = false
           hasSuccessfulMePayloadRef.current = false
-          setForceReloadTick((x) => x + 1)
+          fireRefresh("manual")
         }}
         onRefresh={() => {
           setLoadTimedOut(false)
@@ -4057,7 +4000,7 @@ export default function ResultsClient() {
           hasFetchedMeRef.current = false
           __resultsMeFetchedOnce = false
           hasSuccessfulMePayloadRef.current = false
-          setForceReloadTick((x) => x + 1)
+          fireRefresh("manual")
         }}
         onBack={() => router.push(localePathname("/", activeLocale))}
       />
@@ -4080,7 +4023,7 @@ export default function ResultsClient() {
                 hasFetchedMeRef.current = false
                 __resultsMeFetchedOnce = false
                 hasSuccessfulMePayloadRef.current = false
-                setForceReloadTick((x) => x + 1)
+                fireRefresh("manual")
               }}
             >
               {t("results.retry")}
@@ -4120,7 +4063,7 @@ export default function ResultsClient() {
           hasFetchedMeRef.current = false
           __resultsMeFetchedOnce = false
           hasSuccessfulMePayloadRef.current = false
-          setForceReloadTick((x) => x + 1)
+          fireRefresh("manual")
         }}
         onReconnect={handleConnect}
       />
@@ -4128,6 +4071,7 @@ export default function ResultsClient() {
 
   return (
     <>
+      <ResultsDebugPanel refreshDebug={refreshDebug} orchestratorDebug={orchestratorDebug} />
       <ConnectedGate
         notConnectedUI={
           <>
@@ -4169,7 +4113,7 @@ export default function ResultsClient() {
                     className="w-full sm:w-auto"
                     onClick={() => {
                       setUpdateSlow(false)
-                      setForceReloadTick((x) => x + 1)
+                      fireRefresh("manual")
                     }}
                   >
                     {t("results.retry")}
