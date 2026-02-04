@@ -4,6 +4,34 @@ import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 
 const upsertRateBuckets = new Map<string, { resetAt: number; count: number }>()
 
+function makeRequestId() {
+  try {
+    const g = globalThis as any
+    const maybeCrypto = g?.crypto
+    if (maybeCrypto && typeof maybeCrypto.randomUUID === "function") {
+      return String(maybeCrypto.randomUUID())
+    }
+  } catch {
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function withRequestId(res: NextResponse, requestId: string) {
+  try {
+    res.headers.set("x-request-id", requestId)
+  } catch {
+  }
+  return res
+}
+
+function hasOwn(obj: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
+function jsonWithRequestId(payload: any, init: { status?: number } | undefined, requestId: string) {
+  return withRequestId(NextResponse.json(payload, init), requestId)
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null
   return value as Record<string, unknown>
@@ -179,6 +207,7 @@ async function getIGMe(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const requestId = makeRequestId()
     const ccDebug = isCcDebugEnabled(req)
     const ccDebugSrc = ccDebugSource(req)
 
@@ -186,18 +215,29 @@ export async function POST(req: Request) {
     const userRes = await authed.auth.getUser()
     const user = userRes?.data?.user ?? null
     if (!user) {
-      return NextResponse.json(
+      return jsonWithRequestId(
         { ok: false, error: "unauthenticated", message: "not_logged_in" },
         { status: 401 },
+        requestId,
       )
     }
 
     const c = await cookies()
     const token = (c.get("ig_access_token")?.value ?? "").trim()
     if (!token) {
-      return NextResponse.json(
+      return jsonWithRequestId(
         { ok: false, error: "unauthenticated", message: "missing_session" },
         { status: 401 },
+        requestId,
+      )
+    }
+
+    const explicitSaveHeader = (req.headers.get("x-explicit-save") ?? "").trim()
+    if (explicitSaveHeader !== "1") {
+      return jsonWithRequestId(
+        { ok: false, error: "bad_request", message: "explicit_save_required" },
+        { status: 400 },
+        requestId,
       )
     }
 
@@ -215,9 +255,10 @@ export async function POST(req: Request) {
     const igUsername = meObj?.username ? String(meObj.username) : null
     const igUserIdStr = typeof igUserId === "string" ? igUserId.trim() : ""
     if (!igUserIdStr) {
-      return NextResponse.json(
+      return jsonWithRequestId(
         { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
         { status: 403 },
+        requestId,
       )
     }
 
@@ -232,9 +273,10 @@ export async function POST(req: Request) {
     // If the IG /me endpoint does not confirm ok, treat as not connected.
     // This prevents treating stale cookies as authenticated.
     if (!meOk) {
-      return NextResponse.json(
+      return jsonWithRequestId(
         { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
         { status: 403 },
+        requestId,
       )
     }
 
@@ -249,9 +291,10 @@ export async function POST(req: Request) {
       } else {
         bucket.count += 1
         if (bucket.count > limit) {
-          return NextResponse.json(
+          return jsonWithRequestId(
             { ok: false, error: "rate_limited", message: "too_many_requests" },
             { status: 429 },
+            requestId,
           )
         }
       }
@@ -292,7 +335,7 @@ export async function POST(req: Request) {
     const schemaGuard = await checkMinPriceColumnBestEffort(igUserIdStr)
     if (!schemaGuard.ok && schemaGuard.missing) {
       console.error("[creator-card/upsert] schema guard", { message: schemaGuard.message })
-      return NextResponse.json(
+      return jsonWithRequestId(
         {
           ok: false,
           error: "upsert_failed",
@@ -302,14 +345,16 @@ export async function POST(req: Request) {
           hint: null,
         },
         { status: 500 },
+        requestId,
       )
     }
 
     const bodyUnknown: unknown = await req.json().catch(() => null)
     const body = asRecord(bodyUnknown)
-    if (!body) return NextResponse.json({ ok: false, error: "bad_json" }, { status: 400 })
+    if (!body) return jsonWithRequestId({ ok: false, error: "bad_json" }, { status: 400 }, requestId)
 
-    const handleRaw = (typeof body.handle === "string" ? body.handle.trim() : "").slice(0, 64)
+    const hasHandleKey = hasOwn(body, "handle")
+    const handleRaw = hasHandleKey && typeof body.handle === "string" ? body.handle.trim().slice(0, 64) : ""
     const audienceRaw = (typeof body.audience === "string" ? body.audience.trim() : "").slice(0, 2000)
     const nicheRaw = (typeof body.niche === "string" ? body.niche.trim() : "").slice(0, 128)
     const featuredItemsRaw = (Array.isArray(body.featuredItems) ? body.featuredItems : []).slice(0, 50)
@@ -329,29 +374,38 @@ export async function POST(req: Request) {
 
     const completionPct = computeCompletion(body)
 
-    const proposed = handleRaw
-    let base = proposed ? slugify(proposed) : slugify(igUsername || "creator")
-    if (!base) base = "creator"
-
     const existingByIg = await supabaseServer
       .from("creator_cards")
-      .select("id, handle, user_id, ig_user_id, updated_at")
+      .select("*")
       .eq("ig_user_id", igUserIdStr)
       .limit(1)
       .maybeSingle()
 
     if (existingByIg.error) {
-      return toSupabaseErrorResponse(existingByIg.error, "select existing by ig_user_id")
+      return withRequestId(toSupabaseErrorResponse(existingByIg.error, "select existing by ig_user_id"), requestId)
     }
 
-    const existingId = typeof (existingByIg.data as any)?.id === "string" ? String((existingByIg.data as any).id) : null
-    const existingHandle = typeof (existingByIg.data as any)?.handle === "string" ? String((existingByIg.data as any).handle) : ""
-    const existingUserId = typeof (existingByIg.data as any)?.user_id === "string" ? String((existingByIg.data as any).user_id) : null
+    const existingRow = existingByIg.data && typeof existingByIg.data === "object" ? (existingByIg.data as any) : null
+    const existingId = typeof existingRow?.id === "string" ? String(existingRow.id) : null
+    const existingHandle = typeof existingRow?.handle === "string" ? String(existingRow.handle) : ""
+    const existingUserId = typeof existingRow?.user_id === "string" ? String(existingRow.user_id) : null
+
+    const proposed = hasHandleKey ? handleRaw : ""
+    let base = proposed ? slugify(proposed) : slugify(igUsername || "creator")
+    if (!base) base = "creator"
 
     const wantsNewHandle = Boolean(proposed) && slugify(proposed) !== (existingHandle || "")
-    let handle = wantsNewHandle ? base : existingHandle || base
 
-    if (!existingId || wantsNewHandle) {
+    // IMPORTANT: Do not overwrite handle unless the client explicitly provided it.
+    // - If row exists and handle key is missing => preserve existing handle.
+    // - If inserting a new row => generate a handle (required).
+    let handle = existingRow ? existingHandle : base
+    if (!existingRow && !handle) handle = base
+    if (hasHandleKey) {
+      handle = wantsNewHandle ? base : (existingHandle || base)
+    }
+
+    if (!existingId || (hasHandleKey && wantsNewHandle)) {
       let candidate = base
       for (let i = 0; i < 5; i++) {
         const check = await supabaseServer
@@ -379,16 +433,46 @@ export async function POST(req: Request) {
 
     const audience = audienceRaw
 
+    const clearProfileImageUrl = Boolean((body as any).clearProfileImageUrl)
+    const clearAvatarUrl = Boolean((body as any).clearAvatarUrl)
+
+    const incomingProfileImageUrl = (() => {
+      if (!hasOwn(body, "profileImageUrl")) return undefined
+      const v = (body as any).profileImageUrl
+      if (v === null) return null
+      if (typeof v === "string") {
+        const s = v.trim()
+        return s ? s : ""
+      }
+      return ""
+    })()
+
+    const incomingAvatarUrl = (() => {
+      if (!hasOwn(body, "avatarUrl")) return undefined
+      const v = (body as any).avatarUrl
+      if (v === null) return null
+      if (typeof v === "string") {
+        const s = v.trim()
+        return s ? s : ""
+      }
+      return ""
+    })()
+
+    const existingProfileImageUrl = typeof existingRow?.profile_image_url === "string" ? existingRow.profile_image_url : null
+    const existingAvatarUrl = typeof existingRow?.avatar_url === "string" ? existingRow.avatar_url : null
+
     const profileImageUrl = (() => {
-      const raw = typeof body.profileImageUrl === "string" ? String(body.profileImageUrl) : ""
-      const s = raw.trim()
-      return s ? s : null
+      if (incomingProfileImageUrl === undefined) return existingProfileImageUrl
+      if (incomingProfileImageUrl === null) return clearProfileImageUrl ? null : existingProfileImageUrl
+      if (incomingProfileImageUrl === "") return clearProfileImageUrl ? null : existingProfileImageUrl
+      return incomingProfileImageUrl
     })()
 
     const avatarUrl = (() => {
-      const raw = typeof (body as any).avatarUrl === "string" ? String((body as any).avatarUrl) : ""
-      const s = raw.trim()
-      return s ? s : null
+      if (incomingAvatarUrl === undefined) return existingAvatarUrl
+      if (incomingAvatarUrl === null) return clearAvatarUrl ? null : existingAvatarUrl
+      if (incomingAvatarUrl === "") return clearAvatarUrl ? null : existingAvatarUrl
+      return incomingAvatarUrl
     })()
 
     // TEMP DEBUG: Log incoming profileImageUrl (safe, no full base64)
@@ -408,7 +492,7 @@ export async function POST(req: Request) {
     const contactText = normalizeContactToText(body.contact)
 
     const minPrice = normalizeMinPriceToIntOrNull((body as any).minPrice)
-    
+
     // DEV-ONLY: Log featuredItems in request
     if (shouldDebug()) {
       const featuredItemsArray = Array.isArray(body.featuredItems) ? body.featuredItems : []
@@ -418,26 +502,78 @@ export async function POST(req: Request) {
       }
     }
 
+    const nullableDbKeys = new Set([
+      "niche",
+      "audience",
+      "min_price",
+      "contact",
+      "collaboration_niches",
+      "deliverables",
+      "past_collaborations",
+      "portfolio",
+      "featured_items",
+      "theme_types",
+      "audience_profiles",
+    ])
+
     const dbWrite: Record<string, unknown> = {
       user_id: user.id,
       ig_user_id: igUserIdStr,
       ig_username: igUsername,
-      handle,
-      profile_image_url: profileImageUrl,
-      avatar_url: avatarUrl,
-      niche: nicheRaw || null,
-      audience: audience || null,
-      min_price: minPrice,
-      contact: contactText,
-      collaboration_niches: collaborationNiches,
-      deliverables,
-      past_collaborations: pastCollaborations,
-      portfolio: portfolioRaw,
-      featured_items: featuredItemsSanitized,
-      is_public: Boolean(body.isPublic),
-      theme_types: themeTypes,
-      audience_profiles: audienceProfiles,
       updated_at: new Date().toISOString(),
+    }
+
+    const setIfPresent = (key: string, value: unknown, opts?: { allowNull?: boolean }) => {
+      if (value === undefined) return
+      if (value === null) {
+        if (opts?.allowNull) {
+          dbWrite[key] = null
+        }
+        return
+      }
+      dbWrite[key] = value
+    }
+
+    if (!existingRow || hasHandleKey) {
+      setIfPresent("handle", handle, { allowNull: false })
+    }
+    setIfPresent("profile_image_url", profileImageUrl, { allowNull: true })
+    setIfPresent("avatar_url", avatarUrl, { allowNull: true })
+
+    if (hasOwn(body, "niche")) setIfPresent("niche", nicheRaw || null, { allowNull: true })
+    if (hasOwn(body, "audience")) setIfPresent("audience", audience || null, { allowNull: true })
+    if (hasOwn(body as any, "minPrice")) setIfPresent("min_price", minPrice, { allowNull: true })
+    if (hasOwn(body, "contact")) setIfPresent("contact", contactText, { allowNull: true })
+    if (hasOwn(body, "collaborationNiches")) setIfPresent("collaboration_niches", collaborationNiches, { allowNull: true })
+    if (hasOwn(body, "deliverables")) setIfPresent("deliverables", deliverables, { allowNull: true })
+    if (hasOwn(body, "pastCollaborations")) setIfPresent("past_collaborations", pastCollaborations, { allowNull: true })
+    if (hasOwn(body, "portfolio")) setIfPresent("portfolio", portfolioRaw, { allowNull: true })
+    if (hasOwn(body, "featuredItems")) setIfPresent("featured_items", featuredItemsSanitized, { allowNull: true })
+    if (hasOwn(body, "themeTypes")) setIfPresent("theme_types", themeTypes, { allowNull: true })
+    if (hasOwn(body, "audienceProfiles")) setIfPresent("audience_profiles", audienceProfiles, { allowNull: true })
+    if (hasOwn(body, "isPublic")) setIfPresent("is_public", Boolean(body.isPublic), { allowNull: false })
+
+    if (existingRow) {
+      for (const k of Object.keys(dbWrite)) {
+        if (k === "updated_at") continue
+        const a = (dbWrite as any)[k]
+        const b = (existingRow as any)[k]
+        if (a === b) {
+          delete (dbWrite as any)[k]
+          continue
+        }
+        if (Array.isArray(a) || typeof a === "object") {
+          try {
+            if (JSON.stringify(a) === JSON.stringify(b)) {
+              delete (dbWrite as any)[k]
+            }
+          } catch {
+          }
+        }
+        if (a === null && !nullableDbKeys.has(k)) {
+          delete (dbWrite as any)[k]
+        }
+      }
     }
 
     const isUniqueViolation = (err: unknown) => {
@@ -502,7 +638,7 @@ export async function POST(req: Request) {
             meOk,
           })
         }
-        return NextResponse.json(
+        return jsonWithRequestId(
           {
             ok: false,
             error: "forbidden",
@@ -517,7 +653,8 @@ export async function POST(req: Request) {
                 }
               : null),
           },
-          { status: 403 }
+          { status: 403 },
+          requestId,
         )
       }
 
@@ -537,9 +674,10 @@ export async function POST(req: Request) {
         const reclaim = await reclaimViaRpc(existingId, ccDebugSrc ?? null)
         if (!reclaim.ok) {
           const msg = typeof (reclaim as any)?.error?.message === "string" ? String((reclaim as any).error.message) : ""
-          return NextResponse.json(
+          return jsonWithRequestId(
             { ok: false, error: "upsert_failed", message: msg === "reclaim_no_row" ? "reclaim_no_row" : "reclaim_failed" },
             { status: 500 },
+            requestId,
           )
         }
       }
@@ -560,13 +698,17 @@ export async function POST(req: Request) {
           .maybeSingle()
 
         if (after.error) {
-          return toSupabaseErrorResponse(after.error, "reselect existing by ig_user_id after unique violation")
+          return withRequestId(toSupabaseErrorResponse(after.error, "reselect existing by ig_user_id after unique violation"), requestId)
         }
 
         const afterId = typeof (after.data as any)?.id === "string" ? String((after.data as any).id) : null
         const afterOwner = typeof (after.data as any)?.user_id === "string" ? String((after.data as any).user_id) : null
         if (!afterId) {
-          return NextResponse.json({ ok: false, error: "upsert_failed", message: "insert_race_no_row" }, { status: 500 })
+          return jsonWithRequestId(
+            { ok: false, error: "upsert_failed", message: "insert_race_no_row" },
+            { status: 500 },
+            requestId,
+          )
         }
 
         const authz = authorizeExisting(afterOwner)
@@ -583,7 +725,7 @@ export async function POST(req: Request) {
               raced: true,
             })
           }
-          return NextResponse.json(
+          return jsonWithRequestId(
             {
               ok: false,
               error: "forbidden",
@@ -599,7 +741,8 @@ export async function POST(req: Request) {
                   }
                 : null),
             },
-            { status: 403 }
+            { status: 403 },
+            requestId,
           )
         }
 
@@ -620,9 +763,10 @@ export async function POST(req: Request) {
           const reclaim = await reclaimViaRpc(afterId, ccDebugSrc ?? null)
           if (!reclaim.ok) {
             const msg = typeof (reclaim as any)?.error?.message === "string" ? String((reclaim as any).error.message) : ""
-            return NextResponse.json(
+            return jsonWithRequestId(
               { ok: false, error: "upsert_failed", message: msg === "reclaim_no_row" ? "reclaim_no_row" : "reclaim_failed" },
               { status: 500 },
+              requestId,
             )
           }
         }
@@ -636,7 +780,7 @@ export async function POST(req: Request) {
     }
 
     if (error) {
-      return toSupabaseErrorResponse(error, "upsert")
+      return withRequestId(toSupabaseErrorResponse(error, "upsert"), requestId)
     }
 
     // TEMP DEBUG: Log returned row's profile_image_url (safe, no full base64)
@@ -650,7 +794,7 @@ export async function POST(req: Request) {
         supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50) ?? "not_set",
       })
     }
-    
+
     // DEV-ONLY: Log featuredItems in response
     if (shouldDebug()) {
       const returnedFeaturedItems = Array.isArray(dataObj?.featured_items) ? dataObj.featured_items : []
@@ -659,26 +803,34 @@ export async function POST(req: Request) {
         console.log("[upsert] RESPONSE featuredItems sample:", JSON.stringify(returnedFeaturedItems[0]))
       }
     }
-    
+
     // Map snake_case DB column to camelCase for client
     const featuredItems = Array.isArray(dataObj?.featured_items) ? dataObj.featured_items : []
 
-    return NextResponse.json({
-      ok: true,
-      card: data && typeof data === "object" ? { 
-        ...(data as Record<string, unknown>), 
-        featuredItems,  // Add camelCase alias for client
-        completion_pct: completionPct 
-      } : data,
-      completionPct,
-    })
+    return withRequestId(
+      NextResponse.json({
+        ok: true,
+        card: data && typeof data === "object" ? { 
+          ...(data as Record<string, unknown>), 
+          featuredItems,  // Add camelCase alias for client
+          completion_pct: completionPct 
+        } : data,
+        completionPct,
+      }),
+      requestId,
+    )
   } catch (e: unknown) {
     const errObj = asRecord(e)
     const msg = typeof errObj?.message === "string" ? errObj.message : "unknown"
-    console.error("[creator-card/upsert] unexpected error", { message: msg })
+    const requestId = makeRequestId()
+    console.error("[creator-card/upsert] unexpected error", { requestId, message: msg })
     if (msg.includes("Invalid API key")) {
-      return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500 })
+      return jsonWithRequestId({ ok: false, error: "supabase_invalid_key" }, { status: 500 }, requestId)
     }
-    return NextResponse.json({ ok: false, error: "unexpected_error", message: msg.slice(0, 400) }, { status: 500 })
+    return jsonWithRequestId(
+      { ok: false, error: "unexpected_error", message: msg.slice(0, 400) },
+      { status: 500 },
+      requestId,
+    )
   }
 }
