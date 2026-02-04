@@ -1550,13 +1550,18 @@ export default function ResultsClient() {
       return
     }
 
+    // HARD GUARD: already fetched once successfully
+    if (hasFetchedDailySnapshotRef.current) {
+      return
+    }
+
+    hasFetchedDailySnapshotRef.current = true
+
     const now = Date.now()
     const cooldownMs = 90_000
     if (now - lastDailySnapshotFetchAtRef.current < cooldownMs) return
-    if (hasFetchedDailySnapshotRef.current && trendPoints.length >= 1) return
 
     lastDailySnapshotFetchAtRef.current = now
-    hasFetchedDailySnapshotRef.current = true
 
     setTrendFetchStatus({ loading: true, error: "", lastDays: 90 })
     setTrendNeedsConnectHint(false)
@@ -1667,7 +1672,7 @@ export default function ResultsClient() {
       // and would prematurely cancel an in-flight request. Abort is handled only when a
       // new request starts (above) or on component unmount (separate effect).
     }
-  }, [isConnectedInstagram, mergeToContinuousTrendPoints, normalizeTotalsFromInsightsDaily, supabaseBrowser, trendPoints.length])
+  }, [isConnectedInstagram, mergeToContinuousTrendPoints, normalizeTotalsFromInsightsDaily, supabaseBrowser])
 
   useEffect(() => {
     return () => {
