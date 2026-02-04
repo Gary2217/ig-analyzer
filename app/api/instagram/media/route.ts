@@ -6,6 +6,87 @@ const GRAPH_VERSION = "v24.0"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const __DEV__ = process.env.NODE_ENV !== "production"
+const __missingVideoThumbLogSet = new Set<string>()
+const __MISSING_VIDEO_THUMB_LOG_MAX = 50
+
+function extractShortcodeFromUrl(url: string): string {
+  const s = typeof url === "string" ? url.trim() : ""
+  if (!s) return ""
+  try {
+    const u = new URL(s)
+    const parts = u.pathname.split("/").filter(Boolean)
+    if (parts.length >= 2 && (parts[0] === "p" || parts[0] === "reel" || parts[0] === "reels")) {
+      return String(parts[1] || "").trim()
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const m = /\/(p|reel|reels)\/([^\/\?\#]+)/i.exec(s)
+    return m && m[2] ? String(m[2]).trim() : ""
+  } catch {
+    return ""
+  }
+}
+
+function deriveVideoThumbUrl(permalinkRaw: string, shortcodeRaw: string, fallbackUrlRaw?: string): string {
+  const pl = typeof permalinkRaw === "string" ? permalinkRaw.trim() : ""
+  if (pl && pl.startsWith("http")) {
+    const base = pl.replace(/\/?$/, "/")
+    return `${base}media/?size=l`
+  }
+  const sc = typeof shortcodeRaw === "string" ? shortcodeRaw.trim() : ""
+  if (sc) return `https://www.instagram.com/p/${sc}/media/?size=l`
+  const sc2 = extractShortcodeFromUrl(typeof fallbackUrlRaw === "string" ? fallbackUrlRaw : "")
+  if (sc2) return `https://www.instagram.com/p/${sc2}/media/?size=l`
+  return ""
+}
+
+function enrichVideoThumbsInPlace(payload: any) {
+  const list: any[] = Array.isArray(payload?.data) ? payload.data : []
+  if (list.length === 0) return
+
+  for (const it of list) {
+    if (!it || typeof it !== "object") continue
+    const mt = String((it as any).media_type ?? (it as any).mediaType ?? "").toUpperCase()
+    const isVideo = mt === "VIDEO" || mt === "REELS" || mt.includes("REEL")
+    if (!isVideo) continue
+
+    const tuRaw = (it as any).thumbnail_url
+    const tu = typeof tuRaw === "string" ? tuRaw.trim() : ""
+    if (tu) continue
+
+    const pl = typeof (it as any).permalink === "string" ? String((it as any).permalink) : ""
+    const sc = typeof (it as any).shortcode === "string" ? String((it as any).shortcode) : ""
+    const fallbackUrl =
+      (typeof (it as any).ig_permalink === "string" ? String((it as any).ig_permalink) : "") ||
+      (typeof (it as any).url === "string" ? String((it as any).url) : "") ||
+      (typeof (it as any).link === "string" ? String((it as any).link) : "") ||
+      ""
+
+    const derived = deriveVideoThumbUrl(pl, sc, fallbackUrl || pl)
+    if (derived) {
+      ;(it as any).thumbnail_url = derived
+      continue
+    }
+
+    if (__DEV__ && __missingVideoThumbLogSet.size < __MISSING_VIDEO_THUMB_LOG_MAX) {
+      const id = String((it as any).id || "")
+      const key = `${id}:${pl || fallbackUrl || ""}`.slice(0, 220)
+      if (!__missingVideoThumbLogSet.has(key)) {
+        __missingVideoThumbLogSet.add(key)
+        // eslint-disable-next-line no-console
+        console.debug("[media] video missing thumbnail_url (unrecoverable)", {
+          id: id || null,
+          hasPermalink: Boolean(pl && pl.trim()),
+          hasShortcode: Boolean(sc && sc.trim()),
+        })
+      }
+    }
+  }
+}
+
 function getIsHttps(req: NextRequest) {
   const xfProto = req.headers.get("x-forwarded-proto")?.toLowerCase()
   return xfProto === "https" || req.nextUrl.protocol === "https:"
@@ -389,6 +470,10 @@ export async function GET(req: NextRequest) {
     }
 
     const safeMediaJson = sanitizeGraphPayload(mediaJson)
+
+    // Enrich missing VIDEO/REELS thumbnails when derivable (pure string transformation; no network)
+    enrichVideoThumbsInPlace(safeMediaJson)
+
     const dataLen = safeLen((safeMediaJson as any)?.data)
     if (dataLen > 0) {
       __mediaCache.set(cacheKey, {
