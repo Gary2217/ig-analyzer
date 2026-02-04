@@ -1107,6 +1107,7 @@ export default function ResultsClient() {
   const lastDailySnapshotPointsSourceRef = useRef<string>("")
   const hasRestoredResultsScrollRef = useRef(false)
   const loggedMissingTopPostPreviewRef = useRef<Record<string, true>>({})
+  const loggedEmptySnapshotTopPostsRef = useRef(false)
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
 
@@ -1923,19 +1924,27 @@ export default function ResultsClient() {
   const snapshotTopPosts = useMemo(() => {
     if (!isRecord(dailySnapshotData)) return [] as unknown[]
 
-    const candidates = [
-      (dailySnapshotData as any).top_posts,
-      (dailySnapshotData as any).topPosts,
-      (dailySnapshotData as any).top_posts_7d,
-      (dailySnapshotData as any).topPosts7d,
-      (dailySnapshotData as any).top_performing_posts,
-      (dailySnapshotData as any).topPerformingPosts,
-      (dailySnapshotData as any).posts,
-    ]
+    const c1 = (dailySnapshotData as any).top_posts
+    if (Array.isArray(c1) && c1.length > 0) return c1
+    const c2 = (dailySnapshotData as any).topPosts
+    if (Array.isArray(c2) && c2.length > 0) return c2
+    const c3 = (dailySnapshotData as any).top_performing_posts
+    if (Array.isArray(c3) && c3.length > 0) return c3
+    const c4 = (dailySnapshotData as any).topPerformingPosts
+    if (Array.isArray(c4) && c4.length > 0) return c4
 
-    for (const c of candidates) {
-      if (Array.isArray(c) && c.length > 0) return c
+    if (__DEV__ && !loggedEmptySnapshotTopPostsRef.current) {
+      loggedEmptySnapshotTopPostsRef.current = true
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("[daily-snapshot] snapshotTopPosts empty", {
+          keys: Object.keys(dailySnapshotData as any).slice(0, 80),
+        })
+      } catch {
+        // ignore
+      }
     }
+
     return [] as unknown[]
   }, [dailySnapshotData])
 
@@ -5878,15 +5887,25 @@ export default function ResultsClient() {
                         const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
                         const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
 
+                        const normalizeKey = (input: string): string => {
+                          const s = String(input || "").trim()
+                          if (!s) return ""
+                          if (/^\d+$/.test(s)) {
+                            const t = s.replace(/^0+/, "")
+                            return t ? t : "0"
+                          }
+                          return s
+                        }
+
                         const realIdOrPermalink = (() => {
                           const idRaw = (real as any)?.id
                           const idStr = typeof idRaw === "string" ? idRaw : typeof idRaw === "number" ? String(idRaw) : ""
-                          if (idStr.trim()) return idStr.trim()
+                          if (idStr.trim()) return normalizeKey(idStr)
                           const pl = typeof (real as any)?.permalink === "string" ? String((real as any).permalink).trim() : ""
-                          if (pl) return pl
+                          if (pl) return normalizeKey(pl)
                           const midRaw = (real as any)?.media_id ?? (real as any)?.mediaId
                           const midStr = typeof midRaw === "string" ? midRaw : typeof midRaw === "number" ? String(midRaw) : ""
-                          if (midStr.trim()) return midStr.trim()
+                          if (midStr.trim()) return normalizeKey(midStr)
                           return ""
                         })()
 
@@ -5906,12 +5925,15 @@ export default function ResultsClient() {
                         }
 
                         const findByIdOrPermalink = (list: unknown, key: string): unknown => {
-                          if (!key) return null
+                          const k = normalizeKey(key)
+                          if (!k) return null
                           if (!Array.isArray(list)) return null
                           for (const it of list) {
                             const x = getIdAndPermalink(it)
-                            if (x.id && x.id === key) return it
-                            if (x.pl && x.pl === key) return it
+                            const xid = normalizeKey(x.id)
+                            if (xid && xid === k) return it
+                            const xpl = normalizeKey(x.pl)
+                            if (xpl && xpl === k) return it
                           }
                           return null
                         }
