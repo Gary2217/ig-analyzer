@@ -17,6 +17,53 @@ const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
 const PAGE_ID = "851912424681350"
 const IG_BUSINESS_ID = "17841404364250644"
 
+const __DEV__ = process.env.NODE_ENV !== "production"
+
+type CacheEntry<T> = { at: number; ttl: number; value: T }
+type TrendResponse = { ok: true; days: number; points: TrendPoint[] }
+
+const __trendInflight = new Map<string, Promise<TrendResponse>>()
+const __trendCache = new Map<string, CacheEntry<TrendResponse>>()
+
+function nowMs() {
+  return Date.now()
+}
+
+function readCache<T>(map: Map<string, CacheEntry<T>>, key: string): T | null {
+  const e = map.get(key)
+  if (!e) return null
+  if (nowMs() - e.at > e.ttl) {
+    map.delete(key)
+    return null
+  }
+  return e.value
+}
+
+function writeCache<T>(map: Map<string, CacheEntry<T>>, key: string, value: T, ttl: number) {
+  map.set(key, { at: nowMs(), ttl, value })
+}
+
+function pruneOldest<T>(map: Map<string, CacheEntry<T>>, maxEntries: number) {
+  if (map.size <= maxEntries) return
+  const items = Array.from(map.entries())
+  items.sort((a, b) => a[1].at - b[1].at)
+  const removeN = Math.max(1, map.size - maxEntries)
+  for (let i = 0; i < removeN; i++) {
+    const k = items[i]?.[0]
+    if (k) map.delete(k)
+  }
+}
+
+function tokenSig(raw: string) {
+  const t = String(raw || "").trim()
+  if (!t) return ""
+  try {
+    return createHash("sha256").update(t).digest("hex").slice(0, 16)
+  } catch {
+    return "sha_err"
+  }
+}
+
 type TrendPoint = {
   ts: number
   reach: number | null
@@ -137,14 +184,23 @@ export async function GET(req: Request) {
         401,
       )
     }
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[trend][auth]", {
-        hasToken: Boolean(token),
-        page_id,
-        ig_id,
-        usedHardcodePage: !(pageIdFromCookies || pageIdFromHeader),
-        usedHardcodeIg: !(igIdFromCookies || igIdFromHeader),
-      })
+
+    // ---- response-level inflight + short TTL cache (no contract change) ----
+    const cacheKey = `trend|ig:${ig_id}|pg:${page_id}|days:${days}|tok:${tokenSig(token)}`
+
+    const cached = readCache(__trendCache, cacheKey)
+    if (cached) {
+      const headers: Record<string, string> = { "Cache-Control": "no-store" }
+      if (__DEV__) headers["X-TR-Cache"] = "hit"
+      return NextResponse.json(cached, { status: 200, headers })
+    }
+
+    const inflight = __trendInflight.get(cacheKey)
+    if (inflight) {
+      const out = await inflight
+      const headers: Record<string, string> = { "Cache-Control": "no-store" }
+      if (__DEV__) headers["X-TR-Cache"] = "inflight"
+      return NextResponse.json(out, { status: 200, headers })
     }
 
     const pageTokenUrl = `${GRAPH_BASE}/${encodeURIComponent(page_id)}?fields=access_token&access_token=${encodeURIComponent(token)}`
@@ -160,6 +216,17 @@ export async function GET(req: Request) {
     }
 
     const pageToken = pageTokenBody.access_token as string
+
+    const run = (async (): Promise<TrendResponse> => {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[trend][auth]", {
+        hasToken: Boolean(token),
+        page_id,
+        ig_id,
+        usedHardcodePage: !(pageIdFromCookies || pageIdFromHeader),
+        usedHardcodeIg: !(igIdFromCookies || igIdFromHeader),
+      })
+    }
 
     const untilMs = Date.now()
     const sinceMs = untilMs - (days - 1) * 24 * 60 * 60 * 1000
@@ -292,7 +359,21 @@ export async function GET(req: Request) {
       })
     }
 
-    return NextResponse.json({ ok: true, days, points }, { status: 200 })
+      const out: TrendResponse = { ok: true, days, points }
+      writeCache(__trendCache, cacheKey, out, 8_000)
+      pruneOldest(__trendCache, 200)
+      return out
+    })()
+
+    __trendInflight.set(cacheKey, run)
+    try {
+      const out = await run
+      const headers: Record<string, string> = { "Cache-Control": "no-store" }
+      if (__DEV__) headers["X-TR-Cache"] = "miss"
+      return NextResponse.json(out, { status: 200, headers })
+    } finally {
+      __trendInflight.delete(cacheKey)
+    }
   } catch (err: any) {
     return jsonError("server_error", { message: err?.message ?? String(err) }, 500)
   }
