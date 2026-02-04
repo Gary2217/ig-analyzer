@@ -3323,8 +3323,55 @@ export default function CreatorCardPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof document === "undefined") return
+    document.body.dataset.creatorCardEditor = "1"
+    return () => {
+      try {
+        delete document.body.dataset.creatorCardEditor
+      } catch {
+      }
+    }
+  }, [])
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10">
+      <style jsx global>{`
+        @media (max-width: 640px) {
+          body[data-creator-card-editor="1"] footer > div {
+            padding-top: 1.5rem;
+            padding-bottom: 1.5rem;
+          }
+          body[data-creator-card-editor="1"] footer .mt-8 {
+            margin-top: 0.75rem;
+          }
+
+          body[data-creator-card-editor="1"] footer .space-y-3 {
+            gap: 0.5rem;
+          }
+          body[data-creator-card-editor="1"] footer p {
+            font-size: 0.75rem;
+            line-height: 1.15rem;
+            opacity: 0.65;
+            max-width: 40rem;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+          body[data-creator-card-editor="1"] footer p:nth-of-type(1) {
+            -webkit-line-clamp: 2;
+          }
+          body[data-creator-card-editor="1"] footer p:nth-of-type(2) {
+            -webkit-line-clamp: 1;
+          }
+
+          body[data-creator-card-editor="1"] footer a {
+            opacity: 1;
+            pointer-events: auto;
+          }
+        }
+      `}</style>
+
       <div aria-live="polite" className="sr-only">
         {toast ?? ""}
       </div>
@@ -3343,6 +3390,11 @@ export default function CreatorCardPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-100">{t("creatorCardEditor.title")}</h1>
           <div className="mt-1 text-sm text-slate-300 min-w-0 break-words [overflow-wrap:anywhere]">{t("creatorCardEditor.subtitle")}</div>
+          {isMobile && isDirty && !saving ? (
+            <div className="mt-2 text-xs text-amber-200/80 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+              {activeLocale === "zh-TW" ? "尚未儲存變更，請點右上角『儲存』" : "You have unsaved changes. Tap ‘Save’ in the top-right."}
+            </div>
+          ) : null}
           {shouldShowNotLoggedInBanner && hasLocalDraft ? (
             <div className="mt-2 inline-flex max-w-full items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-white/70 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
               {activeLocale === "zh-TW" ? "本機草稿（未同步）" : "Local draft (not synced)"}
@@ -3630,6 +3682,10 @@ export default function CreatorCardPage() {
                             <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
                             <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
                           </Button>
+                        </div>
+
+                        <div className="mt-2 text-xs text-white/55 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                          {activeLocale === "zh-TW" ? "顯示於公開名片" : "Shown on public creator card"}
                         </div>
                       </div>
 
@@ -4947,6 +5003,10 @@ export default function CreatorCardPage() {
                                     <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
                                   </Button>
                                 </div>
+
+                                <div className="mt-2 text-xs text-white/55 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                                  {activeLocale === "zh-TW" ? "顯示於公開名片" : "Shown on public creator card"}
+                                </div>
                               </div>
 
                               <div className="min-w-0">
@@ -5284,8 +5344,8 @@ export default function CreatorCardPage() {
                             </div>
                           ) : null}
 
-                          <div className={(isMobile ? "mt-4 pb-[calc(env(safe-area-inset-bottom)+96px)]" : "") + " w-full"}>
-                            <Accordion type="multiple" defaultValue={["profile"]} className="w-full">
+                          <div className={(isMobile ? "mt-4 pb-[calc(env(safe-area-inset-bottom)+16px)]" : "") + " w-full"}>
+                            <Accordion type="multiple" defaultValue={["profile", "audience"]} className="w-full">
                               {mobileSections.map((s) => (
                                 <AccordionItem
                                   key={s.key}
