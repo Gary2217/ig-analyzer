@@ -22,11 +22,16 @@ const __DEV__ = process.env.NODE_ENV !== "production"
 type CacheEntry<T> = { at: number; ttl: number; value: T }
 type TrendResponse = { ok: true; days: number; points: TrendPoint[] }
 
-const __trendInflight = new Map<string, Promise<TrendResponse>>()
-const __trendCache = new Map<string, CacheEntry<TrendResponse>>()
+type TrendResponseCached = { out: TrendResponse; insightsCacheState: "hit" | "miss" | "inflight" }
+
+const __trendInflight = new Map<string, Promise<TrendResponseCached>>()
+const __trendCache = new Map<string, CacheEntry<TrendResponseCached>>()
 
 const __trendPageTokenCache = new Map<string, CacheEntry<string>>()
 const __trendPageTokenInflight = new Map<string, Promise<string>>()
+
+const __trendInsightsCache = new Map<string, CacheEntry<{ ok: boolean; data: any[]; body: any }>>()
+const __trendInsightsInflight = new Map<string, Promise<{ ok: boolean; data: any[]; body: any }>>()
 
 function nowMs() {
   return Date.now()
@@ -54,6 +59,66 @@ function pruneOldest<T>(map: Map<string, CacheEntry<T>>, maxEntries: number) {
   for (let i = 0; i < removeN; i++) {
     const k = items[i]?.[0]
     if (k) map.delete(k)
+  }
+}
+
+async function fetchInsightsCached(params: {
+  ig_id: string
+  since: number
+  until: number
+  metricList: string[]
+  pageToken: string
+}): Promise<{ ok: boolean; data: any[]; body: any; cacheState: "hit" | "miss" | "inflight" }> {
+  const metricsKey = params.metricList.join(",")
+  const key =
+    `trend_ins|ig:${params.ig_id}|since:${params.since}|until:${params.until}` +
+    `|m:${metricsKey}|pt:${tokenSig(params.pageToken)}`
+
+  const cached = readCache(__trendInsightsCache, key)
+  if (cached) return { ...cached, cacheState: "hit" }
+
+  const inflight = __trendInsightsInflight.get(key)
+  if (inflight) {
+    const out = await inflight
+    return { ...out, cacheState: "inflight" }
+  }
+
+  const run = (async () => {
+    const url =
+      `${GRAPH_BASE}/${encodeURIComponent(params.ig_id)}/insights` +
+      `?metric=${encodeURIComponent(metricsKey)}` +
+      `&metric_type=total_value` +
+      `&period=day` +
+      `&since=${encodeURIComponent(String(params.since))}` +
+      `&until=${encodeURIComponent(String(params.until))}` +
+      `&access_token=${encodeURIComponent(params.pageToken)}`
+
+    let body: any = null
+    let ok = false
+    let data: any[] = []
+    try {
+      const res = await fetch(url, { cache: "no-store" })
+      body = await safeJson(res)
+      ok = Boolean(res.ok)
+      data = Array.isArray(body?.data) ? body.data : []
+    } catch {
+      ok = false
+      data = []
+      body = null
+    }
+
+    const out = { ok, data, body }
+    writeCache(__trendInsightsCache, key, out, 20_000)
+    pruneOldest(__trendInsightsCache, 200)
+    return out
+  })()
+
+  __trendInsightsInflight.set(key, run)
+  try {
+    const out = await run
+    return { ...out, cacheState: "miss" }
+  } finally {
+    __trendInsightsInflight.delete(key)
   }
 }
 
@@ -231,7 +296,8 @@ export async function GET(req: Request) {
     if (cached) {
       const headers: Record<string, string> = { "Cache-Control": "no-store" }
       if (__DEV__) headers["X-TR-Cache"] = "hit"
-      return NextResponse.json(cached, { status: 200, headers })
+      if (__DEV__) headers["X-TR-INS"] = cached.insightsCacheState
+      return NextResponse.json(cached.out, { status: 200, headers })
     }
 
     const inflight = __trendInflight.get(cacheKey)
@@ -239,7 +305,8 @@ export async function GET(req: Request) {
       const out = await inflight
       const headers: Record<string, string> = { "Cache-Control": "no-store" }
       if (__DEV__) headers["X-TR-Cache"] = "inflight"
-      return NextResponse.json(out, { status: 200, headers })
+      if (__DEV__) headers["X-TR-INS"] = out.insightsCacheState
+      return NextResponse.json(out.out, { status: 200, headers })
     }
 
     let pageToken = ""
@@ -259,7 +326,7 @@ export async function GET(req: Request) {
       throw e
     }
 
-    const run = (async (): Promise<TrendResponse> => {
+    const run = (async (): Promise<TrendResponseCached> => {
     if (process.env.NODE_ENV !== "production") {
       console.log("[trend][auth]", {
         hasToken: Boolean(token),
@@ -288,20 +355,17 @@ export async function GET(req: Request) {
       `&until=${encodeURIComponent(String(until))}` +
       `&access_token=${encodeURIComponent(pageToken)}`
 
-    let insightsRes: Response | null = null
-    let insightsBody: any = null
-    let insightsOk = false
-    let insightsData: any[] = []
-
-    try {
-      insightsRes = await fetch(buildInsightsUrl(primaryMetrics), { cache: "no-store" })
-      insightsBody = await safeJson(insightsRes)
-      insightsOk = Boolean(insightsRes.ok)
-      insightsData = Array.isArray(insightsBody?.data) ? insightsBody.data : []
-    } catch {
-      insightsOk = false
-      insightsData = []
-    }
+    const ins = await fetchInsightsCached({
+      ig_id,
+      since,
+      until,
+      metricList: primaryMetrics,
+      pageToken,
+    })
+    const insightsOk = ins.ok
+    const insightsData = ins.data
+    const insightsBody = ins.body
+    const insightsCacheState = ins.cacheState
 
     const buildInsightsPoints = (data: any[]) => {
       const byDay = new Map<number, TrendPoint>()
@@ -402,9 +466,10 @@ export async function GET(req: Request) {
     }
 
       const out: TrendResponse = { ok: true, days, points }
-      writeCache(__trendCache, cacheKey, out, 8_000)
+      const cachedOut: TrendResponseCached = { out, insightsCacheState }
+      writeCache(__trendCache, cacheKey, cachedOut, 8_000)
       pruneOldest(__trendCache, 200)
-      return out
+      return cachedOut
     })()
 
     __trendInflight.set(cacheKey, run)
@@ -413,7 +478,8 @@ export async function GET(req: Request) {
       const headers: Record<string, string> = { "Cache-Control": "no-store" }
       if (__DEV__) headers["X-TR-Cache"] = "miss"
       if (__DEV__) headers["X-TR-PT"] = pageTokenCacheState
-      return NextResponse.json(out, { status: 200, headers })
+      if (__DEV__) headers["X-TR-INS"] = out.insightsCacheState
+      return NextResponse.json(out.out, { status: 200, headers })
     } finally {
       __trendInflight.delete(cacheKey)
     }
