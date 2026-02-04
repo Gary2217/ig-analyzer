@@ -688,7 +688,14 @@ function SortableFeaturedTile(props: {
       return `/api/ig/thumbnail?url=${encodeURIComponent(rawThumb)}`
     })()
 
-    const finalThumbSrc = resolvedThumbSrc ?? oembedSuccessThumbSrc
+    const finalThumbSrc = (() => {
+      const raw = resolvedThumbSrc ?? oembedSuccessThumbSrc
+      if (!raw) return null
+      if (raw.startsWith("/api/ig/thumbnail?")) return raw
+      if (/^(data:|blob:)/i.test(raw)) return raw
+      if (/^https?:\/\//i.test(raw)) return `/api/ig/thumbnail?url=${encodeURIComponent(raw)}`
+      return raw
+    })()
     // If we already have a thumbnail (e.g. carried from Add), keep rendering it even when oEmbed is rate-limited/error.
     const shouldRenderThumb = Boolean(finalThumbSrc) && !thumbnailLoadError && (!shouldHideThumbnail || Boolean(resolvedThumbSrc))
     const oembedHelperText =
@@ -1548,6 +1555,7 @@ export default function CreatorCardPage() {
       }
 
       const headers: Record<string, string> = { "content-type": "application/json" }
+      headers["x-explicit-save"] = "1"
       if (debugApiEnabled) {
         headers["x-cc-debug"] = "1"
         headers["x-cc-debug-source"] = debugSource
@@ -3217,7 +3225,7 @@ export default function CreatorCardPage() {
   }, [])
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-10 overflow-x-hidden">
       <div aria-live="polite" className="sr-only">
         {toast ?? ""}
       </div>
@@ -5135,7 +5143,7 @@ export default function CreatorCardPage() {
                             </div>
                           ) : null}
 
-                          <div className={(isMobile ? "mt-4" : "") + " w-full"}>
+                          <div className={(isMobile ? "mt-4 pb-[calc(env(safe-area-inset-bottom)+96px)]" : "") + " w-full"}>
                             <Accordion type="multiple" defaultValue={["profile"]} className="w-full">
                               {mobileSections.map((s) => (
                                 <AccordionItem

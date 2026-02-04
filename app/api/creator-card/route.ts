@@ -74,31 +74,11 @@ function toUpsertBody(existingCard: any, payload: CreatorCardProfilePayload) {
       : []
 
   return {
-    handle: typeof card?.handle === "string" ? card.handle : undefined,
-    displayName:
-      typeof card?.displayName === "string"
-        ? card.displayName
-        : typeof card?.display_name === "string"
-          ? card.display_name
-          : undefined,
-    niche: typeof card?.niche === "string" ? card.niche : undefined,
     audience: payload.selfIntro,
     themeTypes,
     audienceProfiles,
-    deliverables: Array.isArray(card?.deliverables) ? card.deliverables : undefined,
-    contact: typeof card?.contact === "string" ? card.contact : undefined,
     portfolio,
     isPublic: typeof card?.isPublic === "boolean" ? card.isPublic : typeof card?.is_public === "boolean" ? card.is_public : undefined,
-    collaborationNiches: Array.isArray(card?.collaborationNiches)
-      ? card.collaborationNiches
-      : Array.isArray(card?.collaboration_niches)
-        ? card.collaboration_niches
-        : undefined,
-    pastCollaborations: Array.isArray(card?.pastCollaborations)
-      ? card.pastCollaborations
-      : Array.isArray(card?.past_collaborations)
-        ? card.past_collaborations
-        : undefined,
   }
 }
 
@@ -148,7 +128,7 @@ export async function PUT(req: Request) {
 
     const saveRes = await fetch(`${internalOrigin}/api/creator-card/upsert`, {
       method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      headers: { cookie, "content-type": "application/json", "x-explicit-save": "1" },
       cache: "no-store",
       body: JSON.stringify(upsertBody),
     })

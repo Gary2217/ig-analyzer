@@ -627,7 +627,7 @@ export async function POST(req: Request) {
     if (existingId) {
       const authz = authorizeExisting(existingUserId)
       if (!authz.ok) {
-        if (ccDebug) {
+        if (ccDebug && shouldDebug()) {
           console.log("[creator-card/upsert] not_owner", {
             at: new Date().toISOString(),
             source: ccDebugSrc,
@@ -658,7 +658,7 @@ export async function POST(req: Request) {
         )
       }
 
-      if (authz.reclaim && ccDebug) {
+      if (authz.reclaim && ccDebug && shouldDebug()) {
         console.log("[creator-card/upsert] reclaim", {
           at: new Date().toISOString(),
           source: ccDebugSrc,
@@ -713,7 +713,7 @@ export async function POST(req: Request) {
 
         const authz = authorizeExisting(afterOwner)
         if (!authz.ok) {
-          if (ccDebug) {
+          if (ccDebug && shouldDebug()) {
             console.log("[creator-card/upsert] not_owner", {
               at: new Date().toISOString(),
               source: ccDebugSrc,
@@ -746,7 +746,7 @@ export async function POST(req: Request) {
           )
         }
 
-        if (authz.reclaim && ccDebug) {
+        if (authz.reclaim && ccDebug && shouldDebug()) {
           console.log("[creator-card/upsert] reclaim", {
             at: new Date().toISOString(),
             source: ccDebugSrc,
