@@ -1092,24 +1092,24 @@ export default function ResultsClient() {
 
   const hasFetchedMediaRef = useRef(false)
   const hasFetchedMeRef = useRef(false)
-  const lastMediaFetchTickRef = useRef<number | null>(null)
+  const lastMediaFetchTickRef = useRef<string | null>(null)
   const mediaReqIdRef = useRef(0)
   const hasSuccessfulMePayloadRef = useRef(false)
   const lastMeFetchTickRef = useRef<number | null>(null)
-
-  const hasRestoredResultsScrollRef = useRef(false)
-
+  const lastSnapshotRevalidateSeqRef = useRef<number>(0)
+  const lastTrendRevalidateSeqRef = useRef<number>(0)
+  const lastRevalidateAtRef = useRef(0)
+  const lastDailySnapshotFetchAtRef = useRef(0)
   const hasFetchedDailySnapshotRef = useRef(false)
   const hasAppliedDailySnapshotTrendRef = useRef(false)
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
   const dailySnapshotRequestSeqRef = useRef(0)
-  const lastDailySnapshotFetchAtRef = useRef(0)
   const lastDailySnapshotPointsSourceRef = useRef<string>("")
+  const hasRestoredResultsScrollRef = useRef(false)
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
 
   const tick = forceReloadTick ?? 0
-  const lastRevalidateAtRef = useRef(0)
 
   const activeLocale = (extractLocaleFromPathname(pathname).locale ?? "en") as "zh-TW" | "en"
   const isZh = activeLocale === "zh-TW"
@@ -1321,29 +1321,25 @@ export default function ResultsClient() {
 
   const { refreshSeq, fireRefresh, refreshDebug } = useRefreshController({ throttleMs: 10_000, enableFocus: true, enableVisibility: true })
 
-  const { orchestratorDebug } = useResultsOrchestrator({
+  const { orchestratorDebug, mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq } = useResultsOrchestrator({
     isConnectedInstagram,
     refreshSeq,
-    fetchMedia: async () => {
-      if (!isConnected) return
-      if (mediaLen > 0 || hasFetchedMediaRef.current || __resultsMediaFetchedOnce) return
-      if (!needsDataRefetch) return
-
-      const now = Date.now()
-      if (now - lastRevalidateAtRef.current < 2500) return
-      lastRevalidateAtRef.current = now
-
-      setForceReloadTick((x) => x + 1)
-    },
-    fetchTrend: async () => {
-      setForceReloadTick((x) => x + 1)
-    },
-    fetchSnapshot: async () => {
-      setForceReloadTick((x) => x + 1)
-    },
+    fetchMedia: async () => {},
+    fetchTrend: async () => {},
+    fetchSnapshot: async () => {},
     enableTrend: true,
     enableSnapshot: true,
   })
+
+  useEffect(() => {
+    if (!__DEV__) return
+    if (mediaRevalidateSeq <= 0 && trendRevalidateSeq <= 0 && snapshotRevalidateSeq <= 0) return
+    dlog("[orchestrator] revalidate_seq", {
+      mediaRevalidateSeq,
+      trendRevalidateSeq,
+      snapshotRevalidateSeq,
+    })
+  }, [__DEV__, dlog, mediaRevalidateSeq, snapshotRevalidateSeq, trendRevalidateSeq])
 
   useEffect(() => {
     if (!cookieConnected) return
@@ -1579,8 +1575,20 @@ export default function ResultsClient() {
       return
     }
 
+    const isRevalidateTrigger = (() => {
+      if (snapshotRevalidateSeq > 0 && snapshotRevalidateSeq !== lastSnapshotRevalidateSeqRef.current) {
+        lastSnapshotRevalidateSeqRef.current = snapshotRevalidateSeq
+        return true
+      }
+      if (trendRevalidateSeq > 0 && trendRevalidateSeq !== lastTrendRevalidateSeqRef.current) {
+        lastTrendRevalidateSeqRef.current = trendRevalidateSeq
+        return true
+      }
+      return false
+    })()
+
     // HARD GUARD: already fetched once successfully
-    if (hasFetchedDailySnapshotRef.current) {
+    if (hasFetchedDailySnapshotRef.current && !isRevalidateTrigger) {
       return
     }
 
@@ -1701,7 +1709,7 @@ export default function ResultsClient() {
       // and would prematurely cancel an in-flight request. Abort is handled only when a
       // new request starts (above) or on component unmount (separate effect).
     }
-  }, [isConnectedInstagram, mergeToContinuousTrendPoints, normalizeTotalsFromInsightsDaily, supabaseBrowser])
+  }, [isConnectedInstagram, mergeToContinuousTrendPoints, normalizeTotalsFromInsightsDaily, snapshotRevalidateSeq, supabaseBrowser, trendRevalidateSeq])
 
   useEffect(() => {
     return () => {
@@ -1962,8 +1970,9 @@ export default function ResultsClient() {
       return
     }
 
-    if (lastMediaFetchTickRef.current === forceReloadTick) return
-    lastMediaFetchTickRef.current = forceReloadTick
+    const nextKey = `${String(forceReloadTick)}:${String(mediaRevalidateSeq)}`
+    if (lastMediaFetchTickRef.current === nextKey) return
+    lastMediaFetchTickRef.current = nextKey
 
     let cancelled = false
     mediaReqIdRef.current += 1
@@ -2100,7 +2109,7 @@ export default function ResultsClient() {
       cancelled = true
       // Do not reset hasFetchedMediaRef here; cleanup can run during dev re-renders.
     }
-  }, [forceReloadTick, mediaLen])
+  }, [forceReloadTick, mediaLen, mediaRevalidateSeq])
 
   // focus handling is centralized in useRefreshController
 
@@ -4071,7 +4080,13 @@ export default function ResultsClient() {
 
   return (
     <>
-      <ResultsDebugPanel refreshDebug={refreshDebug} orchestratorDebug={orchestratorDebug} />
+      <ResultsDebugPanel
+        refreshDebug={refreshDebug}
+        orchestratorDebug={{
+          ...(orchestratorDebug as any),
+          revalidateSeq: { mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq },
+        }}
+      />
       <ConnectedGate
         notConnectedUI={
           <>

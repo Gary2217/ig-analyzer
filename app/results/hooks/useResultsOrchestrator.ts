@@ -62,8 +62,56 @@ export function useResultsOrchestrator(deps: Deps) {
   const [trend, setTrend] = useState<ResourceState>(initState)
   const [snapshot, setSnapshot] = useState<ResourceState>(initState)
 
+  const [mediaRevalidateSeq, setMediaRevalidateSeq] = useState(0)
+  const [trendRevalidateSeq, setTrendRevalidateSeq] = useState(0)
+  const [snapshotRevalidateSeq, setSnapshotRevalidateSeq] = useState(0)
+
   const inFlightRef = useRef<Record<string, boolean>>({})
   const lastKeyRef = useRef<Record<string, string | undefined>>({})
+
+  const schedule = (
+    name: "media" | "trend" | "snapshot",
+    key: string,
+    enabled: boolean,
+    bumpSeq: (updater: (s: number) => number) => void,
+    setState: (updater: (s: ResourceState) => ResourceState) => void,
+  ) => {
+    if (!enabled) return
+    if (!isConnectedInstagram) return
+
+    const prevKey = lastKeyRef.current[name]
+    const isSameKey = prevKey === key
+    void isSameKey
+
+    if (inFlightRef.current[name]) {
+      setState((s) => ({ ...s, dedupedCount: s.dedupedCount + 1 }))
+      return
+    }
+
+    inFlightRef.current[name] = true
+    lastKeyRef.current[name] = key
+
+    const now = Date.now()
+    setState((s) => ({
+      ...s,
+      status: "running",
+      lastStartAt: now,
+      requestKey: key,
+      runCount: s.runCount + 1,
+      error: undefined,
+    }))
+
+    bumpSeq((s) => s + 1)
+
+    // We only schedule the revalidation token here. Actual network work happens
+    // inside ResultsClient's existing effects.
+    setState((s) => ({
+      ...s,
+      status: "success",
+      lastSuccessAt: Date.now(),
+    }))
+    inFlightRef.current[name] = false
+  }
 
   const run = async (
     name: "media" | "trend" | "snapshot",
@@ -122,11 +170,18 @@ export function useResultsOrchestrator(deps: Deps) {
     // Do not change init behavior: only run orchestration on explicit refresh.
     if (refreshSeq <= 0) return
 
-    void run("snapshot", snapshotKey, enableSnapshot, fetchSnapshot, setSnapshot)
-    void run("trend", trendKey, enableTrend, fetchTrend, setTrend)
-    void run("media", mediaKey, enableMedia, fetchMedia, setMedia)
+    // Keep inflight/key dedupe in the orchestrator. We schedule independent
+    // per-resource revalidation tokens; ResultsClient performs the actual work.
+    schedule("snapshot", snapshotKey, enableSnapshot, setSnapshotRevalidateSeq, setSnapshot)
+    schedule("trend", trendKey, enableTrend, setTrendRevalidateSeq, setTrend)
+    schedule("media", mediaKey, enableMedia, setMediaRevalidateSeq, setMedia)
+
+    // Preserve the provided functions for potential future use; do not run them here.
+    void fetchMedia
+    void fetchTrend
+    void fetchSnapshot
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnectedInstagram, refreshSeq, enableSnapshot, enableTrend, enableMedia, snapshotKey, trendKey, mediaKey])
 
-  return { orchestratorDebug: debug }
+  return { orchestratorDebug: debug, mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq }
 }
