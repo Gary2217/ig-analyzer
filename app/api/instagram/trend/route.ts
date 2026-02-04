@@ -25,6 +25,9 @@ type TrendResponse = { ok: true; days: number; points: TrendPoint[] }
 const __trendInflight = new Map<string, Promise<TrendResponse>>()
 const __trendCache = new Map<string, CacheEntry<TrendResponse>>()
 
+const __trendPageTokenCache = new Map<string, CacheEntry<string>>()
+const __trendPageTokenInflight = new Map<string, Promise<string>>()
+
 function nowMs() {
   return Date.now()
 }
@@ -61,6 +64,42 @@ function tokenSig(raw: string) {
     return createHash("sha256").update(t).digest("hex").slice(0, 16)
   } catch {
     return "sha_err"
+  }
+}
+
+async function getPageTokenCached(params: { page_id: string; token: string }): Promise<string> {
+  const key = `trend_pt|pg:${params.page_id}|tok:${tokenSig(params.token)}`
+  const cached = readCache(__trendPageTokenCache, key)
+  if (cached) return cached
+
+  const inflight = __trendPageTokenInflight.get(key)
+  if (inflight) return await inflight
+
+  const run = (async () => {
+    const pageTokenUrl =
+      `${GRAPH_BASE}/${encodeURIComponent(params.page_id)}` +
+      `?fields=access_token&access_token=${encodeURIComponent(params.token)}`
+    const pageTokenRes = await fetch(pageTokenUrl, { cache: "no-store" })
+    const pageTokenBody = await safeJson(pageTokenRes)
+
+    if (!pageTokenRes.ok || !pageTokenBody?.access_token) {
+      const err: any = new Error("failed_to_get_page_access_token")
+      err.upstreamStatus = pageTokenRes.status
+      err.upstreamBody = pageTokenBody
+      throw err
+    }
+
+    const pageToken = pageTokenBody.access_token as string
+    writeCache(__trendPageTokenCache, key, pageToken, 55_000)
+    pruneOldest(__trendPageTokenCache, 200)
+    return pageToken
+  })()
+
+  __trendPageTokenInflight.set(key, run)
+  try {
+    return await run
+  } finally {
+    __trendPageTokenInflight.delete(key)
   }
 }
 
@@ -203,19 +242,22 @@ export async function GET(req: Request) {
       return NextResponse.json(out, { status: 200, headers })
     }
 
-    const pageTokenUrl = `${GRAPH_BASE}/${encodeURIComponent(page_id)}?fields=access_token&access_token=${encodeURIComponent(token)}`
-    const pageTokenRes = await fetch(pageTokenUrl, { cache: "no-store" })
-    const pageTokenBody = await safeJson(pageTokenRes)
-
-    if (!pageTokenRes.ok || !pageTokenBody?.access_token) {
-      return jsonError(
-        "failed_to_get_page_access_token",
-        { upstreamStatus: pageTokenRes.status, upstreamBody: pageTokenBody },
-        pageTokenRes.status || 400,
-      )
+    let pageToken = ""
+    let pageTokenCacheState: "hit" | "miss" | "inflight" = "miss"
+    try {
+      const ptKey = `trend_pt|pg:${page_id}|tok:${tokenSig(token)}`
+      pageTokenCacheState = readCache(__trendPageTokenCache, ptKey) ? "hit" : __trendPageTokenInflight.has(ptKey) ? "inflight" : "miss"
+      pageToken = await getPageTokenCached({ page_id, token })
+    } catch (e: any) {
+      if (e?.message === "failed_to_get_page_access_token") {
+        return jsonError(
+          "failed_to_get_page_access_token",
+          { upstreamStatus: e?.upstreamStatus, upstreamBody: e?.upstreamBody },
+          e?.upstreamStatus || 400,
+        )
+      }
+      throw e
     }
-
-    const pageToken = pageTokenBody.access_token as string
 
     const run = (async (): Promise<TrendResponse> => {
     if (process.env.NODE_ENV !== "production") {
@@ -370,6 +412,7 @@ export async function GET(req: Request) {
       const out = await run
       const headers: Record<string, string> = { "Cache-Control": "no-store" }
       if (__DEV__) headers["X-TR-Cache"] = "miss"
+      if (__DEV__) headers["X-TR-PT"] = pageTokenCacheState
       return NextResponse.json(out, { status: 200, headers })
     } finally {
       __trendInflight.delete(cacheKey)
