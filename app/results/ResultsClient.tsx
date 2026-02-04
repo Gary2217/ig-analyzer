@@ -1108,6 +1108,18 @@ export default function ResultsClient() {
   const hasRestoredResultsScrollRef = useRef(false)
   const loggedMissingTopPostPreviewRef = useRef<Record<string, true>>({})
   const loggedEmptySnapshotTopPostsRef = useRef(false)
+  const loggedMissingVideoThumbRef = useRef<Record<string, true>>({})
+
+  const deriveVideoThumbUrl = (permalinkRaw: string, shortcodeRaw: string): string => {
+    const pl = typeof permalinkRaw === "string" ? permalinkRaw.trim() : ""
+    if (pl && pl.startsWith("http")) {
+      const base = pl.replace(/\/?$/, "/")
+      return `${base}media/?size=l`
+    }
+    const sc = typeof shortcodeRaw === "string" ? shortcodeRaw.trim() : ""
+    if (sc) return `https://www.instagram.com/p/${sc}/media/?size=l`
+    return ""
+  }
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
 
@@ -5886,6 +5898,7 @@ export default function ResultsClient() {
 
                         const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
                         const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
+                        const realShortcode = typeof (real as any)?.shortcode === "string" ? String((real as any).shortcode) : ""
 
                         const normalizeKey = (input: string): string => {
                           const s = String(input || "").trim()
@@ -5944,8 +5957,8 @@ export default function ResultsClient() {
                         const previewUrl = (() => {
                           const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
 
-                          const pickFrom = (it: unknown): { mt: string; tu: string; mu: string; id: string; pl: string } => {
-                            if (!isRecord(it)) return { mt: "", tu: "", mu: "", id: "", pl: "" }
+                          const pickFrom = (it: unknown): { mt: string; tu: string; mu: string } => {
+                            if (!isRecord(it)) return { mt: "", tu: "", mu: "" }
                             const mt = String((it as any).media_type ?? (it as any).mediaType ?? "")
                             const tu = typeof (it as any).thumbnail_url === "string"
                               ? String((it as any).thumbnail_url)
@@ -5957,10 +5970,7 @@ export default function ResultsClient() {
                               : typeof (it as any).mediaUrl === "string"
                                 ? String((it as any).mediaUrl)
                                 : ""
-                            const idRaw = (it as any).id
-                            const id = typeof idRaw === "string" ? idRaw : typeof idRaw === "number" ? String(idRaw) : ""
-                            const pl = typeof (it as any).permalink === "string" ? String((it as any).permalink) : ""
-                            return { mt, tu, mu, id, pl }
+                            return { mt, tu, mu }
                           }
 
                           const srcCandidates: unknown[] = [
@@ -5982,6 +5992,8 @@ export default function ResultsClient() {
                                 if (t) return t
                                 const m = (mu || "").trim()
                                 if (m && !isLikelyVideoUrl(m)) return m
+                                const d = deriveVideoThumbUrl(permalink, realShortcode)
+                                if (d) return d
                                 return ""
                               }
 
@@ -6009,6 +6021,19 @@ export default function ResultsClient() {
 
                           return ""
                         })()
+
+                        if (__DEV__ && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                          const key = String(realIdOrPermalink || real?.id || index)
+                          if (!loggedMissingVideoThumbRef.current[key]) {
+                            loggedMissingVideoThumbRef.current[key] = true
+                            // eslint-disable-next-line no-console
+                            console.debug("[video thumb] missing after derived fallback", {
+                              idOrPermalink: realIdOrPermalink || null,
+                              hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
+                              hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
+                            })
+                          }
+                        }
 
                         if (__DEV__ && !previewUrl) {
                           const key = String(realIdOrPermalink || real?.id || index)
@@ -6212,6 +6237,7 @@ export default function ResultsClient() {
                       const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
                       const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
                       const igHref = permalink
+                      const realShortcode = typeof (real as any)?.shortcode === "string" ? String((real as any).shortcode) : ""
 
                       const previewUrl = (() => {
                         const mt = String(real.media_type ?? "")
@@ -6219,15 +6245,49 @@ export default function ResultsClient() {
                         const mu = typeof real.media_url === "string" ? String(real.media_url) : ""
                         const isVideoType = mt === "VIDEO" || mt === "REELS"
                         const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
-                        const pick = isVideoType ? (tu || mu) : (mu || tu)
-                        if (pick && isLikelyVideoUrl(pick)) return tu || ""
-                        const rawUrl = pick || ""
-                        // Proxy through our endpoint to avoid CORS/CSP issues
-                        if (rawUrl && rawUrl.startsWith("http")) {
-                          return `/api/ig/thumbnail?url=${encodeURIComponent(rawUrl)}`
+
+                        const chosenRaw = (() => {
+                          if (isVideoType) {
+                            const t = (tu || "").trim()
+                            if (t) return t
+                            const m = (mu || "").trim()
+                            if (m && !isLikelyVideoUrl(m)) return m
+                            const d = deriveVideoThumbUrl(permalink, realShortcode)
+                            if (d) return d
+                            return ""
+                          }
+
+                          const m = (mu || "").trim()
+                          if (m) return m
+                          const t = (tu || "").trim()
+                          if (t) return t
+                          return ""
+                        })()
+
+                        if (!chosenRaw) return ""
+                        if (isLikelyVideoUrl(chosenRaw)) {
+                          const t = (tu || "").trim()
+                          if (!t || isLikelyVideoUrl(t)) return ""
+                          if (t.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(t)}`
+                          return t
                         }
-                        return rawUrl
+
+                        if (chosenRaw.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(chosenRaw)}`
+                        return chosenRaw
                       })()
+
+                      if (__DEV__ && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                        const key = String(real?.id || real?.permalink || idx)
+                        if (!loggedMissingVideoThumbRef.current[key]) {
+                          loggedMissingVideoThumbRef.current[key] = true
+                          // eslint-disable-next-line no-console
+                          console.debug("[video thumb] missing after derived fallback", {
+                            idOrPermalink: String(real?.id || real?.permalink || "") || null,
+                            hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
+                            hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
+                          })
+                        }
+                      }
 
                       const analyzeHref = permalink
                         ? `/${activeLocale}/post-analysis?url=${encodeURIComponent(permalink)}`
