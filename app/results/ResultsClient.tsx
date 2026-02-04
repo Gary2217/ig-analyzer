@@ -1110,7 +1110,37 @@ export default function ResultsClient() {
   const loggedEmptySnapshotTopPostsRef = useRef(false)
   const loggedMissingVideoThumbRef = useRef<Record<string, true>>({})
 
-  const deriveVideoThumbUrl = (permalinkRaw: string, shortcodeRaw: string): string => {
+  const isThumbDebugEnabled = useMemo(() => {
+    try {
+      if (typeof window === "undefined") return false
+      const qs = new URLSearchParams(window.location.search)
+      return qs.get("debugThumb") === "1" || window.localStorage.getItem("debugThumb") === "1"
+    } catch {
+      return false
+    }
+  }, [])
+
+  const extractShortcodeFromUrl = (url: string): string => {
+    const s = typeof url === "string" ? url.trim() : ""
+    if (!s) return ""
+    try {
+      const u = new URL(s)
+      const parts = u.pathname.split("/").filter(Boolean)
+      if (parts.length >= 2 && (parts[0] === "p" || parts[0] === "reel")) {
+        return String(parts[1] || "").trim()
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      const m = /\/(p|reel)\/([^\/\?\#]+)/i.exec(s)
+      return m && m[2] ? String(m[2]).trim() : ""
+    } catch {
+      return ""
+    }
+  }
+
+  const deriveVideoThumbUrl = (permalinkRaw: string, shortcodeRaw: string, fallbackUrlRaw?: string): string => {
     const pl = typeof permalinkRaw === "string" ? permalinkRaw.trim() : ""
     if (pl && pl.startsWith("http")) {
       const base = pl.replace(/\/?$/, "/")
@@ -1118,6 +1148,8 @@ export default function ResultsClient() {
     }
     const sc = typeof shortcodeRaw === "string" ? shortcodeRaw.trim() : ""
     if (sc) return `https://www.instagram.com/p/${sc}/media/?size=l`
+    const sc2 = extractShortcodeFromUrl(typeof fallbackUrlRaw === "string" ? fallbackUrlRaw : "")
+    if (sc2) return `https://www.instagram.com/p/${sc2}/media/?size=l`
     return ""
   }
 
@@ -5992,7 +6024,7 @@ export default function ResultsClient() {
                                 if (t) return t
                                 const m = (mu || "").trim()
                                 if (m && !isLikelyVideoUrl(m)) return m
-                                const d = deriveVideoThumbUrl(permalink, realShortcode)
+                                const d = deriveVideoThumbUrl(permalink, realShortcode, igHref)
                                 if (d) return d
                                 return ""
                               }
@@ -6022,7 +6054,7 @@ export default function ResultsClient() {
                           return ""
                         })()
 
-                        if (__DEV__ && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                        if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
                           const key = String(realIdOrPermalink || real?.id || index)
                           if (!loggedMissingVideoThumbRef.current[key]) {
                             loggedMissingVideoThumbRef.current[key] = true
@@ -6252,7 +6284,7 @@ export default function ResultsClient() {
                             if (t) return t
                             const m = (mu || "").trim()
                             if (m && !isLikelyVideoUrl(m)) return m
-                            const d = deriveVideoThumbUrl(permalink, realShortcode)
+                            const d = deriveVideoThumbUrl(permalink, realShortcode, igHref)
                             if (d) return d
                             return ""
                           }
@@ -6276,7 +6308,7 @@ export default function ResultsClient() {
                         return chosenRaw
                       })()
 
-                      if (__DEV__ && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                      if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
                         const key = String(real?.id || real?.permalink || idx)
                         if (!loggedMissingVideoThumbRef.current[key]) {
                           loggedMissingVideoThumbRef.current[key] = true
