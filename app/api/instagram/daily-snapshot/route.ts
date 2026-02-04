@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { supabaseServer } from "@/lib/supabase/server"
+import { createHash } from "crypto"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,6 +17,153 @@ const HANDLER_HEADERS = {
 } as const
 
 const __DEBUG_DAILY_SNAPSHOT__ = process.env.IG_GRAPH_DEBUG === "1"
+
+const __DEV__ = process.env.NODE_ENV !== "production"
+
+type DsResponsePayload = {
+  body: any
+  status: number
+  source: "db" | "graph" | "error"
+}
+
+type CacheEntry<T> = { at: number; ttl: number; value: T }
+
+const __dsInflight = new Map<string, Promise<DsResponsePayload>>()
+const __dsInflightJoinCount = new Map<string, number>()
+const __dsCache = new Map<string, CacheEntry<{ body: any; status: number; source: DsResponsePayload["source"] }>>()
+
+const __dsTotalsCache = new Map<string, CacheEntry<{ ok: boolean; insights_daily: any }>>()
+const __dsFollowersCache = new Map<string, CacheEntry<{ followersCount: number | null; capturedAt: string }>>()
+const __dsFollowersInflight = new Map<string, Promise<void>>()
+
+function nowMs() {
+  return Date.now()
+}
+
+function readCache<T>(map: Map<string, CacheEntry<T>>, key: string): T | null {
+  const e = map.get(key)
+  if (!e) return null
+  if (nowMs() - e.at > e.ttl) {
+    map.delete(key)
+    return null
+  }
+  return e.value
+}
+
+function writeCache<T>(map: Map<string, CacheEntry<T>>, key: string, value: T, ttl: number) {
+  map.set(key, { at: nowMs(), ttl, value })
+}
+
+function pruneOldest<T>(map: Map<string, CacheEntry<T>>, maxEntries: number) {
+  if (map.size <= maxEntries) return
+  const items = Array.from(map.entries())
+  items.sort((a, b) => a[1].at - b[1].at)
+  const removeN = Math.max(1, map.size - maxEntries)
+  for (let i = 0; i < removeN; i++) {
+    const k = items[i]?.[0]
+    if (k) map.delete(k)
+  }
+}
+
+function tokenSignature(rawToken: string) {
+  const t = String(rawToken || "").trim()
+  if (!t) return ""
+  try {
+    return createHash("sha256").update(t).digest("hex").slice(0, 16)
+  } catch {
+    // ultra-conservative fallback (still avoids storing raw token)
+    return `${t.slice(0, 2)}_${t.slice(-2)}`
+  }
+}
+
+async function getTotalsCached(params: {
+  totalsKey: string
+  token: string
+  envToken: string
+  pageId: string
+  igId: string
+  days: number
+}) {
+  const cached = readCache(__dsTotalsCache, params.totalsKey)
+  if (cached) return cached
+
+  const ttl = 25_000
+  const value = await fetchTotalsBestEffort({
+    token: params.token,
+    envToken: params.envToken,
+    pageId: params.pageId,
+    igId: params.igId,
+    days: params.days,
+  })
+
+  writeCache(__dsTotalsCache, params.totalsKey, value, ttl)
+  pruneOldest(__dsTotalsCache, 200)
+  return value
+}
+
+async function writeFollowersBestEffortCached(params: {
+  followersKey: string
+  token: string
+  igId: string
+}) {
+  // Best-effort: never throw, never fail the request.
+  try {
+    const existing = readCache(__dsFollowersCache, params.followersKey)
+    if (existing) return
+
+    const inflight = __dsFollowersInflight.get(params.followersKey)
+    if (inflight) {
+      await inflight.catch(() => null)
+      return
+    }
+
+    const p = (async () => {
+      try {
+        const meUrl = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}`)
+        meUrl.searchParams.set("fields", "followers_count")
+        meUrl.searchParams.set("access_token", params.token)
+
+        const r = await fetch(meUrl.toString(), { method: "GET", cache: "no-store" })
+        const body = await safeJson(r)
+        const followersCountRaw = (body as any)?.followers_count
+        const followersCount = toFiniteNumOrNull(followersCountRaw)
+        const capturedAt = new Date().toISOString()
+
+        // Cache even null for a short TTL to prevent repeated hot-loop fetches.
+        writeCache(__dsFollowersCache, params.followersKey, { followersCount, capturedAt }, 45_000)
+        pruneOldest(__dsFollowersCache, 200)
+
+        if (followersCount !== null) {
+          const dayStr = todayUtcDateString()
+          try {
+            await supabaseServer.from("ig_daily_followers").upsert(
+              {
+                ig_user_id: String(params.igId),
+                day: dayStr,
+                followers_count: Math.floor(followersCount),
+                captured_at: capturedAt,
+              } as any,
+              { onConflict: "ig_user_id,day" },
+            )
+          } catch (e: any) {
+            if (__DEBUG_DAILY_SNAPSHOT__) {
+              console.log("[daily-snapshot] followers_upsert_failed", { message: e?.message ?? String(e) })
+            }
+          }
+        }
+      } catch (e: any) {
+        if (__DEBUG_DAILY_SNAPSHOT__) {
+          console.log("[daily-snapshot] followers_fetch_failed", { message: e?.message ?? String(e) })
+        }
+      }
+    })()
+
+    __dsFollowersInflight.set(params.followersKey, p)
+    await p
+  } finally {
+    __dsFollowersInflight.delete(params.followersKey)
+  }
+}
 
 // Force Graph v24.0 (avoid auto-upgrade drift)
 const GRAPH_VERSION = "v24.0"
@@ -473,42 +621,42 @@ export async function POST(req: Request) {
     if (!pageId) return jsonError(cronMode ? "missing_ids:page_id" : "missing_cookie:ig_page_id", null, 401)
     if (!igId) return jsonError(cronMode ? "missing_ids:ig_ig_id" : "missing_cookie:ig_ig_id", null, 401)
 
-    // Best-effort: write today's followers_count snapshot (do not affect API success)
-    try {
-      const meUrl = new URL(`${GRAPH_BASE}/${encodeURIComponent(igId)}`)
-      meUrl.searchParams.set("fields", "followers_count")
-      meUrl.searchParams.set("access_token", token)
+    const tokSig = cronMode ? "cron" : tokenSignature(token)
+    const requestKey = `ds|${cronMode ? "cron" : "user"}|ig:${igId}|pg:${pageId}|days:${safeDays}|tok:${tokSig}`
+    const totalsKey = `ds_totals|${cronMode ? "cron" : "user"}|ig:${igId}|pg:${pageId}|days:${safeDays}|tok:${tokSig}`
+    const followersKey = `ds_followers|${cronMode ? "cron" : "user"}|ig:${igId}|tok:${tokSig}`
 
-      const r = await fetch(meUrl.toString(), { method: "GET", cache: "no-store" })
-      const body = await safeJson(r)
-      const followersCountRaw = (body as any)?.followers_count
-      const followersCount = toFiniteNumOrNull(followersCountRaw)
-      if (followersCount !== null) {
-        const dayStr = todayUtcDateString()
-        const capturedAt = new Date().toISOString()
-        try {
-          await supabaseServer.from("ig_daily_followers").upsert(
-            {
-              ig_user_id: String(igId),
-              day: dayStr,
-              followers_count: Math.floor(followersCount),
-              captured_at: capturedAt,
-            } as any,
-            { onConflict: "ig_user_id,day" },
-          )
-        } catch (e: any) {
-          if (__DEBUG_DAILY_SNAPSHOT__) {
-            console.log("[daily-snapshot] followers_upsert_failed", { message: e?.message ?? String(e) })
-          }
-        }
+    const cachedResp = readCache(__dsCache, requestKey)
+    if (cachedResp) {
+      if (__DEV__) {
+        console.debug("[daily-snapshot] cache_hit", { key: requestKey, source: cachedResp.source })
       }
-    } catch (e: any) {
-      if (__DEBUG_DAILY_SNAPSHOT__) {
-        console.log("[daily-snapshot] followers_fetch_failed", { message: e?.message ?? String(e) })
-      }
+      const headers: Record<string, string> = { "Cache-Control": "no-store", ...HANDLER_HEADERS }
+      if (__DEV__) headers["X-DS-Cache"] = "hit"
+      if (__DEV__) headers["X-DS-Source"] = String(cachedResp.source)
+      return NextResponse.json(cachedResp.body, { status: cachedResp.status, headers })
     }
 
-    const availableDays = (await getAvailableDaysCount({ igId, pageId })) ?? null
+    const inflight = __dsInflight.get(requestKey)
+    if (inflight) {
+      const joined = (__dsInflightJoinCount.get(requestKey) ?? 0) + 1
+      __dsInflightJoinCount.set(requestKey, joined)
+      if (__DEV__) {
+        console.debug("[daily-snapshot] inflight_join", { key: requestKey, joinCount: joined })
+      }
+      const out = await inflight
+      const headers: Record<string, string> = { "Cache-Control": "no-store", ...HANDLER_HEADERS }
+      if (__DEV__) headers["X-DS-Cache"] = "inflight"
+      if (__DEV__) headers["X-DS-Inflight-Joins"] = String(joined)
+      if (__DEV__) headers["X-DS-Source"] = String(out.source)
+      return NextResponse.json(out.body, { status: out.status, headers })
+    }
+
+    const run = (async (): Promise<DsResponsePayload> => {
+      // Best-effort: write today's followers_count snapshot (do not affect API success)
+      void writeFollowersBestEffortCached({ followersKey, token, igId })
+
+      const availableDays = (await getAvailableDaysCount({ igId, pageId })) ?? null
 
     // Prefer DB snapshots for the trend chart.
     const today = todayUtcDateString()
@@ -556,10 +704,12 @@ export async function POST(req: Request) {
         }
 
         const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
-        const totals = await fetchTotalsBestEffort({ token, envToken, pageId, igId, days: safeDays })
+        const totals = await getTotalsCached({ totalsKey, token, envToken, pageId, igId, days: safeDays })
 
-        return NextResponse.json(
-          {
+        return {
+          status: 200,
+          source: "db",
+          body: {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
@@ -574,8 +724,7 @@ export async function POST(req: Request) {
             series_ok: true,
             __diag: { db_rows: list.length, used_source: "db", start, end: today },
           },
-          { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-        )
+        }
       }
     } catch {
       // ignore DB failures here; fall back to Graph
@@ -599,15 +748,16 @@ export async function POST(req: Request) {
 
       if (!pageToken.ok) {
         // hard fail with diag (don’t silently treat as empty)
-        return NextResponse.json(
-          {
+        return {
+          status: 401,
+          source: "error",
+          body: {
             build_marker: BUILD_MARKER,
             ok: false,
             error: "page_access_token_failed",
             __diag: { token_source: tokenSource, pageTokenStatus: pageToken.status, pageTokenBody: pageToken.body },
           },
-          { status: 401, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-        )
+        }
       }
 
       const series = await fetchInsightsTimeSeries({
@@ -617,8 +767,10 @@ export async function POST(req: Request) {
       })
 
       if (!series.ok) {
-        return NextResponse.json(
-          {
+        return {
+          status: 502,
+          source: "error",
+          body: {
             build_marker: BUILD_MARKER,
             ok: false,
             error: "graph_time_series_failed",
@@ -630,8 +782,7 @@ export async function POST(req: Request) {
               end: today,
             },
           },
-          { status: 502, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-        )
+        }
       }
 
       const points = buildPointsFromGraphInsightsTimeSeries(series.data, safeDays)
@@ -641,12 +792,14 @@ export async function POST(req: Request) {
         points.some((p) => toSafeInt(p?.reach) > 0 || toSafeInt(p?.interactions) > 0)
 
       // totals (best-effort)
-      const totals = await fetchTotalsBestEffort({ token, envToken, pageId, igId, days: safeDays })
+      const totals = await getTotalsCached({ totalsKey, token, envToken, pageId, igId, days: safeDays })
       const insights_daily = totals.insights_daily
 
       if (!hasAnyNonZero) {
-        return NextResponse.json(
-          {
+        return {
+          status: 200,
+          source: "graph",
+          body: {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
@@ -667,8 +820,7 @@ export async function POST(req: Request) {
               totals_ok: totals.ok,
             },
           },
-          { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-        )
+        }
       }
 
       // Write to DB (skip today)
@@ -741,8 +893,10 @@ export async function POST(req: Request) {
         })
       }
 
-      return NextResponse.json(
-        {
+      return {
+        status: 200,
+        source: "graph",
+        body: {
           build_marker: BUILD_MARKER,
           ok: true,
           days: safeDays,
@@ -763,24 +917,51 @@ export async function POST(req: Request) {
             totals_ok: totals.ok,
           },
         },
-        { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-      )
+      }
     } catch (e: any) {
       if (__DEBUG_DAILY_SNAPSHOT__) {
         console.log("[daily-snapshot] graph_seed_failed", {
           message: e?.message ?? "graph_seed_failed",
         })
       }
-      return NextResponse.json(
-        {
+      return {
+        status: 502,
+        source: "error",
+        body: {
           build_marker: BUILD_MARKER,
           ok: false,
           error: "graph_seed_failed",
           message: e?.message ?? String(e),
         },
-        { status: 502, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-      )
+      }
     }
+    })()
+
+    __dsInflight.set(requestKey, run)
+    __dsInflightJoinCount.set(requestKey, 0)
+
+    let out: DsResponsePayload
+    try {
+      out = await run
+    } finally {
+      __dsInflight.delete(requestKey)
+    }
+
+    const respTtl = 8_000
+    writeCache(__dsCache, requestKey, { body: out.body, status: out.status, source: out.source }, respTtl)
+    pruneOldest(__dsCache, 200)
+
+    if (__DEV__) {
+      const joinCount = __dsInflightJoinCount.get(requestKey) ?? 0
+      console.debug("[daily-snapshot] cache_store", { key: requestKey, ttlMs: respTtl, source: out.source, joinCount })
+    }
+
+    const headers: Record<string, string> = { "Cache-Control": "no-store", ...HANDLER_HEADERS }
+    if (__DEV__) headers["X-DS-Cache"] = "miss"
+    if (__DEV__) headers["X-DS-Source"] = String(out.source)
+    if (__DEV__) headers["X-DS-Inflight-Joins"] = String(__dsInflightJoinCount.get(requestKey) ?? 0)
+    __dsInflightJoinCount.delete(requestKey)
+    return NextResponse.json(out.body, { status: out.status, headers })
   } catch (err: any) {
     return jsonError("server_error", { message: err?.message ?? String(err) }, 500)
   }
