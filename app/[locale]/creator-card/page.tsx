@@ -707,6 +707,15 @@ function SortableFeaturedTile(props: {
                 : "Instagram preview is temporarily unavailable. The link is still valid."))
         : null
 
+    const shouldShowIgFriendlyError =
+      Boolean(normalizedUrl && isValidIgUrl) &&
+      (thumbnailLoadError || oembedState?.status === "rate_limited" || oembedState?.status === "error")
+
+    const igFriendlyErrorText =
+      activeLocale === "zh-TW"
+        ? "IG 目前限流或暫時無法取得預覽，稍後再試"
+        : "IG is rate-limited or preview is temporarily unavailable. Please try again."
+
     // Reset thumbnail error when URL changes
     useEffect(() => {
       setThumbnailLoadError(false)
@@ -806,6 +815,32 @@ function SortableFeaturedTile(props: {
               </div>
             )}
           </a>
+        ) : null}
+
+        {shouldShowIgFriendlyError ? (
+          <div className="mt-2 flex items-start justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+            <div className="min-w-0 text-[12px] text-white/70 whitespace-normal break-words [overflow-wrap:anywhere]">
+              {igFriendlyErrorText}
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/80 hover:bg-white/10 min-h-[44px]"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (!normalizedUrl) return
+                if (!isValidIgUrl) return
+                setThumbnailLoadError(false)
+                setRetryKey((x) => x + 1)
+                try {
+                  fetchAndApplyIgOEmbedForItem({ itemId: item.id, normalizedUrl, mediaIdFromUrl })
+                } catch {
+                }
+              }}
+            >
+              {activeLocale === "zh-TW" ? "重試" : "Retry"}
+            </button>
+          </div>
         ) : null}
       </div>
     )
@@ -1215,13 +1250,23 @@ export default function CreatorCardPage() {
   const [showNewCardHint, setShowNewCardHint] = useState(false)
 
   const isDirtyRef = useRef(false)
+  const [dirtyNonce, setDirtyNonce] = useState(0)
+
+  const isDirty = useMemo(() => {
+    void dirtyNonce
+    return isDirtyRef.current
+  }, [dirtyNonce])
 
   const markDirty = useCallback(() => {
+    const wasDirty = isDirtyRef.current
     isDirtyRef.current = true
+    if (!wasDirty) setDirtyNonce((x) => x + 1)
   }, [])
 
   const clearDirty = useCallback(() => {
+    const wasDirty = isDirtyRef.current
     isDirtyRef.current = false
+    if (wasDirty) setDirtyNonce((x) => x + 1)
   }, [])
 
   const confirmLeaveIfDirty = useCallback(() => {
@@ -3215,17 +3260,34 @@ export default function CreatorCardPage() {
     }, 1000)
   }, [saveOk])
 
+  const [mobileSavedFlash, setMobileSavedFlash] = useState(false)
+  const mobileSavedFlashTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!saveOk) return
+    setMobileSavedFlash(true)
+    if (mobileSavedFlashTimerRef.current != null) window.clearTimeout(mobileSavedFlashTimerRef.current)
+    mobileSavedFlashTimerRef.current = window.setTimeout(() => {
+      setMobileSavedFlash(false)
+      mobileSavedFlashTimerRef.current = null
+    }, 2000)
+  }, [saveOk])
+
   useEffect(() => {
     return () => {
       if (saveFlashTimerRef.current != null) {
         window.clearTimeout(saveFlashTimerRef.current)
         saveFlashTimerRef.current = null
       }
+      if (mobileSavedFlashTimerRef.current != null) {
+        window.clearTimeout(mobileSavedFlashTimerRef.current)
+        mobileSavedFlashTimerRef.current = null
+      }
     }
   }, [])
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-10 overflow-x-hidden">
+    <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <div aria-live="polite" className="sr-only">
         {toast ?? ""}
       </div>
@@ -4102,8 +4164,9 @@ export default function CreatorCardPage() {
                           window.setTimeout(() => setSuppressFeaturedTileClick(false), 120)
                         }}
                       >
-                        <SortableContext items={featuredItems.filter(x => x.type === "ig").map((x) => x.id)}>
-                          <div className="relative group/carousel">
+                        <SortableContext items={featuredItems.filter((x) => x.type === "ig").map((x) => x.id)}>
+                          <div className="max-w-full overflow-hidden">
+                            <div className="relative group/carousel">
                             {canScrollFeaturedLeft && (
                               <button
                                 type="button"
@@ -4147,7 +4210,7 @@ export default function CreatorCardPage() {
                             <div 
                               ref={featuredCarouselRef}
                               id="featured-carousel-container"
-                              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-10"
+                              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-4 sm:px-10"
                               style={{ scrollPaddingLeft: "0px" }}
                               onScroll={() => {
                                 const el = featuredCarouselRef.current
@@ -4317,7 +4380,7 @@ export default function CreatorCardPage() {
                                             igMediaId: mediaIdFromUrl ?? undefined,
                                           }
 
-                                          setFeaturedItems(prev => {
+                                          setFeaturedItems((prev) => {
                                             const nextItems = [newItem, ...prev]
                                             persistDraftNow(nextItems)
                                             return nextItems
@@ -4390,7 +4453,7 @@ export default function CreatorCardPage() {
                                       openEditFeatured(id)
                                     }}
                                     onRemove={(id) => {
-                                      setFeaturedItems(prev => {
+                                      setFeaturedItems((prev) => {
                                         const picked = prev.find((x) => x.id === id)
                                         if (picked?.url && picked.url.startsWith("blob:")) URL.revokeObjectURL(picked.url)
                                         const nextItems = prev.filter((x) => x.id !== id)
@@ -4439,11 +4502,12 @@ export default function CreatorCardPage() {
                               ))}
                             </div>
                           </div>
-                      </SortableContext>
+                          </div>
+                        </SortableContext>
                     </DndContext>
 
 
-                      {featuredItems.filter(x => x.type === "ig").length === 0 ? (
+                      {featuredItems.filter((x) => x.type === "ig").length === 0 ? (
                         <div className="mt-2 text-sm text-slate-500">
                           {t("creatorCard.featured.emptyIg")}
                         </div>
@@ -4944,7 +5008,7 @@ export default function CreatorCardPage() {
                                     {themeChipOverflow.canToggle ? (
                                       <button
                                         type="button"
-                                        className="mt-2 -mx-2 inline-flex min-w-0 items-center rounded-md px-2 py-2 text-left text-xs font-semibold text-white/70 hover:bg-white/5 whitespace-normal break-words [overflow-wrap:anywhere]"
+                                        className="mt-2 inline-flex min-w-0 items-center rounded-md px-2 py-3 min-h-[44px] text-left text-xs font-semibold text-white/70 hover:bg-white/5 whitespace-normal break-words [overflow-wrap:anywhere]"
                                         onClick={() => themeChipOverflow.setExpanded((prev) => !prev)}
                                       >
                                         {themeChipOverflow.expanded
@@ -5174,12 +5238,31 @@ export default function CreatorCardPage() {
                             >
                               <div className="mx-auto w-full max-w-6xl px-4 pt-3">
                                 <div className="flex items-center gap-3">
+                                  <div className="shrink-0 text-[11px] font-semibold text-white/70 whitespace-nowrap">
+                                    {(() => {
+                                      const savedText = activeLocale === "zh-TW" ? "已儲存" : "Saved"
+                                      const savingText = activeLocale === "zh-TW" ? "儲存中…" : "Saving…"
+                                      const unsavedText = activeLocale === "zh-TW" ? "未儲存" : "Unsaved"
+                                      if (saving) return savingText
+                                      if (mobileSavedFlash) return savedText
+                                      if (isDirty) return unsavedText
+                                      return savedText
+                                    })()}
+                                  </div>
                                   <Button
                                     type="button"
                                     variant="primary"
                                     className="flex-1 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px] sm:min-h-0"
                                     onClick={handleSave}
-                                    disabled={saving || loading || loadErrorKind === "not_connected" || isNotLoggedIn || loadErrorKind === "supabase_invalid_key" || featuredUploadingIds.size > 0}
+                                    disabled={
+                                      saving ||
+                                      loading ||
+                                      loadErrorKind === "not_connected" ||
+                                      isNotLoggedIn ||
+                                      loadErrorKind === "supabase_invalid_key" ||
+                                      featuredUploadingIds.size > 0 ||
+                                      !isDirty
+                                    }
                                   >
                                     {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                                     {saving ? t("creatorCardEditor.actions.saving") : t("creatorCardEditor.actions.save")}
