@@ -249,26 +249,11 @@ function saWriteResultsCache(key: string, payload: ResultsCachePayloadV1) {
   }
 }
 
-function TopPostThumb({
-  src,
-  alt,
-  mediaType,
-  debugThumb,
-  debugSection,
-  debugShortcode,
-}: {
-  src?: string
-  alt: string
-  mediaType?: string
-  debugThumb?: boolean
-  debugSection?: string
-  debugShortcode?: string
-}) {
+function TopPostThumb({ src, alt, mediaType }: { src?: string; alt: string; mediaType?: string }) {
   const FALLBACK_IMG = "/window.svg"
   const [currentSrc, setCurrentSrc] = useState<string>(src && src.length > 0 ? src : FALLBACK_IMG)
   const [broken, setBroken] = useState(false)
   const fallbackAttemptedRef = useRef(false)
-  const loggedRenderStateRef = useRef<Record<string, true>>({})
 
   // DEV-only: Extract hostname from original src URL
   const getDebugHostname = (srcUrl?: string): string => {
@@ -311,23 +296,6 @@ function TopPostThumb({
     if (!u) return false
     return /\.mp4(\?|$)/i.test(u)
   }, [currentSrc, mediaType])
-
-  if (debugThumb && debugSection && debugShortcode) {
-    const key = `${debugSection}:${debugShortcode}:${String(src || "")}::${broken ? "broken" : "ok"}::${isVideoUrl ? "video" : "img"}`
-    if (!loggedRenderStateRef.current[key]) {
-      loggedRenderStateRef.current[key] = true
-      // eslint-disable-next-line no-console
-      console.debug("[thumb-debug TopPostThumb]", {
-        section: debugSection,
-        shortcode: debugShortcode,
-        src: src || "",
-        currentSrc,
-        broken,
-        isVideoUrl,
-        willRenderImg: Boolean(!broken && currentSrc && currentSrc !== FALLBACK_IMG),
-      })
-    }
-  }
 
   const handleError = useCallback(() => {
     // If proxy failed and we haven't tried direct URL yet, try it
@@ -1138,21 +1106,11 @@ export default function ResultsClient() {
   const loggedEmptySnapshotTopPostsRef = useRef(false)
   const loggedMissingVideoThumbRef = useRef<Record<string, true>>({})
 
-  const DEBUG_REELS = new Set(["CmBaUTTjRzR", "DS9WIXIEyrD"])
-  const loggedThumbDebugReelsTopPostsRef = useRef<Record<string, true>>({})
-  const loggedThumbDebugReelsLatestPostsRef = useRef<Record<string, true>>({})
-
   const isThumbDebugEnabled = useMemo(() => {
     try {
       if (typeof window === "undefined") return false
       const qs = new URLSearchParams(window.location.search)
-      const q =
-        qs.get("debugThumb") ||
-        qs.get("thumbDebug") ||
-        qs.get("thumb_debug") ||
-        ""
-      if (q === "1") return true
-      return window.localStorage.getItem("debugThumb") === "1"
+      return qs.get("debugThumb") === "1" || window.localStorage.getItem("debugThumb") === "1"
     } catch {
       return false
     }
@@ -6124,23 +6082,6 @@ export default function ResultsClient() {
                           return ""
                         })()
 
-                        if (isThumbDebugEnabled) {
-                          const sc = String(realShortcode || "")
-                          if (DEBUG_REELS.has(sc) && !loggedThumbDebugReelsTopPostsRef.current[sc]) {
-                            loggedThumbDebugReelsTopPostsRef.current[sc] = true
-                            // eslint-disable-next-line no-console
-                            console.debug("[thumb-debug reels]", {
-                              section: "top_posts",
-                              shortcode: sc,
-                              permalink,
-                              mediaType,
-                              thumbnail_url: (real as any)?.thumbnail_url ?? (real as any)?.thumbnailUrl ?? null,
-                              media_url: (real as any)?.media_url ?? (real as any)?.mediaUrl ?? null,
-                              previewUrl,
-                            })
-                          }
-                        }
-
                         if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
                           const key = String(realIdOrPermalink || real?.id || index)
                           if (!loggedMissingVideoThumbRef.current[key]) {
@@ -6167,26 +6108,7 @@ export default function ResultsClient() {
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                {isThumbDebugEnabled ? (
-                                  <div className="absolute left-1 top-1 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] leading-tight text-white">
-                                    <div>{previewUrl ? "thumb: OK" : "thumb: EMPTY"}</div>
-                                    <div>sc={String(realShortcode || "") || "-"}</div>
-                                    <div>p={permalink ? "Y" : "N"}</div>
-                                  </div>
-                                ) : null}
-                                <TopPostThumb
-                                  src={previewUrl || undefined}
-                                  alt="post preview"
-                                  mediaType={mediaType}
-                                  debugThumb={
-                                    Boolean(
-                                      isThumbDebugEnabled &&
-                                        DEBUG_REELS.has(String(realShortcode || ""))
-                                    )
-                                  }
-                                  debugSection="top_posts"
-                                  debugShortcode={String(realShortcode || "")}
-                                />
+                                <TopPostThumb src={previewUrl || undefined} alt="post preview" mediaType={mediaType} />
                               </a>
                             </div>
 
@@ -6462,23 +6384,6 @@ export default function ResultsClient() {
                         return chosenRaw
                       })()
 
-                      if (isThumbDebugEnabled) {
-                        const sc = String(realShortcode || "")
-                        if (DEBUG_REELS.has(sc) && !loggedThumbDebugReelsLatestPostsRef.current[sc]) {
-                          loggedThumbDebugReelsLatestPostsRef.current[sc] = true
-                          // eslint-disable-next-line no-console
-                          console.debug("[thumb-debug reels]", {
-                            section: "latest_posts",
-                            shortcode: sc,
-                            permalink,
-                            mediaType,
-                            thumbnail_url: (real as any)?.thumbnail_url ?? (real as any)?.thumbnailUrl ?? null,
-                            media_url: (real as any)?.media_url ?? (real as any)?.mediaUrl ?? null,
-                            previewUrl,
-                          })
-                        }
-                      }
-
                       if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
                         const key = String(real?.id || real?.permalink || idx)
                         if (!loggedMissingVideoThumbRef.current[key]) {
@@ -6501,26 +6406,7 @@ export default function ResultsClient() {
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                {isThumbDebugEnabled ? (
-                                  <div className="absolute left-1 top-1 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[10px] leading-tight text-white">
-                                    <div>{previewUrl ? "thumb: OK" : "thumb: EMPTY"}</div>
-                                    <div>sc={String(realShortcode || "") || "-"}</div>
-                                    <div>p={permalink ? "Y" : "N"}</div>
-                                  </div>
-                                ) : null}
-                                <TopPostThumb
-                                  src={previewUrl || undefined}
-                                  alt="post preview"
-                                  mediaType={mediaType}
-                                  debugThumb={
-                                    Boolean(
-                                      isThumbDebugEnabled &&
-                                        DEBUG_REELS.has(String(realShortcode || ""))
-                                    )
-                                  }
-                                  debugSection="latest_posts"
-                                  debugShortcode={String(realShortcode || "")}
-                                />
+                                <TopPostThumb src={previewUrl || undefined} alt="post preview" mediaType={mediaType} />
                               </a>
                             </div>
 
