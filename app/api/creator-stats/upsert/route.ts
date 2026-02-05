@@ -16,9 +16,28 @@ async function resolveIgUserId(_req: NextRequest): Promise<string | null> {
   return null
 }
 
-function finiteNumOrNull(v: unknown): number | null {
+
+type UnknownRecord = Record<string, unknown>
+
+function isRecord(v: unknown): v is UnknownRecord {
+  return Boolean(v && typeof v === "object" && !Array.isArray(v))
+}
+
+function readNumberField(body: unknown, key: string): number {
+  if (!isRecord(body)) return 0
+  if (!(key in body)) return 0
+  return Number(body[key])
+}
+
+function toFiniteNonNeg(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v)
-  return Number.isFinite(n) ? n : null
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, n)
+}
+
+function toFiniteNonNegInt(v: unknown): number {
+  const n = toFiniteNonNeg(v)
+  return Math.floor(n)
 }
 
 export async function POST(req: NextRequest) {
@@ -26,20 +45,20 @@ export async function POST(req: NextRequest) {
     const creatorId = await resolveIgUserId(req)
     if (!creatorId) return NextResponse.json({ ok: false, error: "not_connected" }, { status: 401 })
 
-    const body = (await req.json().catch(() => null)) as any
+    const body = (await req.json().catch(() => null)) as unknown
     if (!body) return NextResponse.json({ ok: false, error: "bad_json" }, { status: 400 })
 
-    const engagementRatePct = finiteNumOrNull(body?.engagementRatePct)
-    const followers = finiteNumOrNull(body?.followers)
-    const avgLikes = finiteNumOrNull(body?.avgLikes)
-    const avgComments = finiteNumOrNull(body?.avgComments)
+    const engagementRatePct = toFiniteNonNeg(readNumberField(body, "engagementRatePct"))
+    const followers = toFiniteNonNegInt(readNumberField(body, "followers"))
+    const avgLikes = toFiniteNonNeg(readNumberField(body, "avgLikes"))
+    const avgComments = toFiniteNonNeg(readNumberField(body, "avgComments"))
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       creator_id: creatorId,
       engagement_rate_pct: engagementRatePct,
-      followers: typeof followers === "number" ? Math.floor(followers) : null,
-      avg_likes: typeof avgLikes === "number" ? Math.round(avgLikes) : null,
-      avg_comments: typeof avgComments === "number" ? Math.round(avgComments) : null,
+      followers: Math.floor(followers),
+      avg_likes: Math.round(avgLikes),
+      avg_comments: Math.round(avgComments),
       updated_at: new Date().toISOString(),
     }
 
