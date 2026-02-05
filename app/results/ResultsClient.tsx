@@ -793,12 +793,26 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
 export default function ResultsClient() {
   const __DEV__ = process.env.NODE_ENV !== "production"
   const __DEBUG_RESULTS__ = process.env.NEXT_PUBLIC_DEBUG_RESULTS === "1"
+  const [showMediaErrorDetails, setShowMediaErrorDetails] = useState(false)
+  const thumbProxyUrlCacheRef = useRef<Map<string, string>>(new Map())
   const dlog = useCallback(
     (...args: unknown[]) => {
       if (__DEV__) console.debug(...args)
     },
     [__DEV__]
   )
+
+  const toThumbProxyUrl = useCallback((rawUrl: string): string => {
+    const raw = typeof rawUrl === "string" ? rawUrl.trim() : ""
+    if (!raw) return ""
+    if (!raw.startsWith("http")) return raw
+    const finalUrl = toIgDirectMediaUrl(raw) ?? raw
+    const cached = thumbProxyUrlCacheRef.current.get(finalUrl)
+    if (cached) return cached
+    const proxy = `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
+    thumbProxyUrlCacheRef.current.set(finalUrl, proxy)
+    return proxy
+  }, [])
 
   useEffect(() => {
     if (!__DEV__) return
@@ -1117,6 +1131,8 @@ export default function ResultsClient() {
   const loggedMissingTopPostPreviewRef = useRef<Record<string, true>>({})
   const loggedEmptySnapshotTopPostsRef = useRef(false)
   const loggedMissingVideoThumbRef = useRef<Record<string, true>>({})
+  const videoThumbDebugLogCountRef = useRef(0)
+  const videoThumbDebugSuppressedRef = useRef(false)
 
   const isThumbDebugEnabled = useMemo(() => {
     try {
@@ -1159,6 +1175,46 @@ export default function ResultsClient() {
     const sc2 = extractShortcodeFromUrl(typeof fallbackUrlRaw === "string" ? fallbackUrlRaw : "")
     if (sc2) return `https://www.instagram.com/p/${sc2}/media/?size=l`
     return ""
+  }
+
+  const getStableVideoThumbLogKey = (input: { id?: unknown; permalink?: unknown; shortcode?: unknown }): string => {
+    const idRaw = typeof input.id === "string" ? input.id : typeof input.id === "number" ? String(input.id) : ""
+    const id = String(idRaw || "").trim()
+    if (id) return id
+    const pl = typeof input.permalink === "string" ? String(input.permalink).trim() : ""
+    if (pl) return pl
+    const sc = typeof input.shortcode === "string" ? String(input.shortcode).trim() : ""
+    if (sc) return sc
+    return ""
+  }
+
+  const maybeLogMissingVideoThumb = (payload: {
+    stableKey: string
+    idOrPermalink: string | null
+    hasPermalink: boolean
+    hasShortcode: boolean
+  }) => {
+    if (!isThumbDebugEnabled) return
+
+    const key = payload.stableKey || "unknown"
+    if (loggedMissingVideoThumbRef.current[key]) return
+    loggedMissingVideoThumbRef.current[key] = true
+
+    if (videoThumbDebugSuppressedRef.current) return
+    if (videoThumbDebugLogCountRef.current >= 10) {
+      videoThumbDebugSuppressedRef.current = true
+      // eslint-disable-next-line no-console
+      console.debug("[video thumb] further logs suppressed")
+      return
+    }
+
+    videoThumbDebugLogCountRef.current += 1
+    // eslint-disable-next-line no-console
+    console.debug("[video thumb] missing after derived fallback", {
+      idOrPermalink: payload.idOrPermalink,
+      hasPermalink: payload.hasPermalink,
+      hasShortcode: payload.hasShortcode,
+    })
   }
 
   const [forceReloadTick, setForceReloadTick] = useState(0)
@@ -1374,6 +1430,60 @@ export default function ResultsClient() {
   const refetchTick = useRefetchTick({ enabled: isConnectedInstagram, throttleMs: 900 })
 
   const { refreshSeq, fireRefresh, refreshDebug } = useRefreshController({ throttleMs: 10_000, enableFocus: true, enableVisibility: true })
+
+  const retryMediaFetch = useCallback(() => {
+    setGateIsSlow(false)
+    setLoadTimedOut(false)
+    setLoadError(false)
+    setMediaError(null)
+    setShowMediaErrorDetails(false)
+    hasFetchedMediaRef.current = false
+    __resultsMediaFetchedOnce = false
+    setMediaLoaded(false)
+    fireRefresh("manual")
+  }, [fireRefresh])
+
+  const renderMediaErrorBanner = useCallback(() => {
+    if (!mediaError) return null
+    const raw = String(mediaError || "")
+    const code = raw.split(":")[0]
+    const title =
+      code.startsWith("missing_cookie")
+        ? "Not connected"
+        : code === "upstream_timeout"
+          ? "Instagram is slow"
+          : "Failed to load"
+
+    return (
+      <div className="mt-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs text-white/85 leading-snug">{title}</div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowMediaErrorDetails((v) => !v)}
+              className="text-[11px] font-semibold text-white/70 hover:text-white whitespace-nowrap"
+            >
+              {showMediaErrorDetails ? "Hide details" : "Details"}
+            </button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 px-3 border-white/15 text-slate-200 hover:bg-white/5"
+              onClick={retryMediaFetch}
+            >
+              {t("results.retry")}
+            </Button>
+          </div>
+        </div>
+        {showMediaErrorDetails ? (
+          <div className="mt-2 text-[11px] text-white/55 leading-snug break-words">{raw}</div>
+        ) : null}
+      </div>
+    )
+  }, [mediaError, retryMediaFetch, showMediaErrorDetails, t])
 
   const { orchestratorDebug, mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq } = useResultsOrchestrator({
     isConnectedInstagram,
@@ -5853,11 +5963,7 @@ export default function ResultsClient() {
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-2">
                     {t("results.topPosts.description")}
                   </p>
-                  {mediaError ? (
-                    <div className="text-xs opacity-60 mt-1 truncate">
-                      Media load failed: {mediaError}
-                    </div>
-                  ) : null}
+                  {renderMediaErrorBanner()}
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-1">{uiCopy.topPostsSortHint}</p>
                 </div>
 
@@ -5922,7 +6028,7 @@ export default function ResultsClient() {
 
                     const shown = !isSmUpViewport ? renderCards.slice(0, 3) : renderCards
                     return shown.map((p: unknown, index: number) => (
-                      <div key={String(isRecord(p) && typeof p.id === "string" ? p.id : index)} className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden">
+                      <div key={String(isRecord(p) && typeof p.id === "string" ? p.id : index)} className="group relative rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden transition-colors duration-150 hover:border-white/15 hover:bg-white/6 active:bg-white/8">
                         {(() => {
                           if (!isRecord(p)) return null
                           const real = p
@@ -6072,38 +6178,36 @@ export default function ResultsClient() {
                             if (isLikelyVideoUrl(chosenRaw)) {
                               const t = (tu || "").trim()
                               if (!t || isLikelyVideoUrl(t)) continue
-                              if (t.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(t)}`
+                              if (t.startsWith("http")) return toThumbProxyUrl(t)
                               return t
                             }
 
                             if (chosenRaw.startsWith("http")) {
-                              const direct = toIgDirectMediaUrl(chosenRaw)
-                              const finalUrl = direct ?? chosenRaw
-                              return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
+                              return toThumbProxyUrl(chosenRaw)
                             }
                             return chosenRaw
                           }
 
                           const p = (permalink || "").trim()
                           if (p && p.startsWith("http")) {
-                            const direct = toIgDirectMediaUrl(p) ?? p
-                            return `/api/ig/thumbnail?url=${encodeURIComponent(direct)}`
+                            return toThumbProxyUrl(p)
                           }
 
                           return ""
                         })()
 
-                        if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
-                          const key = String(realIdOrPermalink || real?.id || index)
-                          if (!loggedMissingVideoThumbRef.current[key]) {
-                            loggedMissingVideoThumbRef.current[key] = true
-                            // eslint-disable-next-line no-console
-                            console.debug("[video thumb] missing after derived fallback", {
-                              idOrPermalink: realIdOrPermalink || null,
-                              hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
-                              hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
-                            })
-                          }
+                        if (!previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                          const stableKey = getStableVideoThumbLogKey({
+                            id: (real as any)?.id,
+                            permalink: (real as any)?.permalink,
+                            shortcode: (real as any)?.shortcode,
+                          })
+                          maybeLogMissingVideoThumb({
+                            stableKey,
+                            idOrPermalink: realIdOrPermalink || null,
+                            hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
+                            hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
+                          })
                         }
 
                         const isVideo = mediaType === "VIDEO" || mediaType === "REELS"
@@ -6117,10 +6221,30 @@ export default function ResultsClient() {
 
                         const thumbAlt = `Post preview${mediaType ? ` (${mediaType}${ymd && ymd !== "—" ? ` ${ymd}` : ""})` : ""}`
 
+                        const cardHref = (igHref || "").trim()
+
                         return (
-                          <div className="flex gap-2 min-w-0">
+                          <>
+                            {cardHref ? (
+                              <a
+                                href={cardHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="Open on Instagram"
+                                className="absolute inset-0 z-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1220]"
+                              />
+                            ) : null}
+
+                            <div className="relative z-10 flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
-                              <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
+                              <a
+                                href={igHref || undefined}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                className="relative z-10 block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full"
+                              >
                                 <TopPostThumb src={previewUrl || undefined} alt={thumbAlt} mediaType={mediaType} />
                               </a>
                             </div>
@@ -6144,7 +6268,9 @@ export default function ResultsClient() {
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   <a
                                     href={analyzeHref}
-                                    className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 whitespace-nowrap"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    className="relative z-10 inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 whitespace-nowrap"
                                     title={t("results.topPosts.card.analyzeTitle")}
                                   >
                                     {t("results.topPosts.card.analyzeLabel")}
@@ -6233,7 +6359,8 @@ export default function ResultsClient() {
                               </div>
 
                             </div>
-                          </div>
+                            </div>
+                          </>
                         )
                       })()}
                     </div>
@@ -6253,6 +6380,7 @@ export default function ResultsClient() {
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-2">
                     {t("results.latestPosts.description")}
                   </p>
+                  {renderMediaErrorBanner()}
                 </div>
               </CardHeader>
               <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
@@ -6343,8 +6471,7 @@ export default function ResultsClient() {
                         if (!chosenRaw) {
                           const p = (permalink || "").trim()
                           if (p && p.startsWith("http")) {
-                            const finalUrl = toIgDirectMediaUrl(p) ?? p
-                            return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
+                            return toThumbProxyUrl(p)
                           }
                           return ""
                         }
@@ -6353,34 +6480,32 @@ export default function ResultsClient() {
                           if (!t || isLikelyVideoUrl(t)) {
                             const p = (permalink || "").trim()
                             if (p && p.startsWith("http")) {
-                              const finalUrl = toIgDirectMediaUrl(p) ?? p
-                              return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
+                              return toThumbProxyUrl(p)
                             }
                             return ""
                           }
-                          if (t.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(t)}`
+                          if (t.startsWith("http")) return toThumbProxyUrl(t)
                           return t
                         }
 
                         if (chosenRaw.startsWith("http")) {
-                          const direct = toIgDirectMediaUrl(chosenRaw)
-                          const finalUrl = direct ?? chosenRaw
-                          return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
+                          return toThumbProxyUrl(chosenRaw)
                         }
                         return chosenRaw
                       })()
 
-                      if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
-                        const key = String(real?.id || real?.permalink || idx)
-                        if (!loggedMissingVideoThumbRef.current[key]) {
-                          loggedMissingVideoThumbRef.current[key] = true
-                          // eslint-disable-next-line no-console
-                          console.debug("[video thumb] missing after derived fallback", {
-                            idOrPermalink: String(real?.id || real?.permalink || "") || null,
-                            hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
-                            hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
-                          })
-                        }
+                      if (!previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                        const stableKey = getStableVideoThumbLogKey({
+                          id: (real as any)?.id,
+                          permalink: (real as any)?.permalink,
+                          shortcode: (real as any)?.shortcode,
+                        })
+                        maybeLogMissingVideoThumb({
+                          stableKey,
+                          idOrPermalink: String(real?.id || real?.permalink || "") || null,
+                          hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
+                          hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
+                        })
                       }
 
                       const analyzeHref = permalink
@@ -6389,11 +6514,29 @@ export default function ResultsClient() {
 
                       const thumbAlt = `Post preview${mediaType ? ` (${mediaType}${ymd && ymd !== "—" ? ` ${ymd}` : ""})` : ""}`
 
+                      const cardHref = (igHref || "").trim()
+
                       return (
-                        <div key={real?.id || `latest-${idx}`} className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden">
-                          <div className="flex gap-2 min-w-0">
+                        <div key={real?.id || `latest-${idx}`} className="group relative rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden transition-colors duration-150 hover:border-white/15 hover:bg-white/6 active:bg-white/8">
+                          {cardHref ? (
+                            <a
+                              href={cardHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="Open on Instagram"
+                              className="absolute inset-0 z-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1220]"
+                            />
+                          ) : null}
+                          <div className="relative z-10 flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
-                              <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
+                              <a
+                                href={igHref || undefined}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => e.stopPropagation()}
+                                className="relative z-10 block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full"
+                              >
                                 <TopPostThumb src={previewUrl || undefined} alt={thumbAlt} mediaType={mediaType} />
                               </a>
                             </div>
@@ -6411,6 +6554,8 @@ export default function ResultsClient() {
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   <a
                                     href={analyzeHref}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => e.stopPropagation()}
                                     className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 whitespace-nowrap"
                                     title={t("results.topPosts.card.analyzeTitle")}
                                   >
