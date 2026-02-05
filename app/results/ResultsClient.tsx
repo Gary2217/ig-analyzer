@@ -990,6 +990,8 @@ export default function ResultsClient() {
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
+  const trendPointsByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, AccountTrendPoint[]>())
+
   const [followersDailyRows, setFollowersDailyRows] = useState<
     Array<{ day: string; followers_count: number }>
   >([])
@@ -1765,7 +1767,8 @@ export default function ResultsClient() {
 
     lastDailySnapshotFetchAtRef.current = now
 
-    setTrendFetchStatus({ loading: true, error: "", lastDays: selectedTrendRangeDays })
+    const daysForRequest = selectedTrendRangeDays
+    setTrendFetchStatus({ loading: true, error: "", lastDays: daysForRequest })
     setTrendNeedsConnectHint(false)
     lastDailySnapshotPointsSourceRef.current = ""
 
@@ -1783,7 +1786,7 @@ export default function ResultsClient() {
 
     ;(async () => {
       try {
-        const igReq = fetch(`/api/instagram/daily-snapshot?days=${selectedTrendRangeDays}`, {
+        const igReq = fetch(`/api/instagram/daily-snapshot?days=${daysForRequest}`, {
           method: "POST",
           cache: "no-store",
           credentials: "include",
@@ -1813,7 +1816,7 @@ export default function ResultsClient() {
                 const now = new Date()
                 const ms =
                   Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0) -
-                  (selectedTrendRangeDays - 1) * 24 * 60 * 60 * 1000
+                  (daysForRequest - 1) * 24 * 60 * 60 * 1000
                 const d = new Date(ms)
                 const y = d.getUTCFullYear()
                 const m = String(d.getUTCMonth() + 1).padStart(2, "0")
@@ -1825,16 +1828,21 @@ export default function ResultsClient() {
 
         const [igRes, dbRes] = await Promise.all([igReq, dbReq])
 
+        if (dailySnapshotRequestSeqRef.current !== nextReqId) return
+        if (selectedTrendRangeDays !== daysForRequest) return
+
         if (igRes.status === 401 || igRes.status === 403) {
           setTrendNeedsConnectHint(true)
-          setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
           return
         }
 
         const json7 = await igRes.json().catch(() => null)
+        if (dailySnapshotRequestSeqRef.current !== nextReqId) return
+        if (selectedTrendRangeDays !== daysForRequest) return
         if (!igRes.ok || !json7?.ok) {
           setDailySnapshotData(null)
-          setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
           return
         }
 
@@ -1847,7 +1855,7 @@ export default function ResultsClient() {
         lastDailySnapshotPointsSourceRef.current = pointsSource
 
         if (pointsSource === "empty") {
-          setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
           return
         }
 
@@ -1856,22 +1864,25 @@ export default function ResultsClient() {
 
         const dbRows = isRecord(dbRes) ? dbRes.data : null
         const merged = mergeToContinuousTrendPoints({
-          days: selectedTrendRangeDays,
+          days: daysForRequest,
           baseDbRowsRaw: dbRows,
           overridePointsRaw: json7?.points,
         })
 
         if (merged.length >= 1) {
+          if (dailySnapshotRequestSeqRef.current !== nextReqId) return
+          if (selectedTrendRangeDays !== daysForRequest) return
           hasAppliedDailySnapshotTrendRef.current = true
           setTrendPointsDeduped(merged)
+          trendPointsByDaysRef.current.set(daysForRequest, merged)
           setTrendFetchedAt(Date.now())
         }
 
-        setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
+        setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
       } catch (e: unknown) {
         if (isRecord(e) && e.name === "AbortError") return
         setDailySnapshotData(null)
-        setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
+        setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
       }
     })()
 
@@ -5057,6 +5068,10 @@ export default function ResultsClient() {
                               type="button"
                               aria-pressed={active}
                               onClick={() => {
+                                const cached = trendPointsByDaysRef.current.get(d)
+                                if (Array.isArray(cached) && cached.length >= 1) {
+                                  setTrendPointsDeduped(cached)
+                                }
                                 setSelectedTrendRangeDays(d)
                                 hasFetchedDailySnapshotRef.current = false
                                 lastDailySnapshotFetchAtRef.current = 0
@@ -5071,6 +5086,11 @@ export default function ResultsClient() {
                             </button>
                           )
                         })}
+                        {trendFetchStatus.loading && trendFetchStatus.lastDays === selectedTrendRangeDays ? (
+                          <span className="ml-1 inline-flex h-4 w-4 items-center justify-center">
+                            <span className="h-2 w-2 rounded-full bg-white/55 animate-pulse" />
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 
