@@ -990,13 +990,22 @@ export default function ResultsClient() {
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
-  const trendPointsByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, AccountTrendPoint[]>())
+  const trendPointsByDaysRef = useRef(
+    new Map<
+      90 | 60 | 30 | 14 | 7,
+      {
+        points: AccountTrendPoint[]
+        fetchedAt: number | null
+        sig: string
+      }
+    >(),
+  )
   const fetchedByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, boolean>())
   const inFlightTrendDaysRef = useRef<null | (90 | 60 | 30 | 14 | 7)>(null)
   const lastFetchAtByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, number>())
-  const lastTrendSigByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, string>())
   const hasRestoredTrendFromCacheRef = useRef(false)
   const hasRestoredResultsCacheRef = useRef(false)
+  const displayedTrendSigRef = useRef<string>("")
 
   const [followersDailyRows, setFollowersDailyRows] = useState<
     Array<{ day: string; followers_count: number }>
@@ -1057,6 +1066,27 @@ export default function ResultsClient() {
       setTrendPoints(pts)
     },
     [hashTrendPoints],
+  )
+
+  const applyTrendSeries = useCallback(
+    ({
+      days,
+      points,
+      fetchedAt,
+    }: {
+      days: 90 | 60 | 30 | 14 | 7
+      points: AccountTrendPoint[]
+      fetchedAt: number | null
+    }) => {
+      const pts = Array.isArray(points) ? points : ([] as AccountTrendPoint[])
+      const sig = trendSigFor(days, pts)
+      if (sig === displayedTrendSigRef.current) return
+
+      setTrendPointsDeduped(pts)
+      if (fetchedAt !== null) setTrendFetchedAt(fetchedAt)
+      displayedTrendSigRef.current = sig
+    },
+    [setTrendPointsDeduped, trendSigFor],
   )
 
   const [hasCachedData, setHasCachedData] = useState(false)
@@ -1392,13 +1422,14 @@ export default function ResultsClient() {
           const cachedLen = cached.trendPoints.length
           const curLen = Array.isArray(trendPoints) ? trendPoints.length : 0
           if (cachedLen >= 1 || (curLen < 1 && !hasAppliedDailySnapshotTrendRef.current)) {
-            setTrendPointsDeduped(cached.trendPoints)
+            applyTrendSeries({
+              days: selectedTrendRangeDays,
+              points: cached.trendPoints,
+              fetchedAt: typeof cached.trendFetchedAt === "number" ? cached.trendFetchedAt : null,
+            })
           }
           hasRestoredTrendFromCacheRef.current = true
         }
-      }
-      if (typeof cached.trendFetchedAt === "number" || cached.trendFetchedAt === null) {
-        setTrendFetchedAt(cached.trendFetchedAt)
       }
 
       // Migrate legacy locale-specific cache to the locale-agnostic key.
@@ -1406,7 +1437,16 @@ export default function ResultsClient() {
     } finally {
       hasRestoredResultsCacheRef.current = true
     }
-  }, [activeLocale, igCacheId, resultsCacheKey, saReadResultsCache, saWriteResultsCache, setTrendPointsDeduped, trendPoints.length])
+  }, [
+    activeLocale,
+    applyTrendSeries,
+    igCacheId,
+    resultsCacheKey,
+    saReadResultsCache,
+    saWriteResultsCache,
+    selectedTrendRangeDays,
+    trendPoints.length,
+  ])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams?.toString() || "")
@@ -1909,17 +1949,11 @@ export default function ResultsClient() {
           if (dailySnapshotRequestSeqRef.current !== nextReqId) return
           if (selectedTrendRangeDays !== daysForRequest) return
           const sig = trendSigFor(daysForRequest, merged)
-          const prevSig = lastTrendSigByDaysRef.current.get(daysForRequest) ?? ""
-          if (sig === prevSig) {
-            fetchedByDaysRef.current.set(daysForRequest, true)
-            return
-          }
+          const fetchedAt = Date.now()
           hasAppliedDailySnapshotTrendRef.current = true
-          setTrendPointsDeduped(merged)
-          trendPointsByDaysRef.current.set(daysForRequest, merged)
-          lastTrendSigByDaysRef.current.set(daysForRequest, sig)
+          trendPointsByDaysRef.current.set(daysForRequest, { points: merged, fetchedAt, sig })
           fetchedByDaysRef.current.set(daysForRequest, true)
-          setTrendFetchedAt(Date.now())
+          applyTrendSeries({ days: daysForRequest, points: merged, fetchedAt })
         }
 
         setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
@@ -1944,6 +1978,7 @@ export default function ResultsClient() {
     normalizeTotalsFromInsightsDaily,
     selectedTrendRangeDays,
     supabaseBrowser,
+    applyTrendSeries,
     trendSigFor,
   ])
 
@@ -5116,8 +5151,8 @@ export default function ResultsClient() {
                               onClick={() => {
                                 if (selectedTrendRangeDays === d) return
                                 const cached = trendPointsByDaysRef.current.get(d)
-                                if (Array.isArray(cached) && cached.length >= 1) {
-                                  setTrendPointsDeduped(cached)
+                                if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
+                                  applyTrendSeries({ days: d, points: cached.points, fetchedAt: cached.fetchedAt })
                                 }
                                 fetchedByDaysRef.current.delete(d)
                                 setSelectedTrendRangeDays(d)
