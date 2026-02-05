@@ -6044,6 +6044,10 @@ export default function ResultsClient() {
                                 if (m && !isLikelyVideoUrl(m)) return m
                                 const d = deriveVideoThumbUrl(permalink, realShortcode, igHref)
                                 if (d) return d
+                                // Fallback: if we only have an IG permalink (page URL),
+                                // convert it to /media/?size=l so we can fetch a cover image.
+                                const p = (permalink || "").trim()
+                                if (p) return p
                                 return ""
                               }
 
@@ -6066,21 +6070,7 @@ export default function ResultsClient() {
                             }
 
                             if (chosenRaw.startsWith("http")) {
-                              const direct = (() => {
-                                try {
-                                  const u = new URL(chosenRaw)
-                                  const host = u.hostname.replace(/^www\./i, "")
-                                  if (!host.endsWith("instagram.com")) return null
-                                  const parts = u.pathname.split("/").filter(Boolean)
-                                  const kind = parts[0]
-                                  const code = parts[1]
-                                  if (!kind || !code) return null
-                                  if (!["p", "reel", "reels", "tv"].includes(kind)) return null
-                                  return `https://www.instagram.com/${kind}/${code}/media/?size=l`
-                                } catch {
-                                  return null
-                                }
-                              })()
+                              const direct = toIgDirectMediaUrl(chosenRaw)
                               const finalUrl = direct ?? chosenRaw
                               return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
                             }
@@ -6322,6 +6312,9 @@ export default function ResultsClient() {
                             if (m && !isLikelyVideoUrl(m)) return m
                             const d = deriveVideoThumbUrl(permalink, realShortcode, igHref)
                             if (d) return d
+                            // Fallback: use permalink and let the IG page->/media converter handle it.
+                            const p = (permalink || "").trim()
+                            if (p) return p
                             return ""
                           }
 
