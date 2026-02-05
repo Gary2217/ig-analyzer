@@ -254,6 +254,7 @@ function TopPostThumb({ src, alt, mediaType }: { src?: string; alt: string; medi
   const [currentSrc, setCurrentSrc] = useState<string>(src && src.length > 0 ? src : FALLBACK_IMG)
   const [broken, setBroken] = useState(false)
   const fallbackAttemptedRef = useRef(false)
+  const lastFailedSrcRef = useRef<string>("")
 
   // DEV-only: Extract hostname from original src URL
   const getDebugHostname = (srcUrl?: string): string => {
@@ -276,9 +277,16 @@ function TopPostThumb({ src, alt, mediaType }: { src?: string; alt: string; medi
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
+      const next = src && src.length > 0 ? src : FALLBACK_IMG
+      if (src && src.length > 0 && lastFailedSrcRef.current && src === lastFailedSrcRef.current) {
+        setBroken(true)
+        fallbackAttemptedRef.current = false
+        setCurrentSrc(next)
+        return
+      }
       setBroken(false)
       fallbackAttemptedRef.current = false
-      setCurrentSrc(src && src.length > 0 ? src : FALLBACK_IMG)
+      setCurrentSrc(next)
     })
     return () => cancelAnimationFrame(raf)
   }, [src])
@@ -298,6 +306,9 @@ function TopPostThumb({ src, alt, mediaType }: { src?: string; alt: string; medi
   }, [currentSrc, mediaType])
 
   const handleError = useCallback(() => {
+    if (src && src.length > 0) {
+      lastFailedSrcRef.current = src
+    }
     // If proxy failed and we haven't tried direct URL yet, try it
     if (!fallbackAttemptedRef.current && src && src.length > 0) {
       fallbackAttemptedRef.current = true
@@ -6104,11 +6115,13 @@ export default function ResultsClient() {
                         const insightsUnavailable = false
                         const insightsUnavailableLabel = isZh ? "無法取得洞察" : "Insights unavailable"
 
+                        const thumbAlt = `Post preview${mediaType ? ` (${mediaType}${ymd && ymd !== "—" ? ` ${ymd}` : ""})` : ""}`
+
                         return (
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                <TopPostThumb src={previewUrl || undefined} alt="post preview" mediaType={mediaType} />
+                                <TopPostThumb src={previewUrl || undefined} alt={thumbAlt} mediaType={mediaType} />
                               </a>
                             </div>
 
@@ -6401,12 +6414,14 @@ export default function ResultsClient() {
                         ? `/${activeLocale}/post-analysis?url=${encodeURIComponent(permalink)}`
                         : `/${activeLocale}/post-analysis`
 
+                      const thumbAlt = `Post preview${mediaType ? ` (${mediaType}${ymd && ymd !== "—" ? ` ${ymd}` : ""})` : ""}`
+
                       return (
                         <div key={real?.id || `latest-${idx}`} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
-                                <TopPostThumb src={previewUrl || undefined} alt="post preview" mediaType={mediaType} />
+                                <TopPostThumb src={previewUrl || undefined} alt={thumbAlt} mediaType={mediaType} />
                               </a>
                             </div>
 
