@@ -228,6 +228,28 @@ function jsonError(message: string, extra?: any, status = 400) {
   )
 }
 
+function jsonUpstreamTimeout() {
+  return jsonRes(
+    { ok: false, error: "upstream_timeout", detail: null },
+    504,
+    { cache: "miss", kind: "none", ageSeconds: 0, upstream: "called" }
+  )
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ac = new AbortController()
+  const t = setTimeout(() => ac.abort(), ms)
+  try {
+    return await fetch(url, { ...init, signal: ac.signal })
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError"
+}
+
 function safeLen(v: unknown): number {
   return Array.isArray(v) ? v.length : 0
 }
@@ -238,8 +260,17 @@ function safeLen(v: unknown): number {
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
-    const after = url.searchParams.get("after") || ""
-    const limit = url.searchParams.get("limit") || "25"
+
+    const DEFAULT_LIMIT = 25
+    const MAX_LIMIT = 100
+
+    const afterRaw = url.searchParams.get("after") || ""
+    const after = afterRaw && afterRaw.length > 600 ? afterRaw.slice(0, 600) : afterRaw
+
+    const limitRaw = url.searchParams.get("limit") || ""
+    const parsedLimit = Number(limitRaw)
+    const limitNum = Number.isFinite(parsedLimit) && Number.isInteger(parsedLimit) ? parsedLimit : DEFAULT_LIMIT
+    const limit = String(Math.max(1, Math.min(MAX_LIMIT, limitNum)))
 
     const c = await cookies()
     const isHttps = getIsHttps(req)
@@ -273,10 +304,20 @@ export async function GET(req: NextRequest) {
         )
         graphUrl.searchParams.set("access_token", userAccessToken)
 
-        const r = await fetch(graphUrl.toString(), {
-          method: "GET",
-          cache: "no-store",
-        })
+        let r: Response
+        try {
+          r = await fetchWithTimeout(
+            graphUrl.toString(),
+            {
+              method: "GET",
+              cache: "no-store",
+            },
+            10_000
+          )
+        } catch (e: unknown) {
+          if (isAbortError(e)) return jsonUpstreamTimeout()
+          throw e
+        }
         if (r.ok) {
           const data = (await r.json()) as any
           const list: any[] = Array.isArray(data?.data) ? data.data : []
@@ -359,14 +400,21 @@ export async function GET(req: NextRequest) {
       __mediaCache.delete(cacheKey)
     }
 
-    const pageTokenRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(
-        pageId
-      )}?fields=access_token&access_token=${encodeURIComponent(
-        userAccessToken
-      )}`,
-      { cache: "no-store" }
-    )
+    let pageTokenRes: Response
+    try {
+      pageTokenRes = await fetchWithTimeout(
+        `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(
+          pageId
+        )}?fields=access_token&access_token=${encodeURIComponent(
+          userAccessToken
+        )}`,
+        { cache: "no-store" },
+        10_000
+      )
+    } catch (e: unknown) {
+      if (isAbortError(e)) return jsonUpstreamTimeout()
+      throw e
+    }
 
     const pageTokenJson = await safeJson(pageTokenRes)
 
@@ -428,7 +476,13 @@ export async function GET(req: NextRequest) {
       (after ? `&after=${encodeURIComponent(after)}` : "") +
       `&access_token=${encodeURIComponent(pageAccessToken)}`
 
-    const mediaRes = await fetch(mediaUrl, { cache: "no-store" })
+    let mediaRes: Response
+    try {
+      mediaRes = await fetchWithTimeout(mediaUrl, { cache: "no-store" }, 10_000)
+    } catch (e: unknown) {
+      if (isAbortError(e)) return jsonUpstreamTimeout()
+      throw e
+    }
     const mediaJson = await safeJson(mediaRes)
 
     if (!mediaRes.ok) {

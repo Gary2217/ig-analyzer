@@ -5886,8 +5886,25 @@ export default function ResultsClient() {
                 </div>
               </CardHeader>
               <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
                   {(() => {
+                    if (isConnected && !mediaLoaded && !hasRealMedia) {
+                      return Array.from({ length: 3 }, (_, i) => (
+                        <div
+                          key={`top-loading-skeleton-${i}`}
+                          className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden"
+                        >
+                          <div className="flex gap-2 min-w-0">
+                            <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0 rounded-md bg-white/10 animate-pulse" />
+                            <div className="min-w-0 flex-1">
+                              <div className="h-3 w-32 rounded bg-white/10 animate-pulse" />
+                              <div className="mt-2 h-3 w-24 rounded bg-white/10 animate-pulse" />
+                              <div className="mt-3 h-6 w-full rounded bg-white/10 animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    }
                     const placeholders = Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` }))
                     const mockPosts = mockAnalysis.topPosts
                     const renderCards = hasRealMedia
@@ -5905,7 +5922,7 @@ export default function ResultsClient() {
 
                     const shown = !isSmUpViewport ? renderCards.slice(0, 3) : renderCards
                     return shown.map((p: unknown, index: number) => (
-                      <div key={String(isRecord(p) && typeof p.id === "string" ? p.id : index)} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
+                      <div key={String(isRecord(p) && typeof p.id === "string" ? p.id : index)} className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden">
                         {(() => {
                           if (!isRecord(p)) return null
                           const real = p
@@ -6239,8 +6256,25 @@ export default function ResultsClient() {
                 </div>
               </CardHeader>
               <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
                   {(() => {
+                    if (isConnected && !mediaLoaded) {
+                      return Array.from({ length: 3 }, (_, i) => (
+                        <div
+                          key={`latest-loading-skeleton-${i}`}
+                          className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden"
+                        >
+                          <div className="flex gap-2 min-w-0">
+                            <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0 rounded-md bg-white/10 animate-pulse" />
+                            <div className="min-w-0 flex-1">
+                              <div className="h-3 w-32 rounded bg-white/10 animate-pulse" />
+                              <div className="mt-2 h-3 w-24 rounded bg-white/10 animate-pulse" />
+                              <div className="mt-3 h-6 w-full rounded bg-white/10 animate-pulse" />
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    }
                     const renderCards = latestPosts.length > 0 ? latestPosts : []
                     
                     if (renderCards.length === 0) {
@@ -6309,22 +6343,7 @@ export default function ResultsClient() {
                         if (!chosenRaw) {
                           const p = (permalink || "").trim()
                           if (p && p.startsWith("http")) {
-                            const direct = (() => {
-                              try {
-                                const u = new URL(p)
-                                const host = u.hostname.replace(/^www\./i, "")
-                                if (!host.endsWith("instagram.com")) return null
-                                const parts = u.pathname.split("/").filter(Boolean)
-                                const kind = parts[0]
-                                const code = parts[1]
-                                if (!kind || !code) return null
-                                if (!["p", "reel", "reels", "tv"].includes(kind)) return null
-                                return `https://www.instagram.com/${kind}/${code}/media/?size=l`
-                              } catch {
-                                return null
-                              }
-                            })()
-                            const finalUrl = direct ?? p
+                            const finalUrl = toIgDirectMediaUrl(p) ?? p
                             return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
                           }
                           return ""
@@ -6334,22 +6353,7 @@ export default function ResultsClient() {
                           if (!t || isLikelyVideoUrl(t)) {
                             const p = (permalink || "").trim()
                             if (p && p.startsWith("http")) {
-                              const direct = (() => {
-                                try {
-                                  const u = new URL(p)
-                                  const host = u.hostname.replace(/^www\./i, "")
-                                  if (!host.endsWith("instagram.com")) return null
-                                  const parts = u.pathname.split("/").filter(Boolean)
-                                  const kind = parts[0]
-                                  const code = parts[1]
-                                  if (!kind || !code) return null
-                                  if (!["p", "reel", "reels", "tv"].includes(kind)) return null
-                                  return `https://www.instagram.com/${kind}/${code}/media/?size=l`
-                                } catch {
-                                  return null
-                                }
-                              })()
-                              const finalUrl = direct ?? p
+                              const finalUrl = toIgDirectMediaUrl(p) ?? p
                               return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
                             }
                             return ""
@@ -6386,7 +6390,7 @@ export default function ResultsClient() {
                       const thumbAlt = `Post preview${mediaType ? ` (${mediaType}${ymd && ymd !== "—" ? ` ${ymd}` : ""})` : ""}`
 
                       return (
-                        <div key={real?.id || `latest-${idx}`} className="rounded-xl border border-white/8 bg-white/5 p-3 min-w-0 overflow-hidden">
+                        <div key={real?.id || `latest-${idx}`} className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden">
                           <div className="flex gap-2 min-w-0">
                             <div className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
                               <a href={igHref || undefined} target="_blank" rel="noopener noreferrer" className="block relative overflow-hidden rounded-md bg-white/5 border border-white/10 h-full w-full">
