@@ -994,6 +994,9 @@ export default function ResultsClient() {
   const fetchedByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, boolean>())
   const inFlightTrendDaysRef = useRef<null | (90 | 60 | 30 | 14 | 7)>(null)
   const lastFetchAtByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, number>())
+  const lastTrendSigByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, string>())
+  const hasRestoredTrendFromCacheRef = useRef(false)
+  const hasRestoredResultsCacheRef = useRef(false)
 
   const [followersDailyRows, setFollowersDailyRows] = useState<
     Array<{ day: string; followers_count: number }>
@@ -1016,6 +1019,33 @@ export default function ResultsClient() {
     } catch {
       return String(Date.now())
     }
+  }, [])
+
+  const trendSigFor = useCallback((days: 90 | 60 | 30 | 14 | 7, pts: AccountTrendPoint[]) => {
+    const list = Array.isArray(pts) ? pts : []
+    const len = list.length
+    const firstTs = len > 0 && typeof list[0]?.ts === "number" && Number.isFinite(list[0].ts) ? (list[0].ts as number) : 0
+    const lastTs = len > 0 && typeof list[len - 1]?.ts === "number" && Number.isFinite(list[len - 1].ts) ? (list[len - 1].ts as number) : 0
+
+    let sumReach = 0
+    let countReach = 0
+    let sumImpr = 0
+    let countImpr = 0
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i]
+      const r = p?.reach
+      if (typeof r === "number" && Number.isFinite(r)) {
+        sumReach += r
+        countReach += 1
+      }
+      const im = p?.impressions
+      if (typeof im === "number" && Number.isFinite(im)) {
+        sumImpr += im
+        countImpr += 1
+      }
+    }
+
+    return `${days}|${len}|${firstTs}|${lastTs}|r:${Math.round(sumReach)}:${countReach}|i:${Math.round(sumImpr)}:${countImpr}`
   }, [])
 
   const setTrendPointsDeduped = useCallback(
@@ -1335,6 +1365,8 @@ export default function ResultsClient() {
   }, [])
 
   useEffect(() => {
+    if (hasRestoredResultsCacheRef.current) return
+
     const legacyKeySameLocale = `results_cache:${igCacheId}:7:${activeLocale}`
     const legacyKeyOtherLocale = `results_cache:${igCacheId}:7:${activeLocale === "zh-TW" ? "en" : "zh-TW"}`
 
@@ -1343,29 +1375,38 @@ export default function ResultsClient() {
       saReadResultsCache(legacyKeySameLocale) ??
       saReadResultsCache(legacyKeyOtherLocale)
 
-    if (!cached) {
-      setHasCachedData(false)
-      return
-    }
-
-    setHasCachedData(true)
-    if (cached.igMe) setIgMe(cached.igMe)
-    if (Array.isArray(cached.media)) {
-      setMedia(cached.media)
-      if (cached.media.length > 0) setMediaLoaded(true)
-    }
-    if (Array.isArray(cached.trendPoints)) {
-      const cachedLen = cached.trendPoints.length
-      const curLen = Array.isArray(trendPoints) ? trendPoints.length : 0
-      if (cachedLen >= 1 || (curLen < 1 && !hasAppliedDailySnapshotTrendRef.current)) {
-        setTrendPointsDeduped(cached.trendPoints)
+    try {
+      if (!cached) {
+        setHasCachedData(false)
+        return
       }
-    }
-    if (typeof cached.trendFetchedAt === "number" || cached.trendFetchedAt === null) setTrendFetchedAt(cached.trendFetchedAt)
 
-    // Migrate legacy locale-specific cache to the locale-agnostic key.
-    saWriteResultsCache(resultsCacheKey, cached)
-  }, [resultsCacheKey, setTrendPointsDeduped, trendPoints.length])
+      setHasCachedData(true)
+      if (cached.igMe) setIgMe(cached.igMe)
+      if (Array.isArray(cached.media)) {
+        setMedia(cached.media)
+        if (cached.media.length > 0) setMediaLoaded(true)
+      }
+      if (Array.isArray(cached.trendPoints)) {
+        if (!hasRestoredTrendFromCacheRef.current) {
+          const cachedLen = cached.trendPoints.length
+          const curLen = Array.isArray(trendPoints) ? trendPoints.length : 0
+          if (cachedLen >= 1 || (curLen < 1 && !hasAppliedDailySnapshotTrendRef.current)) {
+            setTrendPointsDeduped(cached.trendPoints)
+          }
+          hasRestoredTrendFromCacheRef.current = true
+        }
+      }
+      if (typeof cached.trendFetchedAt === "number" || cached.trendFetchedAt === null) {
+        setTrendFetchedAt(cached.trendFetchedAt)
+      }
+
+      // Migrate legacy locale-specific cache to the locale-agnostic key.
+      saWriteResultsCache(resultsCacheKey, cached)
+    } finally {
+      hasRestoredResultsCacheRef.current = true
+    }
+  }, [activeLocale, igCacheId, resultsCacheKey, saReadResultsCache, saWriteResultsCache, setTrendPointsDeduped, trendPoints.length])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams?.toString() || "")
@@ -1867,9 +1908,16 @@ export default function ResultsClient() {
         if (merged.length >= 1) {
           if (dailySnapshotRequestSeqRef.current !== nextReqId) return
           if (selectedTrendRangeDays !== daysForRequest) return
+          const sig = trendSigFor(daysForRequest, merged)
+          const prevSig = lastTrendSigByDaysRef.current.get(daysForRequest) ?? ""
+          if (sig === prevSig) {
+            fetchedByDaysRef.current.set(daysForRequest, true)
+            return
+          }
           hasAppliedDailySnapshotTrendRef.current = true
           setTrendPointsDeduped(merged)
           trendPointsByDaysRef.current.set(daysForRequest, merged)
+          lastTrendSigByDaysRef.current.set(daysForRequest, sig)
           fetchedByDaysRef.current.set(daysForRequest, true)
           setTrendFetchedAt(Date.now())
         }
@@ -1896,6 +1944,7 @@ export default function ResultsClient() {
     normalizeTotalsFromInsightsDaily,
     selectedTrendRangeDays,
     supabaseBrowser,
+    trendSigFor,
   ])
 
   useEffect(() => {
