@@ -4,6 +4,9 @@ export const runtime = "nodejs"
 
 const __thumbInflight = new Map<string, Promise<Response>>()
 
+const __thumbDebugLogSet = new Set<string>()
+const __THUMB_DEBUG_LOG_MAX = 50
+
 // Whitelist of allowed CDN hostnames (for final redirect validation)
 // Includes all Instagram/Facebook CDN patterns commonly used in production
 const ALLOWED_CDN_HOSTNAMES = [
@@ -15,7 +18,32 @@ const ALLOWED_CDN_HOSTNAMES = [
 ]
 
 // Regex for Instagram media path: /(p|reel|tv)/{shortcode}/media/
-const INSTAGRAM_MEDIA_PATH_REGEX = /^\/(p|reel|tv)\/[A-Za-z0-9_-]+\/media\/$/
+const INSTAGRAM_MEDIA_PATH_REGEX = /^\/(p|reel|reels|tv)\/[A-Za-z0-9_-]+\/media\/$/
+
+function stripUrlQueryAndHash(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl)
+    u.search = ""
+    u.hash = ""
+    return u.toString()
+  } catch {
+    return ""
+  }
+}
+
+function isInstagramHostname(hostnameRaw: string): boolean {
+  const h = String(hostnameRaw || "").toLowerCase().replace(/\.$/, "")
+  return h === "instagram.com" || h.endsWith(".instagram.com") || h === "instagr.am"
+}
+
+function logThumbDebugOnce(enabled: boolean, key: string, payload: Record<string, unknown>) {
+  if (!enabled) return
+  if (__thumbDebugLogSet.size >= __THUMB_DEBUG_LOG_MAX) return
+  if (__thumbDebugLogSet.has(key)) return
+  __thumbDebugLogSet.add(key)
+  // eslint-disable-next-line no-console
+  console.debug("[ig-thumb:debug]", payload)
+}
 
 function isAllowedImageUrl(url: string): boolean {
   try {
@@ -37,8 +65,8 @@ function isAllowedImageUrl(url: string): boolean {
       return true
     }
     
-    // Allow www.instagram.com ONLY for /media/ paths
-    if (hostname === "www.instagram.com") {
+    // Allow instagram.com domain variants ONLY for /media/ paths
+    if (isInstagramHostname(hostname)) {
       const pathname = parsed.pathname
       return INSTAGRAM_MEDIA_PATH_REGEX.test(pathname)
     }
@@ -71,6 +99,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const thumbnailUrl = searchParams.get("url")
+    const debugThumbEnabled = searchParams.get("debugThumb") === "1"
     
     if (!thumbnailUrl) {
       return NextResponse.json(
@@ -78,11 +107,24 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
-    
-    const initialUrlObj = new URL(thumbnailUrl)
+
+    let initialUrlObj: URL
+    try {
+      initialUrlObj = new URL(thumbnailUrl)
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid url parameter" },
+        { status: 400 }
+      )
+    }
     
     // Validate URL is from allowed Instagram/FB CDN
     if (!isAllowedImageUrl(thumbnailUrl)) {
+      logThumbDebugOnce(debugThumbEnabled, `blocked:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}`, {
+        kind: "blocked",
+        inputUrlHost: initialUrlObj.hostname,
+        inputUrlPath: initialUrlObj.pathname,
+      })
       const errorPayload: Record<string, unknown> = {
         error: "URL not from allowed Instagram CDN",
       }
@@ -173,6 +215,20 @@ export async function GET(request: NextRequest) {
         if (!isCDNHostname(finalHostname)) {
           console.error(`Final URL not from allowed CDN: ${finalHostname}`)
 
+          logThumbDebugOnce(
+            debugThumbEnabled,
+            `final_host_blocked:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${finalHostname}`,
+            {
+              kind: "final_hostname_blocked",
+              inputUrlHost: initialUrlObj.hostname,
+              inputUrlPath: initialUrlObj.pathname,
+              finalHostname,
+              finalUrl: stripUrlQueryAndHash(finalUrl) || null,
+              upstreamStatus: imageResponse.status,
+              upstreamContentType: imageResponse.headers.get("content-type"),
+            }
+          )
+
           const errorPayload: Record<string, unknown> = {
             error: "Final redirect URL not from allowed CDN",
           }
@@ -215,6 +271,21 @@ export async function GET(request: NextRequest) {
 
         if (!imageResponse.ok) {
           console.error(`Failed to fetch thumbnail: ${imageResponse.status} ${imageResponse.statusText}`)
+
+          logThumbDebugOnce(
+            debugThumbEnabled,
+            `upstream_error:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${imageResponse.status}`,
+            {
+              kind: "upstream_error",
+              inputUrlHost: initialUrlObj.hostname,
+              inputUrlPath: initialUrlObj.pathname,
+              finalHostname,
+              finalUrl: stripUrlQueryAndHash(finalUrl) || null,
+              upstreamStatus: imageResponse.status,
+              upstreamContentType: imageResponse.headers.get("content-type"),
+            }
+          )
+
           const errorPayload: Record<string, unknown> = {
             error: "Failed to fetch thumbnail from Instagram",
           }
@@ -244,8 +315,24 @@ export async function GET(request: NextRequest) {
         const contentType = imageResponse.headers.get("content-type") || ""
         if (!contentType.startsWith("image/")) {
           console.error(`Invalid content type: ${contentType}`)
+
+          logThumbDebugOnce(
+            debugThumbEnabled,
+            `non_image:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${contentType.slice(0, 64)}`,
+            {
+              kind: "non_image",
+              inputUrlHost: initialUrlObj.hostname,
+              inputUrlPath: initialUrlObj.pathname,
+              finalHostname,
+              finalUrl: stripUrlQueryAndHash(finalUrl) || null,
+              upstreamStatus: imageResponse.status,
+              upstreamContentType: contentType,
+            }
+          )
+
           const errorPayload: Record<string, unknown> = {
             error: "Resource is not an image",
+            code: "NON_IMAGE_UPSTREAM",
           }
           const headers: Record<string, string> = {
             "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
@@ -295,6 +382,17 @@ export async function GET(request: NextRequest) {
         }
 
         console.error(`Thumbnail fetch error: ${errorMsg}`, fetchError)
+
+        logThumbDebugOnce(
+          debugThumbEnabled,
+          `fetch_error:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${errorReason}`,
+          {
+            kind: "fetch_error",
+            inputUrlHost: initialUrlObj.hostname,
+            inputUrlPath: initialUrlObj.pathname,
+            errorReason,
+          }
+        )
         const errorPayload: Record<string, unknown> = {
           error: errorMsg,
         }
