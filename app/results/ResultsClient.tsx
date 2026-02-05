@@ -985,6 +985,7 @@ export default function ResultsClient() {
     error: "",
     lastDays: null,
   })
+  const [selectedTrendRangeDays, setSelectedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
   const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
@@ -1764,7 +1765,7 @@ export default function ResultsClient() {
 
     lastDailySnapshotFetchAtRef.current = now
 
-    setTrendFetchStatus({ loading: true, error: "", lastDays: 90 })
+    setTrendFetchStatus({ loading: true, error: "", lastDays: selectedTrendRangeDays })
     setTrendNeedsConnectHint(false)
     lastDailySnapshotPointsSourceRef.current = ""
 
@@ -1782,7 +1783,7 @@ export default function ResultsClient() {
 
     ;(async () => {
       try {
-        const igReq = fetch("/api/instagram/daily-snapshot?days=90", {
+        const igReq = fetch(`/api/instagram/daily-snapshot?days=${selectedTrendRangeDays}`, {
           method: "POST",
           cache: "no-store",
           credentials: "include",
@@ -1810,7 +1811,9 @@ export default function ResultsClient() {
               .eq("page_id", page_id)
               .gte("day", (() => {
                 const now = new Date()
-                const ms = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0) - 89 * 24 * 60 * 60 * 1000
+                const ms =
+                  Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0) -
+                  (selectedTrendRangeDays - 1) * 24 * 60 * 60 * 1000
                 const d = new Date(ms)
                 const y = d.getUTCFullYear()
                 const m = String(d.getUTCMonth() + 1).padStart(2, "0")
@@ -1824,14 +1827,14 @@ export default function ResultsClient() {
 
         if (igRes.status === 401 || igRes.status === 403) {
           setTrendNeedsConnectHint(true)
-          setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
           return
         }
 
         const json7 = await igRes.json().catch(() => null)
         if (!igRes.ok || !json7?.ok) {
           setDailySnapshotData(null)
-          setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
           return
         }
 
@@ -1844,7 +1847,7 @@ export default function ResultsClient() {
         lastDailySnapshotPointsSourceRef.current = pointsSource
 
         if (pointsSource === "empty") {
-          setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
+          setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
           return
         }
 
@@ -1852,19 +1855,23 @@ export default function ResultsClient() {
         setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
 
         const dbRows = isRecord(dbRes) ? dbRes.data : null
-        const merged90 = mergeToContinuousTrendPoints({ days: 90, baseDbRowsRaw: dbRows, overridePointsRaw: json7?.points })
+        const merged = mergeToContinuousTrendPoints({
+          days: selectedTrendRangeDays,
+          baseDbRowsRaw: dbRows,
+          overridePointsRaw: json7?.points,
+        })
 
-        if (merged90.length >= 1) {
+        if (merged.length >= 1) {
           hasAppliedDailySnapshotTrendRef.current = true
-          setTrendPointsDeduped(merged90)
+          setTrendPointsDeduped(merged)
           setTrendFetchedAt(Date.now())
         }
 
-        setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
+        setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
       } catch (e: unknown) {
         if (isRecord(e) && e.name === "AbortError") return
         setDailySnapshotData(null)
-        setTrendFetchStatus({ loading: false, error: "", lastDays: 90 })
+        setTrendFetchStatus({ loading: false, error: "", lastDays: selectedTrendRangeDays })
       }
     })()
 
@@ -1873,7 +1880,15 @@ export default function ResultsClient() {
       // and would prematurely cancel an in-flight request. Abort is handled only when a
       // new request starts (above) or on component unmount (separate effect).
     }
-  }, [isConnectedInstagram, mergeToContinuousTrendPoints, normalizeTotalsFromInsightsDaily, snapshotRevalidateSeq, supabaseBrowser, trendRevalidateSeq])
+  }, [
+    isConnectedInstagram,
+    mergeToContinuousTrendPoints,
+    normalizeTotalsFromInsightsDaily,
+    selectedTrendRangeDays,
+    snapshotRevalidateSeq,
+    supabaseBrowser,
+    trendRevalidateSeq,
+  ])
 
   useEffect(() => {
     return () => {
@@ -5033,9 +5048,30 @@ export default function ResultsClient() {
                 <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
                     <div className="shrink-0">
-                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80 whitespace-nowrap">
-                        <span className="tabular-nums">90天數據</span>
-                      </span>
+                      <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 p-0.5 text-xs font-semibold text-white/80 whitespace-nowrap">
+                        {([90, 60, 30, 14, 7] as const).map((d) => {
+                          const active = selectedTrendRangeDays === d
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => {
+                                setSelectedTrendRangeDays(d)
+                                hasFetchedDailySnapshotRef.current = false
+                                lastDailySnapshotFetchAtRef.current = 0
+                              }}
+                              className={
+                                `h-10 sm:h-7 px-3 sm:px-2.5 rounded-full tabular-nums text-xs font-semibold transition-colors ` +
+                                `focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 ` +
+                                (active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/6")
+                              }
+                            >
+                              {d}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
 
                     <div className="min-w-0 flex-1 flex justify-end overflow-x-auto flex-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden">

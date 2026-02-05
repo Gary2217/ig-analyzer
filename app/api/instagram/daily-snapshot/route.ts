@@ -334,11 +334,11 @@ function getCookieValueFromHeader(cookie: string, key: string) {
 }
 
 function clampDays(raw: string | null) {
+  const allowed = new Set([90, 60, 30, 14, 7])
   const n = Number(raw)
-  if (!Number.isFinite(n)) return 7
+  if (!Number.isFinite(n)) return 90
   const i = Math.floor(n)
-  if (i < 1) return 1
-  if (i > 365) return 365
+  if (!allowed.has(i)) return 90
   return i
 }
 
@@ -713,6 +713,9 @@ export async function POST(req: Request) {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
+            rangeDays: safeDays,
+            rangeStart: start,
+            rangeEnd: today,
             available_days: availableDays ?? list.length,
             points: buildPaddedPoints({ days: safeDays, byDate }),
             points_ok: true,
@@ -803,6 +806,9 @@ export async function POST(req: Request) {
             build_marker: BUILD_MARKER,
             ok: true,
             days: safeDays,
+            rangeDays: safeDays,
+            rangeStart: start,
+            rangeEnd: today,
             available_days: availableDays,
             points: [],
             points_ok: false,
@@ -900,6 +906,9 @@ export async function POST(req: Request) {
           build_marker: BUILD_MARKER,
           ok: true,
           days: safeDays,
+          rangeDays: safeDays,
+          rangeStart: start,
+          rangeEnd: today,
           available_days: availableDays,
           points,
           points_ok: true,
