@@ -249,6 +249,22 @@ function saWriteResultsCache(key: string, payload: ResultsCachePayloadV1) {
   }
 }
 
+function toIgDirectMediaUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw)
+    const host = u.hostname.replace(/^www\./i, "")
+    if (!host.endsWith("instagram.com")) return null
+    const parts = u.pathname.split("/").filter(Boolean)
+    const kind = parts[0]
+    const code = parts[1]
+    if (!kind || !code) return null
+    if (!["p", "reel", "reels", "tv"].includes(kind)) return null
+    return `https://www.instagram.com/${kind}/${code}/media/?size=l`
+  } catch {
+    return null
+  }
+}
+
 function TopPostThumb({ src, alt, mediaType }: { src?: string; alt: string; mediaType?: string }) {
   const FALLBACK_IMG = "/window.svg"
   const [currentSrc, setCurrentSrc] = useState<string>(src && src.length > 0 ? src : FALLBACK_IMG)
@@ -5996,24 +6012,6 @@ export default function ResultsClient() {
                         const previewUrl = (() => {
                           const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
 
-                          // If a candidate is an Instagram post page URL (p/reel/reels/tv),
-                          // convert it to the direct /media/ image endpoint before proxying.
-                          const toIgDirectMediaUrl = (raw: string): string | null => {
-                            try {
-                              const u = new URL(raw)
-                              const host = u.hostname.replace(/^www\./i, "")
-                              if (!host.endsWith("instagram.com")) return null
-                              const parts = u.pathname.split("/").filter(Boolean)
-                              const kind = parts[0]
-                              const code = parts[1]
-                              if (!kind || !code) return null
-                              if (!["p", "reel", "reels", "tv"].includes(kind)) return null
-                              return `https://www.instagram.com/${kind}/${code}/media/?size=l`
-                            } catch {
-                              return null
-                            }
-                          }
-
                           const pickFrom = (it: unknown): { mt: string; tu: string; mu: string } => {
                             if (!isRecord(it)) return { mt: "", tu: "", mu: "" }
                             const mt = String((it as any).media_type ?? (it as any).mediaType ?? "")
@@ -6376,21 +6374,7 @@ export default function ResultsClient() {
                         }
 
                         if (chosenRaw.startsWith("http")) {
-                          const direct = (() => {
-                            try {
-                              const u = new URL(chosenRaw)
-                              const host = u.hostname.replace(/^www\./i, "")
-                              if (!host.endsWith("instagram.com")) return null
-                              const parts = u.pathname.split("/").filter(Boolean)
-                              const kind = parts[0]
-                              const code = parts[1]
-                              if (!kind || !code) return null
-                              if (!["p", "reel", "reels", "tv"].includes(kind)) return null
-                              return `https://www.instagram.com/${kind}/${code}/media/?size=l`
-                            } catch {
-                              return null
-                            }
-                          })()
+                          const direct = toIgDirectMediaUrl(chosenRaw)
                           const finalUrl = direct ?? chosenRaw
                           return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
                         }
