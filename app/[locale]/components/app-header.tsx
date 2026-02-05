@@ -30,11 +30,12 @@ export default function AppHeader({ locale }: { locale: string }) {
     const hasSaved = sessionStorage.getItem("creatorCard:updated") === "1"
     
     if (hasSaved) {
+      sessionStorage.removeItem("creatorCard:updated")
       // Append ccUpdated flag to trigger immediate hydration
       router.push(`/${locale}/results?ccUpdated=1#creator-card`)
     } else {
       // Normal navigation without flag
-      router.push(`/${locale}/results#creator-card`)
+      router.push(`/${locale}/results`)
     }
   }
 
