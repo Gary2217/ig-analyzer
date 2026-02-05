@@ -180,12 +180,14 @@ export async function GET(request: NextRequest) {
 
         clearTimeout(timeoutId)
 
-        // Verify final response URL (after redirects) is from allowed CDN
+        // Verify final response URL (after redirects)
         const finalUrl = imageResponse.url
         let finalHostname = ""
+        let finalPathname = ""
         try {
           const finalParsed = new URL(finalUrl)
           finalHostname = finalParsed.hostname.toLowerCase()
+          finalPathname = finalParsed.pathname || ""
         } catch {
           console.error("Failed to parse final response URL")
           const errorPayload: Record<string, unknown> = {
@@ -211,8 +213,14 @@ export async function GET(request: NextRequest) {
           )
         }
 
+        const contentType = imageResponse.headers.get("content-type") || ""
+        const isFinalInstagramMediaImage =
+          isInstagramHostname(finalHostname) &&
+          INSTAGRAM_MEDIA_PATH_REGEX.test(finalPathname) &&
+          contentType.startsWith("image/")
+
         // Final URL must be from CDN domains (not arbitrary instagram.com pages)
-        if (!isCDNHostname(finalHostname)) {
+        if (!isCDNHostname(finalHostname) && !isFinalInstagramMediaImage) {
           console.error(`Final URL not from allowed CDN: ${finalHostname}`)
 
           logThumbDebugOnce(
@@ -225,7 +233,7 @@ export async function GET(request: NextRequest) {
               finalHostname,
               finalUrl: stripUrlQueryAndHash(finalUrl) || null,
               upstreamStatus: imageResponse.status,
-              upstreamContentType: imageResponse.headers.get("content-type"),
+              upstreamContentType: contentType,
             }
           )
 
@@ -265,7 +273,7 @@ export async function GET(request: NextRequest) {
           console.debug("[ig-thumb] final", {
             finalHostname,
             status: imageResponse.status,
-            contentType: imageResponse.headers.get("content-type"),
+            contentType,
           })
         }
 
@@ -282,7 +290,7 @@ export async function GET(request: NextRequest) {
               finalHostname,
               finalUrl: stripUrlQueryAndHash(finalUrl) || null,
               upstreamStatus: imageResponse.status,
-              upstreamContentType: imageResponse.headers.get("content-type"),
+              upstreamContentType: contentType,
             }
           )
 
@@ -312,7 +320,6 @@ export async function GET(request: NextRequest) {
         }
 
         // Validate Content-Type is an image
-        const contentType = imageResponse.headers.get("content-type") || ""
         if (!contentType.startsWith("image/")) {
           console.error(`Invalid content type: ${contentType}`)
 
@@ -351,7 +358,7 @@ export async function GET(request: NextRequest) {
           return NextResponse.json(
             errorPayload,
             {
-              status: 502,
+              status: 415,
               headers,
             },
           )
