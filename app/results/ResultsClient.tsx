@@ -1110,6 +1110,10 @@ export default function ResultsClient() {
   const loggedEmptySnapshotTopPostsRef = useRef(false)
   const loggedMissingVideoThumbRef = useRef<Record<string, true>>({})
 
+  const DEBUG_REELS = new Set(["CmBaUTTjRzR", "DS9WIXIEyrD"])
+  const loggedThumbDebugReelsTopPostsRef = useRef<Record<string, true>>({})
+  const loggedThumbDebugReelsLatestPostsRef = useRef<Record<string, true>>({})
+
   const isThumbDebugEnabled = useMemo(() => {
     try {
       if (typeof window === "undefined") return false
@@ -6080,6 +6084,23 @@ export default function ResultsClient() {
                           return ""
                         })()
 
+                        if (isThumbDebugEnabled) {
+                          const sc = String(realShortcode || "")
+                          if (DEBUG_REELS.has(sc) && !loggedThumbDebugReelsTopPostsRef.current[sc]) {
+                            loggedThumbDebugReelsTopPostsRef.current[sc] = true
+                            // eslint-disable-next-line no-console
+                            console.debug("[thumb-debug reels]", {
+                              section: "top_posts",
+                              shortcode: sc,
+                              permalink,
+                              mediaType,
+                              thumbnail_url: (real as any)?.thumbnail_url ?? (real as any)?.thumbnailUrl ?? null,
+                              media_url: (real as any)?.media_url ?? (real as any)?.mediaUrl ?? null,
+                              previewUrl,
+                            })
+                          }
+                        }
+
                         if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
                           const key = String(realIdOrPermalink || real?.id || index)
                           if (!loggedMissingVideoThumbRef.current[key]) {
@@ -6089,23 +6110,6 @@ export default function ResultsClient() {
                               idOrPermalink: realIdOrPermalink || null,
                               hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
                               hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
-                            })
-                          }
-                        }
-
-                        if (__DEV__ && !previewUrl) {
-                          const key = String(realIdOrPermalink || real?.id || index)
-                          if (!loggedMissingTopPostPreviewRef.current[key]) {
-                            loggedMissingTopPostPreviewRef.current[key] = true
-                            // eslint-disable-next-line no-console
-                            console.debug("[top posts] missing previewUrl", {
-                              realIdOrPermalink: realIdOrPermalink || null,
-                              has_real_tu: Boolean((real as any)?.thumbnail_url || (real as any)?.thumbnailUrl),
-                              has_real_mu: Boolean((real as any)?.media_url || (real as any)?.mediaUrl),
-                              has_snapshot_match: Boolean(snapshotMatchPost),
-                              has_recent_match: Boolean(recentMatchPost),
-                              has_snapshot_index: Boolean(Array.isArray(snapshotTopPosts) && Boolean(snapshotTopPosts[index])),
-                              has_recent_index: Boolean(Array.isArray(recentPosts) && Boolean(recentPosts[index])),
                             })
                           }
                         }
@@ -6354,6 +6358,23 @@ export default function ResultsClient() {
                         }
                         return chosenRaw
                       })()
+
+                      if (isThumbDebugEnabled) {
+                        const sc = String(realShortcode || "")
+                        if (DEBUG_REELS.has(sc) && !loggedThumbDebugReelsLatestPostsRef.current[sc]) {
+                          loggedThumbDebugReelsLatestPostsRef.current[sc] = true
+                          // eslint-disable-next-line no-console
+                          console.debug("[thumb-debug reels]", {
+                            section: "latest_posts",
+                            shortcode: sc,
+                            permalink,
+                            mediaType,
+                            thumbnail_url: (real as any)?.thumbnail_url ?? (real as any)?.thumbnailUrl ?? null,
+                            media_url: (real as any)?.media_url ?? (real as any)?.mediaUrl ?? null,
+                            previewUrl,
+                          })
+                        }
+                      }
 
                       if (isThumbDebugEnabled && !previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
                         const key = String(real?.id || real?.permalink || idx)
