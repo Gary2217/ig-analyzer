@@ -37,7 +37,7 @@ let __resultsMediaFetchedOnce = false
 let __resultsMeFetchedOnce = false
 
 // Debug helper for Creator Card Preview refresh flow (dev-only)
-const debugCreatorCard = (...args: any[]) => {
+const debugCreatorCard = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
     console.debug("[CreatorCardPreview]", ...args)
   }
@@ -2086,21 +2086,18 @@ export default function ResultsClient() {
   const snapshotTopPosts = useMemo(() => {
     if (!isRecord(dailySnapshotData)) return [] as unknown[]
 
-    const c1 = (dailySnapshotData as any).top_posts
-    if (Array.isArray(c1) && c1.length > 0) return c1
-    const c2 = (dailySnapshotData as any).topPosts
-    if (Array.isArray(c2) && c2.length > 0) return c2
-    const c3 = (dailySnapshotData as any).top_performing_posts
-    if (Array.isArray(c3) && c3.length > 0) return c3
-    const c4 = (dailySnapshotData as any).topPerformingPosts
-    if (Array.isArray(c4) && c4.length > 0) return c4
+    const candidates = ["top_posts", "topPosts", "top_performing_posts", "topPerformingPosts"]
+    for (const k of candidates) {
+      const v = dailySnapshotData[k]
+      if (Array.isArray(v) && v.length > 0) return v
+    }
 
     if (__DEV__ && !loggedEmptySnapshotTopPostsRef.current) {
       loggedEmptySnapshotTopPostsRef.current = true
       try {
         // eslint-disable-next-line no-console
         console.debug("[daily-snapshot] snapshotTopPosts empty", {
-          keys: Object.keys(dailySnapshotData as any).slice(0, 80),
+          keys: Object.keys(dailySnapshotData).slice(0, 80),
         })
       } catch {
         // ignore
@@ -2466,6 +2463,64 @@ export default function ResultsClient() {
 
   const isPreview = (n: number | null) => isConnected && n === null
 
+  const hasOwn = (obj: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(obj, key)
+
+  const readUnknown = (obj: unknown, key: string): unknown => {
+    if (!isRecord(obj)) return undefined
+    if (!hasOwn(obj, key)) return undefined
+    return obj[key]
+  }
+
+  const readString = (obj: unknown, key: string): string => {
+    const v = readUnknown(obj, key)
+    return typeof v === "string" ? v : ""
+  }
+
+  const readNumber = (obj: unknown, key: string): number | null => {
+    const v = readUnknown(obj, key)
+    return typeof v === "number" && Number.isFinite(v) ? v : null
+  }
+
+  const readIdLike = (obj: unknown, key: string): string => {
+    const v = readUnknown(obj, key)
+    if (typeof v === "string") return v
+    if (typeof v === "number" && Number.isFinite(v)) return String(v)
+    return ""
+  }
+
+  const getStablePostIdentity = (obj: unknown): { id: string; permalink: string; shortcode: string } => {
+    return {
+      id: readIdLike(obj, "id"),
+      permalink: readString(obj, "permalink"),
+      shortcode: readString(obj, "shortcode"),
+    }
+  }
+
+  const getBasicMediaFields = (obj: unknown): {
+    likeCount: number
+    commentsCount: number
+    mediaType: string
+    timestamp: string
+    permalink: string
+    caption: string
+    thumbnailUrl: string
+    mediaUrl: string
+    shortcode: string
+    id: string
+  } => {
+    const likeCount = readNumber(obj, "like_count") ?? 0
+    const commentsCount = readNumber(obj, "comments_count") ?? 0
+    const mediaType = readString(obj, "media_type")
+    const timestamp = readString(obj, "timestamp")
+    const permalink = readString(obj, "permalink")
+    const caption = readString(obj, "caption")
+    const thumbnailUrl = readString(obj, "thumbnail_url")
+    const mediaUrl = readString(obj, "media_url")
+    const shortcode = readString(obj, "shortcode")
+    const id = readIdLike(obj, "id")
+    return { likeCount, commentsCount, mediaType, timestamp, permalink, caption, thumbnailUrl, mediaUrl, shortcode, id }
+  }
+
   // KPI numbers should accept numeric strings from API responses.
   const kpiFollowers = finiteNumOrNull(isRecord(igProfile) ? igProfile.followers_count : null)
   const kpiFollowing = finiteNumOrNull(isRecord(igProfile) ? igProfile.follows_count : null)
@@ -2474,6 +2529,8 @@ export default function ResultsClient() {
 
   // Treat any non-empty media array as real media; do NOT require like/comment metrics.
   const hasRealMedia = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
+
+  type PostsSectionStatus = "loading" | "error" | "empty" | "content"
 
   const topPerformingPosts = useMemo(() => {
     if (!hasRealMedia) return []
@@ -2536,6 +2593,20 @@ export default function ResultsClient() {
 
     return copy.slice(0, 3)
   }, [effectiveRecentMedia])
+
+  const resolveTopPostsStatus = useCallback((): PostsSectionStatus => {
+    if (!isConnected) return "content"
+    if (!mediaLoaded && !hasRealMedia) return "loading"
+    if (mediaLoaded && !hasRealMedia) return "empty"
+    return "content"
+  }, [hasRealMedia, isConnected, mediaLoaded])
+
+  const resolveLatestPostsStatus = useCallback((): PostsSectionStatus => {
+    if (!isConnected) return "content"
+    if (!mediaLoaded) return "loading"
+    if (hasRealMedia && latestPosts.length === 0) return "empty"
+    return "content"
+  }, [hasRealMedia, isConnected, latestPosts.length, mediaLoaded])
 
   // Helper to extract debug info from posts
   const extractPostDebugInfo = useCallback((posts: unknown[]) => {
@@ -4274,7 +4345,7 @@ export default function ResultsClient() {
       <ResultsDebugPanel
         refreshDebug={refreshDebug}
         orchestratorDebug={{
-          ...(orchestratorDebug as any),
+          ...(isRecord(orchestratorDebug) ? orchestratorDebug : {}),
           revalidateSeq: { mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq },
         }}
       />
@@ -5952,6 +6023,8 @@ export default function ResultsClient() {
               />
             )}
 
+            {renderMediaErrorBanner()}
+
             <Card
               id="top-posts-section"
               data-testid="top-performing-posts"
@@ -5963,7 +6036,6 @@ export default function ResultsClient() {
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-2">
                     {t("results.topPosts.description")}
                   </p>
-                  {renderMediaErrorBanner()}
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-1">{uiCopy.topPostsSortHint}</p>
                 </div>
 
@@ -5994,8 +6066,12 @@ export default function ResultsClient() {
               <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
                   {(() => {
-                    if (isConnected && !mediaLoaded && !hasRealMedia) {
-                      return Array.from({ length: 3 }, (_, i) => (
+                    const sectionStatus = resolveTopPostsStatus()
+
+                    const mobileSkeletonCount = isSmUpViewport ? 3 : 2
+
+                    if (sectionStatus === "loading") {
+                      return Array.from({ length: mobileSkeletonCount }, (_, i) => (
                         <div
                           key={`top-loading-skeleton-${i}`}
                           className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden"
@@ -6005,26 +6081,25 @@ export default function ResultsClient() {
                             <div className="min-w-0 flex-1">
                               <div className="h-3 w-32 rounded bg-white/10 animate-pulse" />
                               <div className="mt-2 h-3 w-24 rounded bg-white/10 animate-pulse" />
-                              <div className="mt-3 h-6 w-full rounded bg-white/10 animate-pulse" />
+                              <div className="mt-3 h-6 w-full rounded bg-white/10 animate-pulse hidden sm:block" />
                             </div>
                           </div>
                         </div>
                       ))
                     }
-                    const placeholders = Array.from({ length: 3 }, (_, i) => ({ id: `loading-${i}` }))
-                    const mockPosts = mockAnalysis.topPosts
-                    const renderCards = hasRealMedia
-                      ? (topPerformingPosts.length > 0 ? topPerformingPosts : effectiveRecentMedia.slice(0, 3))
-                      : (isConnected ? placeholders : mockPosts.slice(0, 3))
 
-                    // Show empty state if connected but no posts available
-                    if (isConnected && renderCards.length === 0) {
+                    if (sectionStatus === "empty") {
                       return (
-                        <div className="col-span-full text-center py-8 text-white/60 text-sm">
+                        <div className="col-span-full text-center py-4 sm:py-8 text-white/60 text-xs sm:text-sm">
                           {t("results.topPosts.emptyState")}
                         </div>
                       )
                     }
+
+                    const mockPosts = mockAnalysis.topPosts
+                    const renderCards = hasRealMedia
+                      ? (topPerformingPosts.length > 0 ? topPerformingPosts : effectiveRecentMedia.slice(0, 3))
+                      : mockPosts.slice(0, 3)
 
                     const shown = !isSmUpViewport ? renderCards.slice(0, 3) : renderCards
                     return shown.map((p: unknown, index: number) => (
@@ -6059,9 +6134,10 @@ export default function ResultsClient() {
                           return `${y}/${m}/${day}`
                         })()
 
-                        const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
-                        const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
-                        const realShortcode = typeof (real as any)?.shortcode === "string" ? String((real as any).shortcode) : ""
+                        const base = getBasicMediaFields(real)
+                        const permalink = base.permalink
+                        const caption = base.caption.trim() ? base.caption.trim() : ""
+                        const realShortcode = base.shortcode
 
                         const normalizeKey = (input: string): string => {
                           const s = String(input || "").trim()
@@ -6074,13 +6150,11 @@ export default function ResultsClient() {
                         }
 
                         const realIdOrPermalink = (() => {
-                          const idRaw = (real as any)?.id
-                          const idStr = typeof idRaw === "string" ? idRaw : typeof idRaw === "number" ? String(idRaw) : ""
+                          const idStr = base.id
                           if (idStr.trim()) return normalizeKey(idStr)
-                          const pl = typeof (real as any)?.permalink === "string" ? String((real as any).permalink).trim() : ""
+                          const pl = permalink.trim()
                           if (pl) return normalizeKey(pl)
-                          const midRaw = (real as any)?.media_id ?? (real as any)?.mediaId
-                          const midStr = typeof midRaw === "string" ? midRaw : typeof midRaw === "number" ? String(midRaw) : ""
+                          const midStr = readIdLike(real, "media_id") || readIdLike(real, "mediaId")
                           if (midStr.trim()) return normalizeKey(midStr)
                           return ""
                         })()
@@ -6094,9 +6168,8 @@ export default function ResultsClient() {
 
                         const getIdAndPermalink = (it: unknown): { id: string; pl: string } => {
                           if (!isRecord(it)) return { id: "", pl: "" }
-                          const idRaw = (it as any).id
-                          const id = typeof idRaw === "string" ? idRaw : typeof idRaw === "number" ? String(idRaw) : ""
-                          const pl = typeof (it as any).permalink === "string" ? String((it as any).permalink) : ""
+                          const id = readIdLike(it, "id")
+                          const pl = readString(it, "permalink")
                           return { id, pl }
                         }
 
@@ -6122,17 +6195,9 @@ export default function ResultsClient() {
 
                           const pickFrom = (it: unknown): { mt: string; tu: string; mu: string } => {
                             if (!isRecord(it)) return { mt: "", tu: "", mu: "" }
-                            const mt = String((it as any).media_type ?? (it as any).mediaType ?? "")
-                            const tu = typeof (it as any).thumbnail_url === "string"
-                              ? String((it as any).thumbnail_url)
-                              : typeof (it as any).thumbnailUrl === "string"
-                                ? String((it as any).thumbnailUrl)
-                                : ""
-                            const mu = typeof (it as any).media_url === "string"
-                              ? String((it as any).media_url)
-                              : typeof (it as any).mediaUrl === "string"
-                                ? String((it as any).mediaUrl)
-                                : ""
+                            const mt = readString(it, "media_type") || readString(it, "mediaType")
+                            const tu = readString(it, "thumbnail_url") || readString(it, "thumbnailUrl")
+                            const mu = readString(it, "media_url") || readString(it, "mediaUrl")
                             return { mt, tu, mu }
                           }
 
@@ -6197,16 +6262,17 @@ export default function ResultsClient() {
                         })()
 
                         if (!previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                          const ident = getStablePostIdentity(real)
                           const stableKey = getStableVideoThumbLogKey({
-                            id: (real as any)?.id,
-                            permalink: (real as any)?.permalink,
-                            shortcode: (real as any)?.shortcode,
+                            id: ident.id,
+                            permalink: ident.permalink,
+                            shortcode: ident.shortcode,
                           })
                           maybeLogMissingVideoThumb({
                             stableKey,
                             idOrPermalink: realIdOrPermalink || null,
-                            hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
-                            hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
+                            hasPermalink: Boolean(ident.permalink.trim()),
+                            hasShortcode: Boolean(ident.shortcode.trim()),
                           })
                         }
 
@@ -6380,14 +6446,17 @@ export default function ResultsClient() {
                   <p className="mt-0.5 hidden sm:block text-[11px] text-muted-foreground leading-snug line-clamp-2">
                     {t("results.latestPosts.description")}
                   </p>
-                  {renderMediaErrorBanner()}
                 </div>
               </CardHeader>
               <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-3 lg:px-6 lg:pb-5 lg:pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
                   {(() => {
-                    if (isConnected && !mediaLoaded) {
-                      return Array.from({ length: 3 }, (_, i) => (
+                    const sectionStatus = resolveLatestPostsStatus()
+
+                    const mobileSkeletonCount = isSmUpViewport ? 3 : 2
+
+                    if (sectionStatus === "loading") {
+                      return Array.from({ length: mobileSkeletonCount }, (_, i) => (
                         <div
                           key={`latest-loading-skeleton-${i}`}
                           className="rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden"
@@ -6397,34 +6466,31 @@ export default function ResultsClient() {
                             <div className="min-w-0 flex-1">
                               <div className="h-3 w-32 rounded bg-white/10 animate-pulse" />
                               <div className="mt-2 h-3 w-24 rounded bg-white/10 animate-pulse" />
-                              <div className="mt-3 h-6 w-full rounded bg-white/10 animate-pulse" />
+                              <div className="mt-3 h-6 w-full rounded bg-white/10 animate-pulse hidden sm:block" />
                             </div>
                           </div>
                         </div>
                       ))
                     }
-                    const renderCards = latestPosts.length > 0 ? latestPosts : []
-                    
-                    if (renderCards.length === 0) {
+
+                    if (sectionStatus === "empty") {
                       return (
-                        <div className="col-span-full text-center py-8 text-white/60 text-sm">
+                        <div className="col-span-full text-center py-4 sm:py-8 text-white/60 text-xs sm:text-sm">
                           {t("results.latestPosts.emptyState")}
                         </div>
                       )
                     }
 
-                    return renderCards.map((item, idx) => {
-                      const real = isRecord(item) ? item : null
-                      if (!real) return null
-
-                      const likes = typeof real?.like_count === "number" ? real.like_count : 0
-                      const comments = typeof real?.comments_count === "number" ? real.comments_count : 0
+                    return latestPosts.map((real, idx) => {
+                      const base = getBasicMediaFields(real)
+                      const likes = base.likeCount
+                      const comments = base.commentsCount
                       const engagement = likes + comments
 
-                      const mediaType = typeof real?.media_type === "string" ? String(real.media_type) : ""
+                      const mediaType = base.mediaType
 
                       const ymd = (() => {
-                        const ts = typeof real?.timestamp === "string" ? real.timestamp : ""
+                        const ts = base.timestamp
                         if (!ts) return "—"
                         const d = new Date(ts)
                         const tms = d.getTime()
@@ -6435,15 +6501,15 @@ export default function ResultsClient() {
                         return `${y}/${m}/${day}`
                       })()
 
-                      const permalink = typeof real?.permalink === "string" && real.permalink ? real.permalink : ""
-                      const caption = typeof real?.caption === "string" && real.caption.trim() ? real.caption.trim() : ""
+                      const permalink = base.permalink.trim() ? base.permalink : ""
+                      const caption = base.caption.trim() ? base.caption.trim() : ""
                       const igHref = permalink
-                      const realShortcode = typeof (real as any)?.shortcode === "string" ? String((real as any).shortcode) : ""
+                      const realShortcode = base.shortcode
 
                       const previewUrl = (() => {
-                        const mt = String(real.media_type ?? "")
-                        const tu = typeof real.thumbnail_url === "string" ? String(real.thumbnail_url) : ""
-                        const mu = typeof real.media_url === "string" ? String(real.media_url) : ""
+                        const mt = String(base.mediaType ?? "")
+                        const tu = base.thumbnailUrl
+                        const mu = base.mediaUrl
                         const isVideoType = mt === "VIDEO" || mt === "REELS"
                         const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
 
@@ -6495,16 +6561,17 @@ export default function ResultsClient() {
                       })()
 
                       if (!previewUrl && (mediaType === "VIDEO" || mediaType === "REELS")) {
+                        const ident = getStablePostIdentity(real)
                         const stableKey = getStableVideoThumbLogKey({
-                          id: (real as any)?.id,
-                          permalink: (real as any)?.permalink,
-                          shortcode: (real as any)?.shortcode,
+                          id: ident.id,
+                          permalink: ident.permalink,
+                          shortcode: ident.shortcode,
                         })
                         maybeLogMissingVideoThumb({
                           stableKey,
-                          idOrPermalink: String(real?.id || real?.permalink || "") || null,
-                          hasPermalink: Boolean(typeof (real as any)?.permalink === "string" && String((real as any).permalink).trim()),
-                          hasShortcode: Boolean(typeof (real as any)?.shortcode === "string" && String((real as any).shortcode).trim()),
+                          idOrPermalink: (ident.id || ident.permalink) ? String(ident.id || ident.permalink) : null,
+                          hasPermalink: Boolean(ident.permalink.trim()),
+                          hasShortcode: Boolean(ident.shortcode.trim()),
                         })
                       }
 
@@ -6517,7 +6584,7 @@ export default function ResultsClient() {
                       const cardHref = (igHref || "").trim()
 
                       return (
-                        <div key={real?.id || `latest-${idx}`} className="group relative rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden transition-colors duration-150 hover:border-white/15 hover:bg-white/6 active:bg-white/8">
+                        <div key={base.id ? String(base.id) : `latest-${idx}`} className="group relative rounded-xl border border-white/8 bg-white/5 p-3 sm:p-4 min-w-0 overflow-hidden transition-colors duration-150 hover:border-white/15 hover:bg-white/6 active:bg-white/8">
                           {cardHref ? (
                             <a
                               href={cardHref}
