@@ -3226,6 +3226,37 @@ export default function ResultsClient() {
     }
   }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    if (window.location.hash !== "#creator-card") return
+
+    let allowOnce = false
+    try {
+      allowOnce = sessionStorage.getItem("creatorCard:updated") === "1"
+      if (allowOnce) {
+        sessionStorage.removeItem("creatorCard:updated")
+      }
+    } catch {
+      allowOnce = false
+    }
+
+    if (allowOnce) return
+
+    try {
+      const newUrl = window.location.pathname + window.location.search
+      window.history.replaceState({}, "", newUrl)
+    } catch {
+      // ignore
+    }
+
+    try {
+      window.scrollTo({ top: 0, behavior: "auto" })
+    } catch {
+      // ignore
+    }
+  }, [])
+
   // Mount-time check: reload if hash includes creator-card AND storage has timestamp
   // This handles router.back() navigation where ccUpdated param is not present
   useEffect(() => {
