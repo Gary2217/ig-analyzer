@@ -5989,6 +5989,24 @@ export default function ResultsClient() {
                         const previewUrl = (() => {
                           const isLikelyVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u) || /\/o1\/v\//i.test(u)
 
+                          // If a candidate is an Instagram post page URL (p/reel/reels/tv),
+                          // convert it to the direct /media/ image endpoint before proxying.
+                          const toIgDirectMediaUrl = (raw: string): string | null => {
+                            try {
+                              const u = new URL(raw)
+                              const host = u.hostname.replace(/^www\./i, "")
+                              if (!host.endsWith("instagram.com")) return null
+                              const parts = u.pathname.split("/").filter(Boolean)
+                              const kind = parts[0]
+                              const code = parts[1]
+                              if (!kind || !code) return null
+                              if (!["p", "reel", "reels", "tv"].includes(kind)) return null
+                              return `https://www.instagram.com/${kind}/${code}/media/?size=l`
+                            } catch {
+                              return null
+                            }
+                          }
+
                           const pickFrom = (it: unknown): { mt: string; tu: string; mu: string } => {
                             if (!isRecord(it)) return { mt: "", tu: "", mu: "" }
                             const mt = String((it as any).media_type ?? (it as any).mediaType ?? "")
@@ -6047,7 +6065,25 @@ export default function ResultsClient() {
                               return t
                             }
 
-                            if (chosenRaw.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(chosenRaw)}`
+                            if (chosenRaw.startsWith("http")) {
+                              const direct = (() => {
+                                try {
+                                  const u = new URL(chosenRaw)
+                                  const host = u.hostname.replace(/^www\./i, "")
+                                  if (!host.endsWith("instagram.com")) return null
+                                  const parts = u.pathname.split("/").filter(Boolean)
+                                  const kind = parts[0]
+                                  const code = parts[1]
+                                  if (!kind || !code) return null
+                                  if (!["p", "reel", "reels", "tv"].includes(kind)) return null
+                                  return `https://www.instagram.com/${kind}/${code}/media/?size=l`
+                                } catch {
+                                  return null
+                                }
+                              })()
+                              const finalUrl = direct ?? chosenRaw
+                              return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
+                            }
                             return chosenRaw
                           }
 
@@ -6304,7 +6340,25 @@ export default function ResultsClient() {
                           return t
                         }
 
-                        if (chosenRaw.startsWith("http")) return `/api/ig/thumbnail?url=${encodeURIComponent(chosenRaw)}`
+                        if (chosenRaw.startsWith("http")) {
+                          const direct = (() => {
+                            try {
+                              const u = new URL(chosenRaw)
+                              const host = u.hostname.replace(/^www\./i, "")
+                              if (!host.endsWith("instagram.com")) return null
+                              const parts = u.pathname.split("/").filter(Boolean)
+                              const kind = parts[0]
+                              const code = parts[1]
+                              if (!kind || !code) return null
+                              if (!["p", "reel", "reels", "tv"].includes(kind)) return null
+                              return `https://www.instagram.com/${kind}/${code}/media/?size=l`
+                            } catch {
+                              return null
+                            }
+                          })()
+                          const finalUrl = direct ?? chosenRaw
+                          return `/api/ig/thumbnail?url=${encodeURIComponent(finalUrl)}`
+                        }
                         return chosenRaw
                       })()
 
