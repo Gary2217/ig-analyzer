@@ -991,6 +991,9 @@ export default function ResultsClient() {
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
   const trendPointsByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, AccountTrendPoint[]>())
+  const fetchedByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, boolean>())
+  const inFlightTrendDaysRef = useRef<null | (90 | 60 | 30 | 14 | 7)>(null)
+  const lastFetchAtByDaysRef = useRef(new Map<90 | 60 | 30 | 14 | 7, number>())
 
   const [followersDailyRows, setFollowersDailyRows] = useState<
     Array<{ day: string; followers_count: number }>
@@ -1742,32 +1745,24 @@ export default function ResultsClient() {
       return
     }
 
-    const isRevalidateTrigger = (() => {
-      if (snapshotRevalidateSeq > 0 && snapshotRevalidateSeq !== lastSnapshotRevalidateSeqRef.current) {
-        lastSnapshotRevalidateSeqRef.current = snapshotRevalidateSeq
-        return true
-      }
-      if (trendRevalidateSeq > 0 && trendRevalidateSeq !== lastTrendRevalidateSeqRef.current) {
-        lastTrendRevalidateSeqRef.current = trendRevalidateSeq
-        return true
-      }
-      return false
-    })()
+    const cooldownMs = 90_000
+    const now = Date.now()
+    const daysForRequest = selectedTrendRangeDays
 
-    // HARD GUARD: already fetched once successfully
-    if (hasFetchedDailySnapshotRef.current && !isRevalidateTrigger) {
-      return
+    const shouldStartTrendFetch = (d: 90 | 60 | 30 | 14 | 7, t: number) => {
+      if (inFlightTrendDaysRef.current === d) return false
+      const lastAt = lastFetchAtByDaysRef.current.get(d) ?? 0
+      if (t - lastAt < cooldownMs) return false
+      if (fetchedByDaysRef.current.get(d) === true) return false
+      return true
     }
 
-    hasFetchedDailySnapshotRef.current = true
+    if (!shouldStartTrendFetch(daysForRequest, now)) return
 
-    const now = Date.now()
-    const cooldownMs = 90_000
-    if (now - lastDailySnapshotFetchAtRef.current < cooldownMs) return
+    // Mutations only after we are sure we are starting a request.
+    inFlightTrendDaysRef.current = daysForRequest
+    lastFetchAtByDaysRef.current.set(daysForRequest, now)
 
-    lastDailySnapshotFetchAtRef.current = now
-
-    const daysForRequest = selectedTrendRangeDays
     setTrendFetchStatus({ loading: true, error: "", lastDays: daysForRequest })
     setTrendNeedsConnectHint(false)
     lastDailySnapshotPointsSourceRef.current = ""
@@ -1875,14 +1870,18 @@ export default function ResultsClient() {
           hasAppliedDailySnapshotTrendRef.current = true
           setTrendPointsDeduped(merged)
           trendPointsByDaysRef.current.set(daysForRequest, merged)
+          fetchedByDaysRef.current.set(daysForRequest, true)
           setTrendFetchedAt(Date.now())
         }
 
         setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
       } catch (e: unknown) {
-        if (isRecord(e) && e.name === "AbortError") return
-        setDailySnapshotData(null)
-        setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+        if (!(isRecord(e) && e.name === "AbortError")) {
+          setDailySnapshotData(null)
+          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+        }
+      } finally {
+        if (inFlightTrendDaysRef.current === daysForRequest) inFlightTrendDaysRef.current = null
       }
     })()
 
@@ -1896,9 +1895,7 @@ export default function ResultsClient() {
     mergeToContinuousTrendPoints,
     normalizeTotalsFromInsightsDaily,
     selectedTrendRangeDays,
-    snapshotRevalidateSeq,
     supabaseBrowser,
-    trendRevalidateSeq,
   ])
 
   useEffect(() => {
@@ -5068,13 +5065,13 @@ export default function ResultsClient() {
                               type="button"
                               aria-pressed={active}
                               onClick={() => {
+                                if (selectedTrendRangeDays === d) return
                                 const cached = trendPointsByDaysRef.current.get(d)
                                 if (Array.isArray(cached) && cached.length >= 1) {
                                   setTrendPointsDeduped(cached)
                                 }
+                                fetchedByDaysRef.current.delete(d)
                                 setSelectedTrendRangeDays(d)
-                                hasFetchedDailySnapshotRef.current = false
-                                lastDailySnapshotFetchAtRef.current = 0
                               }}
                               className={
                                 `h-10 sm:h-7 px-3 sm:px-2.5 rounded-full tabular-nums text-xs font-semibold transition-colors ` +
