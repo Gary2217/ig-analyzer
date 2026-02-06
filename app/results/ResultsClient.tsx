@@ -1022,10 +1022,15 @@ export default function ResultsClient() {
       return 0.5
     }
   })
+  const [comparePanelOpen, setComparePanelOpen] = useState(false)
+
+  const trendCacheKey = useCallback((metric: "reach" | "followers", days: 90 | 60 | 30 | 14 | 7) => {
+    return `${metric}:${days}`
+  }, [])
 
   const trendPointsByDaysRef = useRef(
     new Map<
-      90 | 60 | 30 | 14 | 7,
+      string,
       {
         points: AccountTrendPoint[]
         fetchedAt: number | null
@@ -1100,6 +1105,8 @@ export default function ResultsClient() {
     let countReach = 0
     let sumImpr = 0
     let countImpr = 0
+    let sumFollowers = 0
+    let countFollowers = 0
     for (let i = 0; i < list.length; i++) {
       const p = list[i]
       const r = p?.reach
@@ -1112,9 +1119,15 @@ export default function ResultsClient() {
         sumImpr += im
         countImpr += 1
       }
+
+      const f = p?.followerDelta
+      if (typeof f === "number" && Number.isFinite(f)) {
+        sumFollowers += f
+        countFollowers += 1
+      }
     }
 
-    return `${days}|${len}|${firstTs}|${lastTs}|r:${Math.round(sumReach)}:${countReach}|i:${Math.round(sumImpr)}:${countImpr}`
+    return `${days}|${len}|${firstTs}|${lastTs}|r:${Math.round(sumReach)}:${countReach}|i:${Math.round(sumImpr)}:${countImpr}|f:${Math.round(sumFollowers)}:${countFollowers}`
   }, [])
 
   const setTrendPointsDeduped = useCallback(
@@ -1197,6 +1210,8 @@ export default function ResultsClient() {
   const [focusedAccountTrendMetric, setFocusedAccountTrendMetric] = useState<AccountTrendMetricKey>("reach")
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
 
+  const trendRangeSwitchStartRef = useRef<{ at: number; days: 90 | 60 | 30 | 14 | 7 } | null>(null)
+
   const hoverRafRef = useRef<number | null>(null)
   const lastHoverIdxRef = useRef<number | null>(null)
 
@@ -1248,12 +1263,59 @@ export default function ResultsClient() {
     }
   }
 
-  const compareSeries = useMemo(() => {
+  const compareSeriesReach = useMemo(() => {
     if (!compareEnabled) return null
-    const cached = trendPointsByDaysRef.current.get(compareRangeDays)
+    const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", compareRangeDays))
     if (!cached || !Array.isArray(cached.points) || cached.points.length < 1) return null
     return cached.points
-  }, [compareEnabled, compareRangeDays])
+  }, [compareEnabled, compareRangeDays, trendCacheKey])
+
+  const compareSeriesFollowers = useMemo(() => {
+    if (!compareEnabled) return null
+    const cached = trendPointsByDaysRef.current.get(trendCacheKey("followers", compareRangeDays))
+    if (!cached || !Array.isArray(cached.points) || cached.points.length < 1) return null
+    return cached.points
+  }, [compareEnabled, compareRangeDays, trendCacheKey])
+
+  useEffect(() => {
+    if (!Array.isArray(followersDailyRows) || followersDailyRows.length < 1) return
+
+    const sorted = [...followersDailyRows]
+      .filter((r) => typeof r?.day === "string" && typeof r?.followers_count === "number" && Number.isFinite(r.followers_count))
+      .sort((a, b) => String(a.day).localeCompare(String(b.day)))
+
+    if (sorted.length < 1) return
+
+    const mkLabel = (day: string) => {
+      const ts = Date.parse(`${day}T00:00:00.000Z`)
+      if (!Number.isFinite(ts)) return String(day)
+      const d = new Date(ts)
+      try {
+        return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(d)
+      } catch {
+        const m = String(d.getMonth() + 1).padStart(2, "0")
+        const dd = String(d.getDate()).padStart(2, "0")
+        return `${m}/${dd}`
+      }
+    }
+
+    const allRanges = [90, 60, 30, 14, 7] as const
+    for (const days of allRanges) {
+      const slice = sorted.slice(Math.max(0, sorted.length - days))
+      const points: AccountTrendPoint[] = slice
+        .map((r) => {
+          const day = String(r.day)
+          const ts = Date.parse(`${day}T00:00:00.000Z`)
+          if (!Number.isFinite(ts)) return null
+          return { t: mkLabel(day), ts, followerDelta: r.followers_count }
+        })
+        .filter(Boolean) as AccountTrendPoint[]
+
+      if (points.length < 1) continue
+      const sig = trendSigFor(days, points)
+      trendPointsByDaysRef.current.set(trendCacheKey("followers", days), { points, fetchedAt: null, sig })
+    }
+  }, [followersDailyRows, trendCacheKey, trendSigFor])
 
   const TrendHoverTooltip = memo(function TrendHoverTooltip({
     title,
@@ -1285,6 +1347,27 @@ export default function ResultsClient() {
     lastHoverIdxRef.current = nextIdx
     setHoveredAccountTrendIndex(nextIdx)
   }, [])
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return
+    const m = trendRangeSwitchStartRef.current
+    if (!m) return
+    if (m.days !== selectedTrendRangeDays) return
+    const start = m.at
+    trendRangeSwitchStartRef.current = null
+    requestAnimationFrame(() => {
+      const ms = typeof performance !== "undefined" ? performance.now() - start : Date.now() - start
+      console.debug("[trend][ui] range_switch_paint", { days: m.days, ms: Math.round(ms) })
+    })
+  }, [selectedTrendRangeDays])
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return
+    if (!compareEnabled) return
+    const metric = focusedAccountTrendMetric === "followers" ? "followers" : "reach"
+    const cachedOk = metric === "followers" ? Boolean(compareSeriesFollowers) : Boolean(compareSeriesReach)
+    console.debug("[trend][ui] compare_cache", { metric, days: compareRangeDays, cached: cachedOk })
+  }, [compareEnabled, compareRangeDays, compareSeriesFollowers, compareSeriesReach, focusedAccountTrendMetric])
 
   // Determine whether "recent_media" looks like real IG media (numeric id) — DEV logging only
   const recentFirstId = (() => {
@@ -2069,7 +2152,7 @@ export default function ResultsClient() {
           const sig = trendSigFor(daysForRequest, merged)
           const fetchedAt = Date.now()
           hasAppliedDailySnapshotTrendRef.current = true
-          trendPointsByDaysRef.current.set(daysForRequest, { points: merged, fetchedAt, sig })
+          trendPointsByDaysRef.current.set(trendCacheKey("reach", daysForRequest), { points: merged, fetchedAt, sig })
           fetchedByDaysRef.current.set(daysForRequest, true)
           applyTrendSeries({ days: daysForRequest, points: merged, fetchedAt })
         }
@@ -5268,7 +5351,10 @@ export default function ResultsClient() {
                               aria-pressed={active}
                               onClick={() => {
                                 if (selectedTrendRangeDays === d) return
-                                const cached = trendPointsByDaysRef.current.get(d)
+                                if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+                                  trendRangeSwitchStartRef.current = { at: performance.now(), days: d }
+                                }
+                                const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", d))
                                 if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
                                   setSelectedTrendRangeDays(d)
                                   applyCachedTrendSeriesDirect({ days: d, cached })
@@ -5296,67 +5382,21 @@ export default function ResultsClient() {
                     </div>
 
                     <div className="shrink-0">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-white/75 whitespace-nowrap">
-                        <button
-                          type="button"
-                          aria-pressed={compareEnabled}
-                          onClick={() => {
-                            setCompareEnabled((v) => !v)
-                          }}
-                          className={
-                            "inline-flex items-center rounded-full border px-2 py-1 transition-colors " +
-                            (compareEnabled ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/8")
-                          }
-                        >
-                          Compare
-                        </button>
-
-                        <select
-                          value={compareRangeDays}
-                          disabled={!compareEnabled}
-                          onChange={(e) => {
-                            const v = Number(e.target.value)
-                            if (v === 90 || v === 60 || v === 30 || v === 14 || v === 7) setCompareRangeDays(v)
-                          }}
-                          className={
-                            "h-7 rounded-full border px-2 text-xs font-semibold bg-transparent " +
-                            (compareEnabled
-                              ? "border-white/15 text-white/80"
-                              : "border-white/10 text-white/45 opacity-70 cursor-not-allowed")
-                          }
-                        >
-                          {[90, 60, 30, 14, 7].map((d) => (
-                            <option key={`cmp-${d}`} value={d}>
-                              {d}d
-                            </option>
-                          ))}
-                        </select>
-
-                        <input
-                          type="range"
-                          min={0.2}
-                          max={0.9}
-                          step={0.1}
-                          value={compareOpacity}
-                          disabled={!compareEnabled}
-                          onChange={(e) => {
-                            const v = Number(e.target.value)
-                            if (!Number.isFinite(v)) return
-                            setCompareOpacity(Math.max(0.2, Math.min(0.9, v)))
-                          }}
-                          className={
-                            "w-16 h-2 accent-white/70 " +
-                            (compareEnabled ? "opacity-90" : "opacity-40 cursor-not-allowed")
-                          }
-                          aria-label="Compare opacity"
-                        />
-                      </div>
-
-                      {compareEnabled && focusedAccountTrendMetric === "reach" && !compareSeries ? (
-                        <div className="mt-1 text-[10px] text-white/45 leading-snug">
-                          Compare range not cached yet — select that range once to load it.
-                        </div>
-                      ) : null}
+                      <button
+                        type="button"
+                        aria-pressed={compareEnabled}
+                        onClick={() => {
+                          setCompareEnabled((v) => !v)
+                        }}
+                        className={
+                          "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors min-h-[36px] whitespace-nowrap " +
+                          (compareEnabled
+                            ? "border-white/20 bg-white/10 text-white"
+                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/8")
+                        }
+                      >
+                        Compare
+                      </button>
                     </div>
 
                     <div className="min-w-0 flex-1 flex justify-end overflow-x-auto flex-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden">
@@ -5389,6 +5429,85 @@ export default function ResultsClient() {
                         })}
                       </div>
                     </div>
+
+                    {/* Collapsible compare panel - mobile only */}
+                    {compareEnabled && (
+                      <div className="sm:hidden mt-3">
+                        <button
+                          type="button"
+                          onClick={() => setComparePanelOpen(!comparePanelOpen)}
+                          className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 min-h-[36px] text-white/70 text-xs font-medium"
+                          aria-expanded={comparePanelOpen}
+                          aria-controls="compare-panel-content"
+                        >
+                          <span>Compare Settings</span>
+                          <svg 
+                            className={`w-4 h-4 transition-transform ${comparePanelOpen ? 'rotate-180' : ''}`}
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        
+                        {comparePanelOpen && (
+                          <div 
+                            id="compare-panel-content"
+                            className="mt-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 min-w-0"
+                          >
+                            <div className="flex flex-col gap-3 min-w-0">
+                              <div className="min-w-0">
+                                <label className="text-[10px] text-white/45 leading-none mb-1 block">
+                                  Compare Range
+                                </label>
+                                <select
+                                  value={compareRangeDays}
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value)
+                                    if (v === 90 || v === 60 || v === 30 || v === 14 || v === 7) setCompareRangeDays(v)
+                                  }}
+                                  className="w-full min-h-[36px] rounded-full border border-white/15 bg-white/5 px-3 text-sm font-semibold text-white/85"
+                                >
+                                  {[90, 60, 30, 14, 7].map((d) => (
+                                    <option key={`cmp-${d}`} value={d}>
+                                      {d} days
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="min-w-0">
+                                <label className="text-[10px] text-white/45 leading-none mb-1 block">
+                                  Opacity
+                                </label>
+                                <input
+                                  type="range"
+                                  min={0.2}
+                                  max={0.9}
+                                  step={0.1}
+                                  value={compareOpacity}
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value)
+                                    if (!Number.isFinite(v)) return
+                                    setCompareOpacity(Math.max(0.2, Math.min(0.9, v)))
+                                  }}
+                                  className="w-full h-2 accent-white/70 opacity-90"
+                                  aria-label="Compare opacity"
+                                />
+                              </div>
+
+                              {((focusedAccountTrendMetric === "reach" && !compareSeriesReach) ||
+                                (focusedAccountTrendMetric === "followers" && !compareSeriesFollowers)) ? (
+                                <div className="text-[10px] text-white/45 leading-snug">
+                                  Compare range not cached yet — select that range once to load it.
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="hidden sm:inline-flex shrink-0 tabular-nums text-xs text-white/55 whitespace-nowrap">
                       <span>目前可用 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} 天</span>
@@ -6114,12 +6233,12 @@ export default function ResultsClient() {
                                       const comparePath = (() => {
                                         if (!compareEnabled) return ""
                                         if (compareRangeDays === selectedTrendRangeDays) return ""
-                                        if (!compareSeries || compareSeries.length < 1) return ""
+                                        if (!compareSeriesReach || compareSeriesReach.length < 1) return ""
 
                                         const span = Math.max(s.max - s.min, 0)
                                         const mapByTs = new Map<number, number>()
                                         const mapByT = new Map<string, number>()
-                                        for (const p of compareSeries) {
+                                        for (const p of compareSeriesReach) {
                                           const v = p?.reach
                                           if (typeof v !== "number" || !Number.isFinite(v)) continue
                                           const ts = typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : null
@@ -6131,15 +6250,34 @@ export default function ResultsClient() {
                                           }
                                         }
 
-                                        const pts = dataForChart
-                                          .map((p, i) => {
-                                            const keyTs = typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : null
-                                            const raw =
-                                              keyTs !== null
-                                                ? mapByTs.get(keyTs) ?? null
-                                                : mapByT.get(typeof p?.t === "string" ? p.t : "") ?? null
-                                            if (typeof raw !== "number" || !Number.isFinite(raw)) return null
-                                            const norm = span > 0 ? ((raw - s.min) / span) * 100 : 50
+                                        const compareRawByIndex = dataForChart.map((p) => {
+                                          const keyTs = typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : null
+                                          const raw =
+                                            keyTs !== null
+                                              ? mapByTs.get(keyTs) ?? null
+                                              : mapByT.get(typeof p?.t === "string" ? p.t : "") ?? null
+                                          return typeof raw === "number" && Number.isFinite(raw) ? raw : null
+                                        })
+
+                                        const compareMa7ByIndex = compareRawByIndex.map((_, i) => {
+                                          const end = i
+                                          const start = Math.max(0, i - 6)
+                                          let sum = 0
+                                          let count = 0
+                                          for (let j = start; j <= end; j++) {
+                                            const v = compareRawByIndex[j]
+                                            if (typeof v !== "number" || !Number.isFinite(v)) return null
+                                            sum += v
+                                            count += 1
+                                          }
+                                          if (count < 1) return null
+                                          return sum / count
+                                        })
+
+                                        const pts = compareMa7ByIndex
+                                          .map((v, i) => {
+                                            if (typeof v !== "number" || !Number.isFinite(v)) return null
+                                            const norm = span > 0 ? ((v - s.min) / span) * 100 : 50
                                             const x = sx(i)
                                             const y = sy(Number.isFinite(norm) ? norm : 50)
                                             if (!Number.isFinite(x) || !Number.isFinite(y)) return null
@@ -6186,16 +6324,14 @@ export default function ResultsClient() {
                                       const comparePath = (() => {
                                         if (!compareEnabled) return ""
                                         if (compareRangeDays === selectedTrendRangeDays) return ""
-                                        if (!Array.isArray(followersDailyRows) || followersDailyRows.length < 1) return ""
+                                        if (!compareSeriesFollowers || compareSeriesFollowers.length < 1) return ""
 
                                         const span = Math.max(s.max - s.min, 0)
                                         const mapByTs = new Map<number, number>()
-                                        for (const r of followersDailyRows) {
-                                          const day = typeof r?.day === "string" ? r.day : ""
-                                          if (!day) continue
-                                          const ts = Date.parse(`${day}T00:00:00.000Z`)
-                                          if (!Number.isFinite(ts)) continue
-                                          const v = (r as { followers_count?: unknown })?.followers_count
+                                        for (const p of compareSeriesFollowers) {
+                                          const ts = typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : null
+                                          if (ts === null) continue
+                                          const v = p?.followerDelta
                                           if (typeof v !== "number" || !Number.isFinite(v)) continue
                                           mapByTs.set(ts, v)
                                         }
