@@ -1089,6 +1089,23 @@ export default function ResultsClient() {
     [setTrendPointsDeduped, trendSigFor],
   )
 
+  const applyCachedTrendSeriesDirect = useCallback(
+    ({
+      days,
+      cached,
+    }: {
+      days: 90 | 60 | 30 | 14 | 7
+      cached: { points: AccountTrendPoint[]; fetchedAt: number | null; sig: string }
+    }) => {
+      if (cached.sig === displayedTrendSigRef.current) return
+
+      setTrendPoints(cached.points)
+      if (cached.fetchedAt !== null) setTrendFetchedAt(cached.fetchedAt)
+      displayedTrendSigRef.current = cached.sig
+    },
+    [setTrendPoints, setTrendFetchedAt],
+  )
+
   const [hasCachedData, setHasCachedData] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateSlow, setUpdateSlow] = useState(false)
@@ -5152,13 +5169,15 @@ export default function ResultsClient() {
                                 if (selectedTrendRangeDays === d) return
                                 const cached = trendPointsByDaysRef.current.get(d)
                                 if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
-                                  applyTrendSeries({ days: d, points: cached.points, fetchedAt: cached.fetchedAt })
+                                  setSelectedTrendRangeDays(d)
+                                  applyCachedTrendSeriesDirect({ days: d, cached })
+                                } else {
+                                  setSelectedTrendRangeDays(d)
                                 }
                                 fetchedByDaysRef.current.delete(d)
-                                setSelectedTrendRangeDays(d)
                               }}
                               className={
-                                `h-10 sm:h-7 px-3 sm:px-2.5 rounded-full tabular-nums text-xs font-semibold transition-colors ` +
+                                `inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ` +
                                 `focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 ` +
                                 (active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/6")
                               }
