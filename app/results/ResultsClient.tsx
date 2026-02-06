@@ -791,7 +791,7 @@ const normalizeMe = (raw: unknown): IgMeResponse | null => {
   }
 }
 
-export default function ResultsClient() {
+export default function ResultsClient({ initialDailySnapshot }: { initialDailySnapshot?: unknown }) {
   const __DEV__ = process.env.NODE_ENV !== "production"
   const __DEBUG_RESULTS__ = process.env.NEXT_PUBLIC_DEBUG_RESULTS === "1"
   const [showMediaErrorDetails, setShowMediaErrorDetails] = useState(false)
@@ -1065,7 +1065,7 @@ export default function ResultsClient() {
     profileViews: number | null
     impressionsTotal: number | null
   } | null>(null)
-  const [dailySnapshotData, setDailySnapshotData] = useState<unknown>(null)
+  const [dailySnapshotData, setDailySnapshotData] = useState<unknown>(initialDailySnapshot ?? null)
   const [dailySnapshotAvailableDays, setDailySnapshotAvailableDays] = useState<number | null>(null)
   const [trendFetchStatus, setTrendFetchStatus] = useState<{ loading: boolean; error: string; lastDays: number | null }>({
     loading: false,
