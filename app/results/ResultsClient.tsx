@@ -5387,16 +5387,27 @@ export default function ResultsClient() {
                         aria-pressed={compareEnabled}
                         onClick={() => {
                           setCompareEnabled((v) => !v)
+                          // Auto-open panel when enabling compare on mobile
+                          if (!compareEnabled) {
+                            setComparePanelOpen(true)
+                          }
                         }}
                         className={
                           "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors min-h-[36px] whitespace-nowrap " +
                           (compareEnabled
-                            ? "border-white/20 bg-white/10 text-white"
+                            ? "border-white/20 bg-white/10 text-white shadow-sm"
                             : "border-white/10 bg-white/5 text-white/70 hover:bg-white/8")
                         }
                       >
-                        Compare
+                        {isZh ? "比較" : "Compare"}
                       </button>
+                      
+                      {/* Helper text when compare is enabled */}
+                      {compareEnabled && (
+                        <div className="mt-2 text-xs text-white/60 leading-tight min-w-0">
+                          {isZh ? "已啟用比較模式，請選擇時間區間" : "Compare mode enabled - select a time range"}
+                        </div>
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-1 flex justify-end overflow-x-auto flex-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden">
@@ -5440,7 +5451,7 @@ export default function ResultsClient() {
                           aria-expanded={comparePanelOpen}
                           aria-controls="compare-panel-content"
                         >
-                          <span>Compare Settings</span>
+                          <span>{isZh ? "比較設定" : "Compare Settings"}</span>
                           <svg 
                             className={`w-4 h-4 transition-transform ${comparePanelOpen ? 'rotate-180' : ''}`}
                             fill="none" 
@@ -5459,7 +5470,7 @@ export default function ResultsClient() {
                             <div className="flex flex-col gap-3 min-w-0">
                               <div className="min-w-0">
                                 <label className="text-[10px] text-white/45 leading-none mb-1 block">
-                                  Compare Range
+                                  {isZh ? "比較範圍" : "Compare Range"}
                                 </label>
                                 <select
                                   value={compareRangeDays}
@@ -5479,7 +5490,7 @@ export default function ResultsClient() {
 
                               <div className="min-w-0">
                                 <label className="text-[10px] text-white/45 leading-none mb-1 block">
-                                  Opacity
+                                  {isZh ? "透明度" : "Opacity"}
                                 </label>
                                 <input
                                   type="range"
@@ -5500,7 +5511,7 @@ export default function ResultsClient() {
                               {((focusedAccountTrendMetric === "reach" && !compareSeriesReach) ||
                                 (focusedAccountTrendMetric === "followers" && !compareSeriesFollowers)) ? (
                                 <div className="text-[10px] text-white/45 leading-snug">
-                                  Compare range not cached yet — select that range once to load it.
+                                  {isZh ? "比較範圍尚未快取 — 請先選取該範圍一次以載入" : "Compare range not cached yet — select that range once to load it"}
                                 </div>
                               ) : null}
                             </div>
