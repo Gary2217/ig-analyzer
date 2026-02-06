@@ -4,7 +4,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
 import { createClient } from "@supabase/supabase-js"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
@@ -990,6 +990,9 @@ export default function ResultsClient() {
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
+  const [compareEnabled, setCompareEnabled] = useState(false)
+  const [compareRangeDays, setCompareRangeDays] = useState<90 | 60 | 30 | 14 | 7>(30)
+
   const trendPointsByDaysRef = useRef(
     new Map<
       90 | 60 | 30 | 14 | 7,
@@ -1137,6 +1140,9 @@ export default function ResultsClient() {
   const [focusedAccountTrendMetric, setFocusedAccountTrendMetric] = useState<AccountTrendMetricKey>("reach")
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
 
+  const hoverRafRef = useRef<number | null>(null)
+  const lastHoverIdxRef = useRef<number | null>(null)
+
   const followersMetrics = useFollowersMetrics({
     focusedMetric: focusedAccountTrendMetric,
     followersDailyRows,
@@ -1184,6 +1190,44 @@ export default function ResultsClient() {
       return String(Math.round(n))
     }
   }
+
+  const compareSeries = useMemo(() => {
+    if (!compareEnabled) return null
+    const cached = trendPointsByDaysRef.current.get(compareRangeDays)
+    if (!cached || !Array.isArray(cached.points) || cached.points.length < 1) return null
+    return cached.points
+  }, [compareEnabled, compareRangeDays])
+
+  const TrendHoverTooltip = memo(function TrendHoverTooltip({
+    title,
+    items,
+  }: {
+    title: string
+    items: Array<{ label: string; color: string; value: string }>
+  }) {
+    return (
+      <div className="pointer-events-none absolute top-2 left-2 rounded-lg border border-white/10 bg-[#0b1220]/85 backdrop-blur px-3 py-2 shadow-xl max-w-[min(280px,70vw)]">
+        <div className="text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">{title}</div>
+        <div className="mt-1 space-y-1">
+          {items.map((it, i) => (
+            <div key={`trend-tip-${i}`} className="flex items-center justify-between gap-3 text-[11px] text-white/80">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: it.color }} />
+                <span className="truncate min-w-0">{it.label}</span>
+              </div>
+              <span className="tabular-nums whitespace-nowrap">{it.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  })
+
+  const updateHoveredTrendIndex = useCallback((nextIdx: number | null) => {
+    if (nextIdx === lastHoverIdxRef.current) return
+    lastHoverIdxRef.current = nextIdx
+    setHoveredAccountTrendIndex(nextIdx)
+  }, [])
 
   // Determine whether "recent_media" looks like real IG media (numeric id) — DEV logging only
   const recentFirstId = (() => {
@@ -5194,6 +5238,51 @@ export default function ResultsClient() {
                       </div>
                     </div>
 
+                    <div className="shrink-0">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-white/75 whitespace-nowrap">
+                        <button
+                          type="button"
+                          aria-pressed={compareEnabled}
+                          onClick={() => {
+                            setCompareEnabled((v) => !v)
+                          }}
+                          className={
+                            "inline-flex items-center rounded-full border px-2 py-1 transition-colors " +
+                            (compareEnabled ? "border-white/20 bg-white/10 text-white" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/8")
+                          }
+                        >
+                          Compare
+                        </button>
+
+                        <select
+                          value={compareRangeDays}
+                          disabled={!compareEnabled}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            if (v === 90 || v === 60 || v === 30 || v === 14 || v === 7) setCompareRangeDays(v)
+                          }}
+                          className={
+                            "h-7 rounded-full border px-2 text-xs font-semibold bg-transparent " +
+                            (compareEnabled
+                              ? "border-white/15 text-white/80"
+                              : "border-white/10 text-white/45 opacity-70 cursor-not-allowed")
+                          }
+                        >
+                          {[90, 60, 30, 14, 7].map((d) => (
+                            <option key={`cmp-${d}`} value={d}>
+                              {d}d
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {compareEnabled && focusedAccountTrendMetric === "reach" && !compareSeries ? (
+                        <div className="mt-1 text-[10px] text-white/45 leading-snug">
+                          Compare range not cached yet — select that range once to load it.
+                        </div>
+                      ) : null}
+                    </div>
+
                     <div className="min-w-0 flex-1 flex justify-end overflow-x-auto flex-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:hidden">
                       <div className="inline-flex min-w-0 flex-nowrap items-center gap-2">
                         {(
@@ -5854,34 +5943,49 @@ export default function ResultsClient() {
                               viewBox={`0 0 ${w} ${h}`}
                               className="h-full w-full"
                               preserveAspectRatio="none"
-                              onMouseLeave={() => setHoveredAccountTrendIndex(null)}
+                              onMouseLeave={() => {
+                                if (hoverRafRef.current !== null) {
+                                  cancelAnimationFrame(hoverRafRef.current)
+                                  hoverRafRef.current = null
+                                }
+                                updateHoveredTrendIndex(null)
+                              }}
                               onMouseMove={(e) => {
                                 const el = e.currentTarget
                                 const rect = el.getBoundingClientRect()
                                 const x = e.clientX - rect.left
                                 const ratio = rect.width > 0 ? x / rect.width : 0
                                 const idx = Math.round(ratio * (dataForChart.length - 1))
-                                setHoveredAccountTrendIndex(Math.max(0, Math.min(dataForChart.length - 1, idx)))
+                                const next = Math.max(0, Math.min(dataForChart.length - 1, idx))
+                                if (next === lastHoverIdxRef.current) return
+                                if (hoverRafRef.current !== null) return
+                                hoverRafRef.current = requestAnimationFrame(() => {
+                                  hoverRafRef.current = null
+                                  updateHoveredTrendIndex(next)
+                                })
                               }}
                               onTouchStart={(e) => {
                                 const el = e.currentTarget
                                 const rect = el.getBoundingClientRect()
-                                const t = e.touches?.[0]
-                                if (!t) return
-                                const x = t.clientX - rect.left
+                                const t0 = e.touches?.[0]
+                                if (!t0) return
+                                const x = t0.clientX - rect.left
                                 const ratio = rect.width > 0 ? x / rect.width : 0
                                 const idx = Math.round(ratio * (dataForChart.length - 1))
-                                setHoveredAccountTrendIndex(Math.max(0, Math.min(dataForChart.length - 1, idx)))
+                                const next = Math.max(0, Math.min(dataForChart.length - 1, idx))
+                                updateHoveredTrendIndex(next)
                               }}
                               onTouchMove={(e) => {
                                 const el = e.currentTarget
                                 const rect = el.getBoundingClientRect()
-                                const t = e.touches?.[0]
-                                if (!t) return
-                                const x = t.clientX - rect.left
+                                const t0 = e.touches?.[0]
+                                if (!t0) return
+                                const x = t0.clientX - rect.left
                                 const ratio = rect.width > 0 ? x / rect.width : 0
                                 const idx = Math.round(ratio * (dataForChart.length - 1))
-                                setHoveredAccountTrendIndex(Math.max(0, Math.min(dataForChart.length - 1, idx)))
+                                const next = Math.max(0, Math.min(dataForChart.length - 1, idx))
+                                if (next === lastHoverIdxRef.current) return
+                                updateHoveredTrendIndex(next)
                               }}
                             >
                                 <line x1={padX} y1={h - padY} x2={w - padX} y2={h - padY} stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
@@ -5931,6 +6035,45 @@ export default function ResultsClient() {
 
                                       const reachPath = buildSmoothPath(reachPts)
 
+                                      const comparePath = (() => {
+                                        if (!compareEnabled) return ""
+                                        if (compareRangeDays === selectedTrendRangeDays) return ""
+                                        if (!compareSeries || compareSeries.length < 1) return ""
+
+                                        const span = Math.max(s.max - s.min, 0)
+                                        const mapByTs = new Map<number, number>()
+                                        const mapByT = new Map<string, number>()
+                                        for (const p of compareSeries) {
+                                          const v = p?.reach
+                                          if (typeof v !== "number" || !Number.isFinite(v)) continue
+                                          const ts = typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : null
+                                          if (ts !== null) {
+                                            mapByTs.set(ts, v)
+                                          } else {
+                                            const k = typeof p?.t === "string" ? p.t : ""
+                                            if (k) mapByT.set(k, v)
+                                          }
+                                        }
+
+                                        const pts = dataForChart
+                                          .map((p, i) => {
+                                            const keyTs = typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : null
+                                            const raw =
+                                              keyTs !== null
+                                                ? mapByTs.get(keyTs) ?? null
+                                                : mapByT.get(typeof p?.t === "string" ? p.t : "") ?? null
+                                            if (typeof raw !== "number" || !Number.isFinite(raw)) return null
+                                            const norm = span > 0 ? ((raw - s.min) / span) * 100 : 50
+                                            const x = sx(i)
+                                            const y = sy(Number.isFinite(norm) ? norm : 50)
+                                            if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                            return { x, y }
+                                          })
+                                          .filter(Boolean) as Array<{ x: number; y: number }>
+
+                                        return buildSmoothPath(pts)
+                                      })()
+
                                       const span = Math.max(s.max - s.min, 0)
                                       const maPts = reachMa7ByIndex
                                         .map((v, i) => {
@@ -5949,6 +6092,16 @@ export default function ResultsClient() {
                                         <g key={`trend-line-${s.k}`}>
                                           <path d={reachPath} stroke={s.color} strokeWidth={isSmUp ? 2 : 1.4} fill="none" opacity={0.42} />
                                           <path d={maPath} stroke={s.color} strokeWidth={isSmUp ? 2.2 : 1.6} fill="none" opacity={0.92} />
+                                          {comparePath ? (
+                                            <path
+                                              d={comparePath}
+                                              stroke="rgba(255,255,255,0.65)"
+                                              strokeWidth={isSmUp ? 1.8 : 1.4}
+                                              strokeDasharray="6 4"
+                                              fill="none"
+                                              opacity={0.65}
+                                            />
+                                          ) : null}
                                         </g>
                                       )
                                     }
@@ -6072,7 +6225,8 @@ export default function ResultsClient() {
                                   if (n <= 0) return null
                                   const last = n - 1
 
-                                  const maxTicks = isSmUp ? 8 : 4
+                                  const desiredTicks = selectedTrendRangeDays <= 14 ? 7 : 8
+                                  const maxTicks = isSmUp ? desiredTicks : Math.min(4, desiredTicks)
                                   const idxs = (() => {
                                     if (n <= maxTicks) return Array.from({ length: n }).map((_, i) => i)
                                     const out = new Set<number>()
@@ -6171,22 +6325,7 @@ export default function ResultsClient() {
                             </div>
 
                             {clampedHoverIdx !== null && hoverPoint ? (
-                              <div
-                                className="pointer-events-none absolute top-2 left-2 rounded-lg border border-white/10 bg-[#0b1220]/85 backdrop-blur px-3 py-2 shadow-xl max-w-[min(280px,70vw)]"
-                              >
-                                <div className="text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">{hoverPoint.t}</div>
-                                <div className="mt-1 space-y-1">
-                                  {tooltipItems.map((it, i) => (
-                                    <div key={`trend-tip-${i}`} className="flex items-center justify-between gap-3 text-[11px] text-white/80">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: it.color }} />
-                                        <span className="truncate min-w-0">{it.label}</span>
-                                      </div>
-                                      <span className="tabular-nums whitespace-nowrap">{it.value}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
+                              <TrendHoverTooltip title={String(hoverPoint.t ?? "")} items={tooltipItems} />
                             ) : null}
                           </div>
                         )}
