@@ -794,6 +794,92 @@ export default function ResultsClient() {
   const __DEV__ = process.env.NODE_ENV !== "production"
   const __DEBUG_RESULTS__ = process.env.NEXT_PUBLIC_DEBUG_RESULTS === "1"
   const [showMediaErrorDetails, setShowMediaErrorDetails] = useState(false)
+
+  type DevErrorEntry = {
+    id: string
+    at: number
+    type: "window_error" | "unhandled_rejection" | "console_error"
+    message: string
+    stack?: string
+  }
+
+  const [devErrorPanelOpen, setDevErrorPanelOpen] = useState(false)
+  const [devErrors, setDevErrors] = useState<DevErrorEntry[]>([])
+  const devConsoleErrorOrigRef = useRef<((...args: unknown[]) => void) | null>(null)
+
+  const pushDevError = useCallback(
+    (next: Omit<DevErrorEntry, "id" | "at"> & { stack?: string }) => {
+      if (!__DEV__) return
+      const entry: DevErrorEntry = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        at: Date.now(),
+        type: next.type,
+        message: next.message,
+        stack: next.stack,
+      }
+      setDevErrors((prev) => {
+        const merged = [entry, ...prev]
+        return merged.length > 20 ? merged.slice(0, 20) : merged
+      })
+    },
+    [__DEV__],
+  )
+
+  useEffect(() => {
+    if (!__DEV__) return
+    if (typeof window === "undefined") return
+
+    const onError = (event: ErrorEvent) => {
+      pushDevError({
+        type: "window_error",
+        message: String(event?.message ?? "(window.onerror)"),
+        stack: typeof event?.error?.stack === "string" ? event.error.stack : undefined,
+      })
+    }
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason: any = (event as any)?.reason
+      pushDevError({
+        type: "unhandled_rejection",
+        message: typeof reason?.message === "string" ? reason.message : String(reason ?? "(unhandledrejection)"),
+        stack: typeof reason?.stack === "string" ? reason.stack : undefined,
+      })
+    }
+
+    window.addEventListener("error", onError)
+    window.addEventListener("unhandledrejection", onUnhandledRejection)
+
+    if (!devConsoleErrorOrigRef.current) {
+      devConsoleErrorOrigRef.current = console.error
+      console.error = (...args: unknown[]) => {
+        try {
+          const msg = args
+            .map((a) => {
+              if (typeof a === "string") return a
+              try {
+                return JSON.stringify(a)
+              } catch {
+                return String(a)
+              }
+            })
+            .join(" ")
+          pushDevError({ type: "console_error", message: msg })
+        } catch {
+          // ignore
+        }
+        devConsoleErrorOrigRef.current?.(...args)
+      }
+    }
+
+    return () => {
+      window.removeEventListener("error", onError)
+      window.removeEventListener("unhandledrejection", onUnhandledRejection)
+      if (devConsoleErrorOrigRef.current) {
+        console.error = devConsoleErrorOrigRef.current
+        devConsoleErrorOrigRef.current = null
+      }
+    }
+  }, [__DEV__, pushDevError])
   const thumbProxyUrlCacheRef = useRef<Map<string, string>>(new Map())
   const dlog = useCallback(
     (...args: unknown[]) => {
@@ -1251,6 +1337,11 @@ export default function ResultsClient() {
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
 
   const trendRangeSwitchStartRef = useRef<{ at: number; days: 90 | 60 | 30 | 14 | 7 } | null>(null)
+
+  useEffect(() => {
+    // Range switching can change series lengths; clear hover to avoid stale index reads.
+    setHoveredAccountTrendIndex(null)
+  }, [selectedTrendRangeDays])
 
   const hoverRafRef = useRef<number | null>(null)
   const lastHoverIdxRef = useRef<number | null>(null)
@@ -2107,6 +2198,9 @@ export default function ResultsClient() {
           method: "POST",
           cache: "no-store",
           credentials: "include",
+          headers: {
+            Accept: "application/json",
+          },
           signal: ac.signal,
         })
 
@@ -2152,6 +2246,11 @@ export default function ResultsClient() {
           setTrendNeedsConnectHint(true)
           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
           return
+        }
+
+        const ct = (igRes.headers.get("content-type") ?? "").toLowerCase()
+        if (!ct.includes("application/json")) {
+          throw new Error(`daily_snapshot_non_json status=${igRes.status} url=/api/instagram/daily-snapshot?days=${daysForRequest}`)
         }
 
         const json7 = await igRes.json().catch(() => null)
@@ -2200,6 +2299,13 @@ export default function ResultsClient() {
         setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
       } catch (e: unknown) {
         if (!(isRecord(e) && e.name === "AbortError")) {
+          if (__DEV__) {
+            console.debug("[daily-snapshot] fetch_failed", {
+              message: isRecord(e) && typeof e.message === "string" ? e.message : String(e),
+              days: daysForRequest,
+              reqId: nextReqId,
+            })
+          }
           setDailySnapshotData(null)
           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
         }
@@ -3971,18 +4077,28 @@ export default function ResultsClient() {
           // Prefetch without updating UI (silent)
           try {
             const url = new URL(window.location.href)
-            url.pathname = `/${activeLocale}/api/instagram/trend`
+            // Use the existing JSON endpoint (avoid locale-prefixed paths that 404 in prod).
+            url.pathname = `/api/instagram/daily-snapshot`
             url.searchParams.set("days", String(days))
-            
-            // Silent fetch - don't update any state
-            fetch(url.toString(), {
-              method: "GET",
+
+            const res = await fetch(url.toString(), {
+              method: "POST",
+              cache: "no-store",
+              credentials: "include",
               headers: {
                 "Accept": "application/json",
               },
-            }).catch(() => {
-              // Silently ignore prefetch errors
             })
+
+            // Prefetch is best-effort and must never poison cache with HTML 404 pages.
+            const ct = res.headers.get("content-type") ?? ""
+            if (!res.ok || !ct.toLowerCase().includes("application/json")) {
+              throw new Error(`prefetch_non_json_or_not_ok status=${res.status} url=${url.toString()}`)
+            }
+            const body = await res.json().catch(() => null)
+            if (!body || body.ok !== true) {
+              throw new Error(`prefetch_bad_json url=${url.toString()}`)
+            }
           } catch {
             // Ignore prefetch errors
           }
@@ -3997,7 +4113,7 @@ export default function ResultsClient() {
       clearTimeout(timer)
       cleanup()
     }
-  }, [isConnectedInstagram, selectedTrendRangeDays, activeLocale])
+  }, [isConnectedInstagram, selectedTrendRangeDays])
 
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
@@ -4804,6 +4920,62 @@ export default function ResultsClient() {
           revalidateSeq: { mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq },
         }}
       />
+
+      {__DEV__ && (
+        <div className="fixed bottom-3 right-3 z-[80] min-w-0">
+          <div className="min-w-0 max-w-[min(420px,92vw)]">
+            <button
+              type="button"
+              onClick={() => setDevErrorPanelOpen((v) => !v)}
+              className="inline-flex min-h-[36px] items-center justify-center rounded-full border border-white/15 bg-[#0b1220]/85 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur hover:bg-white/5"
+              aria-expanded={devErrorPanelOpen}
+            >
+              {`錯誤面板 / Errors (${devErrors.length})`}
+            </button>
+
+            {devErrorPanelOpen && (
+              <div className="mt-2 rounded-xl border border-white/10 bg-[#0b1220]/90 backdrop-blur shadow-xl overflow-hidden min-w-0">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/10 min-w-0">
+                  <div className="text-[11px] text-white/70 min-w-0 truncate">
+                    {isZh ? "最近錯誤" : "Recent errors"}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDevErrors([])}
+                    className="min-h-[36px] px-2 text-[11px] font-semibold text-white/70 hover:text-white/90"
+                  >
+                    {isZh ? "清除" : "Clear"}
+                  </button>
+                </div>
+                <div className="max-h-[min(50vh,360px)] overflow-y-auto overflow-x-hidden p-2 space-y-2 min-w-0">
+                  {devErrors.length === 0 ? (
+                    <div className="px-2 py-2 text-[11px] text-white/55 min-w-0 break-words">
+                      {isZh ? "目前沒有錯誤" : "No errors captured"}
+                    </div>
+                  ) : (
+                    devErrors.map((e) => (
+                      <div key={e.id} className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 min-w-0">
+                        <div className="text-[10px] text-white/50 tabular-nums whitespace-nowrap truncate min-w-0">
+                          {new Date(e.at).toLocaleTimeString()} · {e.type}
+                        </div>
+                        <div className="mt-1 text-[11px] text-white/80 leading-snug min-w-0 break-words whitespace-pre-wrap">
+                          {e.message}
+                        </div>
+                        {e.stack ? (
+                          <pre className="mt-1 text-[10px] text-white/55 leading-snug min-w-0 whitespace-pre-wrap break-words">
+                            {e.stack}
+                          </pre>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <ConnectedGate
         notConnectedUI={
           <>
@@ -5481,11 +5653,15 @@ export default function ResultsClient() {
                                 
                                 if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
                                   trendRangeSwitchStartRef.current = { at: performance.now(), days: d }
+                                  console.debug("[trend][perf] range click start", { days: d, requestId })
                                 }
                                 
                                 const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", d))
                                 if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
                                   setSelectedTrendRangeDays(d)
+                                  if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+                                    console.debug("[trend][perf] cache hit, applying immediately", { days: d, requestId })
+                                  }
                                   applyCachedTrendSeriesDirect({ days: d, cached })
                                   // Reset loading state immediately for cached data
                                   if (isMountedRef.current && requestId === rangeChangeRequestIdRef.current) {
@@ -5494,6 +5670,9 @@ export default function ResultsClient() {
                                   }
                                 } else {
                                   setSelectedTrendRangeDays(d)
+                                  if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+                                    console.debug("[trend][perf] cache miss, will fetch", { days: d, requestId })
+                                  }
                                   // Loading state will be reset when data arrives via trendFetchStatus or safety timeout
                                 }
                                 fetchedByDaysRef.current.delete(d)
@@ -5966,7 +6145,7 @@ export default function ResultsClient() {
                           k === "reach"
                             ? p.reach
                             : k === "followers"
-                              ? followersSeriesValues[i]
+                              ? (typeof followersSeriesValues[i] === "number" && Number.isFinite(followersSeriesValues[i]) ? followersSeriesValues[i] : null)
                             : k === "interactions"
                               ? p.interactions
                               : k === "impressions"
@@ -6047,14 +6226,24 @@ export default function ResultsClient() {
                   const tooltipItems = hoverPoint
                     ? (() => {
                         if (focusedIsFollowers) {
-                          const v = typeof clampedHoverIdx === "number" ? followersSeriesValues[clampedHoverIdx] : null
+                          const v =
+                            typeof clampedHoverIdx === "number" &&
+                            clampedHoverIdx >= 0 &&
+                            clampedHoverIdx < followersSeriesValues.length
+                              ? followersSeriesValues[clampedHoverIdx]
+                              : null
                           if (typeof v !== "number" || !Number.isFinite(v)) return []
 
-                          const delta = typeof clampedHoverIdx === "number" ? deltasByIndex[clampedHoverIdx] : null
+                          const delta =
+                            typeof clampedHoverIdx === "number" &&
+                            clampedHoverIdx >= 0 &&
+                            clampedHoverIdx < deltasByIndex.length
+                              ? deltasByIndex[clampedHoverIdx]
+                              : null
                           const deltaText =
                             typeof delta === "number" && Number.isFinite(delta)
-                              ? `${delta >= 0 ? "+" : ""}${Math.round(delta).toLocaleString()}`
-                              : "—"
+                              ? `${delta >= 0 ? "+" : ""}${delta.toLocaleString()}`
+                              : ""
 
                           return [
                             {
