@@ -21,7 +21,6 @@ import { useAuthNavigation } from "../lib/useAuthNavigation"
 import { extractIgUserIdFromInsightsId } from "../lib/instagram"
 import { getPostMetrics } from "../lib/postMetrics"
 import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
-import { FollowersStatChips } from "./components/FollowersStatChips"
 import { useRefreshController } from "./hooks/useRefreshController"
 import { useResultsOrchestrator } from "./hooks/useResultsOrchestrator"
 import { ResultsDebugPanel } from "./components/ResultsDebugPanel"
@@ -1426,6 +1425,52 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     deltasByIndex,
     lastDataDay,
   } = followersMetrics
+
+  const committedStatValues = useMemo(() => {
+    const pickFinite = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null)
+
+    const compute = (values: Array<number | null>) => {
+      const finite = values.filter((x): x is number => typeof x === "number" && Number.isFinite(x))
+      if (finite.length < 1) {
+        return { latest: null as number | null, prev: null as number | null, start: null as number | null }
+      }
+      const latest = finite[finite.length - 1]
+      const prev = finite.length >= 2 ? finite[finite.length - 2] : null
+      const start = finite[0]
+      return { latest, prev, start }
+    }
+
+    const reachSeriesCommitted: AccountTrendPoint[] = Array.isArray(trendPoints) ? trendPoints : ([] as AccountTrendPoint[])
+
+    const reachBase = compute(
+      reachSeriesCommitted.map((p) => {
+        if (!isRecord(p)) return null
+        return pickFinite((p as any).reach)
+      }),
+    )
+
+    const followersBase = compute(
+      (Array.isArray(followersSeriesValues) ? followersSeriesValues : []).map((v) => pickFinite(v)),
+    )
+
+    const deltaDay = (b: { latest: number | null; prev: number | null }) =>
+      typeof b.latest === "number" && typeof b.prev === "number" ? b.latest - b.prev : null
+    const deltaRange = (b: { latest: number | null; start: number | null }) =>
+      typeof b.latest === "number" && typeof b.start === "number" ? b.latest - b.start : null
+
+    return {
+      reach: {
+        latest: reachBase.latest,
+        deltaDay: deltaDay(reachBase),
+        deltaRange: deltaRange(reachBase),
+      },
+      followers: {
+        latest: followersBase.latest,
+        deltaDay: deltaDay(followersBase),
+        deltaRange: deltaRange(followersBase),
+      },
+    }
+  }, [followersSeriesValues, trendPoints])
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const igRecentLen = isRecord(igMe) && Array.isArray(igMe.recent_media) ? igMe.recent_media.length : 0
@@ -5858,6 +5903,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                           )
                         })}
                       </div>
+
+                      <div className="mt-1 text-[10px] text-white/45 leading-snug text-center sm:text-left min-w-0 break-words">
+                        <div>{isZh ? "圖表數據：觸及 / 粉絲" : "Chart metric: Reach / Followers"}</div>
+                        <div>
+                          {isZh
+                            ? "粉絲為總數（非每日增量）；變化值為與前一日／範圍起點相比"
+                            : "Followers is total count (not daily delta); changes are vs previous day / range start"}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Collapsible compare panel - mobile only */}
@@ -6004,29 +6058,42 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                         ) : null}
                         <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
                           {(() => {
-                            const reachSeriesForStats = shouldShowEmptySeriesHint
-                              ? ([] as AccountTrendPoint[])
-                              : Array.isArray(trendPoints) && trendPoints.length >= 1
-                                ? trendPoints
-                                : accountTrend
-                            const reachValues = reachSeriesForStats
-                              .map((p) => {
-                                if (!isRecord(p)) return null
-                                const v = p.reach
-                                return typeof v === "number" && Number.isFinite(v) ? v : null
-                              })
-                              .filter((x): x is number => typeof x === "number")
-                            
-                            const hasAnyValidReach = reachValues.length > 0
-                            
-                            const reachTotal = hasAnyValidReach && reachValues.length >= 1 ? reachValues[reachValues.length - 1] : null
-                            const reachDeltaYesterday = hasAnyValidReach && reachValues.length >= 2 ? reachValues[reachValues.length - 1] - reachValues[reachValues.length - 2] : null
-                            const reachGrowth7d = (() => {
-                              if (!hasAnyValidReach) return null
-                              const n = reachValues.length
-                              if (n < 8) return null
-                              return reachValues[n - 1] - reachValues[Math.max(0, n - 1 - 7)]
-                            })()
+                            const fmt = (v: number | null) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v).toLocaleString() : "—")
+                            const fmtDelta = (v: number | null) =>
+                              typeof v === "number" && Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${Math.round(v).toLocaleString()}` : "—"
+
+                            const renderTiles = (labels: { a: string; b: string; c: string }, vals: { a: number | null; b: number | null; c: number | null }) => {
+                              const subtleLoading = showRangeOverlay ? "opacity-90 animate-pulse" : ""
+                              return (
+                                <div className={"w-full sm:w-auto min-w-0 max-w-full overflow-hidden " + subtleLoading}>
+                                  <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 min-w-0">
+                                    <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
+                                      <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{labels.a}</div>
+                                      <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">{fmt(vals.a)}</div>
+                                    </div>
+                                    <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
+                                      <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{labels.b}</div>
+                                      <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">{fmtDelta(vals.b)}</div>
+                                    </div>
+                                    <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
+                                      <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{labels.c}</div>
+                                      <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">{fmtDelta(vals.c)}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            const reachLabels = {
+                              a: isZh ? "最新觸及" : "Latest reach",
+                              b: isZh ? "昨日" : "Yesterday",
+                              c: isZh ? `${renderedTrendRangeDays}天` : `${renderedTrendRangeDays}d`,
+                            }
+                            const followersLabels = {
+                              a: isZh ? "最新粉絲" : "Latest followers",
+                              b: isZh ? "昨日" : "Yesterday",
+                              c: isZh ? `${renderedTrendRangeDays}天` : `${renderedTrendRangeDays}d`,
+                            }
 
                             return (
                               <>
@@ -6036,14 +6103,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     (focusedAccountTrendMetric === "reach" ? "opacity-100" : "opacity-0 pointer-events-none")
                                   }
                                 >
-                                  <FollowersStatChips
-                                    totalFollowers={reachTotal}
-                                    deltaYesterday={reachDeltaYesterday}
-                                    growth7d={reachGrowth7d}
-                                    labelTotal="觸及總"
-                                    labelYesterday="昨日"
-                                    label7d="近7天"
-                                  />
+                                  {renderTiles(
+                                    reachLabels,
+                                    {
+                                      a: committedStatValues.reach.latest,
+                                      b: committedStatValues.reach.deltaDay,
+                                      c: committedStatValues.reach.deltaRange,
+                                    },
+                                  )}
                                 </div>
                                 <div
                                   className={
@@ -6051,7 +6118,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     (focusedAccountTrendMetric === "followers" ? "opacity-100" : "opacity-0 pointer-events-none")
                                   }
                                 >
-                                  <FollowersStatChips totalFollowers={totalFollowers} deltaYesterday={deltaYesterday} growth7d={growth7d} />
+                                  {renderTiles(
+                                    followersLabels,
+                                    {
+                                      a: committedStatValues.followers.latest,
+                                      b: committedStatValues.followers.deltaDay,
+                                      c: committedStatValues.followers.deltaRange,
+                                    },
+                                  )}
                                 </div>
                               </>
                             )
