@@ -101,9 +101,14 @@ function isAbortError(err: unknown): boolean {
 }
 
 type UnknownRecord = Record<string, unknown>
-function isRecord(v: unknown): v is UnknownRecord {
-  return typeof v === "object" && v !== null && !Array.isArray(v)
+function isRecord(val: unknown): val is Record<string, unknown> {
+  return typeof val === "object" && val !== null && !Array.isArray(val)
 }
+
+function Skeleton({ className }: { className?: string }) {
+  return <div className={"animate-pulse rounded-md bg-white/5 " + (className || "")} />
+}
+
 function asNumber(v: unknown): number | undefined {
   return typeof v === "number" ? v : undefined
 }
@@ -1471,6 +1476,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       },
     }
   }, [followersSeriesValues, trendPoints])
+
+  // UI state flags for loading skeleton and empty-state
+  const hasCommittedTrend = Array.isArray(trendPoints) && trendPoints.length > 0
+  const hasCommittedFollowers = Array.isArray(followersSeriesValues) && followersSeriesValues.length > 0
+  const isMetricFollowers = focusedAccountTrendMetric === "followers"
+  const hasCommittedSeriesForSelectedMetric = isMetricFollowers ? hasCommittedFollowers : hasCommittedTrend
+  const isLoadingOverlay = Boolean(showRangeOverlay) || Boolean(isChangingRange) || Boolean(trendFetchStatus.loading)
+  const shouldShowEmptyState = !isLoadingOverlay && !hasCommittedSeriesForSelectedMetric
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const igRecentLen = isRecord(igMe) && Array.isArray(igMe.recent_media) ? igMe.recent_media.length : 0
@@ -6660,8 +6673,60 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                             </div>
                           </div>
                         </div>
+                      ) : shouldShowEmptyState ? (
+                        <div className="w-full mt-2 relative min-w-0">
+                          <div className="h-[220px] sm:h-[280px] lg:h-[320px] w-full flex items-center justify-center rounded-xl border border-white/8 bg-white/5">
+                            <div className="w-full max-w-[400px] px-4 text-center min-w-0" aria-live="polite">
+                              <div className="mx-auto mb-4 h-12 w-12 rounded-xl border border-dashed border-white/15 bg-white/[0.03] flex items-center justify-center">
+                                <div className="h-5 w-5 rounded-full border border-white/20" />
+                              </div>
+                              <div className="text-sm sm:text-base text-white/80 leading-snug min-w-0 break-words overflow-wrap-anywhere mb-3">
+                                <div>尚無資料 / No data yet</div>
+                              </div>
+                              <div className="text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere mb-4">
+                                <div>我們正在準備你的帳號趨勢資料。請稍後再試，或按下重新整理。</div>
+                                <div>We're preparing your trend data. Try again soon or refresh.</div>
+                              </div>
+                              <div className="flex flex-col items-center gap-2">
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    // Use existing refresh pattern
+                                    fireRefresh("manual")
+                                  }}
+                                  disabled={!isConnectedInstagram}
+                                  className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10 w-full sm:w-auto shrink-0"
+                                >
+                                  {isZh ? "重新整理" : "Refresh"}
+                                </Button>
+                                <div className="text-[10px] text-white/45 leading-snug min-w-0 break-words overflow-wrap-anywhere">
+                                  <div>首次連結可能需要 10–30 秒。</div>
+                                  <div>First-time setup may take 10–30 seconds.</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         <div className="w-full mt-2 relative min-w-0">
+                          {/* Loading skeleton overlay */}
+                          {isLoadingOverlay && (
+                            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/5 backdrop-blur-[0.5px] rounded-xl pointer-events-none">
+                              <Skeleton className="h-5 w-20 mb-3" />
+                              <Skeleton className="h-[180px] sm:h-[240px] lg:h-[280px] w-full max-w-[500px]" />
+                              <div className="flex gap-2 mt-3">
+                                <Skeleton className="h-6 w-8 rounded-full" />
+                                <Skeleton className="h-6 w-8 rounded-full" />
+                                <Skeleton className="h-6 w-8 rounded-full" />
+                              </div>
+                              {showRangeOverlay && (
+                                <div className="absolute top-3 right-3 flex items-center gap-2 text-xs text-white/60 min-w-0">
+                                  <span className="h-3 w-3 rounded-full border border-white/30 border-t-white animate-spin flex-shrink-0" />
+                                  <span className="truncate">{isZh ? "更新中..." : "Updating..."}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="h-[220px] sm:h-[280px] lg:h-[320px] w-full">
                             <svg
                               viewBox={`0 0 ${w} ${h}`}
