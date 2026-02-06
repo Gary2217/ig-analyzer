@@ -5,6 +5,7 @@
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react"
+import { flushSync } from "react-dom"
 import { createClient } from "@supabase/supabase-js"
 import { useI18n } from "../../components/locale-provider"
 import { Button } from "../../components/ui/button"
@@ -1074,11 +1075,15 @@ export default function ResultsClient() {
   const [selectedTrendRangeDays, setSelectedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
   const [renderedTrendRangeDays, setRenderedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
   const [isChangingRange, setIsChangingRange] = useState(false)
+  const [showRangeOverlay, setShowRangeOverlay] = useState(false)
+  const [rangeOverlayError, setRangeOverlayError] = useState(false)
   const [rangeChangeRequestId, setRangeChangeRequestId] = useState(0)
   
   // Refs for safety and cleanup
   const rangeChangeRequestIdRef = useRef(0)
-  const rangeSwitchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const rangeOverlayInFlightRef = useRef<{ requestId: number; days: 90 | 60 | 30 | 14 | 7 } | null>(null)
+  const rangeOverlayErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rangeSwitchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prefetchCleanupRef = useRef<(() => void) | null>(null)
   const isMountedRef = useRef(true)
   
@@ -1089,6 +1094,35 @@ export default function ResultsClient() {
       rangeSwitchTimeoutRef.current = null
     }
   }, [])
+
+  const clearRangeOverlayErrorTimer = useCallback(() => {
+    if (rangeOverlayErrorTimerRef.current) {
+      clearTimeout(rangeOverlayErrorTimerRef.current)
+      rangeOverlayErrorTimerRef.current = null
+    }
+  }, [])
+
+  const failLatestRangeSwitch = useCallback(
+    (days: 90 | 60 | 30 | 14 | 7) => {
+      const inflight = rangeOverlayInFlightRef.current
+      if (!inflight) return
+      if (inflight.days !== days) return
+      if (inflight.requestId !== rangeChangeRequestIdRef.current) return
+
+      clearRangeSwitchTimeout()
+      setShowRangeOverlay(false)
+      setIsChangingRange(false)
+      setRangeOverlayError(true)
+      rangeOverlayInFlightRef.current = null
+
+      clearRangeOverlayErrorTimer()
+      rangeOverlayErrorTimerRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return
+        setRangeOverlayError(false)
+      }, 2500)
+    },
+    [clearRangeOverlayErrorTimer, clearRangeSwitchTimeout],
+  )
   
   // Helper: arm range switch timeout (safety net)
   const armRangeSwitchTimeout = useCallback((requestId: number) => {
@@ -1097,6 +1131,7 @@ export default function ResultsClient() {
       // Only clear loading for the latest request to avoid race conditions
       if (isMountedRef.current && requestId === rangeChangeRequestIdRef.current) {
         setIsChangingRange(false)
+        setShowRangeOverlay(false)
       }
     }, 12000) // 12s safety timeout
   }, [clearRangeSwitchTimeout])
@@ -1148,12 +1183,13 @@ export default function ResultsClient() {
     return () => {
       isMountedRef.current = false
       clearRangeSwitchTimeout()
+      clearRangeOverlayErrorTimer()
       if (prefetchCleanupRef.current) {
         prefetchCleanupRef.current()
         prefetchCleanupRef.current = null
       }
     }
-  }, [clearRangeSwitchTimeout])
+  }, [clearRangeOverlayErrorTimer, clearRangeSwitchTimeout])
 
   const trendPointsByDaysRef = useRef(
     new Map<
@@ -1288,8 +1324,18 @@ export default function ResultsClient() {
 
       // Only advance the rendered range when we actually commit the new series.
       setRenderedTrendRangeDays(days)
+
+      // Range switching UX: only the latest in-flight request is allowed to clear the overlay.
+      const inflight = rangeOverlayInFlightRef.current
+      if (inflight && inflight.days === days && inflight.requestId === rangeChangeRequestIdRef.current) {
+        clearRangeSwitchTimeout()
+        setRangeOverlayError(false)
+        setShowRangeOverlay(false)
+        setIsChangingRange(false)
+        rangeOverlayInFlightRef.current = null
+      }
     },
-    [setTrendPointsDeduped, setTrendFetchedAt, trendSigFor],
+    [clearRangeSwitchTimeout, setTrendPointsDeduped, setTrendFetchedAt, trendSigFor],
   )
 
   const applyCachedTrendSeriesDirect = useCallback(
@@ -1308,8 +1354,18 @@ export default function ResultsClient() {
 
       // Cache hit: we can immediately render the requested range.
       setRenderedTrendRangeDays(days)
+
+      // Range switching UX: only the latest in-flight request is allowed to clear the overlay.
+      const inflight = rangeOverlayInFlightRef.current
+      if (inflight && inflight.days === days && inflight.requestId === rangeChangeRequestIdRef.current) {
+        clearRangeSwitchTimeout()
+        setRangeOverlayError(false)
+        setShowRangeOverlay(false)
+        setIsChangingRange(false)
+        rangeOverlayInFlightRef.current = null
+      }
     },
-    [setTrendPoints, setTrendFetchedAt],
+    [clearRangeSwitchTimeout, setTrendPoints, setTrendFetchedAt],
   )
 
   const [hasCachedData, setHasCachedData] = useState(false)
@@ -2308,6 +2364,7 @@ export default function ResultsClient() {
         if (igRes.status === 401 || igRes.status === 403) {
           setTrendNeedsConnectHint(true)
           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+          failLatestRangeSwitch(daysForRequest)
           return
         }
 
@@ -2322,6 +2379,7 @@ export default function ResultsClient() {
         if (!igRes.ok || !json7?.ok) {
           setDailySnapshotData(null)
           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+          failLatestRangeSwitch(daysForRequest)
           return
         }
 
@@ -2335,6 +2393,7 @@ export default function ResultsClient() {
 
         if (pointsSource === "empty") {
           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+          failLatestRangeSwitch(daysForRequest)
           return
         }
 
@@ -2371,6 +2430,7 @@ export default function ResultsClient() {
           }
           setDailySnapshotData(null)
           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+          failLatestRangeSwitch(daysForRequest)
         }
       } finally {
         if (inFlightTrendDaysRef.current === daysForRequest) inFlightTrendDaysRef.current = null
@@ -4095,11 +4155,14 @@ export default function ResultsClient() {
   // Reset range loading state when fetch completes (terminal states)
   useEffect(() => {
     // Terminal states: loading is false (success, error, or idle)
-    if (!trendFetchStatus.loading && isChangingRange) {
-      clearRangeSwitchTimeout()
-      setIsChangingRange(false)
+    if (!trendFetchStatus.loading && showRangeOverlay && isChangingRange) {
+      if (rangeOverlayInFlightRef.current?.requestId === rangeChangeRequestIdRef.current) {
+        clearRangeSwitchTimeout()
+        setIsChangingRange(false)
+        setShowRangeOverlay(false)
+      }
     }
-  }, [trendFetchStatus.loading, isChangingRange, clearRangeSwitchTimeout])
+  }, [trendFetchStatus.loading, showRangeOverlay, isChangingRange, clearRangeSwitchTimeout])
 
   // Prefetch (silent): trigger once after first successful fetch / first interaction.
   useEffect(() => {
@@ -5639,40 +5702,47 @@ export default function ResultsClient() {
                                 
                                 const requestId = rangeChangeRequestIdRef.current + 1
                                 rangeChangeRequestIdRef.current = requestId
-                                setRangeChangeRequestId(requestId)
-                                setIsChangingRange(true)
-                                
-                                // Arm safety timeout
-                                armRangeSwitchTimeout(requestId)
+                                rangeOverlayInFlightRef.current = { requestId, days: d }
+                                clearRangeOverlayErrorTimer()
+                                flushSync(() => {
+                                  setRangeChangeRequestId(requestId)
+                                  setIsChangingRange(true)
+                                  setShowRangeOverlay(true)
+                                  setRangeOverlayError(false)
+                                })
 
-                                // Warm cache on first interaction (silent)
                                 triggerPrefetchCommonRanges()
-                                
+
                                 if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
                                   trendRangeSwitchStartRef.current = { at: performance.now(), days: d }
                                   console.debug("[trend][perf] range click start", { days: d, requestId })
                                 }
-                                
-                                const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", d))
-                                if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
-                                  setSelectedTrendRangeDays(d)
-                                  if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
-                                    console.debug("[trend][perf] cache hit, applying immediately", { days: d, requestId })
-                                  }
-                                  applyCachedTrendSeriesDirect({ days: d, cached })
-                                  // Reset loading state immediately for cached data
-                                  if (isMountedRef.current && requestId === rangeChangeRequestIdRef.current) {
-                                    clearRangeSwitchTimeout()
-                                    setIsChangingRange(false)
-                                  }
-                                } else {
-                                  setSelectedTrendRangeDays(d)
-                                  if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
-                                    console.debug("[trend][perf] cache miss, will fetch", { days: d, requestId })
-                                  }
-                                  // Loading state will be reset when data arrives via trendFetchStatus or safety timeout
-                                }
+
                                 fetchedByDaysRef.current.delete(d)
+
+                                const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", d))
+                                if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
+                                  console.debug(
+                                    cached && Array.isArray(cached.points) && cached.points.length >= 1
+                                      ? "[trend][perf] cache hit"
+                                      : "[trend][perf] cache miss",
+                                    { days: d, requestId },
+                                  )
+                                }
+                                requestAnimationFrame(() => {
+                                  if (!isMountedRef.current) return
+                                  if (requestId !== rangeChangeRequestIdRef.current) return
+
+                                  // Arm safety timeout
+                                  armRangeSwitchTimeout(requestId)
+
+                                  setSelectedTrendRangeDays(d)
+                                  if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
+                                    applyCachedTrendSeriesDirect({ days: d, cached })
+                                  } else {
+                                    // Loading state will be reset when data arrives via trendFetchStatus or safety timeout
+                                  }
+                                })
                               }}
                               className={
                                 `inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ` +
@@ -5880,7 +5950,7 @@ export default function ResultsClient() {
                         }
                       >
                         {/* Loading overlay for range switching */}
-                        {isChangingRange && (
+                        {showRangeOverlay && (
                           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/10 backdrop-blur-[0.5px] rounded-lg pointer-events-none">
                             <div className="flex items-center gap-2 text-sm text-white/80 min-w-0">
                               <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin flex-shrink-0" />
@@ -5888,6 +5958,12 @@ export default function ResultsClient() {
                             </div>
                           </div>
                         )}
+
+                        {rangeOverlayError && !showRangeOverlay ? (
+                          <div className="absolute left-2 top-2 z-20 rounded-md border border-white/10 bg-black/25 px-2 py-1 text-[11px] text-white/80 pointer-events-none">
+                            {isZh ? "載入失敗" : "Failed"}
+                          </div>
+                        ) : null}
                         <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
                           {(() => {
                             const reachSeriesForStats = shouldShowEmptySeriesHint
