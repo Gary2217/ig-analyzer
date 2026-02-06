@@ -990,8 +990,38 @@ export default function ResultsClient() {
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
 
-  const [compareEnabled, setCompareEnabled] = useState(false)
-  const [compareRangeDays, setCompareRangeDays] = useState<90 | 60 | 30 | 14 | 7>(30)
+  const LS_COMPARE_ENABLED = "results:trendCompareEnabled"
+  const LS_COMPARE_DAYS = "results:trendCompareDays"
+  const LS_COMPARE_OPACITY = "results:trendCompareOpacity"
+
+  const [compareEnabled, setCompareEnabled] = useState(() => {
+    try {
+      if (typeof window === "undefined") return false
+      return window.localStorage.getItem(LS_COMPARE_ENABLED) === "1"
+    } catch {
+      return false
+    }
+  })
+  const [compareRangeDays, setCompareRangeDays] = useState<90 | 60 | 30 | 14 | 7>(() => {
+    try {
+      if (typeof window === "undefined") return 30
+      const raw = Number(window.localStorage.getItem(LS_COMPARE_DAYS))
+      if (raw === 90 || raw === 60 || raw === 30 || raw === 14 || raw === 7) return raw
+      return 30
+    } catch {
+      return 30
+    }
+  })
+  const [compareOpacity, setCompareOpacity] = useState<number>(() => {
+    try {
+      if (typeof window === "undefined") return 0.5
+      const raw = Number(window.localStorage.getItem(LS_COMPARE_OPACITY) ?? "0.5")
+      if (!Number.isFinite(raw)) return 0.5
+      return Math.max(0.2, Math.min(0.9, raw))
+    } catch {
+      return 0.5
+    }
+  })
 
   const trendPointsByDaysRef = useRef(
     new Map<
@@ -1009,6 +1039,33 @@ export default function ResultsClient() {
   const hasRestoredTrendFromCacheRef = useRef(false)
   const hasRestoredResultsCacheRef = useRef(false)
   const displayedTrendSigRef = useRef<string>("")
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+      window.localStorage.setItem(LS_COMPARE_ENABLED, compareEnabled ? "1" : "0")
+    } catch {
+      // ignore
+    }
+  }, [LS_COMPARE_ENABLED, compareEnabled])
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+      window.localStorage.setItem(LS_COMPARE_DAYS, String(compareRangeDays))
+    } catch {
+      // ignore
+    }
+  }, [LS_COMPARE_DAYS, compareRangeDays])
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return
+      window.localStorage.setItem(LS_COMPARE_OPACITY, String(compareOpacity))
+    } catch {
+      // ignore
+    }
+  }, [LS_COMPARE_OPACITY, compareOpacity])
 
   const [followersDailyRows, setFollowersDailyRows] = useState<
     Array<{ day: string; followers_count: number }>
@@ -5274,6 +5331,25 @@ export default function ResultsClient() {
                             </option>
                           ))}
                         </select>
+
+                        <input
+                          type="range"
+                          min={0.2}
+                          max={0.9}
+                          step={0.1}
+                          value={compareOpacity}
+                          disabled={!compareEnabled}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            if (!Number.isFinite(v)) return
+                            setCompareOpacity(Math.max(0.2, Math.min(0.9, v)))
+                          }}
+                          className={
+                            "w-16 h-2 accent-white/70 " +
+                            (compareEnabled ? "opacity-90" : "opacity-40 cursor-not-allowed")
+                          }
+                          aria-label="Compare opacity"
+                        />
                       </div>
 
                       {compareEnabled && focusedAccountTrendMetric === "reach" && !compareSeries ? (
@@ -6095,15 +6171,63 @@ export default function ResultsClient() {
                                           {comparePath ? (
                                             <path
                                               d={comparePath}
-                                              stroke="rgba(255,255,255,0.65)"
+                                              stroke="rgba(255,255,255,0.95)"
                                               strokeWidth={isSmUp ? 1.8 : 1.4}
                                               strokeDasharray="6 4"
                                               fill="none"
-                                              opacity={0.65}
+                                              opacity={compareOpacity}
                                             />
                                           ) : null}
                                         </g>
                                       )
+                                    }
+
+                                    if (focusedIsFollowers && s.k === "followers") {
+                                      const comparePath = (() => {
+                                        if (!compareEnabled) return ""
+                                        if (compareRangeDays === selectedTrendRangeDays) return ""
+                                        if (!Array.isArray(followersDailyRows) || followersDailyRows.length < 1) return ""
+
+                                        const span = Math.max(s.max - s.min, 0)
+                                        const mapByTs = new Map<number, number>()
+                                        for (const r of followersDailyRows) {
+                                          const day = typeof r?.day === "string" ? r.day : ""
+                                          if (!day) continue
+                                          const ts = Date.parse(`${day}T00:00:00.000Z`)
+                                          if (!Number.isFinite(ts)) continue
+                                          const v = (r as { followers_count?: unknown })?.followers_count
+                                          if (typeof v !== "number" || !Number.isFinite(v)) continue
+                                          mapByTs.set(ts, v)
+                                        }
+
+                                        const pts = dataForChart
+                                          .map((p, i) => {
+                                            const keyTs = typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : null
+                                            if (keyTs === null) return null
+                                            const raw = mapByTs.get(keyTs) ?? null
+                                            if (typeof raw !== "number" || !Number.isFinite(raw)) return null
+                                            const norm = span > 0 ? ((raw - s.min) / span) * 100 : 50
+                                            const x = sx(i)
+                                            const y = sy(Number.isFinite(norm) ? norm : 50)
+                                            if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                            return { x, y }
+                                          })
+                                          .filter(Boolean) as Array<{ x: number; y: number }>
+
+                                        return buildSmoothPath(pts)
+                                      })()
+
+                                      return comparePath ? (
+                                        <path
+                                          key={`trend-line-compare-${s.k}`}
+                                          d={comparePath}
+                                          stroke="rgba(255,255,255,0.95)"
+                                          strokeWidth={isSmUp ? 1.8 : 1.4}
+                                          strokeDasharray="6 4"
+                                          fill="none"
+                                          opacity={compareOpacity}
+                                        />
+                                      ) : null
                                     }
 
                                     const d = s.points
