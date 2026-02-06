@@ -24,13 +24,17 @@ type DsResponsePayload = {
   body: any
   status: number
   source: "db" | "graph" | "error"
+  etag: string
 }
 
 type CacheEntry<T> = { at: number; ttl: number; value: T }
 
 const __dsInflight = new Map<string, Promise<DsResponsePayload>>()
 const __dsInflightJoinCount = new Map<string, number>()
-const __dsCache = new Map<string, CacheEntry<{ body: any; status: number; source: DsResponsePayload["source"] }>>()
+const __dsCache = new Map<
+  string,
+  CacheEntry<{ body: any; status: number; source: DsResponsePayload["source"]; etag: string }>
+>()
 
 const __dsTotalsCache = new Map<string, CacheEntry<{ ok: boolean; insights_daily: any }>>()
 const __dsFollowersCache = new Map<string, CacheEntry<{ followersCount: number | null; capturedAt: string }>>()
@@ -322,6 +326,112 @@ function jsonError(message: string, extra?: any, status = 400) {
   )
 }
 
+function weakEtagFromParts(parts: Array<string | number | null | undefined>) {
+  const raw = parts
+    .map((p) => (p === null || p === undefined ? "" : String(p)))
+    .join("|")
+  try {
+    const h = createHash("sha256").update(raw).digest("hex").slice(0, 24)
+    return `W/"${h}"`
+  } catch {
+    return `W/"${raw.slice(0, 24)}"`
+  }
+}
+
+function isIfNoneMatchHit(req: Request, etag: string) {
+  const inm = req.headers.get("if-none-match")
+  if (!inm || !etag) return false
+  const v = inm.trim()
+  if (!v) return false
+  return v === etag
+}
+
+function respondWithEtag(params: {
+  req: Request
+  status: number
+  body: any
+  etag: string
+  branch: string
+  source: DsResponsePayload["source"]
+}) {
+  const headers: Record<string, string> = {
+    "Cache-Control": "no-store",
+    ETag: params.etag,
+    ...HANDLER_HEADERS,
+  }
+
+  const etagHit = params.status === 200 && isIfNoneMatchHit(params.req, params.etag)
+  if (__DEV__) {
+    headers["X-DS-Branch"] = params.branch
+    headers["X-DS-Source"] = String(params.source)
+    if (etagHit) headers["X-DS-ETag"] = "304"
+    console.debug("[daily-snapshot][etag]", { status: etagHit ? 304 : params.status, branch: params.branch, etagHit })
+  }
+
+  if (etagHit) {
+    return new NextResponse(null, { status: 304, headers })
+  }
+  if (params.status === 304) {
+    return new NextResponse(null, { status: 304, headers })
+  }
+  if (params.status === 200) {
+    headers["Content-Type"] = "application/json; charset=utf-8"
+  }
+  return NextResponse.json(params.body, { status: params.status, headers })
+}
+
+function buildTrendPointsV2(points: DailySnapshotPoint[]) {
+  const list = Array.isArray(points) ? points : []
+  const fmtLabel = (ts: number) => {
+    try {
+      return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
+    } catch {
+      const d = new Date(ts)
+      const m = String(d.getMonth() + 1).padStart(2, "0")
+      const dd = String(d.getDate()).padStart(2, "0")
+      return `${m}/${dd}`
+    }
+  }
+
+  const reachByIndex: Array<number | null> = list.map((p) => {
+    const v = typeof p?.reach === "number" ? p.reach : Number(p?.reach)
+    return Number.isFinite(v) ? Math.max(0, Math.floor(v)) : null
+  })
+
+  const reachMa7ByIndex = reachByIndex.map((_, i) => {
+    const end = i
+    const start = Math.max(0, i - 6)
+    let sum = 0
+    let count = 0
+    for (let j = start; j <= end; j++) {
+      const v = reachByIndex[j]
+      if (typeof v !== "number" || !Number.isFinite(v)) return null
+      sum += v
+      count += 1
+    }
+    if (count < 1) return null
+    return sum / count
+  })
+
+  return list
+    .map((p, i) => {
+      const date = String(p?.date || "").trim()
+      const ts = date ? Date.parse(`${date}T00:00:00.000Z`) : NaN
+      const tsOk = Number.isFinite(ts) ? (ts as number) : null
+      return {
+        date,
+        ts: tsOk,
+        t: tsOk !== null ? fmtLabel(tsOk) : date,
+        reach: typeof p?.reach === "number" ? p.reach : null,
+        impressions: typeof p?.impressions === "number" ? p.impressions : null,
+        interactions: typeof p?.interactions === "number" ? p.interactions : null,
+        engaged: typeof p?.engaged_accounts === "number" ? p.engaged_accounts : null,
+        reach_ma7: typeof reachMa7ByIndex[i] === "number" && Number.isFinite(reachMa7ByIndex[i] as number) ? (reachMa7ByIndex[i] as number) : null,
+      }
+    })
+    .filter((p) => typeof p.ts === "number" && Number.isFinite(p.ts))
+}
+
 function getCookieValueFromHeader(cookie: string, key: string) {
   const re = new RegExp(`${key}=([^;]+)`)
   const m = cookie.match(re)
@@ -560,6 +670,15 @@ export async function POST(req: Request) {
     const h = req.headers.get("x-cron-secret")
     const cron = process.env.CRON_SECRET
     const cronMode = Boolean(h && cron && h === cron)
+    
+    if (__DEV__) {
+      console.debug("[daily-snapshot][auth]", { 
+        cronMode, 
+        hasHeader: Boolean(h), 
+        hasEnvCron: Boolean(cron),
+        branchHint: cronMode ? "cron" : "cookie"
+      })
+    }
 
     let token = ""
     let pageId = ""
@@ -569,8 +688,28 @@ export async function POST(req: Request) {
     if (cronMode) {
       const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
       const envUserId = (process.env.IG_USER_ID ?? "").trim()
-      if (!envToken) return jsonError("missing_env:IG_ACCESS_TOKEN", null, 401)
-      if (!envUserId) return jsonError("missing_env:IG_USER_ID", null, 401)
+      if (!envToken) {
+        const etag = weakEtagFromParts(["ds", "missing_env", "IG_ACCESS_TOKEN"])
+        return respondWithEtag({
+          req,
+          status: 401,
+          body: { ok: false, error: "missing_env:IG_ACCESS_TOKEN" },
+          etag,
+          branch: "missing_env_token",
+          source: "error",
+        })
+      }
+      if (!envUserId) {
+        const etag = weakEtagFromParts(["ds", "missing_env", "IG_USER_ID"])
+        return respondWithEtag({
+          req,
+          status: 401,
+          body: { ok: false, error: "missing_env:IG_USER_ID" },
+          etag,
+          branch: "missing_env_user",
+          source: "error",
+        })
+      }
       token = envToken
       igId = envUserId
     } else {
@@ -594,7 +733,17 @@ export async function POST(req: Request) {
       pageId = (pageIdFromCookies || pageIdFromHeader).trim()
       igId = (igIdFromCookies || igIdFromHeader).trim()
 
-      if (!token) return jsonError("missing_cookie:ig_access_token", null, 401)
+      if (!token) {
+        const etag = weakEtagFromParts(["ds", "missing_cookie", "ig_access_token"])
+        return respondWithEtag({
+          req,
+          status: 401,
+          body: { ok: false, error: "missing_cookie:ig_access_token" },
+          etag,
+          branch: "missing_cookie_token",
+          source: "error",
+        })
+      }
     }
 
     // If ids are missing, try to load them (and set cookies if possible).
@@ -618,45 +767,74 @@ export async function POST(req: Request) {
       }
     }
 
-    if (!pageId) return jsonError(cronMode ? "missing_ids:page_id" : "missing_cookie:ig_page_id", null, 401)
-    if (!igId) return jsonError(cronMode ? "missing_ids:ig_ig_id" : "missing_cookie:ig_ig_id", null, 401)
+    // Resolve IDs: in cronMode, prefer environment variables over cookies
+    const envPageId = (process.env.IG_PAGE_ID ?? "").trim()
+    const envIgId = (process.env.IG_IG_ID ?? "").trim()
+    const resolvedPageId = cronMode ? (pageId || envPageId) : pageId
+    const resolvedIgId = cronMode ? (igId || envIgId) : igId
+
+    if (!resolvedPageId) {
+      const error = cronMode ? "missing_ids:page_id" : "missing_cookie:ig_page_id"
+      const etag = weakEtagFromParts(["ds", error])
+      return respondWithEtag({
+        req,
+        status: 401,
+        body: { ok: false, error },
+        etag,
+        branch: "missing_page_id",
+        source: "error",
+      })
+    }
+    if (!resolvedIgId) {
+      const error = cronMode ? "missing_ids:ig_ig_id" : "missing_cookie:ig_ig_id"
+      const etag = weakEtagFromParts(["ds", error])
+      return respondWithEtag({
+        req,
+        status: 401,
+        body: { ok: false, error },
+        etag,
+        branch: "missing_ig_id",
+        source: "error",
+      })
+    }
 
     const tokSig = cronMode ? "cron" : tokenSignature(token)
-    const requestKey = `ds|${cronMode ? "cron" : "user"}|ig:${igId}|pg:${pageId}|days:${safeDays}|tok:${tokSig}`
-    const totalsKey = `ds_totals|${cronMode ? "cron" : "user"}|ig:${igId}|pg:${pageId}|days:${safeDays}|tok:${tokSig}`
-    const followersKey = `ds_followers|${cronMode ? "cron" : "user"}|ig:${igId}|tok:${tokSig}`
+    const requestKey = `ds|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|pg:${resolvedPageId}|days:${safeDays}|tok:${tokSig}`
+    const totalsKey = `ds_totals|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|pg:${resolvedPageId}|days:${safeDays}|tok:${tokSig}`
+    const followersKey = `ds_followers|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|tok:${tokSig}`
 
     const cachedResp = readCache(__dsCache, requestKey)
     if (cachedResp) {
-      if (__DEV__) {
-        console.debug("[daily-snapshot] cache_hit", { key: requestKey, source: cachedResp.source })
-      }
-      const headers: Record<string, string> = { "Cache-Control": "no-store", ...HANDLER_HEADERS }
-      if (__DEV__) headers["X-DS-Cache"] = "hit"
-      if (__DEV__) headers["X-DS-Source"] = String(cachedResp.source)
-      return NextResponse.json(cachedResp.body, { status: cachedResp.status, headers })
+      return respondWithEtag({
+        req,
+        status: cachedResp.status,
+        body: cachedResp.body,
+        etag: cachedResp.etag,
+        branch: "cache_hit",
+        source: cachedResp.source,
+      })
     }
 
     const inflight = __dsInflight.get(requestKey)
     if (inflight) {
       const joined = (__dsInflightJoinCount.get(requestKey) ?? 0) + 1
       __dsInflightJoinCount.set(requestKey, joined)
-      if (__DEV__) {
-        console.debug("[daily-snapshot] inflight_join", { key: requestKey, joinCount: joined })
-      }
       const out = await inflight
-      const headers: Record<string, string> = { "Cache-Control": "no-store", ...HANDLER_HEADERS }
-      if (__DEV__) headers["X-DS-Cache"] = "inflight"
-      if (__DEV__) headers["X-DS-Inflight-Joins"] = String(joined)
-      if (__DEV__) headers["X-DS-Source"] = String(out.source)
-      return NextResponse.json(out.body, { status: out.status, headers })
+      return respondWithEtag({
+        req,
+        status: out.status,
+        body: out.body,
+        etag: out.etag,
+        branch: "inflight_join",
+        source: out.source,
+      })
     }
 
     const run = (async (): Promise<DsResponsePayload> => {
       // Best-effort: write today's followers_count snapshot (do not affect API success)
-      void writeFollowersBestEffortCached({ followersKey, token, igId })
+      void writeFollowersBestEffortCached({ followersKey, token, igId: resolvedIgId })
 
-      const availableDays = (await getAvailableDaysCount({ igId, pageId })) ?? null
+      const availableDays = (await getAvailableDaysCount({ igId: resolvedIgId, pageId: resolvedPageId })) ?? null
 
     // Prefer DB snapshots for the trend chart.
     const today = todayUtcDateString()
@@ -670,9 +848,9 @@ export async function POST(req: Request) {
     try {
       const { data: dbRows, error: dbError } = await supabaseServer
         .from("ig_daily_insights")
-        .select("day,reach,impressions,total_interactions,accounts_engaged")
-        .eq("ig_user_id", Number(igId))
-        .eq("page_id", Number(pageId))
+        .select("day,reach,impressions,total_interactions,accounts_engaged,updated_at")
+        .eq("ig_user_id", Number(resolvedIgId))
+        .eq("page_id", Number(resolvedPageId))
         .gte("day", start)
         .lte("day", today)
         .order("day", { ascending: true })
@@ -692,6 +870,7 @@ export async function POST(req: Request) {
           string,
           { reach: number; impressions: number; interactions: number; engaged_accounts: number }
         >()
+        let maxUpdatedAt: string | null = null
         for (const r of list as any[]) {
           const dateStr = String(r?.day || "").trim()
           if (!dateStr) continue
@@ -701,14 +880,26 @@ export async function POST(req: Request) {
             interactions: toSafeInt(r?.total_interactions),
             engaged_accounts: toSafeInt(r?.accounts_engaged), // may be 0 in v24 path
           })
+
+          const ua = typeof r?.updated_at === "string" ? String(r.updated_at).trim() : ""
+          if (ua) {
+            if (!maxUpdatedAt || ua > maxUpdatedAt) maxUpdatedAt = ua
+          }
+        }
+
+        const pointsPadded = buildPaddedPoints({ days: safeDays, byDate })
+        const etag = weakEtagFromParts(["ds", "db", resolvedIgId, resolvedPageId, safeDays, maxUpdatedAt ?? today])
+        if (isIfNoneMatchHit(req, etag)) {
+          return { status: 200, source: "db", body: null, etag }
         }
 
         const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
-        const totals = await getTotalsCached({ totalsKey, token, envToken, pageId, igId, days: safeDays })
+        const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
 
         return {
           status: 200,
           source: "db",
+          etag,
           body: {
             build_marker: BUILD_MARKER,
             ok: true,
@@ -717,10 +908,11 @@ export async function POST(req: Request) {
             rangeStart: start,
             rangeEnd: today,
             available_days: availableDays ?? list.length,
-            points: buildPaddedPoints({ days: safeDays, byDate }),
+            points: pointsPadded,
             points_ok: true,
             points_source: "db",
             points_end_date: today,
+            trend_points_v2: buildTrendPointsV2(pointsPadded),
             // we’ll still provide totals even when DB hit is used (best effort)
             insights_daily: totals.insights_daily,
             insights_daily_series: [],
@@ -740,20 +932,22 @@ export async function POST(req: Request) {
       const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
 
       // page access token via cookie token
-      let pageToken = await getPageAccessToken(token, pageId)
+      let pageToken = await getPageAccessToken(token, resolvedPageId)
       let tokenSource: "cookie" | "env" = "cookie"
 
       // optional env fallback
       if (!pageToken.ok && envToken) {
         tokenSource = "env"
-        pageToken = await getPageAccessToken(envToken, pageId)
+        pageToken = await getPageAccessToken(envToken, resolvedPageId)
       }
 
       if (!pageToken.ok) {
         // hard fail with diag (don’t silently treat as empty)
+        const etag = weakEtagFromParts(["ds", "auth_err", resolvedIgId, resolvedPageId, safeDays, today])
         return {
           status: 401,
           source: "error",
+          etag,
           body: {
             build_marker: BUILD_MARKER,
             ok: false,
@@ -764,15 +958,17 @@ export async function POST(req: Request) {
       }
 
       const series = await fetchInsightsTimeSeries({
-        igId,
+        igId: resolvedIgId,
         pageAccessToken: pageToken.pageAccessToken,
         days: safeDays,
       })
 
       if (!series.ok) {
+        const etag = weakEtagFromParts(["ds", "graph_err", resolvedIgId, resolvedPageId, safeDays, today, series.status])
         return {
           status: 502,
           source: "error",
+          etag,
           body: {
             build_marker: BUILD_MARKER,
             ok: false,
@@ -789,19 +985,24 @@ export async function POST(req: Request) {
       }
 
       const points = buildPointsFromGraphInsightsTimeSeries(series.data, safeDays)
+      const etag = weakEtagFromParts(["ds", "graph", resolvedIgId, resolvedPageId, safeDays, today, points.length])
+      if (isIfNoneMatchHit(req, etag)) {
+        return { status: 200, source: "graph", body: null, etag }
+      }
 
       const hasAnyNonZero =
         Array.isArray(points) &&
         points.some((p) => toSafeInt(p?.reach) > 0 || toSafeInt(p?.interactions) > 0)
 
       // totals (best-effort)
-      const totals = await getTotalsCached({ totalsKey, token, envToken, pageId, igId, days: safeDays })
+      const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
       const insights_daily = totals.insights_daily
 
       if (!hasAnyNonZero) {
         return {
           status: 200,
           source: "graph",
+          etag,
           body: {
             build_marker: BUILD_MARKER,
             ok: true,
@@ -814,6 +1015,7 @@ export async function POST(req: Request) {
             points_ok: false,
             points_source: "empty",
             points_end_date: today,
+            trend_points_v2: [],
             insights_daily,
             insights_daily_series: series.data,
             series_ok: true,
@@ -848,8 +1050,8 @@ export async function POST(req: Request) {
             ? await supabaseServer
                 .from("ig_daily_insights")
                 .select("day,reach,impressions,total_interactions,accounts_engaged")
-                .eq("ig_user_id", Number(igId))
-                .eq("page_id", Number(pageId))
+                .eq("ig_user_id", Number(resolvedIgId))
+                .eq("page_id", Number(resolvedPageId))
                 .in("day", daysToCheck)
             : ({ data: [] } as any)
 
@@ -872,8 +1074,8 @@ export async function POST(req: Request) {
         const rowsToUpsert = candidate
           .filter((r) => !skipDays.has(r.day))
           .map((r) => ({
-            ig_user_id: Number(igId),
-            page_id: Number(pageId),
+            ig_user_id: Number(resolvedIgId),
+            page_id: Number(resolvedPageId),
             day: r.day,
             reach: r.reach,
             impressions: r.impressions,
@@ -902,6 +1104,7 @@ export async function POST(req: Request) {
       return {
         status: 200,
         source: "graph",
+        etag,
         body: {
           build_marker: BUILD_MARKER,
           ok: true,
@@ -914,6 +1117,7 @@ export async function POST(req: Request) {
           points_ok: true,
           points_source: "graph_series_v24",
           points_end_date: today,
+          trend_points_v2: buildTrendPointsV2(points),
           insights_daily,
           insights_daily_series: series.data,
           series_ok: true,
@@ -933,9 +1137,11 @@ export async function POST(req: Request) {
           message: e?.message ?? "graph_seed_failed",
         })
       }
+      const etag = weakEtagFromParts(["ds", "graph_seed_failed", resolvedIgId, resolvedPageId, safeDays])
       return {
         status: 502,
         source: "error",
+        etag,
         body: {
           build_marker: BUILD_MARKER,
           ok: false,
@@ -944,34 +1150,81 @@ export async function POST(req: Request) {
         },
       }
     }
-    })()
 
-    __dsInflight.set(requestKey, run)
-    __dsInflightJoinCount.set(requestKey, 0)
+    const etag = weakEtagFromParts(["ds", "no_data", resolvedIgId, resolvedPageId, safeDays])
+    return {
+      status: 200,
+      source: "db",
+      etag,
+      body: {
+        build_marker: BUILD_MARKER,
+        ok: true,
+        days: safeDays,
+        rangeDays: safeDays,
+        rangeStart: start,
+        rangeEnd: today,
+        available_days: availableDays,
+        points: [],
+        points_ok: false,
+        points_source: "empty",
+        points_end_date: today,
+        trend_points_v2: [],
+        insights_daily: [],
+        insights_daily_series: [],
+        series_ok: true,
+        __diag: { db_rows: 0, used_source: "empty", start, end: today },
+      },
+    }
+  })()
 
-    let out: DsResponsePayload
+  __dsInflight.set(requestKey, run)
+  __dsInflightJoinCount.set(requestKey, 0)
+
+  try {
+    const out = await run
+
+    // Cache only successful 200 responses.
     try {
-      out = await run
-    } finally {
-      __dsInflight.delete(requestKey)
+      if (out.status === 200 && out.body !== null) {
+        writeCache(__dsCache, requestKey, { body: out.body, status: out.status, source: out.source, etag: out.etag }, 12_000)
+        pruneOldest(__dsCache, 200)
+      }
+    } catch {
+      // ignore
     }
 
-    const respTtl = 8_000
-    writeCache(__dsCache, requestKey, { body: out.body, status: out.status, source: out.source }, respTtl)
-    pruneOldest(__dsCache, 200)
-
-    if (__DEV__) {
-      const joinCount = __dsInflightJoinCount.get(requestKey) ?? 0
-      console.debug("[daily-snapshot] cache_store", { key: requestKey, ttlMs: respTtl, source: out.source, joinCount })
-    }
-
-    const headers: Record<string, string> = { "Cache-Control": "no-store", ...HANDLER_HEADERS }
-    if (__DEV__) headers["X-DS-Cache"] = "miss"
-    if (__DEV__) headers["X-DS-Source"] = String(out.source)
-    if (__DEV__) headers["X-DS-Inflight-Joins"] = String(__dsInflightJoinCount.get(requestKey) ?? 0)
-    __dsInflightJoinCount.delete(requestKey)
-    return NextResponse.json(out.body, { status: out.status, headers })
+    return respondWithEtag({
+      req,
+      status: out.status,
+      body: out.body,
+      etag: out.etag,
+      branch: "miss",
+      source: out.source,
+    })
   } catch (err: any) {
-    return jsonError("server_error", { message: err?.message ?? String(err) }, 500)
+    const etag = weakEtagFromParts(["ds", "server_error", String(err?.message ?? "err")])
+    return respondWithEtag({
+      req,
+      status: 500,
+      body: { ok: false, error: "server_error", message: err?.message ?? String(err) },
+      etag,
+      branch: "server_error",
+      source: "error",
+    })
+  } finally {
+    __dsInflight.delete(requestKey)
+    __dsInflightJoinCount.delete(requestKey)
   }
+} catch (e: any) {
+  const etag = weakEtagFromParts(["ds", "server_error", String(e?.message ?? "err")])
+  return respondWithEtag({
+    req,
+    status: 500,
+    body: { ok: false, error: "server_error", message: e?.message ?? String(e) },
+    etag,
+    branch: "server_error_outer",
+    source: "error",
+  })
+}
+
 }
