@@ -93,7 +93,7 @@ async function getTotalsCached(params: {
   const cached = readCache(__dsTotalsCache, params.totalsKey)
   if (cached) return cached
 
-  const ttl = 25_000
+  const ttl = 180_000
   const value = await fetchTotalsBestEffort({
     token: params.token,
     envToken: params.envToken,
@@ -193,6 +193,148 @@ function utcDateStringFromOffset(daysAgo: number) {
   const m = String(d.getUTCMonth() + 1).padStart(2, "0")
   const dd = String(d.getUTCDate()).padStart(2, "0")
   return `${y}-${m}-${dd}`
+}
+
+function utcDateRangeForDays(days: number) {
+  const today = todayUtcDateString()
+  const start = utcDateStringFromOffset(days - 1)
+  return { today, start }
+}
+
+function buildPaddedPointsFromRows(rows: any[], days: number) {
+  const byDate = new Map<
+    string,
+    { reach: number; impressions: number; interactions: number; engaged_accounts: number }
+  >()
+  for (const r of rows as any[]) {
+    const dateStr = String(r?.day || "").trim()
+    if (!dateStr) continue
+    byDate.set(dateStr, {
+      reach: toSafeInt(r?.reach),
+      impressions: toSafeInt(r?.impressions),
+      interactions: toSafeInt(r?.total_interactions),
+      engaged_accounts: toSafeInt(r?.accounts_engaged),
+    })
+  }
+  return buildPaddedPoints({ days, byDate })
+}
+
+async function readAccountDailySnapshots(params: {
+  userScopeKey: string
+  igId: string
+  pageId: string
+  start: string
+  today: string
+}) {
+  try {
+    const { data, error } = await supabaseServer
+      .from("account_daily_snapshot")
+      .select("day,reach,impressions,total_interactions,accounts_engaged,updated_at")
+      .eq("user_id", params.userScopeKey)
+      .eq("ig_user_id", Number(params.igId))
+      .eq("page_id", Number(params.pageId))
+      .gte("day", params.start)
+      .lte("day", params.today)
+      .order("day", { ascending: true })
+    if (error) return { rows: [], error }
+    return { rows: Array.isArray(data) ? data : [], error: null }
+  } catch (e: any) {
+    return { rows: [], error: e }
+  }
+}
+
+async function upsertAccountDailySnapshots(params: {
+  userScopeKey: string
+  igId: string
+  pageId: string
+  rows: Array<{
+    day: string
+    reach: number
+    impressions: number
+    total_interactions: number
+    accounts_engaged: number
+  }>
+}) {
+  if (params.rows.length === 0) return { ok: true as const, error: null }
+  try {
+    const { error } = await supabaseServer.from("account_daily_snapshot").upsert(
+      params.rows.map((r) => ({
+        user_id: params.userScopeKey,
+        ig_user_id: Number(params.igId),
+        page_id: Number(params.pageId),
+        day: r.day,
+        reach: r.reach,
+        impressions: r.impressions,
+        total_interactions: r.total_interactions,
+        accounts_engaged: r.accounts_engaged,
+      })),
+      { onConflict: "user_id,ig_user_id,page_id,day" }
+    )
+    return { ok: !error, error }
+  } catch (e: any) {
+    return { ok: false, error: e }
+  }
+}
+
+async function backfillMissingSnapshotsFromGraph(params: {
+  userScopeKey: string
+  token: string
+  envToken: string
+  igId: string
+  pageId: string
+  start: string
+  today: string
+  maxDays: number
+}) {
+  const daysToBackfill = Math.min(params.maxDays, 120)
+  const untilMs = Date.now()
+  const sinceMs = untilMs - (daysToBackfill - 1) * 24 * 60 * 60 * 1000
+  const since = Math.floor(sinceMs / 1000)
+  const until = Math.floor(untilMs / 1000)
+
+  let pageToken = await getPageAccessToken(params.token, params.pageId)
+  let tokenSource: "cookie" | "env" = "cookie"
+  if (!pageToken.ok && params.envToken) {
+    tokenSource = "env"
+    pageToken = await getPageAccessToken(params.envToken, params.pageId)
+  }
+  if (!pageToken.ok) {
+    return { ok: false as const, error: "page_access_token_failed", tokenSource, rows: [] as any[] }
+  }
+
+  const series = await fetchInsightsTimeSeries({
+    igId: params.igId,
+    pageAccessToken: pageToken.pageAccessToken,
+    days: daysToBackfill,
+  })
+  if (!series.ok) {
+    return { ok: false as const, error: "graph_time_series_failed", tokenSource, rows: [] }
+  }
+
+  const points = buildPointsFromGraphInsightsTimeSeries(series.data, daysToBackfill)
+  const rows = points
+    .filter((p) => p?.date && p.date !== params.today)
+    .map((p) => ({
+      day: p.date,
+      reach: toSafeInt(p.reach),
+      impressions: 0,
+      total_interactions: toSafeInt(p.interactions),
+      accounts_engaged: 0,
+    }))
+
+  if (rows.length > 0) {
+    const upsertRes = await upsertAccountDailySnapshots({
+      userScopeKey: params.userScopeKey,
+      igId: params.igId,
+      pageId: params.pageId,
+      rows,
+    })
+    if (!upsertRes.ok) {
+      return { ok: false as const, error: "upsert_failed", tokenSource, rows: [] }
+    }
+  }
+
+  return { ok: true as const, rows, tokenSource }
 }
 
 function toSafeInt(v: unknown) {
@@ -461,9 +603,9 @@ function getCookieValueFromHeader(cookie: string, key: string) {
 function clampDays(raw: string | null) {
   const allowed = new Set([90, 60, 30, 14, 7])
   const n = Number(raw)
-  if (!Number.isFinite(n)) return 90
+  if (!Number.isFinite(n)) return 30
   const i = Math.floor(n)
-  if (!allowed.has(i)) return 90
+  if (!allowed.has(i)) return 30
   return i
 }
 
@@ -662,20 +804,6 @@ async function fetchTotalsBestEffort(params: {
   return { ok: totalsResp.ok as boolean, insights_daily }
 }
 
-async function getAvailableDaysCount(params: { igId: string; pageId: string }) {
-  try {
-    const r = await (supabaseServer as any)
-      .from("ig_daily_insights")
-      .select("day", { count: "exact", head: true })
-      .eq("ig_user_id", Number(params.igId))
-      .eq("page_id", Number(params.pageId))
-    const count = typeof (r as any)?.count === "number" ? (r as any).count : null
-    return Number.isFinite(count) ? (count as number) : null
-  } catch {
-    return null
-  }
-}
-
 export async function POST(req: Request) {
   const t0 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
   const timingMarks: Array<{ name: string; dur: number }> = []
@@ -872,6 +1000,7 @@ export async function POST(req: Request) {
     }
 
     const tokSig = cronMode ? "cron" : tokenSignature(token)
+    const userScopeKey = cronMode ? "cron" : tokSig
     const requestKey = `ds|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|pg:${resolvedPageId}|days:${safeDays}|tok:${tokSig}`
     const totalsKey = `ds_totals|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|pg:${resolvedPageId}|days:${safeDays}|tok:${tokSig}`
     const followersKey = `ds_followers|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|tok:${tokSig}`
@@ -909,185 +1038,351 @@ export async function POST(req: Request) {
       // Best-effort: write today's followers_count snapshot (do not affect API success)
       void writeFollowersBestEffortCached({ followersKey, token, igId: resolvedIgId })
 
-      const tAvailStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-      const availableDays = (await getAvailableDaysCount({ igId: resolvedIgId, pageId: resolvedPageId })) ?? null
-      mark("avail", tAvailStart)
+      const { today, start } = utcDateRangeForDays(safeDays)
+      const availableDays: number | null = null
 
-    // Prefer DB snapshots for the trend chart.
-    const today = todayUtcDateString()
-    const start = utcDateStringFromOffset(safeDays - 1)
-
-    if (__DEBUG_DAILY_SNAPSHOT__) {
-      console.log("[daily-snapshot] scope", { days: safeDays })
-    }
-
-    // 1) Try DB first
-    try {
-      const tDbStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-      const { data: dbRows, error: dbError } = await supabaseServer
-        .from("ig_daily_insights")
-        .select("day,reach,impressions,total_interactions,accounts_engaged,updated_at")
-        .eq("ig_user_id", Number(resolvedIgId))
-        .eq("page_id", Number(resolvedPageId))
-        .gte("day", start)
-        .lte("day", today)
-        .order("day", { ascending: true })
-
-      mark("db", tDbStart)
-
-      const list = Array.isArray(dbRows) ? dbRows : []
       if (__DEBUG_DAILY_SNAPSHOT__) {
-        console.log("[daily-snapshot] db", {
-          err: dbError
-            ? { message: (dbError as any)?.message, code: (dbError as any)?.code, hint: (dbError as any)?.hint }
-            : null,
-          rows_len: list.length,
-        })
+        console.log("[daily-snapshot] scope", { days: safeDays, start, today, userScopeKey, resolvedIgId, resolvedPageId })
       }
 
-      if (!dbError && list.length > 0) {
-        const tBuildStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-        const byDate = new Map<
-          string,
-          { reach: number; impressions: number; interactions: number; engaged_accounts: number }
-        >()
-        let maxUpdatedAt: string | null = null
-        for (const r of list as any[]) {
-          const dateStr = String(r?.day || "").trim()
-          if (!dateStr) continue
-          byDate.set(dateStr, {
-            reach: toSafeInt(r?.reach),
-            impressions: toSafeInt(r?.impressions), // may be 0 in v24 path
-            interactions: toSafeInt(r?.total_interactions),
-            engaged_accounts: toSafeInt(r?.accounts_engaged), // may be 0 in v24 path
-          })
+      // 1) Try pre-aggregated snapshots first (fast path)
+      try {
+        const tSnapStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+        const { rows: snapRows, error: snapError } = await readAccountDailySnapshots({
+          userScopeKey,
+          igId: resolvedIgId,
+          pageId: resolvedPageId,
+          start,
+          today,
+        })
+        mark("snap", tSnapStart)
 
-          const ua = typeof r?.updated_at === "string" ? String(r.updated_at).trim() : ""
-          if (ua) {
-            if (!maxUpdatedAt || ua > maxUpdatedAt) maxUpdatedAt = ua
+        if (!snapError && snapRows.length > 0) {
+          if (__DEBUG_DAILY_SNAPSHOT__) {
+            console.log("[daily-snapshot] snap_hit", { snap_rows: snapRows.length, source: "snap" })
+          }
+          const tBuildStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+          const pointsPadded = buildPaddedPointsFromRows(snapRows, safeDays)
+          mark("build", tBuildStart)
+
+          const maxUpdatedAt = snapRows.reduce((max: string | null, r: any) => {
+            const ua = typeof r?.updated_at === "string" ? String(r.updated_at).trim() : ""
+            return ua && (!max || ua > max) ? ua : max
+          }, null)
+
+          const etag = weakEtagFromParts(["ds", "snap", resolvedIgId, resolvedPageId, safeDays, maxUpdatedAt ?? today])
+          if (isIfNoneMatchHit(req, etag)) {
+            return { status: 200, source: "db", body: null, etag }
+          }
+
+          const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+          const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+          const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
+          mark("totals", tTotalsStart)
+
+          return {
+            status: 200,
+            source: "db",
+            etag,
+            body: {
+              build_marker: BUILD_MARKER,
+              ok: true,
+              days: safeDays,
+              rangeDays: safeDays,
+              rangeStart: start,
+              rangeEnd: today,
+              available_days: snapRows.length,
+              points: pointsPadded,
+              points_ok: true,
+              points_source: "snap",
+              points_end_date: today,
+              trend_points_v2: buildTrendPointsV2(pointsPadded),
+              insights_daily: totals.insights_daily,
+              insights_daily_series: [],
+              series_ok: true,
+              __diag: { snap_rows: snapRows.length, used_source: "snap", start, end: today },
+            },
+          }
+        }
+      } catch {
+        // ignore snapshot failures; fall back to legacy DB path
+      }
+
+      // 2) Legacy ig_daily_insights (fallback)
+      try {
+        const tDbStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+        const { data: dbRows, error: dbError } = await supabaseServer
+          .from("ig_daily_insights")
+          .select("day,reach,impressions,total_interactions,accounts_engaged,updated_at")
+          .eq("ig_user_id", Number(resolvedIgId))
+          .eq("page_id", Number(resolvedPageId))
+          .gte("day", start)
+          .lte("day", today)
+          .order("day", { ascending: true })
+
+        mark("db", tDbStart)
+
+        const list = Array.isArray(dbRows) ? dbRows : []
+        if (__DEBUG_DAILY_SNAPSHOT__) {
+          console.log("[daily-snapshot] legacy_db", {
+            err: dbError
+              ? { message: (dbError as any)?.message, code: (dbError as any)?.code, hint: (dbError as any)?.hint }
+              : null,
+            rows_len: list.length,
+          })
+        }
+
+        if (!dbError && list.length > 0) {
+          if (__DEBUG_DAILY_SNAPSHOT__) {
+            console.log("[daily-snapshot] legacy_db_hit", { rows_len: list.length, source: "legacy_db" })
+          }
+          const tBuildStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+          const pointsPadded = buildPaddedPointsFromRows(list, safeDays)
+          mark("build", tBuildStart)
+
+          const maxUpdatedAt = list.reduce((max: string | null, r: any) => {
+            const ua = typeof r?.updated_at === "string" ? String(r.updated_at).trim() : ""
+            return ua && (!max || ua > max) ? ua : max
+          }, null)
+
+          const etag = weakEtagFromParts(["ds", "db", resolvedIgId, resolvedPageId, safeDays, maxUpdatedAt ?? today])
+          if (isIfNoneMatchHit(req, etag)) {
+            return { status: 200, source: "db", body: null, etag }
+          }
+
+          const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+          const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+          const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
+          mark("totals", tTotalsStart)
+
+          return {
+            status: 200,
+            source: "db",
+            etag,
+            body: {
+              build_marker: BUILD_MARKER,
+              ok: true,
+              days: safeDays,
+              rangeDays: safeDays,
+              rangeStart: start,
+              rangeEnd: today,
+              available_days: list.length,
+              points: pointsPadded,
+              points_ok: true,
+              points_source: "legacy_db",
+              points_end_date: today,
+              trend_points_v2: buildTrendPointsV2(pointsPadded),
+              insights_daily: totals.insights_daily,
+              insights_daily_series: [],
+              series_ok: true,
+              __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today },
+            },
+          }
+        }
+      } catch {
+        // ignore legacy DB failures; fall back to Graph
+      }
+
+      if (__DEBUG_DAILY_SNAPSHOT__) {
+        console.log("[daily-snapshot] no_data_fallback", { source: "empty", safeDays, start, today })
+      }
+
+      // 3) Seed from Graph (v24 rules) and backfill snapshots
+      try {
+        const tGraphStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+        const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+
+        // page access token via cookie token
+        let pageToken = await getPageAccessToken(token, resolvedPageId)
+        let tokenSource: "cookie" | "env" = "cookie"
+
+        // optional env fallback
+        if (!pageToken.ok && envToken) {
+          tokenSource = "env"
+          pageToken = await getPageAccessToken(envToken, resolvedPageId)
+        }
+
+        if (!pageToken.ok) {
+          // hard fail with diag (don't silently treat as empty)
+          const etag = weakEtagFromParts(["ds", "auth_err", resolvedIgId, resolvedPageId, safeDays, today])
+          return {
+            status: 401,
+            source: "error",
+            etag,
+            body: {
+              build_marker: BUILD_MARKER,
+              ok: false,
+              error: "page_access_token_failed",
+              __diag: { token_source: tokenSource, pageTokenStatus: pageToken.status, pageTokenBody: pageToken.body },
+            },
           }
         }
 
-        const pointsPadded = buildPaddedPoints({ days: safeDays, byDate })
-        mark("build", tBuildStart)
-        const etag = weakEtagFromParts(["ds", "db", resolvedIgId, resolvedPageId, safeDays, maxUpdatedAt ?? today])
-        if (isIfNoneMatchHit(req, etag)) {
-          return { status: 200, source: "db", body: null, etag }
+        const series = await fetchInsightsTimeSeries({
+          igId: resolvedIgId,
+          pageAccessToken: pageToken.pageAccessToken,
+          days: safeDays,
+        })
+
+        mark("graph", tGraphStart)
+
+        if (!series.ok) {
+          const etag = weakEtagFromParts(["ds", "graph_err", resolvedIgId, resolvedPageId, safeDays, today, series.status])
+          return {
+            status: 502,
+            source: "error",
+            etag,
+            body: {
+              build_marker: BUILD_MARKER,
+              ok: false,
+              error: "graph_time_series_failed",
+              __diag: {
+                token_source: tokenSource,
+                status: series.status,
+                body: series.body,
+                start,
+                end: today,
+              },
+            },
+          }
         }
 
+        const points = buildPointsFromGraphInsightsTimeSeries(series.data, safeDays)
+        const etag = weakEtagFromParts(["ds", "graph", resolvedIgId, resolvedPageId, safeDays, today, points.length])
+        if (isIfNoneMatchHit(req, etag)) {
+          return { status: 200, source: "graph", body: null, etag }
+        }
+
+        const hasAnyNonZero =
+          Array.isArray(points) &&
+          points.some((p) => toSafeInt(p?.reach) > 0 || toSafeInt(p?.interactions) > 0)
+
+        // totals (best-effort)
         const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-        const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
         const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
         mark("totals", tTotalsStart)
+        const insights_daily = totals.insights_daily
 
-        return {
-          status: 200,
-          source: "db",
-          etag,
-          body: {
-            build_marker: BUILD_MARKER,
-            ok: true,
-            days: safeDays,
-            rangeDays: safeDays,
-            rangeStart: start,
-            rangeEnd: today,
-            available_days: availableDays ?? list.length,
-            points: pointsPadded,
-            points_ok: true,
-            points_source: "db",
-            points_end_date: today,
-            trend_points_v2: buildTrendPointsV2(pointsPadded),
-            // we’ll still provide totals even when DB hit is used (best effort)
-            insights_daily: totals.insights_daily,
-            insights_daily_series: [],
-            series_ok: true,
-            __diag: { db_rows: list.length, used_source: "db", start, end: today },
-          },
+        // Backfill snapshots on-demand (last 120d) if we hit Graph path
+        try {
+          const tBackfillStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+          const backfill = await backfillMissingSnapshotsFromGraph({
+            userScopeKey,
+            token,
+            envToken,
+            igId: resolvedIgId,
+            pageId: resolvedPageId,
+            start,
+            today,
+            maxDays: 120,
+          })
+          mark("backfill", tBackfillStart)
+          if (__DEBUG_DAILY_SNAPSHOT__) {
+            console.log("[daily-snapshot] backfill", { ok: backfill.ok, rows: backfill.rows.length, tokenSource: backfill.tokenSource, maxDays: 120 })
+          }
+        } catch {
+          // ignore backfill failures; continue with Graph response
         }
-      }
-    } catch {
-      // ignore DB failures here; fall back to Graph
-    }
 
-    if (__DEBUG_DAILY_SNAPSHOT__) console.log("[daily-snapshot] db empty")
-
-    // 2) Seed from Graph (v24 rules)
-    try {
-      const tGraphStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-      const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
-
-      // page access token via cookie token
-      let pageToken = await getPageAccessToken(token, resolvedPageId)
-      let tokenSource: "cookie" | "env" = "cookie"
-
-      // optional env fallback
-      if (!pageToken.ok && envToken) {
-        tokenSource = "env"
-        pageToken = await getPageAccessToken(envToken, resolvedPageId)
-      }
-
-      if (!pageToken.ok) {
-        // hard fail with diag (don’t silently treat as empty)
-        const etag = weakEtagFromParts(["ds", "auth_err", resolvedIgId, resolvedPageId, safeDays, today])
-        return {
-          status: 401,
-          source: "error",
-          etag,
-          body: {
-            build_marker: BUILD_MARKER,
-            ok: false,
-            error: "page_access_token_failed",
-            __diag: { token_source: tokenSource, pageTokenStatus: pageToken.status, pageTokenBody: pageToken.body },
-          },
-        }
-      }
-
-      const series = await fetchInsightsTimeSeries({
-        igId: resolvedIgId,
-        pageAccessToken: pageToken.pageAccessToken,
-        days: safeDays,
-      })
-
-      mark("graph", tGraphStart)
-
-      if (!series.ok) {
-        const etag = weakEtagFromParts(["ds", "graph_err", resolvedIgId, resolvedPageId, safeDays, today, series.status])
-        return {
-          status: 502,
-          source: "error",
-          etag,
-          body: {
-            build_marker: BUILD_MARKER,
-            ok: false,
-            error: "graph_time_series_failed",
-            __diag: {
-              token_source: tokenSource,
-              status: series.status,
-              body: series.body,
-              start,
-              end: today,
+        if (!hasAnyNonZero) {
+          return {
+            status: 200,
+            source: "graph",
+            etag,
+            body: {
+              build_marker: BUILD_MARKER,
+              ok: true,
+              days: safeDays,
+              rangeDays: safeDays,
+              rangeStart: start,
+              rangeEnd: today,
+              available_days: availableDays,
+              points: [],
+              points_ok: false,
+              points_source: "empty",
+              points_end_date: today,
+              trend_points_v2: [],
+              insights_daily,
+              insights_daily_series: series.data,
+              series_ok: true,
+              __diag: {
+                snap_rows: 0,
+                used_source: "graph",
+                start,
+                end: today,
+                token_source: tokenSource,
+                totals_ok: totals.ok,
+              },
             },
-          },
+          }
         }
-      }
 
-      const points = buildPointsFromGraphInsightsTimeSeries(series.data, safeDays)
-      const etag = weakEtagFromParts(["ds", "graph", resolvedIgId, resolvedPageId, safeDays, today, points.length])
-      if (isIfNoneMatchHit(req, etag)) {
-        return { status: 200, source: "graph", body: null, etag }
-      }
+        // Write to legacy ig_daily_insights (skip today)
+        try {
+          const candidate = points
+            .filter((p) => p?.date && p.date !== today)
+            .map((p) => ({
+              day: p.date,
+              reach: toSafeInt(p.reach),
+              impressions: 0,
+              total_interactions: toSafeInt(p.interactions),
+              accounts_engaged: 0,
+            }))
 
-      const hasAnyNonZero =
-        Array.isArray(points) &&
-        points.some((p) => toSafeInt(p?.reach) > 0 || toSafeInt(p?.interactions) > 0)
+          const skipDays = new Set<string>()
+          try {
+            const daysToCheck = candidate.map((r) => r.day).filter(Boolean)
+            const { data: existing } = daysToCheck.length
+              ? await supabaseServer
+                  .from("ig_daily_insights")
+                  .select("day,reach,impressions,total_interactions,accounts_engaged")
+                  .eq("ig_user_id", Number(resolvedIgId))
+                  .eq("page_id", Number(resolvedPageId))
+                  .in("day", daysToCheck)
+              : ({ data: [] } as any)
 
-      // totals (best-effort)
-      const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-      const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
-      mark("totals", tTotalsStart)
-      const insights_daily = totals.insights_daily
+            for (const r of (Array.isArray(existing) ? existing : []) as any[]) {
+              const d = String(r?.day || "").trim()
+              if (!d) continue
+              if (
+                toSafeInt(r?.reach) > 0 ||
+                toSafeInt(r?.impressions) > 0 ||
+                toSafeInt(r?.total_interactions) > 0 ||
+                toSafeInt(r?.accounts_engaged) > 0
+              ) {
+                skipDays.add(d)
+              }
+            }
+          } catch {
+            // ignore
+          }
 
-      if (!hasAnyNonZero) {
+          const rowsToUpsert = candidate
+            .filter((r) => !skipDays.has(r.day))
+            .map((r) => ({
+              ig_user_id: Number(resolvedIgId),
+              page_id: Number(resolvedPageId),
+              day: r.day,
+              reach: r.reach,
+              impressions: r.impressions,
+              total_interactions: r.total_interactions,
+              accounts_engaged: r.accounts_engaged,
+              updated_at: new Date().toISOString(),
+            }))
+
+          if (rowsToUpsert.length >= 1) {
+            await supabaseServer.from("ig_daily_insights").upsert(rowsToUpsert as any, {
+              onConflict: "ig_user_id,page_id,day",
+            })
+          }
+        } catch {
+          // ignore db write failures
+        }
+
+        if (__DEBUG_DAILY_SNAPSHOT__) {
+          console.log("[daily-snapshot] graph_response", { points_len: points.length, hasAnyNonZero, source: "graph" })
+        }
+
         return {
           status: 200,
           source: "graph",
@@ -1100,16 +1395,16 @@ export async function POST(req: Request) {
             rangeStart: start,
             rangeEnd: today,
             available_days: availableDays,
-            points: [],
-            points_ok: false,
-            points_source: "empty",
+            points,
+            points_ok: true,
+            points_source: "graph_series_v24",
             points_end_date: today,
-            trend_points_v2: [],
+            trend_points_v2: buildTrendPointsV2(points),
             insights_daily,
             insights_daily_series: series.data,
             series_ok: true,
             __diag: {
-              db_rows: 0,
+              snap_rows: 0,
               used_source: "graph",
               start,
               end: today,
@@ -1118,127 +1413,23 @@ export async function POST(req: Request) {
             },
           },
         }
-      }
-
-      // Write to DB (skip today)
-      try {
-        const candidate = points
-          .filter((p) => p?.date && p.date !== today)
-          .map((p) => ({
-            day: p.date,
-            reach: toSafeInt(p.reach),
-            impressions: 0,
-            total_interactions: toSafeInt(p.interactions),
-            accounts_engaged: 0,
-          }))
-
-        const skipDays = new Set<string>()
-        try {
-          const daysToCheck = candidate.map((r) => r.day).filter(Boolean)
-          const { data: existing } = daysToCheck.length
-            ? await supabaseServer
-                .from("ig_daily_insights")
-                .select("day,reach,impressions,total_interactions,accounts_engaged")
-                .eq("ig_user_id", Number(resolvedIgId))
-                .eq("page_id", Number(resolvedPageId))
-                .in("day", daysToCheck)
-            : ({ data: [] } as any)
-
-          for (const r of (Array.isArray(existing) ? existing : []) as any[]) {
-            const d = String(r?.day || "").trim()
-            if (!d) continue
-            if (
-              toSafeInt(r?.reach) > 0 ||
-              toSafeInt(r?.impressions) > 0 ||
-              toSafeInt(r?.total_interactions) > 0 ||
-              toSafeInt(r?.accounts_engaged) > 0
-            ) {
-              skipDays.add(d)
-            }
-          }
-        } catch {
-          // ignore
+      } catch (e: any) {
+        if (__DEBUG_DAILY_SNAPSHOT__) {
+          console.log("[daily-snapshot] graph_seed_failed", { error: e?.message ?? "graph_seed_failed", source: "error" })
         }
-
-        const rowsToUpsert = candidate
-          .filter((r) => !skipDays.has(r.day))
-          .map((r) => ({
-            ig_user_id: Number(resolvedIgId),
-            page_id: Number(resolvedPageId),
-            day: r.day,
-            reach: r.reach,
-            impressions: r.impressions,
-            total_interactions: r.total_interactions,
-            accounts_engaged: r.accounts_engaged,
-            updated_at: new Date().toISOString(),
-          }))
-
-        if (rowsToUpsert.length >= 1) {
-          await supabaseServer.from("ig_daily_insights").upsert(rowsToUpsert as any, {
-            onConflict: "ig_user_id,page_id,day",
-          })
-        }
-      } catch {
-        // ignore db write failures
-      }
-
-      if (__DEBUG_DAILY_SNAPSHOT__) {
-        console.log("[daily-snapshot] graph_seed_ok", {
-          token_source: tokenSource,
-          series_status: series.status,
-          totals_ok: totals.ok,
-        })
-      }
-
-      return {
-        status: 200,
-        source: "graph",
-        etag,
-        body: {
-          build_marker: BUILD_MARKER,
-          ok: true,
-          days: safeDays,
-          rangeDays: safeDays,
-          rangeStart: start,
-          rangeEnd: today,
-          available_days: availableDays,
-          points,
-          points_ok: true,
-          points_source: "graph_series_v24",
-          points_end_date: today,
-          trend_points_v2: buildTrendPointsV2(points),
-          insights_daily,
-          insights_daily_series: series.data,
-          series_ok: true,
-          __diag: {
-            db_rows: 0,
-            used_source: "graph",
-            start,
-            end: today,
-            token_source: tokenSource,
-            totals_ok: totals.ok,
+        const etag = weakEtagFromParts(["ds", "graph_seed_failed", resolvedIgId, resolvedPageId, safeDays])
+        return {
+          status: 502,
+          source: "error",
+          etag,
+          body: {
+            build_marker: BUILD_MARKER,
+            ok: false,
+            error: "graph_seed_failed",
+            message: e?.message ?? String(e),
           },
-        },
+        }
       }
-    } catch (e: any) {
-      if (__DEBUG_DAILY_SNAPSHOT__) {
-        console.log("[daily-snapshot] graph_seed_failed", {
-          message: e?.message ?? "graph_seed_failed",
-        })
-      }
-      const etag = weakEtagFromParts(["ds", "graph_seed_failed", resolvedIgId, resolvedPageId, safeDays])
-      return {
-        status: 502,
-        source: "error",
-        etag,
-        body: {
-          build_marker: BUILD_MARKER,
-          ok: false,
-          error: "graph_seed_failed",
-          message: e?.message ?? String(e),
-        },
-      }
-    }
 
     const etag = weakEtagFromParts(["ds", "no_data", resolvedIgId, resolvedPageId, safeDays])
     return {
@@ -1261,7 +1452,7 @@ export async function POST(req: Request) {
         insights_daily: [],
         insights_daily_series: [],
         series_ok: true,
-        __diag: { db_rows: 0, used_source: "empty", start, end: today },
+        __diag: { snap_rows: 0, used_source: "empty", start, end: today },
       },
     }
   })()
