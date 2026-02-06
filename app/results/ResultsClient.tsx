@@ -1072,6 +1072,7 @@ export default function ResultsClient() {
     lastDays: null,
   })
   const [selectedTrendRangeDays, setSelectedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
+  const [renderedTrendRangeDays, setRenderedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
   const [isChangingRange, setIsChangingRange] = useState(false)
   const [rangeChangeRequestId, setRangeChangeRequestId] = useState(0)
   
@@ -1284,8 +1285,11 @@ export default function ResultsClient() {
       setTrendPointsDeduped(pts)
       if (fetchedAt !== null) setTrendFetchedAt(fetchedAt)
       displayedTrendSigRef.current = sig
+
+      // Only advance the rendered range when we actually commit the new series.
+      setRenderedTrendRangeDays(days)
     },
-    [setTrendPointsDeduped, trendSigFor],
+    [setTrendPointsDeduped, setTrendFetchedAt, trendSigFor],
   )
 
   const applyCachedTrendSeriesDirect = useCallback(
@@ -1301,6 +1305,9 @@ export default function ResultsClient() {
       setTrendPoints(cached.points)
       if (cached.fetchedAt !== null) setTrendFetchedAt(cached.fetchedAt)
       displayedTrendSigRef.current = cached.sig
+
+      // Cache hit: we can immediately render the requested range.
+      setRenderedTrendRangeDays(days)
     },
     [setTrendPoints, setTrendFetchedAt],
   )
@@ -1843,6 +1850,62 @@ export default function ResultsClient() {
     Boolean(isRecord(igMe) && igMe.connected === true) ||
     Boolean(isRecord(igMe) && igMe.connected ? (isRecord(igProfile) ? igProfile.username : undefined) : (isRecord(igMe) ? igMe.username : undefined))
   const isConnectedInstagram = cookieConnected || Boolean(isRecord(igMe) && igMe.connected === true) || isConnected
+
+  const hasTriggeredPrefetchRef = useRef(false)
+  const prefetchInFlightDaysRef = useRef<Set<90 | 60 | 30 | 14 | 7>>(new Set())
+  const triggerPrefetchCommonRanges = useCallback(() => {
+    if (hasTriggeredPrefetchRef.current) return
+    if (typeof window === "undefined" || !isConnectedInstagram) return
+
+    const connection = (navigator as any).connection
+    if (connection && connection.effectiveType && connection.effectiveType === "slow-2g") {
+      return
+    }
+
+    hasTriggeredPrefetchRef.current = true
+
+    const ranges: (90 | 60 | 30 | 14 | 7)[] = [7, 14, 30, 60, 90]
+    const currentRange = selectedTrendRangeDays
+
+    const scheduleFn = window.requestIdleCallback || ((cb: () => void) => window.setTimeout(cb, 500))
+    scheduleFn(() => {
+      for (const days of ranges) {
+        if (!isMountedRef.current) return
+        if (days === currentRange) continue
+        if (trendPointsByDaysRef.current.has(trendCacheKey("reach", days))) continue
+        if (fetchedByDaysRef.current.get(days)) continue
+        if (prefetchInFlightDaysRef.current.has(days)) continue
+
+        prefetchInFlightDaysRef.current.add(days)
+
+        ;(async () => {
+          try {
+            const url = new URL(window.location.href)
+            url.pathname = `/api/instagram/daily-snapshot`
+            url.searchParams.set("days", String(days))
+
+            const res = await fetch(url.toString(), {
+              method: "POST",
+              cache: "no-store",
+              credentials: "include",
+              headers: {
+                Accept: "application/json",
+              },
+            })
+
+            const ct = (res.headers.get("content-type") ?? "").toLowerCase()
+            if (!res.ok || !ct.includes("application/json")) return
+            const body = await res.json().catch(() => null)
+            if (!body || body.ok !== true) return
+          } catch {
+            // ignore
+          } finally {
+            prefetchInFlightDaysRef.current.delete(days)
+          }
+        })()
+      }
+    })
+  }, [isConnectedInstagram, selectedTrendRangeDays, trendCacheKey])
 
   const hasAnyResultsData = Boolean(effectiveRecentLen > 0 || trendPoints.length > 0 || igMe)
 
@@ -4038,82 +4101,13 @@ export default function ResultsClient() {
     }
   }, [trendFetchStatus.loading, isChangingRange, clearRangeSwitchTimeout])
 
-  // Prefetch common ranges to warm cache
+  // Prefetch (silent): trigger once after first successful fetch / first interaction.
   useEffect(() => {
-    // Only prefetch on client side and when connected
-    if (typeof window === "undefined" || !isConnectedInstagram) return
-    
-    // Check network connection (optional throttling)
-    const connection = (navigator as any).connection
-    if (connection && connection.effectiveType && connection.effectiveType === 'slow-2g') {
-      return // Skip prefetch on very slow connections
-    }
-
-    const prefetchRanges: (90 | 60 | 30 | 14 | 7)[] = [7, 14, 30] // Common ranges to prefetch
-    const currentRange = selectedTrendRangeDays
-    let cancelled = false
-    
-    // Store cleanup function
-    const cleanup = () => {
-      cancelled = true
-    }
-    prefetchCleanupRef.current = cleanup
-    
-    const schedulePrefetch = () => {
-      // Use requestIdleCallback if available, fallback to setTimeout
-      const scheduleFn = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 500))
-      
-      scheduleFn(() => {
-        if (cancelled || !isMountedRef.current) return
-        
-        prefetchRanges.forEach(async (days) => {
-          if (cancelled || !isMountedRef.current) return
-          
-          // Skip if already cached or is the current range
-          if (days === currentRange) return
-          if (trendPointsByDaysRef.current.has(trendCacheKey("reach", days))) return
-          if (fetchedByDaysRef.current.get(days)) return
-          
-          // Prefetch without updating UI (silent)
-          try {
-            const url = new URL(window.location.href)
-            // Use the existing JSON endpoint (avoid locale-prefixed paths that 404 in prod).
-            url.pathname = `/api/instagram/daily-snapshot`
-            url.searchParams.set("days", String(days))
-
-            const res = await fetch(url.toString(), {
-              method: "POST",
-              cache: "no-store",
-              credentials: "include",
-              headers: {
-                "Accept": "application/json",
-              },
-            })
-
-            // Prefetch is best-effort and must never poison cache with HTML 404 pages.
-            const ct = res.headers.get("content-type") ?? ""
-            if (!res.ok || !ct.toLowerCase().includes("application/json")) {
-              throw new Error(`prefetch_non_json_or_not_ok status=${res.status} url=${url.toString()}`)
-            }
-            const body = await res.json().catch(() => null)
-            if (!body || body.ok !== true) {
-              throw new Error(`prefetch_bad_json url=${url.toString()}`)
-            }
-          } catch {
-            // Ignore prefetch errors
-          }
-        })
-      })
-    }
-
-    // Delay prefetch to not block initial render
-    const timer = setTimeout(schedulePrefetch, 1000)
-    
-    return () => {
-      clearTimeout(timer)
-      cleanup()
-    }
-  }, [isConnectedInstagram, selectedTrendRangeDays])
+    if (!isConnectedInstagram) return
+    if (trendFetchStatus.loading) return
+    if (!hasAppliedDailySnapshotTrendRef.current) return
+    triggerPrefetchCommonRanges()
+  }, [isConnectedInstagram, trendFetchStatus.loading, triggerPrefetchCommonRanges])
 
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
@@ -5650,6 +5644,9 @@ export default function ResultsClient() {
                                 
                                 // Arm safety timeout
                                 armRangeSwitchTimeout(requestId)
+
+                                // Warm cache on first interaction (silent)
+                                triggerPrefetchCommonRanges()
                                 
                                 if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
                                   trendRangeSwitchStartRef.current = { at: performance.now(), days: d }
@@ -6829,11 +6826,11 @@ export default function ResultsClient() {
                                   if (n <= 0) return null
                                   const last = n - 1
 
-                                  const desiredTicks = selectedTrendRangeDays <= 14 ? 7 : 8
+                                  const desiredTicks = renderedTrendRangeDays <= 14 ? 7 : 8
                                   const maxTicks = isSmUp ? desiredTicks : Math.min(4, desiredTicks)
                                   const idxs = (() => {
                                     if (n <= maxTicks) return Array.from({ length: n }).map((_, i) => i)
-                                    const out = new Set<number>()
+                                    const out: Set<number> = new Set()
                                     out.add(0)
                                     out.add(last)
                                     const slots = Math.max(maxTicks - 2, 0)
@@ -6850,7 +6847,7 @@ export default function ResultsClient() {
 
                                   return (
                                     <g key="trend-x-axis-upgrade">
-                                      {idxs.map((i) => {
+                                      {idxs.map((i: number) => {
                                         const x = sx(i)
                                         if (!Number.isFinite(x)) return null
                                         return (
@@ -6875,7 +6872,7 @@ export default function ResultsClient() {
                                         )
                                       })}
 
-                                      {idxs.map((i) => {
+                                      {idxs.map((i: number) => {
                                         const x = sx(i)
                                         if (!Number.isFinite(x)) return null
                                         const labelRaw = dataForChart[i]?.t ?? ""
