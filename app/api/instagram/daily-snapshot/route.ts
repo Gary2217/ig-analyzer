@@ -36,6 +36,8 @@ const __dsCache = new Map<
   CacheEntry<{ body: any; status: number; source: DsResponsePayload["source"]; etag: string }>
 >()
 
+const __dsIdsCache = new Map<string, CacheEntry<{ pageId: string; igId: string }>>()
+
 const __dsTotalsCache = new Map<string, CacheEntry<{ ok: boolean; insights_daily: any }>>()
 const __dsFollowersCache = new Map<string, CacheEntry<{ followersCount: number | null; capturedAt: string }>>()
 const __dsFollowersInflight = new Map<string, Promise<void>>()
@@ -353,11 +355,16 @@ function respondWithEtag(params: {
   etag: string
   branch: string
   source: DsResponsePayload["source"]
+  serverTiming?: string
 }) {
   const headers: Record<string, string> = {
     "Cache-Control": "no-store",
     ETag: params.etag,
     ...HANDLER_HEADERS,
+  }
+
+  if (params.serverTiming) {
+    headers["Server-Timing"] = params.serverTiming
   }
 
   const etagHit = params.status === 200 && isIfNoneMatchHit(params.req, params.etag)
@@ -662,10 +669,34 @@ async function getAvailableDaysCount(params: { igId: string; pageId: string }) {
 }
 
 export async function POST(req: Request) {
+  const t0 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+  const timingMarks: Array<{ name: string; dur: number }> = []
+  const mark = (name: string, start: number) => {
+    const t = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+    const dur = Math.max(0, t - start)
+    timingMarks.push({ name, dur })
+    return t
+  }
+  const serverTimingHeader = () => {
+    const list = timingMarks
+      .map((m) => {
+        const d = Number.isFinite(m.dur) ? Math.round(m.dur * 10) / 10 : 0
+        return `${m.name};dur=${d}`
+      })
+      .join(", ")
+    return list
+  }
+
+  const respondTimed = (p: Omit<Parameters<typeof respondWithEtag>[0], "serverTiming">) => {
+    return respondWithEtag({ ...p, serverTiming: serverTimingHeader() })
+  }
+
   try {
     const url = new URL(req.url)
     const days = clampDays(url.searchParams.get("days"))
     const safeDays = Math.max(1, days)
+
+    const tAuthStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
 
     const h = req.headers.get("x-cron-secret")
     const cron = process.env.CRON_SECRET
@@ -690,7 +721,8 @@ export async function POST(req: Request) {
       const envUserId = (process.env.IG_USER_ID ?? "").trim()
       if (!envToken) {
         const etag = weakEtagFromParts(["ds", "missing_env", "IG_ACCESS_TOKEN"])
-        return respondWithEtag({
+        mark("auth", tAuthStart)
+        return respondTimed({
           req,
           status: 401,
           body: { ok: false, error: "missing_env:IG_ACCESS_TOKEN" },
@@ -701,7 +733,8 @@ export async function POST(req: Request) {
       }
       if (!envUserId) {
         const etag = weakEtagFromParts(["ds", "missing_env", "IG_USER_ID"])
-        return respondWithEtag({
+        mark("auth", tAuthStart)
+        return respondTimed({
           req,
           status: 401,
           body: { ok: false, error: "missing_env:IG_USER_ID" },
@@ -722,20 +755,15 @@ export async function POST(req: Request) {
       const rawCookieHeader = req.headers.get("cookie") || ""
 
       const tokenFromCookies = typeof c?.get === "function" ? (c.get("ig_access_token")?.value ?? "") : ""
-      const pageIdFromCookies = typeof c?.get === "function" ? (c.get("ig_page_id")?.value ?? "") : ""
-      const igIdFromCookies = typeof c?.get === "function" ? (c.get("ig_ig_id")?.value ?? "") : ""
 
       const tokenFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_access_token")
-      const pageIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_page_id")
-      const igIdFromHeader = getCookieValueFromHeader(rawCookieHeader, "ig_ig_id")
 
       token = (tokenFromCookies || tokenFromHeader).trim()
-      pageId = (pageIdFromCookies || pageIdFromHeader).trim()
-      igId = (igIdFromCookies || igIdFromHeader).trim()
 
       if (!token) {
         const etag = weakEtagFromParts(["ds", "missing_cookie", "ig_access_token"])
-        return respondWithEtag({
+        mark("auth", tAuthStart)
+        return respondTimed({
           req,
           status: 401,
           body: { ok: false, error: "missing_cookie:ig_access_token" },
@@ -746,25 +774,54 @@ export async function POST(req: Request) {
       }
     }
 
-    // If ids are missing, try to load them (and set cookies if possible).
-    if (!pageId || !igId) {
-      try {
-        const ids = await getIdsIfMissing(token, pageId, igId)
-        if (ids.ok) {
-          pageId = ids.pageId
-          igId = ids.igId
-          try {
-            if (!cronMode && typeof c?.set === "function") {
-              c.set("ig_page_id", pageId, { httpOnly: true, sameSite: "lax", path: "/" })
-              c.set("ig_ig_id", igId, { httpOnly: true, sameSite: "lax", path: "/" })
-            }
-          } catch {
-            // ignore
-          }
+    mark("auth", tAuthStart)
+
+    // Multi-user SaaS hardening:
+    // Always resolve pageId/igId from the *current* token (do not trust ig_page_id / ig_ig_id cookies).
+    const tIdsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+    if (!cronMode) {
+      const tokSigForIds = tokenSignature(token)
+      const idsCacheKey = `ds_ids|tok:${tokSigForIds}`
+      const cachedIds = readCache(__dsIdsCache, idsCacheKey)
+      if (cachedIds?.pageId && cachedIds?.igId) {
+        pageId = cachedIds.pageId
+        igId = cachedIds.igId
+        mark("ids", tIdsStart)
+      } else {
+        const ids = await getIdsIfMissing(token, "", "")
+        mark("ids", tIdsStart)
+        if (!ids.ok || !ids.pageId || !ids.igId) {
+          const etag = weakEtagFromParts(["ds", "missing_ids_from_token"])
+          return respondTimed({
+            req,
+            status: 403,
+            body: { ok: false, error: "missing_ids_from_token" },
+            etag,
+            branch: "missing_ids_from_token",
+            source: "error",
+          })
         }
-      } catch {
-        // ignore
+
+        pageId = ids.pageId
+        igId = ids.igId
+        try {
+          writeCache(__dsIdsCache, idsCacheKey, { pageId, igId }, 60_000)
+          pruneOldest(__dsIdsCache, 200)
+        } catch {
+          // ignore
+        }
+
+        try {
+          if (typeof c?.set === "function") {
+            c.set("ig_page_id", pageId, { httpOnly: true, sameSite: "lax", path: "/" })
+            c.set("ig_ig_id", igId, { httpOnly: true, sameSite: "lax", path: "/" })
+          }
+        } catch {
+          // ignore
+        }
       }
+    } else {
+      mark("ids", tIdsStart)
     }
 
     // Resolve IDs: in cronMode, prefer environment variables over cookies
@@ -776,7 +833,7 @@ export async function POST(req: Request) {
     if (!resolvedPageId) {
       const error = cronMode ? "missing_ids:page_id" : "missing_cookie:ig_page_id"
       const etag = weakEtagFromParts(["ds", error])
-      return respondWithEtag({
+      return respondTimed({
         req,
         status: 401,
         body: { ok: false, error },
@@ -788,7 +845,7 @@ export async function POST(req: Request) {
     if (!resolvedIgId) {
       const error = cronMode ? "missing_ids:ig_ig_id" : "missing_cookie:ig_ig_id"
       const etag = weakEtagFromParts(["ds", error])
-      return respondWithEtag({
+      return respondTimed({
         req,
         status: 401,
         body: { ok: false, error },
@@ -805,7 +862,8 @@ export async function POST(req: Request) {
 
     const cachedResp = readCache(__dsCache, requestKey)
     if (cachedResp) {
-      return respondWithEtag({
+      mark("total", t0)
+      return respondTimed({
         req,
         status: cachedResp.status,
         body: cachedResp.body,
@@ -820,7 +878,8 @@ export async function POST(req: Request) {
       const joined = (__dsInflightJoinCount.get(requestKey) ?? 0) + 1
       __dsInflightJoinCount.set(requestKey, joined)
       const out = await inflight
-      return respondWithEtag({
+      mark("total", t0)
+      return respondTimed({
         req,
         status: out.status,
         body: out.body,
@@ -834,7 +893,9 @@ export async function POST(req: Request) {
       // Best-effort: write today's followers_count snapshot (do not affect API success)
       void writeFollowersBestEffortCached({ followersKey, token, igId: resolvedIgId })
 
+      const tAvailStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
       const availableDays = (await getAvailableDaysCount({ igId: resolvedIgId, pageId: resolvedPageId })) ?? null
+      mark("avail", tAvailStart)
 
     // Prefer DB snapshots for the trend chart.
     const today = todayUtcDateString()
@@ -846,6 +907,7 @@ export async function POST(req: Request) {
 
     // 1) Try DB first
     try {
+      const tDbStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
       const { data: dbRows, error: dbError } = await supabaseServer
         .from("ig_daily_insights")
         .select("day,reach,impressions,total_interactions,accounts_engaged,updated_at")
@@ -854,6 +916,8 @@ export async function POST(req: Request) {
         .gte("day", start)
         .lte("day", today)
         .order("day", { ascending: true })
+
+      mark("db", tDbStart)
 
       const list = Array.isArray(dbRows) ? dbRows : []
       if (__DEBUG_DAILY_SNAPSHOT__) {
@@ -866,6 +930,7 @@ export async function POST(req: Request) {
       }
 
       if (!dbError && list.length > 0) {
+        const tBuildStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
         const byDate = new Map<
           string,
           { reach: number; impressions: number; interactions: number; engaged_accounts: number }
@@ -888,13 +953,16 @@ export async function POST(req: Request) {
         }
 
         const pointsPadded = buildPaddedPoints({ days: safeDays, byDate })
+        mark("build", tBuildStart)
         const etag = weakEtagFromParts(["ds", "db", resolvedIgId, resolvedPageId, safeDays, maxUpdatedAt ?? today])
         if (isIfNoneMatchHit(req, etag)) {
           return { status: 200, source: "db", body: null, etag }
         }
 
+        const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
         const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
         const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
+        mark("totals", tTotalsStart)
 
         return {
           status: 200,
@@ -929,6 +997,7 @@ export async function POST(req: Request) {
 
     // 2) Seed from Graph (v24 rules)
     try {
+      const tGraphStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
       const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
 
       // page access token via cookie token
@@ -963,6 +1032,8 @@ export async function POST(req: Request) {
         days: safeDays,
       })
 
+      mark("graph", tGraphStart)
+
       if (!series.ok) {
         const etag = weakEtagFromParts(["ds", "graph_err", resolvedIgId, resolvedPageId, safeDays, today, series.status])
         return {
@@ -995,7 +1066,9 @@ export async function POST(req: Request) {
         points.some((p) => toSafeInt(p?.reach) > 0 || toSafeInt(p?.interactions) > 0)
 
       // totals (best-effort)
+      const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
       const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
+      mark("totals", tTotalsStart)
       const insights_daily = totals.insights_daily
 
       if (!hasAnyNonZero) {
@@ -1193,7 +1266,8 @@ export async function POST(req: Request) {
       // ignore
     }
 
-    return respondWithEtag({
+    mark("total", t0)
+    return respondTimed({
       req,
       status: out.status,
       body: out.body,
@@ -1203,7 +1277,8 @@ export async function POST(req: Request) {
     })
   } catch (err: any) {
     const etag = weakEtagFromParts(["ds", "server_error", String(err?.message ?? "err")])
-    return respondWithEtag({
+    mark("total", t0)
+    return respondTimed({
       req,
       status: 500,
       body: { ok: false, error: "server_error", message: err?.message ?? String(err) },
@@ -1217,7 +1292,8 @@ export async function POST(req: Request) {
   }
 } catch (e: any) {
   const etag = weakEtagFromParts(["ds", "server_error", String(e?.message ?? "err")])
-  return respondWithEtag({
+  mark("total", t0)
+  return respondTimed({
     req,
     status: 500,
     body: { ok: false, error: "server_error", message: e?.message ?? String(e) },
