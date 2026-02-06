@@ -1,56 +1,59 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const BUILD_MARKER = "daily-snapshot-diag-v1"
-const HANDLER_FILE = "app/api/instagram/daily-snapshot/diag/route.ts"
-const HANDLER_VERSION = "ds-diag-v1"
-const HANDLER_HEADERS = {
-  "X-Handler-File": HANDLER_FILE,
-  "X-Handler-Version": HANDLER_VERSION,
-  "X-Handler-Build-Marker": BUILD_MARKER,
-} as const
+const BUILD_MARKER = "daily-snapshot-diag-v2"
 
-const GRAPH_VERSION = "v24.0"
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
-function maskToken(token: string) {
-  const t = String(token || "")
-  if (!t) return ""
-  if (t.length <= 10) return `${t.slice(0, 2)}***${t.slice(-2)}`
-  return `${t.slice(0, 4)}***${t.slice(-4)}`
+function jsonOk(data: any) {
+  return NextResponse.json(data, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "X-Handler-Build-Marker": BUILD_MARKER,
+    },
+  })
 }
 
-function json404() {
-  return NextResponse.json(
-    { ok: false, build_marker: BUILD_MARKER },
-    { status: 404, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-  )
-}
+function getDiagData(req: Request) {
+  // Check cron mode status (safe, no secrets)
+  const cronSecretHeader = req.headers.get("x-cron-secret")
+  const cronSecretEnv = (process.env.CRON_SECRET ?? "").trim()
+  const cronModeExpected = Boolean(cronSecretHeader && cronSecretEnv)
+  
+  const igPageIdEnv = (process.env.IG_PAGE_ID ?? "").trim()
+  const igIgIdEnv = (process.env.IG_IG_ID ?? "").trim()
+  const igAccessTokenEnv = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+  const igUserIdEnv = (process.env.IG_USER_ID ?? "").trim()
 
-function jsonOk(diag: any) {
-  return NextResponse.json(
-    { ok: true, build_marker: BUILD_MARKER, diag },
-    { status: 200, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-  )
+  return {
+    ok: true,
+    build_marker: BUILD_MARKER,
+    methods: {
+      get: true,
+      post: true,
+    },
+    cron: {
+      header_present: Boolean(cronSecretHeader),
+      cron_secret_env_present: Boolean(cronSecretEnv),
+      cron_mode_expected: cronModeExpected,
+    },
+    env: {
+      has_ig_page_id: Boolean(igPageIdEnv),
+      has_ig_ig_id: Boolean(igIgIdEnv),
+      has_ig_access_token: Boolean(igAccessTokenEnv),
+      has_ig_user_id: Boolean(igUserIdEnv),
+    },
+    time: {
+      now_iso: new Date().toISOString(),
+    },
+  }
 }
 
 export async function GET(req: Request) {
-  const url = new URL(req.url)
-  const env = process.env.NODE_ENV === "production" ? "production" : "development"
+  return jsonOk(getDiagData(req))
+}
 
-  const isProd = env === "production"
-  const keyRequired = isProd
-  const providedKey = url.searchParams.get("key") || ""
-  const expectedKey = (process.env.DAILY_SNAPSHOT_DIAG_KEY ?? "").trim()
-  const keyOk = !keyRequired ? true : Boolean(expectedKey) && providedKey === expectedKey
-  if (keyRequired && !keyOk) return json404()
-
-  return jsonOk({
-    env,
-    gating: { key_required: keyRequired, key_ok: keyOk },
-  note: "診斷 endpoint 已正常回應",
-  })
+export async function POST(req: Request) {
+  return jsonOk(getDiagData(req))
 }
