@@ -986,6 +986,8 @@ export default function ResultsClient() {
     lastDays: null,
   })
   const [selectedTrendRangeDays, setSelectedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
+  const [isChangingRange, setIsChangingRange] = useState(false)
+  const [rangeChangeRequestId, setRangeChangeRequestId] = useState(0)
   const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
@@ -3883,6 +3885,66 @@ export default function ResultsClient() {
     return () => window.clearTimeout(tt)
   }, [isUpdating])
 
+  // Reset range loading state when fetch completes
+  useEffect(() => {
+    if (!trendFetchStatus.loading && isChangingRange) {
+      setIsChangingRange(false)
+    }
+  }, [trendFetchStatus.loading, isChangingRange])
+
+  // Prefetch common ranges to warm cache
+  useEffect(() => {
+    // Only prefetch on client side and when connected
+    if (typeof window === "undefined" || !isConnectedInstagram) return
+    
+    // Check network connection (optional throttling)
+    const connection = (navigator as any).connection
+    if (connection && connection.effectiveType && connection.effectiveType === 'slow-2g') {
+      return // Skip prefetch on very slow connections
+    }
+
+    const prefetchRanges: (90 | 60 | 30 | 14 | 7)[] = [7, 14, 30] // Common ranges to prefetch
+    const currentRange = selectedTrendRangeDays
+    
+    const schedulePrefetch = () => {
+      // Use requestIdleCallback if available, fallback to setTimeout
+      const scheduleFn = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 500))
+      
+      scheduleFn(() => {
+        prefetchRanges.forEach(async (days) => {
+          // Skip if already cached or is the current range
+          if (days === currentRange) return
+          if (trendPointsByDaysRef.current.has(trendCacheKey("reach", days))) return
+          if (fetchedByDaysRef.current.get(days)) return
+          
+          // Prefetch without updating UI
+          try {
+            const url = new URL(window.location.href)
+            url.pathname = `/${activeLocale}/api/instagram/trend`
+            url.searchParams.set("days", String(days))
+            
+            // Silent fetch - don't update any state
+            fetch(url.toString(), {
+              method: "GET",
+              headers: {
+                "Accept": "application/json",
+              },
+            }).catch(() => {
+              // Silently ignore prefetch errors
+            })
+          } catch {
+            // Ignore prefetch errors
+          }
+        })
+      })
+    }
+
+    // Delay prefetch to not block initial render
+    const timer = setTimeout(schedulePrefetch, 1000)
+    
+    return () => clearTimeout(timer)
+  }, [isConnectedInstagram, selectedTrendRangeDays, activeLocale])
+
   const hasResult = Boolean(result)
   const safeResult: FakeAnalysis = result ?? {
     platform: "instagram",
@@ -5351,15 +5413,30 @@ export default function ResultsClient() {
                               aria-pressed={active}
                               onClick={() => {
                                 if (selectedTrendRangeDays === d) return
+                                // Prevent duplicate clicks while loading
+                                if (isChangingRange) return
+                                
+                                const requestId = rangeChangeRequestId + 1
+                                setRangeChangeRequestId(requestId)
+                                setIsChangingRange(true)
+                                
                                 if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
                                   trendRangeSwitchStartRef.current = { at: performance.now(), days: d }
                                 }
+                                
                                 const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", d))
                                 if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
                                   setSelectedTrendRangeDays(d)
                                   applyCachedTrendSeriesDirect({ days: d, cached })
+                                  // Reset loading state immediately for cached data
+                                  setTimeout(() => {
+                                    if (rangeChangeRequestId === requestId) {
+                                      setIsChangingRange(false)
+                                    }
+                                  }, 0)
                                 } else {
                                   setSelectedTrendRangeDays(d)
+                                  // Loading state will be reset when data arrives via trendFetchStatus
                                 }
                                 fetchedByDaysRef.current.delete(d)
                               }}
@@ -5568,6 +5645,15 @@ export default function ResultsClient() {
                             : "opacity-0 pointer-events-none")
                         }
                       >
+                        {/* Loading overlay for range switching */}
+                        {isChangingRange && (
+                          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-[1px] rounded-lg">
+                            <div className="flex items-center gap-2 text-sm text-white/80">
+                              <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                              <span>{isZh ? "載入中..." : "Loading..."}</span>
+                            </div>
+                          </div>
+                        )}
                         <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
                           {(() => {
                             const reachSeriesForStats = shouldShowEmptySeriesHint
