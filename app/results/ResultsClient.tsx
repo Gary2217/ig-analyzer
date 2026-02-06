@@ -988,6 +988,32 @@ export default function ResultsClient() {
   const [selectedTrendRangeDays, setSelectedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
   const [isChangingRange, setIsChangingRange] = useState(false)
   const [rangeChangeRequestId, setRangeChangeRequestId] = useState(0)
+  
+  // Refs for safety and cleanup
+  const rangeChangeRequestIdRef = useRef(0)
+  const rangeSwitchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const prefetchCleanupRef = useRef<(() => void) | null>(null)
+  const isMountedRef = useRef(true)
+  
+  // Helper: clear range switch timeout
+  const clearRangeSwitchTimeout = useCallback(() => {
+    if (rangeSwitchTimeoutRef.current) {
+      clearTimeout(rangeSwitchTimeoutRef.current)
+      rangeSwitchTimeoutRef.current = null
+    }
+  }, [])
+  
+  // Helper: arm range switch timeout (safety net)
+  const armRangeSwitchTimeout = useCallback((requestId: number) => {
+    clearRangeSwitchTimeout()
+    rangeSwitchTimeoutRef.current = setTimeout(() => {
+      // Only clear loading for the latest request to avoid race conditions
+      if (isMountedRef.current && requestId === rangeChangeRequestIdRef.current) {
+        setIsChangingRange(false)
+      }
+    }, 12000) // 12s safety timeout
+  }, [clearRangeSwitchTimeout])
+  
   const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
@@ -1029,6 +1055,18 @@ export default function ResultsClient() {
   const trendCacheKey = useCallback((metric: "reach" | "followers", days: 90 | 60 | 30 | 14 | 7) => {
     return `${metric}:${days}`
   }, [])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+      clearRangeSwitchTimeout()
+      if (prefetchCleanupRef.current) {
+        prefetchCleanupRef.current()
+        prefetchCleanupRef.current = null
+      }
+    }
+  }, [clearRangeSwitchTimeout])
 
   const trendPointsByDaysRef = useRef(
     new Map<
@@ -3885,12 +3923,14 @@ export default function ResultsClient() {
     return () => window.clearTimeout(tt)
   }, [isUpdating])
 
-  // Reset range loading state when fetch completes
+  // Reset range loading state when fetch completes (terminal states)
   useEffect(() => {
+    // Terminal states: loading is false (success, error, or idle)
     if (!trendFetchStatus.loading && isChangingRange) {
+      clearRangeSwitchTimeout()
       setIsChangingRange(false)
     }
-  }, [trendFetchStatus.loading, isChangingRange])
+  }, [trendFetchStatus.loading, isChangingRange, clearRangeSwitchTimeout])
 
   // Prefetch common ranges to warm cache
   useEffect(() => {
@@ -3905,19 +3945,30 @@ export default function ResultsClient() {
 
     const prefetchRanges: (90 | 60 | 30 | 14 | 7)[] = [7, 14, 30] // Common ranges to prefetch
     const currentRange = selectedTrendRangeDays
+    let cancelled = false
+    
+    // Store cleanup function
+    const cleanup = () => {
+      cancelled = true
+    }
+    prefetchCleanupRef.current = cleanup
     
     const schedulePrefetch = () => {
       // Use requestIdleCallback if available, fallback to setTimeout
       const scheduleFn = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 500))
       
       scheduleFn(() => {
+        if (cancelled || !isMountedRef.current) return
+        
         prefetchRanges.forEach(async (days) => {
+          if (cancelled || !isMountedRef.current) return
+          
           // Skip if already cached or is the current range
           if (days === currentRange) return
           if (trendPointsByDaysRef.current.has(trendCacheKey("reach", days))) return
           if (fetchedByDaysRef.current.get(days)) return
           
-          // Prefetch without updating UI
+          // Prefetch without updating UI (silent)
           try {
             const url = new URL(window.location.href)
             url.pathname = `/${activeLocale}/api/instagram/trend`
@@ -3942,7 +3993,10 @@ export default function ResultsClient() {
     // Delay prefetch to not block initial render
     const timer = setTimeout(schedulePrefetch, 1000)
     
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      cleanup()
+    }
   }, [isConnectedInstagram, selectedTrendRangeDays, activeLocale])
 
   const hasResult = Boolean(result)
@@ -5411,14 +5465,19 @@ export default function ResultsClient() {
                               key={d}
                               type="button"
                               aria-pressed={active}
+                              aria-busy={isChangingRange && active}
                               onClick={() => {
                                 if (selectedTrendRangeDays === d) return
                                 // Prevent duplicate clicks while loading
                                 if (isChangingRange) return
                                 
-                                const requestId = rangeChangeRequestId + 1
+                                const requestId = rangeChangeRequestIdRef.current + 1
+                                rangeChangeRequestIdRef.current = requestId
                                 setRangeChangeRequestId(requestId)
                                 setIsChangingRange(true)
+                                
+                                // Arm safety timeout
+                                armRangeSwitchTimeout(requestId)
                                 
                                 if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
                                   trendRangeSwitchStartRef.current = { at: performance.now(), days: d }
@@ -5429,14 +5488,13 @@ export default function ResultsClient() {
                                   setSelectedTrendRangeDays(d)
                                   applyCachedTrendSeriesDirect({ days: d, cached })
                                   // Reset loading state immediately for cached data
-                                  setTimeout(() => {
-                                    if (rangeChangeRequestId === requestId) {
-                                      setIsChangingRange(false)
-                                    }
-                                  }, 0)
+                                  if (isMountedRef.current && requestId === rangeChangeRequestIdRef.current) {
+                                    clearRangeSwitchTimeout()
+                                    setIsChangingRange(false)
+                                  }
                                 } else {
                                   setSelectedTrendRangeDays(d)
-                                  // Loading state will be reset when data arrives via trendFetchStatus
+                                  // Loading state will be reset when data arrives via trendFetchStatus or safety timeout
                                 }
                                 fetchedByDaysRef.current.delete(d)
                               }}
@@ -5647,10 +5705,10 @@ export default function ResultsClient() {
                       >
                         {/* Loading overlay for range switching */}
                         {isChangingRange && (
-                          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-[1px] rounded-lg">
-                            <div className="flex items-center gap-2 text-sm text-white/80">
-                              <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                              <span>{isZh ? "載入中..." : "Loading..."}</span>
+                          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/10 backdrop-blur-[0.5px] rounded-lg pointer-events-none">
+                            <div className="flex items-center gap-2 text-sm text-white/80 min-w-0">
+                              <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin flex-shrink-0" />
+                              <span className="truncate">{isZh ? "載入中..." : "Loading..."}</span>
                             </div>
                           </div>
                         )}
