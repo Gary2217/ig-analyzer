@@ -1084,6 +1084,7 @@ export default function ResultsClient() {
   const rangeOverlayInFlightRef = useRef<{ requestId: number; days: 90 | 60 | 30 | 14 | 7 } | null>(null)
   const rangeOverlayErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rangeSwitchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const userScopeKeyRef = useRef<string>("session")
   const prefetchCleanupRef = useRef<(() => void) | null>(null)
   const isMountedRef = useRef(true)
   
@@ -1175,7 +1176,7 @@ export default function ResultsClient() {
   const [comparePanelOpen, setComparePanelOpen] = useState(false)
 
   const trendCacheKey = useCallback((metric: "reach" | "followers", days: 90 | 60 | 30 | 14 | 7) => {
-    return `${metric}:${days}`
+    return `${userScopeKeyRef.current}::${metric}:${days}`
   }, [])
 
   // Cleanup on unmount
@@ -3693,6 +3694,43 @@ export default function ResultsClient() {
     return igUserIdStr || null
   }, [creatorIdFromCardMe, dailySnapshotData])
 
+  const userScopeKey = useMemo(() => {
+    const meIg = isRecord(meQuery.data) && typeof meQuery.data.igId === "string" ? String(meQuery.data.igId).trim() : ""
+    const cookieIg = getCookieValue("ig_ig_id").trim()
+    const cookiePage = getCookieValue("ig_page_id").trim()
+    const base = (resolvedCreatorId || meIg || cookieIg).trim()
+    const page = cookiePage.trim()
+    return `${base || "session"}|${page || ""}`
+  }, [meQuery.data, resolvedCreatorId])
+
+  useEffect(() => {
+    const prev = userScopeKeyRef.current
+    if (prev === userScopeKey) return
+
+    userScopeKeyRef.current = userScopeKey
+
+    trendPointsByDaysRef.current.clear()
+    fetchedByDaysRef.current.clear()
+    lastFetchAtByDaysRef.current.clear()
+    inFlightTrendDaysRef.current = null
+    displayedTrendSigRef.current = ""
+    trendPointsHashRef.current = ""
+    hasAppliedDailySnapshotTrendRef.current = false
+    hasTriggeredPrefetchRef.current = false
+
+    setTrendPoints([])
+    setTrendFetchedAt(null)
+    setDailySnapshotData(null)
+    setTrendFetchStatus({ loading: false, error: "", lastDays: null })
+    setShowRangeOverlay(false)
+    setIsChangingRange(false)
+    clearRangeSwitchTimeout()
+
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[trend][scope] reset client caches", { prev, next: userScopeKey })
+    }
+  }, [clearRangeSwitchTimeout, userScopeKey])
+
   useEffect(() => {
     if (!isConnectedInstagram) {
       setFollowersDailyRows([])
@@ -5686,7 +5724,7 @@ export default function ResultsClient() {
                 <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
                     <div className="shrink-0">
-                      <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 p-0.5 text-xs font-semibold text-white/80 whitespace-nowrap">
+                      <div className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-white/5 p-0.5 text-xs font-semibold text-white/80 min-w-0">
                         {([90, 60, 30, 14, 7] as const).map((d) => {
                           const active = selectedTrendRangeDays === d
                           return (
