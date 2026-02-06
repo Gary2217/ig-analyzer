@@ -322,10 +322,15 @@ function toFiniteNumOrNull(v: unknown): number | null {
 }
 
 function jsonError(message: string, extra?: any, status = 400) {
-  return NextResponse.json(
-    { ok: false, error: message, ...(extra ?? null) },
-    { status, headers: { "Cache-Control": "no-store", ...HANDLER_HEADERS } },
-  )
+  const body = JSON.stringify({ ok: false, error: message, ...(extra ?? null) })
+  return new NextResponse(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json; charset=utf-8",
+      ...HANDLER_HEADERS,
+    },
+  })
 }
 
 function weakEtagFromParts(parts: Array<string | number | null | undefined>) {
@@ -360,6 +365,7 @@ function respondWithEtag(params: {
   const headers: Record<string, string> = {
     "Cache-Control": "no-store",
     ETag: params.etag,
+    "Timing-Allow-Origin": "*",
     ...HANDLER_HEADERS,
   }
 
@@ -381,10 +387,12 @@ function respondWithEtag(params: {
   if (params.status === 304) {
     return new NextResponse(null, { status: 304, headers })
   }
-  if (params.status === 200) {
+
+  const raw = params.body === null || params.body === undefined ? null : JSON.stringify(params.body)
+  if (raw !== null) {
     headers["Content-Type"] = "application/json; charset=utf-8"
   }
-  return NextResponse.json(params.body, { status: params.status, headers })
+  return new NextResponse(raw, { status: params.status, headers })
 }
 
 function buildTrendPointsV2(points: DailySnapshotPoint[]) {
@@ -671,13 +679,20 @@ async function getAvailableDaysCount(params: { igId: string; pageId: string }) {
 export async function POST(req: Request) {
   const t0 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
   const timingMarks: Array<{ name: string; dur: number }> = []
+  const hasMark = (name: string) => timingMarks.some((m) => m.name === name)
   const mark = (name: string, start: number) => {
     const t = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
     const dur = Math.max(0, t - start)
     timingMarks.push({ name, dur })
     return t
   }
+  const ensureTotalMark = () => {
+    if (hasMark("total")) return
+    const t = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+    timingMarks.push({ name: "total", dur: Math.max(0, t - t0) })
+  }
   const serverTimingHeader = () => {
+    ensureTotalMark()
     const list = timingMarks
       .map((m) => {
         const d = Number.isFinite(m.dur) ? Math.round(m.dur * 10) / 10 : 0
@@ -688,6 +703,7 @@ export async function POST(req: Request) {
   }
 
   const respondTimed = (p: Omit<Parameters<typeof respondWithEtag>[0], "serverTiming">) => {
+    ensureTotalMark()
     return respondWithEtag({ ...p, serverTiming: serverTimingHeader() })
   }
 
