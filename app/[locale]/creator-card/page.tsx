@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { Input } from "../../../components/ui/input"
 import { extractLocaleFromPathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
-import { normalizeIgThumbnailUrlOrNull, useCreatorCardPreviewData } from "../../components/creator-card/useCreatorCardPreviewData"
+import { normalizeIgThumbnailUrlOrNull } from "../../components/creator-card/useCreatorCardPreviewData"
 import { CreatorCardPreviewShell } from "@/app/components/creator-card/CreatorCardPreviewShell"
 import { CardMobilePreviewShell } from "@/app/components/creator-card/CardMobilePreviewShell"
 import { useInstagramConnection } from "@/app/components/InstagramConnectionProvider"
@@ -335,6 +335,17 @@ type CreatorCardMeResponse = {
   me?: unknown
   draftUpdatedAt?: number
   error?: unknown
+}
+
+type CreatorCardEditorBootstrapResponse = {
+  ok: boolean
+  card?: unknown
+  thumbs?: unknown
+  me?: unknown
+  stats?: unknown
+  igConnection?: unknown
+  error?: unknown
+  message?: unknown
 }
 
 type CreatorStatsResponse = {
@@ -1307,8 +1318,38 @@ export default function CreatorCardPage() {
   const [minPrice, setMinPrice] = useState<number | null>(null)
   const [minPriceDraft, setMinPriceDraft] = useState("")
 
-  // Fetch preview data using shared hook (for stats and fallback data)
-  const previewData = useCreatorCardPreviewData({ enabled: true })
+  const previewData = useMemo(() => {
+    const engagementRatePct = typeof creatorStats?.engagementRatePct === "number" && Number.isFinite(creatorStats.engagementRatePct)
+      ? creatorStats.engagementRatePct
+      : null
+
+    const followersCount =
+      typeof (igProfile as any)?.followers_count === "number" && Number.isFinite((igProfile as any).followers_count)
+        ? (igProfile as any).followers_count
+        : null
+    const followingCount =
+      typeof (igProfile as any)?.follows_count === "number" && Number.isFinite((igProfile as any).follows_count)
+        ? (igProfile as any).follows_count
+        : null
+    const postsCount =
+      typeof (igProfile as any)?.media_count === "number" && Number.isFinite((igProfile as any).media_count)
+        ? (igProfile as any).media_count
+        : null
+
+    return {
+      isLoading: Boolean(loading),
+      hasCard: Boolean(cardId),
+      cardId: cardId ?? null,
+      creatorId: creatorId ?? null,
+      creatorCard: null,
+      igProfile: igProfile ?? null,
+      stats: engagementRatePct !== null ? { engagementRatePct } : null,
+      followers: followersCount ?? undefined,
+      following: followingCount ?? undefined,
+      posts: postsCount ?? undefined,
+      engagementRate: engagementRatePct ?? undefined,
+    }
+  }, [cardId, creatorId, creatorStats?.engagementRatePct, igProfile, loading])
   const [themeTypes, setThemeTypes] = useState<string[]>([])
   const [audienceProfiles, setAudienceProfiles] = useState<string[]>([])
 
@@ -2010,17 +2051,37 @@ export default function CreatorCardPage() {
             }, 8000)
           : null
 
-        const res = await fetch("/api/creator-card/me", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-          signal: controller.signal,
-        })
+        // Prefer aggregated editor bootstrap endpoint (single request)
+        let res: Response | null = null
+        let json: CreatorCardEditorBootstrapResponse | CreatorCardMeResponse | null = null
+
+        try {
+          res = await fetch("/api/creator-card/editor", {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+            signal: controller.signal,
+          })
+          const jsonRaw: unknown = await res.json().catch(() => null)
+          json = (asRecord(jsonRaw) as unknown as CreatorCardEditorBootstrapResponse) ?? null
+        } catch {
+          res = null
+          json = null
+        }
+
+        // Fallback to legacy /me if bootstrap fails
+        if (!res || !res.ok || (json as any)?.ok === undefined) {
+          res = await fetch("/api/creator-card/me", {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+            signal: controller.signal,
+          })
+          const jsonRaw: unknown = await res.json().catch(() => null)
+          json = (asRecord(jsonRaw) as unknown as CreatorCardMeResponse) ?? null
+        }
 
         if (timeoutId != null) window.clearTimeout(timeoutId)
-
-        const jsonRaw: unknown = await res.json().catch(() => null)
-        const json = (asRecord(jsonRaw) as unknown as CreatorCardMeResponse) ?? null
         if (cancelled) return
 
         const isEmptyCardState =
@@ -2063,17 +2124,22 @@ export default function CreatorCardPage() {
         setLoadErrorKind(null)
         setLoadError(null)
 
-        const card = isEmptyCardState ? null : asRecord(json?.card) ?? null
+        const card = isEmptyCardState ? null : asRecord((json as any)?.card) ?? null
 
         const dbUpdatedAtMs = parseEpochMsFromUnknown((card as any)?.updated_at)
         dbUpdatedAtMsRef.current = dbUpdatedAtMs
         const nextCardId = card ? readString((card as any)?.id) : null
         setCardId(nextCardId ? String(nextCardId) : null)
 
-        const meObj = asRecord(json?.me)
-        const nextCreatorIdRaw = meObj ? readString(meObj.igUserId) : null
+        const meObj = asRecord((json as any)?.me)
+        const nextCreatorIdRaw = meObj ? readString((meObj as any).igUserId) : null
         const nextCreatorId = nextCreatorIdRaw ? String(nextCreatorIdRaw).trim() : ""
         setCreatorId(nextCreatorId || null)
+
+        // If bootstrap includes stats, use it to avoid extra request.
+        const statsObj = asRecord((json as any)?.stats)
+        const nextEng = statsObj ? readNumber((statsObj as any).engagementRatePct ?? (statsObj as any).engagement_rate_pct) : null
+        setCreatorStats(nextEng == null ? null : { engagementRatePct: nextEng })
 
         const nextBase: CreatorCardPayload | null = card
           ? {
@@ -2667,6 +2733,11 @@ export default function CreatorCardPage() {
       return
     }
 
+    // If stats already hydrated by editor bootstrap, skip extra request.
+    if (creatorStats && typeof creatorStats.engagementRatePct === "number") {
+      return
+    }
+
     let cancelled = false
     ;(async () => {
       try {
@@ -2694,7 +2765,7 @@ export default function CreatorCardPage() {
     return () => {
       cancelled = true
     }
-  }, [creatorId])
+  }, [creatorId, creatorStats?.engagementRatePct])
 
   const handleRetryLoad = useCallback(() => {
     setRefetchTick((x) => x + 1)
