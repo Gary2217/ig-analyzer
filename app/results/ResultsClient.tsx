@@ -5870,7 +5870,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                 <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="flex items-center justify-between gap-3 min-w-0 sm:contents">
                     <div className="shrink-0">
-                      <div className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-white/5 p-0.5 text-xs font-semibold text-white/80 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-0.5 text-xs font-semibold text-white/80 min-w-0">
                         {([90, 60, 30, 14, 7] as const).map((d) => {
                           const active = selectedTrendRangeDays === d
                           return (
@@ -5929,10 +5929,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                 })
                               }}
                               className={
-                                `inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ` +
+                                `inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ` +
                                 `min-h-[44px] ` +
                                 `focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 ` +
-                                (active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/6")
+                                (active
+                                  ? "bg-white/15 border-white/25 text-white font-semibold shadow-sm"
+                                  : "border-white/10 bg-white/[0.02] text-white/55 hover:bg-white/8 hover:text-white/80")
                               }
                             >
                               {d}
@@ -5969,22 +5971,20 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                           })
                         }}
                         className={
-                          "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-all min-h-[44px] whitespace-nowrap " +
+                          "inline-flex items-center justify-center rounded-full border px-4 py-1.5 text-sm font-semibold transition-all min-h-[44px] whitespace-nowrap min-w-[120px] " +
                           (isCompareLoading
-                            ? "border-white/20 bg-white/8 text-white/70 cursor-not-allowed"
+                            ? "border-white/20 bg-gradient-to-r from-sky-500/50 to-cyan-500/50 text-white/80 cursor-not-allowed"
                             : compareEnabled
-                            ? "border-white/20 bg-white/10 text-white shadow-sm hover:bg-white/15"
-                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/8 hover:text-white/90")
+                            ? "border-white/25 bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-md shadow-cyan-500/15 hover:from-sky-400 hover:to-cyan-400"
+                            : "border-white/15 bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-md shadow-cyan-500/10 hover:from-sky-400 hover:to-cyan-400")
                         }
                       >
-                        {isCompareLoading ? (
-                          <>
-                            <span className="h-3 w-3 rounded-full border border-white/30 border-t-white animate-spin mr-2" />
-                            {isZh ? "處理中" : "Loading"}
-                          </>
-                        ) : (
-                          isZh ? "比較" : "Compare"
-                        )}
+                        <span className="inline-flex items-center justify-center gap-2">
+                          {isCompareLoading ? (
+                            <span className="h-3 w-3 rounded-full border border-white/35 border-t-white animate-spin" />
+                          ) : null}
+                          <span>{isCompareLoading ? (isZh ? "處理中" : "Loading") : isZh ? "比較" : "Compare"}</span>
+                        </span>
                       </button>
                       
                       {/* Helper text when compare is enabled */}
@@ -7187,6 +7187,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                             y={Math.max(12, cy - 12)}
                                             textAnchor="middle"
                                             fill="rgba(255,255,255,0.70)"
+                                            stroke="rgba(0,0,0,0.55)"
+                                            strokeWidth={3}
+                                            paintOrder="stroke"
                                             fontSize={10}
                                             fontWeight={600}
                                           >
