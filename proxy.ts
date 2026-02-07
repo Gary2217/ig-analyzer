@@ -10,12 +10,21 @@ function isSupportedLocale(v: string): v is SupportedLocale {
 function shouldSkip(pathname: string) {
   return (
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
     /\.[a-z0-9]+$/i.test(pathname)
   )
+}
+
+function getRequestId(req: NextRequest) {
+  const existing = req.headers.get("x-request-id")
+  return existing && existing.trim() ? existing.trim() : crypto.randomUUID()
+}
+
+function ensureRequestIdHeader(res: NextResponse, requestId: string) {
+  res.headers.set("x-request-id", requestId)
+  return res
 }
 
 function detectLocale(req: NextRequest): SupportedLocale {
@@ -30,13 +39,31 @@ function detectLocale(req: NextRequest): SupportedLocale {
 
 export default function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl
-  if (shouldSkip(pathname)) return NextResponse.next()
+  const requestId = getRequestId(req)
+  if (shouldSkip(pathname)) {
+    const base = NextResponse.next()
+    return ensureRequestIdHeader(base, requestId)
+  }
+
+  // Do not redirect /api; just pass through while still attaching request id.
+  if (pathname.startsWith("/api")) {
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set("x-request-id", requestId)
+
+    const base0 = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+    return ensureRequestIdHeader(base0, requestId)
+  }
 
   if (pathname === "/") {
     const locale = detectLocale(req)
     const url = req.nextUrl.clone()
     url.pathname = `/${locale}`
-    const res = NextResponse.redirect(url)
+    const res0 = NextResponse.redirect(url)
+    const res = ensureRequestIdHeader(res0, requestId)
     res.cookies.set("NEXT_LOCALE", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
     res.cookies.set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
     return res
@@ -48,12 +75,14 @@ export default function proxy(req: NextRequest) {
     // Set x-locale header for immediate locale detection in layout
     const requestHeaders = new Headers(req.headers)
     requestHeaders.set('x-locale', firstSeg)
+    requestHeaders.set("x-request-id", requestId)
     
-    const res = NextResponse.next({
+    const res0 = NextResponse.next({
       request: {
         headers: requestHeaders,
       },
     })
+    const res = ensureRequestIdHeader(res0, requestId)
     
     const currentNext = req.cookies.get("NEXT_LOCALE")?.value
     if (currentNext !== firstSeg) {
@@ -71,7 +100,8 @@ export default function proxy(req: NextRequest) {
   const url = req.nextUrl.clone()
   url.pathname = `/${locale}${pathname}`
   url.search = search
-  const res = NextResponse.redirect(url)
+  const res0 = NextResponse.redirect(url)
+  const res = ensureRequestIdHeader(res0, requestId)
   res.cookies.set("NEXT_LOCALE", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
   res.cookies.set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
   return res

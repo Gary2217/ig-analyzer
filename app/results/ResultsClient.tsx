@@ -118,6 +118,14 @@ function Skeleton({ className }: { className?: string }) {
   )
 }
 
+function StatsValueSkeleton() {
+  return (
+    <div className="mt-1 min-w-0">
+      <Skeleton className="h-6 w-24 sm:h-7 sm:w-28" />
+    </div>
+  )
+}
+
 const shimmerStyles = `
   @keyframes shimmer {
     0% { background-position: -200% 0; }
@@ -1067,6 +1075,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const [igMe, setIgMe] = useState<IgMeResponse | null>(null)
   const [igMeLoading, setIgMeLoading] = useState(true)
   const [igMeUnauthorized, setIgMeUnauthorized] = useState(false)
+  const [dashSummary, setDashSummary] = useState<unknown>(null)
+  const [dashSummaryLoading, setDashSummaryLoading] = useState<boolean>(true)
+  const [dashSummaryEtag, setDashSummaryEtag] = useState<string | null>(null)
   const [connectEnvError, setConnectEnvError] = useState<"missing_env" | null>(null)
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -3245,9 +3256,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   }
 
   // KPI numbers should accept numeric strings from API responses.
-  const kpiFollowers = finiteNumOrNull(isRecord(igProfile) ? igProfile.followers_count : null)
-  const kpiFollowing = finiteNumOrNull(isRecord(igProfile) ? igProfile.follows_count : null)
-  const kpiMediaCount = finiteNumOrNull(isRecord(igProfile) ? igProfile.media_count : null)
+  const dashKpis = isRecord(dashSummary) && isRecord(dashSummary.kpis) ? (dashSummary.kpis as Record<string, unknown>) : null
+  const kpiFollowers = finiteNumOrNull(dashKpis ? dashKpis.followers_count : (isRecord(igProfile) ? igProfile.followers_count : null))
+  const kpiFollowing = finiteNumOrNull(dashKpis ? dashKpis.follows_count : (isRecord(igProfile) ? igProfile.follows_count : null))
+  const kpiMediaCount = finiteNumOrNull(dashKpis ? dashKpis.media_count : (isRecord(igProfile) ? igProfile.media_count : null))
   const kpiPosts = kpiMediaCount
 
   // Treat any non-empty media array as real media; do NOT require like/comment metrics.
@@ -3551,6 +3563,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const followers = allowDemoProfile ? mockAnalysis.profile.followers : kpiFollowers
   const following = allowDemoProfile ? mockAnalysis.profile.following : kpiFollowing
   const posts = allowDemoProfile ? mockAnalysis.profile.posts : kpiPosts
+
+  const shouldShowStatsSkeleton = !allowDemoProfile && dashSummaryLoading && (followers == null || following == null || posts == null)
 
   const accountTypeLabel = (value: string) => {
     if (value === "Personal Account") return t("results.values.accountType.personal")
@@ -4253,6 +4267,58 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       }
     })()
   }, [computedMetrics, finiteNumOrNull, igProfile, isConnectedInstagram, resolvedCreatorId])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const url = new URL("/api/dashboard/summary", window.location.origin)
+
+        const headers: Record<string, string> = { accept: "application/json" }
+        if (dashSummaryEtag) headers["if-none-match"] = dashSummaryEtag
+
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+          headers,
+        })
+
+        if (cancelled) return
+
+        if (res.status === 304) {
+          setDashSummaryLoading(false)
+          return
+        }
+
+        const ct = (res.headers.get("content-type") ?? "").toLowerCase()
+        if (!ct.includes("application/json")) {
+          setDashSummaryLoading(false)
+          return
+        }
+
+        const etag = res.headers.get("etag")
+        if (etag) setDashSummaryEtag(etag)
+
+        const json = await res.json().catch(() => null)
+        if (cancelled) return
+        if (res.ok && isRecord(json) && json.ok) {
+          setDashSummary(json)
+        }
+      } catch (e) {
+        if (cancelled) return
+        if (isAbortError(e)) return
+      } finally {
+        if (cancelled) return
+        setDashSummaryLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!isConnectedInstagram) return
@@ -5495,38 +5561,50 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 text-center">
                   <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                     <div className="text-xs text-slate-400">{t("results.profile.followers")}</div>
-                    <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
-                      <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
-                      {isPreview(kpiFollowers) && (
-                        <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                          {t("results.common.preview")}
-                        </span>
-                      )}
-                    </div>
+                    {shouldShowStatsSkeleton ? (
+                      <StatsValueSkeleton />
+                    ) : (
+                      <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
+                        <span className="tabular-nums whitespace-nowrap">{formatNum(followers)}</span>
+                        {isPreview(kpiFollowers) && (
+                          <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                            {t("results.common.preview")}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                     <div className="text-xs text-slate-400">{t("results.profile.followingLabel")}</div>
-                    <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
-                      <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
-                      {isPreview(kpiFollowing) && (
-                        <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                          {t("results.common.preview")}
-                        </span>
-                      )}
-                    </div>
+                    {shouldShowStatsSkeleton ? (
+                      <StatsValueSkeleton />
+                    ) : (
+                      <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
+                        <span className="tabular-nums whitespace-nowrap">{formatNum(following)}</span>
+                        {isPreview(kpiFollowing) && (
+                          <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                            {t("results.common.preview")}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                     <div className="text-xs text-slate-400">{t("results.profile.postsLabel")}</div>
-                    <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
-                      <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
-                      {isPreview(kpiPosts) && (
-                        <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                          {t("results.common.preview")}
-                        </span>
-                      )}
-                    </div>
+                    {shouldShowStatsSkeleton ? (
+                      <StatsValueSkeleton />
+                    ) : (
+                      <div className="mt-1 text-[clamp(16px,5vw,24px)] sm:text-xl font-semibold text-white leading-none min-w-0">
+                        <span className="tabular-nums whitespace-nowrap">{formatNum(posts)}</span>
+                        {isPreview(kpiPosts) && (
+                          <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                            {t("results.common.preview")}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
