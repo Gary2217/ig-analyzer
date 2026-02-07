@@ -131,11 +131,33 @@ const shimmerStyles = `
   .animate-shimmer {
     animation: shimmer 1.2s ease-in-out infinite, shimmerFade 1.2s ease-in-out infinite;
   }
+  .trend-today-pulse circle:first-child {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: trendTodayPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes trendTodayPulse {
+    0% {
+      opacity: 0.25;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.55;
+      transform: scale(1.18);
+    }
+    100% {
+      opacity: 0.25;
+      transform: scale(1);
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .animate-shimmer {
       animation: none;
       opacity: 0.5;
       background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.05) 100%);
+    }
+    .trend-today-pulse circle:first-child {
+      animation: none;
     }
   }
 `
@@ -7250,33 +7272,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   )
                                 })()}
                               </svg>
-                              {/* ultra-subtle pulse for Today marker (scoped to this component) */}
-                              <style jsx>{`
-                                .trend-today-pulse circle:first-child {
-                                  transform-box: fill-box;
-                                  transform-origin: center;
-                                  animation: trendTodayPulse 1.8s ease-in-out infinite;
-                                }
-                                @keyframes trendTodayPulse {
-                                  0% {
-                                    opacity: 0.25;
-                                    transform: scale(1);
-                                  }
-                                  50% {
-                                    opacity: 0.55;
-                                    transform: scale(1.18);
-                                  }
-                                  100% {
-                                    opacity: 0.25;
-                                    transform: scale(1);
-                                  }
-                                }
-                                @media (prefers-reduced-motion: reduce) {
-                                  .trend-today-pulse circle:first-child {
-                                    animation: none;
-                                  }
-                                }
-                              `}</style>
                             </div>
 
                             {clampedHoverIdx !== null && hoverPoint ? (
