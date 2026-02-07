@@ -4134,11 +4134,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       return
     }
 
+    // Preview data is now owned by useCreatorCardPreviewData (via /api/creator-card/preview).
+    // Keep legacy state/reset behavior only; avoid duplicate fetches here.
     if (creatorCardFetchedRef.current && creatorCardReload === 0) return
     creatorCardFetchedRef.current = true
-
-    void reloadCreatorCard()
-  }, [creatorCardReload, isConnectedInstagram, reloadCreatorCard])
+  }, [creatorCardReload, isConnectedInstagram])
 
   // Scroll to hash anchor after page loads (for Back navigation from Creator Card)
   useEffect(() => {
@@ -4199,39 +4199,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     if (refreshSeq <= 0) return
     if (!isConnectedInstagram) return
     if (selectedGoal !== "brandCollaborationProfile") return
-    safeReloadCreatorCard()
-  }, [isConnectedInstagram, refreshSeq, safeReloadCreatorCard, selectedGoal])
+    // Preview data is now fetched by the preview hook; avoid duplicate reloads here.
+  }, [isConnectedInstagram, refreshSeq, selectedGoal])
 
   useEffect(() => {
+    // Stats for the preview are now returned by /api/creator-card/preview.
+    // Avoid duplicate stats fetches here.
     if (!isConnectedInstagram || !resolvedCreatorId) {
       setCreatorStats(null)
       return
-    }
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch(`/api/creators/${encodeURIComponent(resolvedCreatorId)}/stats`, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        })
-        const json: unknown = await res.json().catch(() => null)
-        if (cancelled) return
-        if (!res.ok || !isRecord(json) || !json.ok) {
-          setCreatorStats(null)
-          return
-        }
-        setCreatorStats(isRecord(json) && json.stats ? json.stats : null)
-      } catch (e) {
-        if (cancelled) return
-        if (isAbortError(e)) return
-        setCreatorStats(null)
-      }
-    })()
-
-    return () => {
-      cancelled = true
     }
   }, [isConnectedInstagram, resolvedCreatorId])
 

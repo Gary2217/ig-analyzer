@@ -188,6 +188,42 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
       try {
         setIsLoading(true)
 
+        // Prefer aggregated preview endpoint (single request) for speed + tenant safety.
+        // Fallback to legacy multi-fetch if needed.
+        try {
+          const res = await fetch("/api/creator-card/preview", {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+            signal: controller.signal,
+            headers: { accept: "application/json" },
+          })
+          if (!cancelled && res.ok) {
+            const json = await res.json().catch(() => null)
+            const obj = isRecord(json) ? (json as Record<string, unknown>) : null
+            if (obj?.ok === true) {
+              const normalized = normalizeCreatorCardPayload(obj)
+              const statsObj = isRecord(obj.stats) ? (obj.stats as Record<string, unknown>) : null
+
+              const pct = finiteNumOrNull(statsObj?.engagementRatePct) ?? finiteNumOrNull(statsObj?.engagement_rate_pct)
+              const followersFromStats = finiteNumOrNull(statsObj?.followers)
+
+              if (!cancelled) {
+                setCreatorCard(normalized)
+                setEngagementRatePct(pct)
+
+                // Best-effort: allow stats to fill followers if IG profile isn't available yet.
+                // (Keep current return shape: followers/following/posts still primarily from igProfile.)
+                void followersFromStats
+              }
+
+              return
+            }
+          }
+        } catch {
+          // fall back below
+        }
+
         // First fetch creator card to get creatorId
         const cardRes = await fetch("/api/creator-card/me", { signal: controller.signal })
         if (cancelled) return

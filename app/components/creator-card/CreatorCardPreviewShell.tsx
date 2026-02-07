@@ -4,6 +4,10 @@ import Link from "next/link"
 import { ExternalLink } from "lucide-react"
 import { CreatorCardPreview } from "../CreatorCardPreview"
 
+function Skeleton({ className }: { className?: string }) {
+  return <div className={"animate-pulse rounded-md bg-white/10 " + (className || "")} />
+}
+
 type CreatorCardPreviewShellProps = {
   locale: string
   t: (key: string) => string
@@ -81,9 +85,48 @@ export function CreatorCardPreviewShell({
   // State 2: Loading
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-        <p className="text-sm text-white/60">{locale === "zh-TW" ? "載入名片中..." : "Loading creator card..."}</p>
+      <div className="min-w-0">
+        {showHeaderButtons ? (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <div className="flex items-center gap-2 justify-end shrink-0">
+              <Skeleton className="h-10 w-28 rounded-full" />
+              <Skeleton className="h-10 w-28 rounded-full" />
+            </div>
+          </div>
+        ) : null}
+
+        <div className="rounded-xl border border-white/10 bg-transparent">
+          <div className="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10">
+            <div className="flex items-center gap-3 min-w-0">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-4 w-40 max-w-full" />
+                <div className="mt-2">
+                  <Skeleton className="h-3 w-28" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="p-3 sm:p-4 lg:p-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-0">
+              <Skeleton className="h-12 rounded-xl" />
+              <Skeleton className="h-12 rounded-xl" />
+              <Skeleton className="h-12 rounded-xl" />
+              <Skeleton className="h-12 rounded-xl" />
+            </div>
+            <div className="mt-4 grid grid-cols-3 sm:grid-cols-6 gap-2">
+              <Skeleton className="aspect-square rounded-xl" />
+              <Skeleton className="aspect-square rounded-xl" />
+              <Skeleton className="aspect-square rounded-xl" />
+              <Skeleton className="aspect-square rounded-xl" />
+              <Skeleton className="aspect-square rounded-xl hidden sm:block" />
+              <Skeleton className="aspect-square rounded-xl hidden sm:block" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
