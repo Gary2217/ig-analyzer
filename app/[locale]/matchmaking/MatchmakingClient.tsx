@@ -22,6 +22,7 @@ const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
 interface MatchmakingClientProps {
   locale: Locale
   initialCards: CreatorCard[]
+  initialMeCard?: CreatorCard | null
 }
 
 function clampNumber(n: number, min: number, max: number) {
@@ -251,7 +252,41 @@ function pinOwnerCardFirst<T extends { id: string }>(cards: T[], ownerCardId: st
   return [owner, ...rest]
 }
 
-export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
+function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
+  const id = typeof input?.id === "string" ? input.id : null
+  if (!id) return null
+
+  const displayNameRaw = typeof input?.ig_username === "string" ? input.ig_username : typeof input?.displayName === "string" ? input.displayName : ""
+  const displayName = displayNameRaw || id
+  const avatarUrl =
+    typeof input?.avatar_url === "string"
+      ? input.avatar_url
+      : typeof input?.avatarUrl === "string"
+        ? input.avatarUrl
+        : typeof input?.profile_image_url === "string"
+          ? input.profile_image_url
+          : typeof input?.profileImageUrl === "string"
+            ? input.profileImageUrl
+            : svgAvatarDataUrl(String(id), displayName)
+
+  const niche = typeof input?.niche === "string" ? input.niche : typeof input?.category === "string" ? input.category : "Creator"
+  const deliverables = Array.isArray(input?.deliverables) ? (input.deliverables as unknown[]).filter((x): x is string => typeof x === "string") : []
+  const isPublic = typeof input?.is_public === "boolean" ? input.is_public : typeof input?.isPublic === "boolean" ? input.isPublic : false
+
+  return {
+    id,
+    displayName,
+    avatarUrl,
+    category: niche || "Creator",
+    deliverables,
+    followerCount: 0,
+    engagementRate: null,
+    isVerified: false,
+    profileUrl: isPublic ? `${localePrefix}/card/${id}` : `${localePrefix}/creator-card`,
+  }
+}
+
+export function MatchmakingClient({ locale, initialCards, initialMeCard }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fav = useFavorites()
@@ -305,7 +340,7 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
-  const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
+  const [meCard, setMeCard] = useState<CreatorCard | null>(initialMeCard ?? null)
 
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
@@ -449,6 +484,11 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
       let shouldPersistOwnerLookup = true
 
       try {
+        if (initialMeCard) {
+          shouldPersistOwnerLookup = false
+          return
+        }
+
         if (ownerLookupStartedRef.current) return
         ownerLookupStartedRef.current = true
 
@@ -458,8 +498,6 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
             const cached = JSON.parse(raw) as any
             if (cached?.done) {
               shouldPersistOwnerLookup = false
-              const cachedOwnerCardId = typeof cached?.ownerCardId === "string" ? cached.ownerCardId : null
-              if (!cancelled && cachedOwnerCardId) setOwnerCardId(cachedOwnerCardId)
               return
             }
           }
@@ -489,8 +527,13 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
         if (!meCardId) return
 
+        if (!cancelled) {
+          const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
+          const safe = sanitizeMeCard(meJson?.card, localePrefix)
+          if (safe) setMeCard(safe)
+        }
+
         nextOwnerCardId = meCardId
-        if (!cancelled) setOwnerCardId(meCardId)
 
         if (!ownerIgUserId) return
 
@@ -843,15 +886,57 @@ export function MatchmakingClient({ locale, initialCards }: MatchmakingClientPro
     return out
   }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
-  const finalCards = useMemo(() => pinOwnerCardFirst(filtered, ownerCardId), [filtered, ownerCardId])
+  const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string }) | null => {
+    if (!meCard) return null
+
+    const topics = (meCard.category ? [meCard.category] : []).filter(Boolean)
+    const deliverables = Array.isArray((meCard as any).deliverables) ? ((meCard as any).deliverables as string[]) : []
+    const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
+    const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
+
+    const rawHandle =
+      typeof (meCard as any).handle === "string"
+        ? String((meCard as any).handle).trim()
+        : typeof (meCard as any).igUsername === "string"
+          ? String((meCard as any).igUsername).trim()
+          : typeof (meCard as any).username === "string"
+            ? String((meCard as any).username).trim()
+            : typeof meCard.displayName === "string"
+              ? String(meCard.displayName).trim()
+              : ""
+    const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
+
+    return {
+      id: meCard.id,
+      name: meCard.displayName,
+      handle,
+      avatarUrl: meCard.avatarUrl,
+      topics,
+      platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
+      collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
+      deliverables,
+      stats: {
+        followers: undefined,
+        engagementRate: undefined,
+      },
+      href: meCard.profileUrl,
+      isDemo: Boolean((meCard as any).isDemo),
+    }
+  }, [meCard])
+
+  const finalCards = useMemo(() => {
+    const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
+    return pinnedCreator ? [pinnedCreator, ...rest] : rest
+  }, [filtered, pinnedCreator])
 
   const debugOwnerLastOwnerCardIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (!debugOwner) return
-    if (debugOwnerLastOwnerCardIdRef.current === ownerCardId) return
-    debugOwnerLastOwnerCardIdRef.current = ownerCardId
-    console.log("[debug] ownerCardId:", ownerCardId)
-  }, [debugOwner, ownerCardId])
+    const id = meCard?.id ?? null
+    if (debugOwnerLastOwnerCardIdRef.current === id) return
+    debugOwnerLastOwnerCardIdRef.current = id
+    console.log("[debug] ownerCardId:", id)
+  }, [debugOwner, meCard?.id])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null

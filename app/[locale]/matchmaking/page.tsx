@@ -1,5 +1,6 @@
 import { MatchmakingClient } from "./MatchmakingClient"
 import { createPublicClient } from "@/lib/supabase/server"
+import { createAuthedClient } from "@/lib/supabase/server"
 import type { CreatorCard } from "./types"
 
 export const dynamic = "force-dynamic"
@@ -94,6 +95,43 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
   }
 }
 
+async function fetchMyCreatorCardPublicSafe(localePrefix: string): Promise<CreatorCard | null> {
+  try {
+    const authed = await createAuthedClient()
+    const userRes = await authed.auth.getUser()
+    const user = userRes?.data?.user ?? null
+    if (!user) return null
+
+    const { data, error } = await authed
+      .from("creator_cards")
+      .select("id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, is_public")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error || !data?.id) return null
+
+    const displayName = (data as any).ig_username || data.id
+    const avatarUrl = (data as any).avatar_url || (data as any).profile_image_url || svgAvatarDataUrl(String(data.id), displayName)
+    const isPublic = typeof (data as any).is_public === "boolean" ? Boolean((data as any).is_public) : false
+
+    return {
+      id: data.id,
+      displayName,
+      avatarUrl,
+      category: (data as any).niche || "Creator",
+      deliverables: Array.isArray((data as any).deliverables) ? ((data as any).deliverables as string[]) : [],
+      followerCount: 0,
+      engagementRate: null,
+      isVerified: false,
+      profileUrl: isPublic ? `${localePrefix}/card/${data.id}` : `${localePrefix}/creator-card`,
+    }
+  } catch {
+    return null
+  }
+}
+
 export default async function MatchmakingPage({ params }: MatchmakingPageProps) {
   const resolvedParams = await params
   const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
@@ -102,5 +140,7 @@ export default async function MatchmakingPage({ params }: MatchmakingPageProps) 
   // Fetch real creator cards ordered by updated_at desc
   const creatorCards = await fetchPublicCreatorCards(localePrefix)
 
-  return <MatchmakingClient locale={locale} initialCards={creatorCards} />
+  const meCard = await fetchMyCreatorCardPublicSafe(localePrefix)
+
+  return <MatchmakingClient locale={locale} initialCards={creatorCards} initialMeCard={meCard} />
 }
