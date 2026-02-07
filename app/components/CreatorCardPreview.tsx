@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/core"
 import {
   SortableContext,
+  arrayMove,
   horizontalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable"
@@ -195,6 +196,25 @@ function normalizeImgSrc(value: unknown, fallback: string): string {
   if (!s) return fallback
   if (/^(https?:\/\/|data:|blob:)/i.test(s)) return s
   return fallback
+}
+
+function isMobileViewport() {
+  if (typeof window === "undefined") return false
+  try {
+    return window.matchMedia("(max-width: 640px)").matches
+  } catch {
+    return false
+  }
+}
+
+function stableHash32(input: string) {
+  const s = String(input || "")
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return (h >>> 0).toString(16)
 }
 
 const CREATOR_CARD_AVATAR_FALLBACK_SRC =
@@ -502,6 +522,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   const normalizedLocale = locale === "zh-TW" ? "zh-TW" : "en"
 
+  const isMobile = useMemo(() => isMobileViewport(), [])
+  const eagerCount = isMobile ? 2 : 3
+  const maxThumbs = 8
+
   // Modal state for IG post preview
   const [openIg, setOpenIg] = useState<{ url: string; thumb?: string; caption?: string | null } | null>(null)
   const [openAvatarUrl, setOpenAvatarUrl] = useState<string | null>(null)
@@ -685,7 +709,22 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     return (featuredItems || []).filter((x) => x?.type === "ig" && Boolean(normalizeUrl(x.url)))
   }, [featuredItems])
 
-  const sortableIds = useMemo(() => sortableIg.map(x => x.id), [sortableIg])
+  const previewIgItems = useMemo(() => {
+    const seen = new Set<string>()
+    const out: typeof sortableIg = []
+    for (const it of sortableIg) {
+      if (out.length >= maxThumbs) break
+      const thumb = normalizeIgThumbnailUrlOrNull((it as any)?.thumbnailUrl)
+      const key = thumb || normalizeUrl(it.url)
+      if (!key) continue
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(it)
+    }
+    return out
+  }, [maxThumbs, sortableIg])
+
+  const previewSortableIds = useMemo(() => previewIgItems.map((x) => x.id), [previewIgItems])
 
   // Handle drag end for reordering
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -693,17 +732,13 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     if (!over || active.id === over.id) return
     if (!props.onReorderIgIds) return
 
-    const oldIndex = sortableIds.indexOf(String(active.id))
-    const newIndex = sortableIds.indexOf(String(over.id))
+    const oldIndex = previewSortableIds.indexOf(String(active.id))
+    const newIndex = previewSortableIds.indexOf(String(over.id))
+    if (oldIndex < 0 || newIndex < 0) return
 
-    if (oldIndex === -1 || newIndex === -1) return
-
-    const nextIds = [...sortableIds]
-    const [moved] = nextIds.splice(oldIndex, 1)
-    nextIds.splice(newIndex, 0, moved)
-
-    props.onReorderIgIds(nextIds)
-  }, [sortableIds, props])
+    const next = arrayMove(previewSortableIds, oldIndex, newIndex)
+    props.onReorderIgIds(next)
+  }, [previewSortableIds, props])
 
   // Initialize preview carousel scroll state
   useEffect(() => {
@@ -1106,7 +1141,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
               </button>
             )}
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
+              <SortableContext items={previewSortableIds} strategy={horizontalListSortingStrategy}>
                 <div
                   ref={(el) => {
                     featuredStripRef.current = el
@@ -1127,7 +1162,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                       </div>
                     </div>
                   ) : (
-                    sortableIg.map((item) => {
+                    previewIgItems.map((item, idx) => {
                     const normalizedUrl = normalizeUrl(item.url)
                     const retryKey = retryKeys[normalizedUrl] || 0
                     
@@ -1136,10 +1171,11 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                     const thumbnailSrc = normalizeIgThumbnailUrlOrNull(item.thumbnailUrl) ?? undefined
                     const caption = typeof item.caption === "string" ? item.caption : null
                     const isVideo = item.mediaType === "video" || item.mediaType === "reel"
+                    const isEager = idx < eagerCount
                     
                     return (
                       <SortablePreviewItem
-                        key={item.id}
+                        key={`${item.id}-${stableHash32(normalizedUrl)}`}
                         item={item}
                         onItemClick={(e) => {
                           e.preventDefault()
@@ -1158,9 +1194,12 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                               src={thumbnailSrc}
                               alt="Instagram post"
                               className="w-full h-full object-cover block"
-                              loading="lazy"
+                              loading={isEager ? "eager" : "lazy"}
                               referrerPolicy="no-referrer"
                               decoding="async"
+                              fetchPriority={isEager ? "high" : "auto"}
+                              width={280}
+                              height={350}
                               onError={() => {
                                 setThumbnailLoadErrors((prev: Record<string, boolean>) => ({ ...prev, [normalizedUrl]: true }))
                               }}

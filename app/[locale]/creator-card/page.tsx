@@ -2,7 +2,7 @@
 
 // NOTE: Save blocked only during uploads (featuredUploadingIds > 0); failed uploads marked but don't block save
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { ChevronDown, Eye, Loader2, Plus, X } from "lucide-react"
@@ -1919,6 +1919,19 @@ export default function CreatorCardPage() {
 
     return normalizeContact(serializedContact)
   }, [serializedContact])
+
+  const deferredDisplayName = useDeferredValue(displayName)
+  const deferredUsername = useDeferredValue(displayUsername)
+  const deferredAboutText = useDeferredValue(baseCard?.audience ?? null)
+  const deferredPrimaryNiche = useDeferredValue(baseCard?.niche ?? null)
+  const deferredMinPrice = useDeferredValue(minPrice)
+  const deferredFeaturedItems = useDeferredValue(featuredItems)
+  const deferredThemeTypes = useDeferredValue(themeTypes)
+  const deferredAudienceProfiles = useDeferredValue(audienceProfiles)
+  const deferredCollaborationNiches = useDeferredValue(collaborationNiches)
+  const deferredDeliverables = useDeferredValue(deliverables)
+  const deferredPastCollaborations = useDeferredValue(pastCollaborations)
+  const deferredPreviewContact = useDeferredValue(previewContact)
 
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
@@ -5502,18 +5515,18 @@ export default function CreatorCardPage() {
                     creatorCard: {
                       ...(previewData.creatorCard ?? {}),
                       profileImageUrl: currentAvatarSrc,
-                      displayName: displayName,
-                      username: displayUsername || null,
-                      aboutText: baseCard?.audience ?? null,
-                      primaryNiche: baseCard?.niche ?? null,
-                      minPrice: minPrice ?? null,
-                      contact: previewContact,
-                      featuredItems: featuredItems,
-                      themeTypes: themeTypes,
-                      audienceProfiles: audienceProfiles,
-                      collaborationNiches: collaborationNiches,
-                      deliverables: deliverables,
-                      pastCollaborations: pastCollaborations,
+                      displayName: deferredDisplayName,
+                      username: deferredUsername || null,
+                      aboutText: deferredAboutText,
+                      primaryNiche: deferredPrimaryNiche,
+                      minPrice: deferredMinPrice ?? null,
+                      contact: deferredPreviewContact,
+                      featuredItems: deferredFeaturedItems,
+                      themeTypes: deferredThemeTypes,
+                      audienceProfiles: deferredAudienceProfiles,
+                      collaborationNiches: deferredCollaborationNiches,
+                      deliverables: deferredDeliverables,
+                      pastCollaborations: deferredPastCollaborations,
                     },
                   }}
                   username={displayUsername || undefined}
