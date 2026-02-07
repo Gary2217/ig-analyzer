@@ -282,7 +282,7 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
     followerCount: 0,
     engagementRate: null,
     isVerified: false,
-    profileUrl: isPublic ? `${localePrefix}/card/${id}` : `${localePrefix}/creator-card`,
+    profileUrl: isPublic ? `${localePrefix}/card/${id}` : `${localePrefix}/creator-card/view/${id}`,
   }
 }
 
