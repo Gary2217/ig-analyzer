@@ -9,7 +9,10 @@ import { useI18n } from "./locale-provider"
 const LOCALES: Locale[] = ["zh-TW", "en"]
 
 function setLocaleCookie(locale: Locale) {
-  document.cookie = `locale=${locale}; path=/; max-age=${60 * 60 * 24 * 365}`
+  const maxAge = 60 * 60 * 24 * 365
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; secure" : ""
+  document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=${maxAge}; samesite=lax${secure}`
+  document.cookie = `locale=${locale}; path=/; max-age=${maxAge}; samesite=lax${secure}`
 }
 
 export default function LocaleSwitcher() {
@@ -20,7 +23,7 @@ export default function LocaleSwitcher() {
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   const parts = pathname.split("/").filter(Boolean)
-  const current = (parts[0] === "zh-TW" || parts[0] === "en" ? parts[0] : "en") as Locale
+  const current = (parts[0] === "zh-TW" || parts[0] === "en" ? parts[0] : "zh-TW") as Locale
   const rest = parts[0] === "zh-TW" || parts[0] === "en" ? parts.slice(1) : parts
   const restPath = rest.length ? `/${rest.join("/")}` : ""
 
@@ -47,7 +50,8 @@ export default function LocaleSwitcher() {
     const pathWithoutLocale = restPath || "/"
 
     const origin = typeof window !== "undefined" ? window.location.origin : ""
-    const destUrl = `${origin}/${next}${pathWithoutLocale}${qs ? `?${qs}` : ""}`
+    const hash = typeof window !== "undefined" ? window.location.hash : ""
+    const destUrl = `${origin}/${next}${pathWithoutLocale}${qs ? `?${qs}` : ""}${hash || ""}`
 
     if (typeof window !== "undefined") {
       window.location.assign(destUrl)

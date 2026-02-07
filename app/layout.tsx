@@ -41,7 +41,7 @@ export default async function RootLayout({
   const headerLocale = hdrs.get('x-locale');
   const cookieStore = await cookies();
   const cookieLocale = cookieStore.get('locale')?.value;
-  const locale = headerLocale || cookieLocale || 'en';
+  const locale = headerLocale || cookieLocale || 'zh-TW';
   
   return (
     <html lang={locale} className="dark" style={{ colorScheme: "dark" }}>

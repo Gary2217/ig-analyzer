@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const SUPPORTED = ["zh-TW", "en", "ja"] as const
+const SUPPORTED = ["zh-TW", "en"] as const
 type SupportedLocale = (typeof SUPPORTED)[number]
 
 function isSupportedLocale(v: string): v is SupportedLocale {
@@ -13,30 +13,19 @@ function shouldSkip(pathname: string) {
     pathname.startsWith("/api") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
-    pathname === "/sitemap.xml"
+    pathname === "/sitemap.xml" ||
+    /\.[a-z0-9]+$/i.test(pathname)
   )
 }
 
 function detectLocale(req: NextRequest): SupportedLocale {
-  // 1) cookie
+  const cookieNext = req.cookies.get("NEXT_LOCALE")?.value
+  if (cookieNext && isSupportedLocale(cookieNext)) return cookieNext
+
   const cookieLocale = req.cookies.get("locale")?.value
   if (cookieLocale && isSupportedLocale(cookieLocale)) return cookieLocale
 
-  // 2) geo header (若平台有提供)
-  const country =
-    req.headers.get("x-vercel-ip-country") ||
-    req.headers.get("cf-ipcountry") ||
-    ""
-  if (["TW", "HK", "MO"].includes(country)) return "zh-TW"
-  if (country === "JP") return "ja"
-
-  // 3) accept-language
-  const al = (req.headers.get("accept-language") || "").toLowerCase()
-  if (al.includes("zh-hant") || al.includes("zh-tw") || al.includes("zh-hk")) return "zh-TW"
-  if (al.includes("ja")) return "ja"
-
-  // 4) fallback
-  return "en"
+  return "zh-TW"
 }
 
 export default function proxy(req: NextRequest) {
@@ -44,10 +33,12 @@ export default function proxy(req: NextRequest) {
   if (shouldSkip(pathname)) return NextResponse.next()
 
   if (pathname === "/") {
+    const locale = detectLocale(req)
     const url = req.nextUrl.clone()
-    url.pathname = "/en"
+    url.pathname = `/${locale}`
     const res = NextResponse.redirect(url)
-    res.cookies.set("locale", "en", { path: "/", maxAge: 60 * 60 * 24 * 365 })
+    res.cookies.set("NEXT_LOCALE", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
+    res.cookies.set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
     return res
   }
 
@@ -64,20 +55,25 @@ export default function proxy(req: NextRequest) {
       },
     })
     
-    // Set locale cookie for persistence
-    const currentLocale = req.cookies.get('locale')?.value
+    const currentNext = req.cookies.get("NEXT_LOCALE")?.value
+    if (currentNext !== firstSeg) {
+      res.cookies.set("NEXT_LOCALE", firstSeg, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
+    }
+    const currentLocale = req.cookies.get("locale")?.value
     if (currentLocale !== firstSeg) {
-      res.cookies.set('locale', firstSeg, { path: '/', maxAge: 60 * 60 * 24 * 365 })
+      res.cookies.set("locale", firstSeg, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
     }
     return res
   }
 
   // 沒有 locale prefix → 導向 /{locale}{pathname}
+  const locale = detectLocale(req)
   const url = req.nextUrl.clone()
-  url.pathname = `/en${pathname}`
+  url.pathname = `/${locale}${pathname}`
   url.search = search
   const res = NextResponse.redirect(url)
-  res.cookies.set("locale", "en", { path: "/", maxAge: 60 * 60 * 24 * 365 })
+  res.cookies.set("NEXT_LOCALE", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
+  res.cookies.set("locale", locale, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" })
   return res
 }
 
