@@ -106,8 +106,39 @@ function isRecord(val: unknown): val is Record<string, unknown> {
 }
 
 function Skeleton({ className }: { className?: string }) {
-  return <div className={"animate-pulse rounded-md bg-white/5 " + (className || "")} />
+  return (
+    <div 
+      className={"animate-shimmer rounded-md bg-gradient-to-r from-white/15 via-white/35 to-white/15 " + (className || "")}
+      style={{
+        backgroundSize: '200% 100%',
+        animationDuration: '1.2s',
+        animationTimingFunction: 'ease-in-out',
+      }}
+    />
+  )
 }
+
+const shimmerStyles = `
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes shimmerFade {
+    0% { opacity: 0.35; }
+    50% { opacity: 0.65; }
+    100% { opacity: 0.35; }
+  }
+  .animate-shimmer {
+    animation: shimmer 1.2s ease-in-out infinite, shimmerFade 1.2s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-shimmer {
+      animation: none;
+      opacity: 0.5;
+      background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.05) 100%);
+    }
+  }
+`
 
 function asNumber(v: unknown): number | undefined {
   return typeof v === "number" ? v : undefined
@@ -1144,6 +1175,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const [trendFetchedAt, setTrendFetchedAt] = useState<number | null>(null)
   const [trendHasNewDay, setTrendHasNewDay] = useState(false)
   const [trendNeedsConnectHint, setTrendNeedsConnectHint] = useState(false)
+  const [manualRefreshOverlay, setManualRefreshOverlay] = useState(false)
+  const hasSeenTrendLoadingRef = useRef(false)
+  const manualRefreshFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const manualRefreshOverlayRef = useRef(false)
+  const trendLoadingRef = useRef(false)
 
   const LS_COMPARE_ENABLED = "results:trendCompareEnabled"
   const LS_COMPARE_DAYS = "results:trendCompareDays"
@@ -1157,6 +1193,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       return false
     }
   })
+  const [isCompareLoading, setIsCompareLoading] = useState(false)
   const [compareRangeDays, setCompareRangeDays] = useState<90 | 60 | 30 | 14 | 7>(() => {
     try {
       if (typeof window === "undefined") return 30
@@ -1189,6 +1226,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       isMountedRef.current = false
       clearRangeSwitchTimeout()
       clearRangeOverlayErrorTimer()
+      if (manualRefreshFallbackTimerRef.current) {
+        clearTimeout(manualRefreshFallbackTimerRef.current)
+        manualRefreshFallbackTimerRef.current = null
+      }
       if (prefetchCleanupRef.current) {
         prefetchCleanupRef.current()
         prefetchCleanupRef.current = null
@@ -1482,8 +1523,32 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const hasCommittedFollowers = Array.isArray(followersSeriesValues) && followersSeriesValues.length > 0
   const isMetricFollowers = focusedAccountTrendMetric === "followers"
   const hasCommittedSeriesForSelectedMetric = isMetricFollowers ? hasCommittedFollowers : hasCommittedTrend
-  const isLoadingOverlay = Boolean(showRangeOverlay) || Boolean(isChangingRange) || Boolean(trendFetchStatus.loading)
+  const isLoadingOverlay = Boolean(showRangeOverlay) || Boolean(isChangingRange) || Boolean(trendFetchStatus.loading) || Boolean(manualRefreshOverlay)
   const shouldShowEmptyState = !isLoadingOverlay && !hasCommittedSeriesForSelectedMetric
+
+  useEffect(() => {
+    manualRefreshOverlayRef.current = manualRefreshOverlay
+  }, [manualRefreshOverlay])
+
+  useEffect(() => {
+    trendLoadingRef.current = trendFetchStatus.loading
+  }, [trendFetchStatus.loading])
+
+  useEffect(() => {
+    if (!manualRefreshOverlay) return
+    if (trendFetchStatus.loading) {
+      hasSeenTrendLoadingRef.current = true
+      return
+    }
+
+    if (hasSeenTrendLoadingRef.current) {
+      setManualRefreshOverlay(false)
+      if (manualRefreshFallbackTimerRef.current) {
+        clearTimeout(manualRefreshFallbackTimerRef.current)
+        manualRefreshFallbackTimerRef.current = null
+      }
+    }
+  }, [manualRefreshOverlay, trendFetchStatus.loading])
 
   // Stable lengths for useEffect deps (avoid conditional/spread deps changing array size)
   const igRecentLen = isRecord(igMe) && Array.isArray(igMe.recent_media) ? igMe.recent_media.length : 0
@@ -5066,6 +5131,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
   return (
     <>
+      <style jsx>{shimmerStyles}</style>
       <ResultsDebugPanel
         refreshDebug={refreshDebug}
         orchestratorDebug={{
@@ -5805,6 +5871,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   setIsChangingRange(true)
                                   setShowRangeOverlay(true)
                                   setRangeOverlayError(false)
+                                  setSelectedTrendRangeDays(d)
                                 })
 
                                 triggerPrefetchCommonRanges()
@@ -5832,7 +5899,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   // Arm safety timeout
                                   armRangeSwitchTimeout(requestId)
 
-                                  setSelectedTrendRangeDays(d)
                                   if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
                                     applyCachedTrendSeriesDirect({ days: d, cached })
                                   } else {
@@ -5842,6 +5908,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                               }}
                               className={
                                 `inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ` +
+                                `min-h-[44px] ` +
                                 `focus:outline-none focus:ring-2 focus:ring-white/20 focus:ring-offset-0 ` +
                                 (active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/6")
                               }
@@ -5862,21 +5929,40 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       <button
                         type="button"
                         aria-pressed={compareEnabled}
+                        aria-busy={isCompareLoading}
+                        disabled={isCompareLoading}
                         onClick={() => {
+                          if (isCompareLoading) return
+
+                          setIsCompareLoading(true)
                           setCompareEnabled((v) => !v)
-                          // Auto-open panel when enabling compare on mobile
+                          
                           if (!compareEnabled) {
                             setComparePanelOpen(true)
                           }
+
+                          requestAnimationFrame(() => {
+                            if (!isMountedRef.current) return
+                            setIsCompareLoading(false)
+                          })
                         }}
                         className={
-                          "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors min-h-[36px] whitespace-nowrap " +
-                          (compareEnabled
-                            ? "border-white/20 bg-white/10 text-white shadow-sm"
-                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/8")
+                          "inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-sm font-semibold transition-all min-h-[44px] whitespace-nowrap " +
+                          (isCompareLoading
+                            ? "border-white/20 bg-white/8 text-white/70 cursor-not-allowed"
+                            : compareEnabled
+                            ? "border-white/20 bg-white/10 text-white shadow-sm hover:bg-white/15"
+                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/8 hover:text-white/90")
                         }
                       >
-                        {isZh ? "比較" : "Compare"}
+                        {isCompareLoading ? (
+                          <>
+                            <span className="h-3 w-3 rounded-full border border-white/30 border-t-white animate-spin mr-2" />
+                            {isZh ? "處理中" : "Loading"}
+                          </>
+                        ) : (
+                          isZh ? "比較" : "Compare"
+                        )}
                       </button>
                       
                       {/* Helper text when compare is enabled */}
@@ -6691,10 +6777,25 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                 <Button
                                   type="button"
                                   onClick={() => {
-                                    // Use existing refresh pattern
+                                    if (isLoadingOverlay) return
+                                    setManualRefreshOverlay(true)
+                                    manualRefreshOverlayRef.current = true
+                                    hasSeenTrendLoadingRef.current = false
+                                    if (manualRefreshFallbackTimerRef.current) {
+                                      clearTimeout(manualRefreshFallbackTimerRef.current)
+                                      manualRefreshFallbackTimerRef.current = null
+                                    }
+                                    manualRefreshFallbackTimerRef.current = setTimeout(() => {
+                                      if (!isMountedRef.current) return
+                                      if (!manualRefreshOverlayRef.current) return
+                                      if (trendLoadingRef.current) return
+                                      if (hasSeenTrendLoadingRef.current) return
+                                      setManualRefreshOverlay(false)
+                                      manualRefreshFallbackTimerRef.current = null
+                                    }, 2000)
                                     fireRefresh("manual")
                                   }}
-                                  disabled={!isConnectedInstagram}
+                                  disabled={!isConnectedInstagram || isLoadingOverlay}
                                   className="h-9 px-4 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 shadow-md shadow-cyan-500/20 hover:shadow-cyan-400/30 border border-white/10 w-full sm:w-auto shrink-0"
                                 >
                                   {isZh ? "重新整理" : "Refresh"}
@@ -6708,7 +6809,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                           </div>
                         </div>
                       ) : (
-                        <div className="w-full mt-2 relative min-w-0">
+                        <div className="w-full mt-2 relative min-w-0 overflow-hidden rounded-xl">
                           {/* Loading skeleton overlay */}
                           {isLoadingOverlay && (
                             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/5 backdrop-blur-[0.5px] rounded-xl pointer-events-none">
@@ -6727,7 +6828,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                               )}
                             </div>
                           )}
-                          <div className="h-[220px] sm:h-[280px] lg:h-[320px] w-full">
+                          <div className={"h-[220px] sm:h-[280px] lg:h-[320px] w-full transition-opacity " + (isLoadingOverlay ? "opacity-60" : "opacity-100")}>
                             <svg
                               viewBox={`0 0 ${w} ${h}`}
                               className="h-full w-full"
