@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createHash } from "crypto"
-import { getMeState } from "@/app/api/auth/instagram/me/route"
+import { getMeState } from "@/app/lib/server/instagramMeResolver"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
