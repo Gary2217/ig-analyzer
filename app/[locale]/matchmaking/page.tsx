@@ -125,7 +125,7 @@ async function fetchMyCreatorCardPublicSafe(localePrefix: string): Promise<Creat
       followerCount: 0,
       engagementRate: null,
       isVerified: false,
-      profileUrl: isPublic ? `${localePrefix}/card/${data.id}` : `${localePrefix}/creator-card/view/${data.id}`,
+      profileUrl: `${localePrefix}/creator-card/view`,
     }
   } catch {
     return null
