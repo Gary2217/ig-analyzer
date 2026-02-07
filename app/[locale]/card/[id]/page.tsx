@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import type { Metadata } from "next"
 import { createServiceClient } from "@/lib/supabase/server"
 import { PublicCardClient } from "./PublicCardClient"
 import { PublicCardErrorState } from "./PublicCardErrorState"
@@ -13,6 +14,186 @@ interface PublicCardPageProps {
     locale: string
     id: string
   }>
+}
+
+function getSiteOrigin() {
+  const fromPublic = (process.env.NEXT_PUBLIC_SITE_URL || "").trim()
+  if (fromPublic && fromPublic.startsWith("http")) return fromPublic.replace(/\/$/, "")
+
+  const vercelUrl = (process.env.VERCEL_URL || "").trim()
+  if (vercelUrl) return `https://${vercelUrl}`
+
+  return "http://localhost:3000"
+}
+
+function toAbsoluteUrl(origin: string, maybeRelative: string | null | undefined) {
+  const s = String(maybeRelative || "").trim()
+  if (!s) return null
+  if (s.startsWith("http://") || s.startsWith("https://")) return s
+  if (s.startsWith("//")) return `https:${s}`
+  if (s.startsWith("/")) return `${origin}${s}`
+  return `${origin}/${s}`
+}
+
+function sanitizeOneLine(s: string) {
+  return String(s)
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function clampDescription(s: string, max = 160) {
+  const one = sanitizeOneLine(s)
+  if (one.length <= max) return one
+  return `${one.slice(0, Math.max(0, max - 1)).trimEnd()}…`
+}
+
+function pickFirstFeaturedImage(normalized: ReturnType<typeof normalizeCreatorCardForPreview>) {
+  const items = Array.isArray(normalized.featuredItems) ? normalized.featuredItems : []
+  for (const it of items) {
+    const u = (it as any)?.thumbnailUrl || (it as any)?.thumbnail_url
+    if (typeof u === "string" && u.trim()) return u.trim()
+  }
+  return null
+}
+
+function buildLocalizedSeo(
+  locale: "zh-TW" | "en",
+  fields: {
+    displayName: string
+    username: string | null
+    primaryNiche: string | null
+    aboutText: string | null
+  },
+) {
+  const name = sanitizeOneLine(fields.displayName || (locale === "zh-TW" ? "IG 創作者" : "Instagram Creator"))
+  const niche = fields.primaryNiche ? sanitizeOneLine(fields.primaryNiche) : ""
+
+  const title =
+    locale === "zh-TW"
+      ? `${name}｜IG 創作者名片`
+      : `${name} | Instagram Creator Card`
+
+  const descBase =
+    locale === "zh-TW"
+      ? niche
+        ? `${name}，專注於 ${niche}。查看作品、合作內容與創作者資訊。`
+        : `${name} 的 IG 創作者名片。查看作品、合作內容與創作者資訊。`
+      : niche
+        ? `${name} is an Instagram creator focused on ${niche}. View profile, work, and collaborations.`
+        : `${name}'s Instagram creator card. View profile, work, and collaborations.`
+
+  const about = fields.aboutText ? sanitizeOneLine(fields.aboutText) : ""
+  const description = clampDescription(about && about.length >= 24 ? about : descBase, 160)
+
+  const alt =
+    locale === "zh-TW"
+      ? `${name} 的 IG 創作者名片`
+      : `${name}'s Instagram creator card`
+
+  return { title, description, alt }
+}
+
+export async function generateMetadata({ params }: PublicCardPageProps): Promise<Metadata> {
+  const resolvedParams = await params
+  const locale: "zh-TW" | "en" = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
+  const id = resolvedParams.id
+
+  const origin = getSiteOrigin()
+  const canonicalPath = `/${locale}/card/${encodeURIComponent(id)}`
+  const canonicalUrl = `${origin}${canonicalPath}`
+
+  const generic = buildLocalizedSeo(locale, {
+    displayName: locale === "zh-TW" ? "IG 創作者" : "Instagram Creator",
+    username: null,
+    primaryNiche: null,
+    aboutText: null,
+  })
+
+  try {
+    const viaApi = await fetchCreatorCardViaPublicEndpoint(id)
+    const cardRes = viaApi.data ? viaApi : await fetchCreatorCard(id)
+    const card = cardRes.data
+
+    if (!card) {
+      return {
+        title: generic.title,
+        description: generic.description,
+        alternates: { canonical: canonicalUrl },
+        openGraph: {
+          title: generic.title,
+          description: generic.description,
+          url: canonicalUrl,
+          type: "website",
+        },
+        twitter: {
+          card: "summary_large_image",
+          title: generic.title,
+          description: generic.description,
+        },
+      }
+    }
+
+    const normalized = normalizeCreatorCardForPreview(card)
+    const seo = buildLocalizedSeo(locale, {
+      displayName: normalized.displayName || (locale === "zh-TW" ? "IG 創作者" : "Instagram Creator"),
+      username: normalized.username ? String(normalized.username) : null,
+      primaryNiche: normalized.primaryNiche ? String(normalized.primaryNiche) : null,
+      aboutText: normalized.aboutText ? String(normalized.aboutText) : null,
+    })
+
+    const profileImg = normalized.profileImageUrl ? String(normalized.profileImageUrl) : null
+    const featuredImg = pickFirstFeaturedImage(normalized)
+    const imageAbs = toAbsoluteUrl(origin, profileImg || featuredImg)
+
+    const handleForTitle = normalized.username ? `@${sanitizeOneLine(String(normalized.username))}` : ""
+    const title = handleForTitle ? `${seo.title} (${handleForTitle})` : seo.title
+
+    return {
+      title,
+      description: seo.description,
+      alternates: { canonical: canonicalUrl },
+      openGraph: {
+        title,
+        description: seo.description,
+        url: canonicalUrl,
+        type: "profile",
+        ...(imageAbs
+          ? {
+              images: [
+                {
+                  url: imageAbs,
+                  alt: seo.alt,
+                },
+              ],
+            }
+          : null),
+      },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description: seo.description,
+        ...(imageAbs ? { images: [imageAbs] } : null),
+      },
+    }
+  } catch {
+    return {
+      title: generic.title,
+      description: generic.description,
+      alternates: { canonical: canonicalUrl },
+      openGraph: {
+        title: generic.title,
+        description: generic.description,
+        url: canonicalUrl,
+        type: "website",
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: generic.title,
+        description: generic.description,
+      },
+    }
+  }
 }
 
 async function fetchCreatorCardViaPublicEndpoint(id: string): Promise<FetchResult> {
