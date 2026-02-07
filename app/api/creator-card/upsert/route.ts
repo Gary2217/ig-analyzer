@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
+import { getMeState } from "@/app/lib/server/instagramMeResolver"
 
 const upsertRateBuckets = new Map<string, { resetAt: number; count: number }>()
 
@@ -16,6 +17,11 @@ function makeRequestId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+function getOrCreateRequestId(req: Request) {
+  const existing = (req.headers.get("x-request-id") ?? "").trim()
+  return existing ? existing : makeRequestId()
+}
+
 function withRequestId(res: NextResponse, requestId: string) {
   try {
     res.headers.set("x-request-id", requestId)
@@ -28,8 +34,9 @@ function hasOwn(obj: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(obj, key)
 }
 
-function jsonWithRequestId(payload: any, init: { status?: number } | undefined, requestId: string) {
-  return withRequestId(NextResponse.json(payload, init), requestId)
+function jsonWithRequestId(payload: any, init: { status?: number; headers?: HeadersInit } | undefined, requestId: string) {
+  const res = NextResponse.json(payload, { status: init?.status, headers: init?.headers })
+  return withRequestId(res, requestId)
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -189,25 +196,10 @@ function computeCompletion(payload: unknown) {
   return Math.round((done / checks.length) * 100)
 }
 
-async function getIGMe(req: Request) {
-  const cookie = req.headers.get("cookie") || ""
-  const requestOrigin = new URL(req.url).origin
-  const host = new URL(req.url).host
-  const isTunnelHost = host.includes("trycloudflare.com") || host.includes("cloudflare.com")
-  const internalOrigin =
-    process.env.NODE_ENV !== "production" && isTunnelHost ? "http://localhost:3000" : requestOrigin
-
-  const res = await fetch(`${internalOrigin}/api/auth/instagram/me`, {
-    headers: { cookie },
-    cache: "no-store",
-  })
-  if (!res.ok) return null
-  return await res.json().catch(() => null)
-}
-
 export async function POST(req: Request) {
+  const requestId = getOrCreateRequestId(req)
   try {
-    const requestId = makeRequestId()
+    const t0 = Date.now()
     const ccDebug = isCcDebugEnabled(req)
     const ccDebugSrc = ccDebugSource(req)
 
@@ -247,17 +239,20 @@ export async function POST(req: Request) {
       (c.get("ig_ig_id")?.value ?? "").trim()
     )
 
-    const me = await getIGMe(req)
-    const meObj = me && typeof me === "object" ? (me as Record<string, unknown>) : null
-    const meOk = meObj?.ok === true
-    const meIgUserId = typeof meObj?.igUserId === "string" ? String(meObj.igUserId) : null
+    const tMeStart = Date.now()
+    const meState = await getMeState(req)
+    const tMeMs = Date.now() - tMeStart
+
+    const meOk = Boolean((meState as any)?.connected)
+    const meIgUserId = typeof (meState as any)?.igUserId === "string" ? String((meState as any).igUserId) : null
     const igUserId = (cookieIgUserId || meIgUserId || "").trim() || null
-    const igUsername = meObj?.username ? String(meObj.username) : null
+    const igUsername = (meState as any)?.username ? String((meState as any).username) : null
     const igUserIdStr = typeof igUserId === "string" ? igUserId.trim() : ""
     if (!igUserIdStr) {
+      const durationMs = Date.now() - t0
       return jsonWithRequestId(
         { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
-        { status: 403 },
+        { status: 403, headers: { "Server-Timing": `creator_card_upsert;dur=${durationMs}, ig_me_resolve;dur=${tMeMs}` } },
         requestId,
       )
     }
@@ -273,9 +268,10 @@ export async function POST(req: Request) {
     // If the IG /me endpoint does not confirm ok, treat as not connected.
     // This prevents treating stale cookies as authenticated.
     if (!meOk) {
+      const durationMs = Date.now() - t0
       return jsonWithRequestId(
         { ok: false, error: "not_connected", message: "ig_not_connected_or_expired" },
-        { status: 403 },
+        { status: 403, headers: { "Server-Timing": `creator_card_upsert;dur=${durationMs}, ig_me_resolve;dur=${tMeMs}` } },
         requestId,
       )
     }
@@ -334,6 +330,7 @@ export async function POST(req: Request) {
     // Best-effort schema guard: do not fail if query permissions are limited.
     const schemaGuard = await checkMinPriceColumnBestEffort(igUserIdStr)
     if (!schemaGuard.ok && schemaGuard.missing) {
+      const durationMs = Date.now() - t0
       console.error("[creator-card/upsert] schema guard", { message: schemaGuard.message })
       return jsonWithRequestId(
         {
@@ -344,14 +341,17 @@ export async function POST(req: Request) {
           details: null,
           hint: null,
         },
-        { status: 500 },
+        { status: 500, headers: { "Server-Timing": `creator_card_upsert;dur=${durationMs}, ig_me_resolve;dur=${tMeMs}` } },
         requestId,
       )
     }
 
     const bodyUnknown: unknown = await req.json().catch(() => null)
     const body = asRecord(bodyUnknown)
-    if (!body) return jsonWithRequestId({ ok: false, error: "bad_json" }, { status: 400 }, requestId)
+    if (!body) {
+      const durationMs = Date.now() - t0
+      return jsonWithRequestId({ ok: false, error: "bad_json" }, { status: 400, headers: { "Server-Timing": `creator_card_upsert;dur=${durationMs}, ig_me_resolve;dur=${tMeMs}` } }, requestId)
+    }
 
     const hasHandleKey = hasOwn(body, "handle")
     const handleRaw = hasHandleKey && typeof body.handle === "string" ? body.handle.trim().slice(0, 64) : ""
@@ -780,7 +780,14 @@ export async function POST(req: Request) {
     }
 
     if (error) {
-      return withRequestId(toSupabaseErrorResponse(error, "upsert"), requestId)
+      const durationMs = Date.now() - t0
+      const res = withRequestId(toSupabaseErrorResponse(error, "upsert"), requestId)
+      try {
+        res.headers.set("Server-Timing", `creator_card_upsert;dur=${durationMs}, ig_me_resolve;dur=${tMeMs}`)
+      } catch {
+        // best-effort
+      }
+      return res
     }
 
     // TEMP DEBUG: Log returned row's profile_image_url (safe, no full base64)
@@ -807,22 +814,20 @@ export async function POST(req: Request) {
     // Map snake_case DB column to camelCase for client
     const featuredItems = Array.isArray(dataObj?.featured_items) ? dataObj.featured_items : []
 
-    return withRequestId(
-      NextResponse.json({
+    const durationMs = Date.now() - t0
+
+    return jsonWithRequestId(
+      {
         ok: true,
-        card: data && typeof data === "object" ? { 
-          ...(data as Record<string, unknown>), 
-          featuredItems,  // Add camelCase alias for client
-          completion_pct: completionPct 
-        } : data,
+        card: data ? { ...data, featuredItems } : { featuredItems },
         completionPct,
-      }),
+      },
+      { status: 200, headers: { "Server-Timing": `creator_card_upsert;dur=${durationMs}, ig_me_resolve;dur=${tMeMs}` } },
       requestId,
     )
   } catch (e: unknown) {
     const errObj = asRecord(e)
     const msg = typeof errObj?.message === "string" ? errObj.message : "unknown"
-    const requestId = makeRequestId()
     console.error("[creator-card/upsert] unexpected error", { requestId, message: msg })
     if (msg.includes("Invalid API key")) {
       return jsonWithRequestId({ ok: false, error: "supabase_invalid_key" }, { status: 500 }, requestId)

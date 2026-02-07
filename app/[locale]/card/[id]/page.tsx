@@ -15,6 +15,47 @@ interface PublicCardPageProps {
   }>
 }
 
+async function fetchCreatorCardViaPublicEndpoint(id: string): Promise<FetchResult> {
+  try {
+    const base = process.env.NEXT_PUBLIC_SITE_URL || ""
+    const origin = base && base.startsWith("http") ? base : null
+    const url = new URL("/api/creator-card/public-card", origin ?? "http://localhost:3000")
+    url.searchParams.set("id", id)
+
+    const res = await fetch(url.toString(), { method: "GET", cache: "no-store" })
+    const json: any = await res.json().catch(() => null)
+    if (!res.ok || !json?.ok || !json?.card) {
+      return { data: null, errorType: res.status === 404 ? "not_found" : "service_error" }
+    }
+
+    // Adapt to CreatorCardData-ish shape expected by normalizer
+    const c = json.card
+    const data: any = {
+      id: String(c.cardId || c.id || id),
+      ig_username: typeof c.username === "string" ? c.username : null,
+      display_name: typeof c.displayName === "string" ? c.displayName : null,
+      niche: typeof c.primaryNiche === "string" ? c.primaryNiche : null,
+      primary_niche: typeof c.primaryNiche === "string" ? c.primaryNiche : null,
+      profile_image_url: typeof c.profileImageUrl === "string" ? c.profileImageUrl : null,
+      avatar_url: typeof c.profileImageUrl === "string" ? c.profileImageUrl : null,
+      is_public: true,
+      about_text: typeof c.aboutText === "string" ? c.aboutText : null,
+      audience: typeof c.aboutText === "string" ? c.aboutText : null,
+      theme_types: Array.isArray(c.themeTypes) ? c.themeTypes : null,
+      audience_profiles: Array.isArray(c.audienceProfiles) ? c.audienceProfiles : null,
+      deliverables: Array.isArray(c.deliverables) ? c.deliverables : null,
+      collaboration_niches: Array.isArray(c.collaborationNiches) ? c.collaborationNiches : null,
+      past_collaborations: Array.isArray(c.pastCollaborations) ? c.pastCollaborations : null,
+      portfolio: Array.isArray(c.featuredItems) ? c.featuredItems : null,
+      contact: null,
+    }
+
+    return { data }
+  } catch {
+    return { data: null, errorType: "service_error" }
+  }
+}
+
 interface CreatorCardData {
   id: string
   ig_username: string | null
@@ -199,7 +240,8 @@ export default async function PublicCardPage({ params }: PublicCardPageProps) {
   const locale = resolvedParams.locale === "zh-TW" ? "zh-TW" : "en"
   const id = resolvedParams.id
 
-  const { data: card, errorType } = await fetchCreatorCard(id)
+  const viaApi = await fetchCreatorCardViaPublicEndpoint(id)
+  const { data: card, errorType } = viaApi.data ? viaApi : await fetchCreatorCard(id)
 
   // Show friendly error UI instead of generic 404
   if (!card) {
