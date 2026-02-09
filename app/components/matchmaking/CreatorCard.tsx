@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
@@ -94,6 +94,7 @@ export function CreatorCard({
   onRetryStats?: () => void
   selectedBudgetMax?: number | null
 }) {
+  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const copy = getCopy(locale)
@@ -450,12 +451,18 @@ export function CreatorCard({
 
       <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3 relative z-20 pointer-events-auto">
         {isPinned ? (
-          <Link
-            href={href}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              if (!href) return
+              router.push(href)
+            }}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
           >
             <span className="min-w-0 truncate">{mm.ctaPreviewMyCard}</span>
-          </Link>
+          </button>
         ) : (
           <button
             type="button"
