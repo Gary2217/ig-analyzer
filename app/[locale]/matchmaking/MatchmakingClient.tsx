@@ -629,6 +629,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [])
 
   const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
+    const normalizeTagItem = (x: unknown): string => {
+      if (typeof x === "string") return x.trim()
+      if (!x || typeof x !== "object") return ""
+      const obj = x as any
+      const candidates = [obj.label, obj.value, obj.name, obj.title]
+      for (const c of candidates) {
+        if (typeof c === "string" && c.trim()) return c.trim()
+      }
+      return ""
+    }
+
     return cards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const tagCategories = (() => {
@@ -640,7 +651,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           []
         return Array.isArray(raw)
           ? raw
-              .map((x) => (typeof x === "string" ? x.trim() : ""))
+              .map(normalizeTagItem)
               .filter(Boolean)
               .slice(0, 30)
           : ([] as string[])
@@ -912,6 +923,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
     const topics = (meCard.category ? [meCard.category] : []).filter(Boolean)
     const tagCategories = (() => {
+      const normalizeTagItem = (x: unknown): string => {
+        if (typeof x === "string") return x.trim()
+        if (!x || typeof x !== "object") return ""
+        const obj = x as any
+        const candidates = [obj.label, obj.value, obj.name, obj.title]
+        for (const c of candidates) {
+          if (typeof c === "string" && c.trim()) return c.trim()
+        }
+        return ""
+      }
+
       const raw =
         (Array.isArray((meCard as any).collaborationNiches) ? (meCard as any).collaborationNiches : null) ??
         (Array.isArray((meCard as any).collaboration_niches) ? (meCard as any).collaboration_niches : null) ??
@@ -920,7 +942,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         []
       return Array.isArray(raw)
         ? raw
-            .map((x) => (typeof x === "string" ? x.trim() : ""))
+            .map(normalizeTagItem)
             .filter(Boolean)
             .slice(0, 30)
         : ([] as string[])
