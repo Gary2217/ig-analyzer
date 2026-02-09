@@ -998,6 +998,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return [...filler, ...real]
   }, [demoCards, finalCards, pinnedCreator])
 
+  const lowerDemoCards = useMemo((): CreatorCardData[] => {
+    // Re-introduce a demo-only grid below only when there are too few real creators.
+    if (finalCards.length >= 8) return []
+    const fillerCount = pinnedCreator ? 3 : 4
+    return demoCards.slice(fillerCount)
+  }, [demoCards, finalCards.length, pinnedCreator])
+
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
     if (budget === "custom") {
@@ -1296,6 +1303,31 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
             )
           })}
         </CreatorGrid>
+
+        {lowerDemoCards.length ? (
+          <>
+            <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-8">
+              <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.demoSectionTitle}</div>
+            </div>
+
+            <CreatorGrid>
+              {lowerDemoCards.map((c) => (
+                <MatchmakingCreatorCard
+                  key={c.id}
+                  creator={({ ...(c as CreatorCardData), creatorId: undefined } as CreatorCardData & {
+                    creatorId?: string
+                  })}
+                  locale={locale}
+                  isFav={false}
+                  onToggleFav={() => {}}
+                  statsLoading={false}
+                  statsError={false}
+                  selectedBudgetMax={selectedBudgetMax}
+                />
+              ))}
+            </CreatorGrid>
+          </>
+        ) : null}
       </div>
 
       <FavoritesDrawer
