@@ -54,4 +54,5 @@ export type CreatorCardData = {
   contactLine?: string
   href: string
   isDemo?: boolean
+  isPinned?: boolean
 }

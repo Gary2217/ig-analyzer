@@ -39,6 +39,7 @@ export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
   const [chipsExpanded, setChipsExpanded] = useState(false)
+  const [mobileExpanded, setMobileExpanded] = useState(false)
 
   const budgetLabelFor = (range: Exclude<BudgetRange, "any" | "custom">) => {
     const isZh = props.locale === "zh-TW"
@@ -79,12 +80,12 @@ export function FiltersBar(props: Props) {
   const hiddenCount = Math.max(0, chipOptions.length - visibleChips.length)
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
+    <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-6">
       <div className="flex flex-col gap-3">
         <div className="sticky top-[52px] sm:top-[72px] z-40 -mx-3 sm:mx-0 px-3 sm:px-0">
           <div className="rounded-2xl border border-white/10 bg-[#0b1220]/75 backdrop-blur-md">
             <div className="p-3 sm:p-4">
-              <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5 min-w-0">
                 <input
                   value={props.search}
                   onChange={(e) => props.onSearch(e.target.value)}
@@ -92,10 +93,19 @@ export function FiltersBar(props: Props) {
                   className="h-11 w-full sm:flex-1 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
                 />
 
+                <button
+                  type="button"
+                  onClick={() => setMobileExpanded((v) => !v)}
+                  className="h-11 w-full sm:hidden px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/85 hover:bg-white/10 whitespace-nowrap"
+                  aria-expanded={mobileExpanded}
+                >
+                  {mm.filtersButton}
+                </button>
+
                 <select
                   value={props.platform}
                   onChange={(e) => props.onPlatform(e.target.value as any)}
-                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[140px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[140px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 hidden sm:block"
                 >
                   {props.platformOptions.map((o) => (
                     <option key={o.value} value={o.value} className="bg-slate-900">
@@ -107,7 +117,7 @@ export function FiltersBar(props: Props) {
                 <select
                   value={props.budget}
                   onChange={(e) => props.onBudget(e.target.value as any)}
-                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[140px] max-w-full sm:max-w-none rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[140px] max-w-full sm:max-w-none rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 hidden sm:block"
                 >
                   {budgetOptions.map((o) => (
                     <option key={o.value} value={o.value} className="bg-slate-900">
@@ -119,7 +129,7 @@ export function FiltersBar(props: Props) {
                 <select
                   value={props.sort}
                   onChange={(e) => props.onSort(e.target.value as any)}
-                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[180px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
+                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[180px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 hidden sm:block"
                 >
                   <option value="best_match" className="bg-slate-900">
                     {mm.sortBestMatch}
@@ -139,6 +149,52 @@ export function FiltersBar(props: Props) {
                 >
                   {copy.common.favorites} ({props.favoritesCount})
                 </button>
+              </div>
+
+              <div className={mobileExpanded ? "mt-3 sm:mt-0" : "mt-0 sm:mt-0"}>
+                <div className={`${mobileExpanded ? "block" : "hidden"} sm:block`}>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                    <select
+                      value={props.platform}
+                      onChange={(e) => props.onPlatform(e.target.value as any)}
+                      className="h-11 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 sm:hidden"
+                    >
+                      {props.platformOptions.map((o) => (
+                        <option key={o.value} value={o.value} className="bg-slate-900">
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={props.budget}
+                      onChange={(e) => props.onBudget(e.target.value as any)}
+                      className="h-11 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 sm:hidden"
+                    >
+                      {budgetOptions.map((o) => (
+                        <option key={o.value} value={o.value} className="bg-slate-900">
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={props.sort}
+                      onChange={(e) => props.onSort(e.target.value as any)}
+                      className="h-11 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 sm:hidden"
+                    >
+                      <option value="best_match" className="bg-slate-900">
+                        {mm.sortBestMatch}
+                      </option>
+                      <option value="followers_desc" className="bg-slate-900">
+                        {mm.sortFollowersDesc}
+                      </option>
+                      <option value="er_desc" className="bg-slate-900">
+                        {mm.sortErDesc}
+                      </option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {props.sort === "best_match" ? (
@@ -168,7 +224,7 @@ export function FiltersBar(props: Props) {
                 ) : null}
               </div>
 
-              <div className="mt-2 flex flex-wrap gap-2 min-w-0">
+              <div className={`mt-2 flex flex-wrap gap-2 min-w-0 ${mobileExpanded ? "" : "hidden sm:flex"}`}>
                 {visibleChips.map((o) => {
                   const active = props.selectedTypes.includes(o.value)
                   return (

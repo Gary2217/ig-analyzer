@@ -632,17 +632,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [])
 
-  const cardsWithDemos = useMemo(() => {
-    const TARGET_TOTAL = 12
-    const existingIds = new Set(cards.map((c) => c.id))
-    const realCards = cards.filter((c) => !c.isDemo)
-    const missing = Math.min(3, Math.max(0, TARGET_TOTAL - realCards.length))
-    const demos = missing > 0 ? buildDemoCreators({ locale, existingIds, count: missing, seedBase: "matchmaking" }) : []
-    return [...realCards, ...demos]
-  }, [cards, locale])
+  const realCards = useMemo(() => cards.filter((c) => !c.isDemo), [cards])
 
   const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
-    return cardsWithDemos.map((c) => {
+    return realCards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
@@ -715,7 +708,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         isDemo: Boolean(c.isDemo),
       }
     })
-  }, [cardsWithDemos, statsVersion])
+  }, [realCards, statsVersion])
 
   const creatorFormatsById = useMemo(() => {
     const map = new Map<string, FormatKey[]>()
@@ -958,6 +951,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       },
       href: meCard.profileUrl,
       isDemo: Boolean((meCard as any).isDemo),
+      isPinned: true,
     }
   }, [meCard, statsVersion])
 
@@ -965,6 +959,33 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
     return pinnedCreator ? [pinnedCreator, ...rest] : rest
   }, [filtered, pinnedCreator])
+
+  const demoCards = useMemo((): CreatorCardData[] => {
+    const count = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 640px)").matches ? 3 : 6
+    const existingIds = new Set<string>([...finalCards.map((c) => c.id)])
+    return buildDemoCreators({ locale, existingIds, count, seedBase: "matchmaking:demo-row" }).map((c) => {
+      const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
+      const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
+      const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
+
+      return {
+        id: c.id,
+        name: c.displayName,
+        handle: undefined,
+        avatarUrl: c.avatarUrl,
+        topics: (c.category ? [c.category] : []).filter(Boolean),
+        platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
+        collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
+        deliverables,
+        stats: {
+          followers: typeof (c as any).followerCount === "number" ? (c as any).followerCount : undefined,
+          engagementRate: typeof (c as any).engagementRate === "number" ? (c as any).engagementRate : undefined,
+        },
+        href: "#",
+        isDemo: true,
+      }
+    })
+  }, [finalCards, locale])
 
   const debugOwnerLastOwnerCardIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1207,7 +1228,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
       <div className="pt-6 sm:pt-8">
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
+        <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-6">
           <div className="min-w-0">
             <h1 className="text-[clamp(20px,4.2vw,28px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
               {uiCopy.matchmaking.pageHeadline}
@@ -1259,7 +1280,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           statsUpdating={statsPrefetchRunning}
         />
 
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
+        <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-6 mt-4">
           <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
         </div>
 
@@ -1288,6 +1309,24 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               />
             )
           })}
+        </CreatorGrid>
+
+        <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-6 mt-8">
+          <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.demoSectionTitle}</div>
+        </div>
+        <CreatorGrid>
+          {demoCards.map((c) => (
+            <MatchmakingCreatorCard
+              key={c.id}
+              creator={c}
+              locale={locale}
+              isFav={false}
+              onToggleFav={() => {}}
+              statsLoading={false}
+              statsError={false}
+              selectedBudgetMax={selectedBudgetMax}
+            />
+          ))}
         </CreatorGrid>
       </div>
 
