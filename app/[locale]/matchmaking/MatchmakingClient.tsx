@@ -983,6 +983,21 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     })
   }, [finalCards, locale])
 
+  const renderCards = useMemo((): Array<CreatorCardData & { creatorId?: string }> => {
+    const pinned = pinnedCreator
+    const real = finalCards
+
+    const fillerCount = pinned ? 3 : 4
+    const filler = demoCards.slice(0, fillerCount).map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
+
+    if (pinned) {
+      const rest = real.filter((c) => c.id !== pinned.id)
+      return [pinned, ...filler, ...rest]
+    }
+
+    return [...filler, ...real]
+  }, [demoCards, finalCards, pinnedCreator])
+
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
     if (budget === "custom") {
@@ -1256,7 +1271,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         </div>
 
         <CreatorGrid>
-          {finalCards.map((c) => {
+          {renderCards.map((c) => {
             const creatorId = c.creatorId
             const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
             const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
@@ -1280,25 +1295,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               />
             )
           })}
-        </CreatorGrid>
-
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-8">
-          <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.demoSectionTitle}</div>
-        </div>
-
-        <CreatorGrid>
-          {demoCards.map((c) => (
-            <MatchmakingCreatorCard
-              key={c.id}
-              creator={c}
-              locale={locale}
-              isFav={false}
-              onToggleFav={() => {}}
-              statsLoading={false}
-              statsError={false}
-              selectedBudgetMax={selectedBudgetMax}
-            />
-          ))}
         </CreatorGrid>
       </div>
 
