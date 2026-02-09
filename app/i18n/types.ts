@@ -67,6 +67,8 @@ export type CopyDictionary = {
     sortEngagement: string
 
     myCardBadge: string
+    demoSectionTitle: string
+    demoBadge: string
 
     filtersButton: string
     profileNotSet: string

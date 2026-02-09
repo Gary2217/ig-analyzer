@@ -68,6 +68,8 @@ export const en: CopyDictionary = {
     sortEngagement: "Engagement Rate (High)",
 
     myCardBadge: "My Card",
+    demoSectionTitle: "Demo",
+    demoBadge: "Demo",
     myCardFirstToggle: "My card first",
 
     filtersButton: "Filters",

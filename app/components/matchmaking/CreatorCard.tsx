@@ -266,6 +266,102 @@ export function CreatorCard({
     return out
   })()
 
+  const CardBody = (
+    <>
+      <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
+        {creator.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={creator.avatarUrl}
+            alt={creator.name || ""}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-full bg-white/10" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+      </div>
+
+      <div className="p-3 sm:p-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-white/90 truncate min-w-0">{creator.name}</div>
+            {shouldShowHandle ? <div className="text-xs text-white/50 truncate min-w-0">@{creator.handle}</div> : null}
+
+            <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
+              {displayChips.length ? (
+                displayChips.map((c) => (
+                  <span
+                    key={c.key}
+                    className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
+                  >
+                    {c.label}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[11px] text-white/40">{mm.noTopics}</span>
+              )}
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.20),0_12px_30px_-18px_rgba(59,130,246,0.35)]">
+                <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-cyan-400/40 to-blue-500/30" />
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <div className="text-[11px] text-white/45 truncate min-w-0">{mm.labelFollowers}</div>
+                  {statsError && onRetryStats ? (
+                    <button
+                      type="button"
+                      onClick={onRetryStats}
+                      className="shrink-0 h-6 w-6 grid place-items-center rounded-md border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
+                      aria-label={mm.retryStatsAria}
+                      title={mm.retryStatsAria}
+                    >
+                      ↻
+                    </button>
+                  ) : null}
+                </div>
+                {statsLoading ? (
+                  <div className="mt-2 h-[22px] w-[110px] max-w-full rounded-md bg-white/10 animate-pulse" />
+                ) : (
+                  <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200/95 to-blue-100/90">
+                    {formatNumber(creator.stats?.followers)}
+                  </div>
+                )}
+              </div>
+
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(167,139,250,0.20),0_12px_30px_-18px_rgba(236,72,153,0.35)]">
+                <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-violet-400/40 to-fuchsia-500/30" />
+                <div className="text-[11px] text-white/45 truncate min-w-0">{mm.labelEngagement}</div>
+                {statsLoading ? (
+                  <div className="mt-2 h-[22px] w-[90px] max-w-full rounded-md bg-white/10 animate-pulse" />
+                ) : (
+                  <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-violet-200/95 to-fuchsia-100/90">
+                    {formatER(creator.stats?.engagementRate)}
+                  </div>
+                )}
+              </div>
+
+              {typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice) ? (
+                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.22),0_12px_30px_-18px_rgba(34,211,238,0.25)] sm:col-span-2">
+                  <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
+                  <div className="text-[11px] text-white/45 truncate min-w-0">{mm.budgetLabel}</div>
+                  <div className="mt-1 text-sm font-semibold text-white/85 tabular-nums whitespace-nowrap truncate min-w-0">
+                    {mm.minPriceFrom(formatNTD(creator.minPrice) ?? "")}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {showHighEngagement ? <div className="mt-2 text-[11px] text-white/55 truncate min-w-0">{mm.highEngagementLabel}</div> : null}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+
   return (
     <div
       className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full"
@@ -278,110 +374,28 @@ export function CreatorCard({
         </div>
       ) : null}
 
-      <Link href={href} className="block flex-1 relative z-0">
-        <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
-          {creator.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={creator.avatarUrl}
-              alt={creator.name || ""}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-14 h-14 rounded-full bg-white/10" />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-        </div>
-
-        <div className="p-3 sm:p-4 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-white/90 truncate min-w-0">{creator.name}</div>
-              {shouldShowHandle ? (
-                <div className="text-xs text-white/50 truncate min-w-0">@{creator.handle}</div>
-              ) : null}
-
-              <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
-                {displayChips.length ? (
-                  displayChips.map((c) => (
-                    <span
-                      key={c.key}
-                      className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
-                    >
-                      {c.label}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-[11px] text-white/40">{mm.noTopics}</span>
-                )}
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.20),0_12px_30px_-18px_rgba(59,130,246,0.35)]">
-                  <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-cyan-400/40 to-blue-500/30" />
-                  <div className="flex items-start justify-between gap-2 min-w-0">
-                    <div className="text-[11px] text-white/45 truncate min-w-0">{mm.labelFollowers}</div>
-                    {statsError && onRetryStats ? (
-                      <button
-                        type="button"
-                        onClick={onRetryStats}
-                        className="shrink-0 h-6 w-6 grid place-items-center rounded-md border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
-                        aria-label={mm.retryStatsAria}
-                        title={mm.retryStatsAria}
-                      >
-                        ↻
-                      </button>
-                    ) : null}
-                  </div>
-                  {statsLoading ? (
-                    <div className="mt-2 h-[22px] w-[110px] max-w-full rounded-md bg-white/10 animate-pulse" />
-                  ) : (
-                    <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200/95 to-blue-100/90">
-                      {formatNumber(creator.stats?.followers)}
-                    </div>
-                  )}
-                </div>
-
-                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(167,139,250,0.20),0_12px_30px_-18px_rgba(236,72,153,0.35)]">
-                  <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-violet-400/40 to-fuchsia-500/30" />
-                  <div className="text-[11px] text-white/45 truncate min-w-0">{mm.labelEngagement}</div>
-                  {statsLoading ? (
-                    <div className="mt-2 h-[22px] w-[90px] max-w-full rounded-md bg-white/10 animate-pulse" />
-                  ) : (
-                    <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-violet-200/95 to-fuchsia-100/90">
-                      {formatER(creator.stats?.engagementRate)}
-                    </div>
-                  )}
-                </div>
-
-                {typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice) ? (
-                  <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.22),0_12px_30px_-18px_rgba(34,211,238,0.25)] sm:col-span-2">
-                    <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
-                    <div className="text-[11px] text-white/45 truncate min-w-0">{mm.budgetLabel}</div>
-                    <div className="mt-1 text-sm font-semibold text-white/85 tabular-nums whitespace-nowrap truncate min-w-0">
-                      {mm.minPriceFrom(formatNTD(creator.minPrice) ?? "")}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              {showHighEngagement ? (
-                <div className="mt-2 text-[11px] text-white/55 truncate min-w-0">{mm.highEngagementLabel}</div>
-              ) : null}
+      {isEmpty ? (
+        <div className="block flex-1 relative z-0 cursor-default">
+          <div className="absolute top-2 right-2 z-10">
+            <div className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-white/70 whitespace-nowrap">
+              {mm.demoBadge}
             </div>
           </div>
+          {CardBody}
         </div>
-      </Link>
+      ) : (
+        <Link href={href} className="block flex-1 relative z-0">
+          {CardBody}
+        </Link>
+      )}
 
-      <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3 relative z-20 pointer-events-auto">
+      <div className="px-3 pb-3 sm:px-3 sm:pb-3 mt-3 relative z-20 pointer-events-auto">
         <button
           type="button"
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
+            if (isEmpty) return
             if (!contactItems.length) {
               setShowContact(false)
               setCtaToast("沒有提供聯絡方式 / No contact info provided")
@@ -396,9 +410,10 @@ export function CreatorCard({
             setCtaToast(null)
             setShowContact((v) => !v)
           }}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0 disabled:opacity-60 disabled:hover:brightness-100"
+          disabled={isEmpty}
         >
-          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{mm.ctaStartCollaboration}</span>
+          <span className="min-w-0 truncate">{mm.ctaStartCollaboration}</span>
         </button>
 
         <div aria-live="polite" className="sr-only">

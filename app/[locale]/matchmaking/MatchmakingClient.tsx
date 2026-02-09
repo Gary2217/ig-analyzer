@@ -299,25 +299,14 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
 export function MatchmakingClient({ locale, initialCards, initialMeCard }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const uiCopy = getCopy(locale)
+  const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
 
-  if (typeof window !== "undefined") {
-    const qp = new URLSearchParams(window.location.search)
-    if (qp.get("debugOwner") === "1") {
-      console.log("[debug] MatchmakingClient mounted")
-    }
-  }
-
-  const debugOwner = useMemo(() => {
-    try {
-      if (typeof window === "undefined") return false
-      const qp = new URLSearchParams(window.location.search)
-      return qp.get("debugOwner") === "1"
-    } catch {
-      return false
-    }
-  }, [])
+  const [meCard, setMeCard] = useState<CreatorCard | null>(() => {
+    return initialMeCard ? sanitizeMeCard(initialMeCard, localePrefix) : null
+  })
 
   const statsCacheRef = useRef(
     new Map<
@@ -340,8 +329,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const [statsVersion, setStatsVersion] = useState(0)
 
-  const uiCopy = useMemo(() => getCopy(locale), [locale])
-
   const [cards, setCards] = useState<CreatorCard[]>(initialCards)
 
   const [q, setQ] = useState("")
@@ -350,8 +337,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
   const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
-  const [meCard, setMeCard] = useState<CreatorCard | null>(initialMeCard ?? null)
-
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
   const cardsRef = useRef(cards)
@@ -485,7 +470,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     router.replace(qs ? `?${qs}` : "?", { scroll: false })
   }, [q, platform, budget, selectedTypes, router])
 
-
   useEffect(() => {
     let cancelled = false
 
@@ -526,19 +510,21 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         })
         const meJson = (await meRes.json().catch(() => null)) as any
 
-        if (debugOwner) {
-          console.log("[debug] /api/creator-card/me response status:", meRes.status)
-          console.log("[debug] /api/creator-card/me json:", meJson)
+        if (meRes.ok && meJson?.ok === true && meJson?.card) {
+          const safe = sanitizeMeCard(meJson.card, localePrefix)
+          if (safe) setMeCard(safe)
         }
-
-        if (!meRes.ok || meJson?.ok !== true) return
-
-        const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
         if (!meCardId) return
 
+        const ownerIgUserId =
+          typeof meJson?.card?.ig_user_id === "string"
+            ? meJson.card.ig_user_id
+            : typeof meJson?.card?.igUserId === "string"
+              ? meJson.card.igUserId
+              : null
+
         if (!cancelled) {
-          const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
           const safe = sanitizeMeCard(meJson?.card, localePrefix)
           if (safe) setMeCard(safe)
         }
@@ -632,17 +618,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [])
 
-  const cardsWithDemos = useMemo(() => {
-    const TARGET_TOTAL = 12
-    const existingIds = new Set(cards.map((c) => c.id))
-    const realCards = cards.filter((c) => !c.isDemo)
-    const missing = Math.min(3, Math.max(0, TARGET_TOTAL - realCards.length))
-    const demos = missing > 0 ? buildDemoCreators({ locale, existingIds, count: missing, seedBase: "matchmaking" }) : []
-    return [...realCards, ...demos]
-  }, [cards, locale])
-
   const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
-    return cardsWithDemos.map((c) => {
+    return cards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
@@ -715,7 +692,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         isDemo: Boolean(c.isDemo),
       }
     })
-  }, [cardsWithDemos, statsVersion])
+  }, [cards, statsVersion])
 
   const creatorFormatsById = useMemo(() => {
     const map = new Map<string, FormatKey[]>()
@@ -963,17 +940,48 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const finalCards = useMemo(() => {
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
-    return pinnedCreator ? [pinnedCreator, ...rest] : rest
+    const combined = pinnedCreator ? [pinnedCreator, ...rest] : rest
+
+    const seen = new Set<string>()
+    const out: typeof combined = []
+    for (const c of combined) {
+      if (!c?.id) continue
+      if (seen.has(c.id)) continue
+      seen.add(c.id)
+      out.push(c)
+    }
+    return out
   }, [filtered, pinnedCreator])
 
-  const debugOwnerLastOwnerCardIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (!debugOwner) return
-    const id = meCard?.id ?? null
-    if (debugOwnerLastOwnerCardIdRef.current === id) return
-    debugOwnerLastOwnerCardIdRef.current = id
-    console.log("[debug] ownerCardId:", id)
-  }, [debugOwner, meCard?.id])
+  const demoCards = useMemo((): CreatorCardData[] => {
+    // Show ~2 rows worth of demo cards on desktop (4 cols => 8 cards).
+    const count = 8
+    const existingIds = new Set(finalCards.map((c) => c.id))
+    const demos = buildDemoCreators({ locale, existingIds, count, seedBase: "matchmaking" })
+
+    return demos.map((c) => {
+      const followers = typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) ? (c as any).followerCount : undefined
+      const er = typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate) ? (c as any).engagementRate : undefined
+
+      return {
+        id: c.id,
+        name: locale === "zh-TW" ? "示範創作者" : "Demo Creator",
+        handle: locale === "zh-TW" ? "demo" : "demo",
+        avatarUrl: c.avatarUrl,
+        topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
+        platforms: ["instagram"],
+        collabTypes: ["other"],
+        deliverables: [],
+        minPrice: 8000,
+        stats: {
+          followers,
+          engagementRate: er,
+        },
+        href: "#",
+        isDemo: true,
+      }
+    })
+  }, [finalCards, locale])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
@@ -1188,22 +1196,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     [creators, fav.favoriteIds]
   )
 
-  // TEMP DEBUG (remove after verification): prove which array is rendered in the grid.
-  // The final render uses: finalCards.map(...)
-  const debugRenderLastKeyRef = useRef<string>("")
-  if (debugOwner) {
-    const renderCards = finalCards
-    const renderFirst5 = renderCards.slice(0, 5).map((c) => c.id)
-    const finalFirst5 = finalCards.slice(0, 5).map((c) => c.id)
-    const key = `${renderFirst5.join(",")}|${finalFirst5.join(",")}`
-    if (debugRenderLastKeyRef.current !== key) {
-      debugRenderLastKeyRef.current = key
-      console.log("[debug] render variable:", "finalCards")
-      console.log("[debug] renderCards(finalCards) first5:", renderFirst5)
-      console.log("[debug] finalCards first5:", finalFirst5)
-    }
-  }
-
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
       <div className="pt-6 sm:pt-8">
@@ -1288,6 +1280,25 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               />
             )
           })}
+        </CreatorGrid>
+
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-8">
+          <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.demoSectionTitle}</div>
+        </div>
+
+        <CreatorGrid>
+          {demoCards.map((c) => (
+            <MatchmakingCreatorCard
+              key={c.id}
+              creator={c}
+              locale={locale}
+              isFav={false}
+              onToggleFav={() => {}}
+              statsLoading={false}
+              statsError={false}
+              selectedBudgetMax={selectedBudgetMax}
+            />
+          ))}
         </CreatorGrid>
       </div>
 

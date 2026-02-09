@@ -68,6 +68,8 @@ export const zhTW: CopyDictionary = {
     sortEngagement: "互動率（高→低）",
 
     myCardBadge: "我的名片",
+    demoSectionTitle: "示範",
+    demoBadge: "示範",
     myCardFirstToggle: "我的名片置頂",
 
     filtersButton: "篩選",
