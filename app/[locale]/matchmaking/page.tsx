@@ -104,7 +104,7 @@ async function fetchMyCreatorCardPublicSafe(localePrefix: string): Promise<Creat
 
     const { data, error } = await authed
       .from("creator_cards")
-      .select("id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, is_public")
+      .select("id, ig_user_id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, is_public")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -118,6 +118,7 @@ async function fetchMyCreatorCardPublicSafe(localePrefix: string): Promise<Creat
 
     return {
       id: data.id,
+      igUserId: typeof (data as any).ig_user_id === "string" ? (data as any).ig_user_id : null,
       displayName,
       avatarUrl,
       category: (data as any).niche || "Creator",

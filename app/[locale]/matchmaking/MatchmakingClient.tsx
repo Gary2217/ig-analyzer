@@ -256,6 +256,15 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
   const id = typeof input?.id === "string" ? input.id : null
   if (!id) return null
 
+  // IMPORTANT: keep `igUserId` on the pinned owner card.
+  // Matchmaking stats hydration keys off igUserId -> /api/creators/:id/stats.
+  const igUserId =
+    typeof input?.ig_user_id === "string"
+      ? input.ig_user_id
+      : typeof input?.igUserId === "string"
+        ? input.igUserId
+        : null
+
   const displayNameRaw = typeof input?.ig_username === "string" ? input.ig_username : typeof input?.displayName === "string" ? input.displayName : ""
   const displayName = displayNameRaw || id
   const avatarUrl =
@@ -275,6 +284,7 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
 
   return {
     id,
+    igUserId,
     displayName,
     avatarUrl,
     category: niche || "Creator",
@@ -894,6 +904,32 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
     const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
 
+    const creatorIdStr =
+      typeof (meCard as any)?.igUserId === "string" && /^\d+$/.test(String((meCard as any).igUserId))
+        ? String((meCard as any).igUserId)
+        : null
+    const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
+
+    const rawFollowers =
+      typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
+        ? Math.floor(cachedStats.followers)
+        : typeof (meCard as any)?.stats?.followers === "number" && Number.isFinite((meCard as any).stats.followers)
+          ? Math.floor((meCard as any).stats.followers)
+          : typeof (meCard as any)?.followerCount === "number" && Number.isFinite((meCard as any).followerCount) && (meCard as any).followerCount > 0
+            ? Math.floor((meCard as any).followerCount)
+            : undefined
+
+    const rawER =
+      typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
+        ? cachedStats.engagementRatePct / 100
+        : typeof (meCard as any)?.stats?.engagementRatePct === "number" && Number.isFinite((meCard as any).stats.engagementRatePct)
+          ? (meCard as any).stats.engagementRatePct / 100
+          : typeof (meCard as any)?.stats?.engagementRate === "number" && Number.isFinite((meCard as any).stats.engagementRate)
+            ? (meCard as any).stats.engagementRate
+            : typeof (meCard as any)?.engagementRate === "number" && Number.isFinite((meCard as any).engagementRate)
+              ? (meCard as any).engagementRate
+              : undefined
+
     const rawHandle =
       typeof (meCard as any).handle === "string"
         ? String((meCard as any).handle).trim()
@@ -908,6 +944,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
     return {
       id: meCard.id,
+      creatorId: creatorIdStr ?? undefined,
       name: meCard.displayName,
       handle,
       avatarUrl: meCard.avatarUrl,
@@ -916,13 +953,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
       deliverables,
       stats: {
-        followers: undefined,
-        engagementRate: undefined,
+        followers: rawFollowers,
+        engagementRate: rawER,
       },
       href: meCard.profileUrl,
       isDemo: Boolean((meCard as any).isDemo),
     }
-  }, [meCard])
+  }, [meCard, statsVersion])
 
   const finalCards = useMemo(() => {
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
