@@ -100,5 +100,9 @@ export const en: CopyDictionary = {
 
     updatingStats: "Updating stats…",
     retryStatsAria: "Retry stats",
+
+    paginationPrev: "Prev",
+    paginationNext: "Next",
+    paginationPage: (page: number, total: number) => `Page ${page} / ${total}`,
   },
 }

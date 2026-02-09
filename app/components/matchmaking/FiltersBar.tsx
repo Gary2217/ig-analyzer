@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import type { BudgetRange, Platform, TypeKey } from "./types"
+import type { BudgetRange, CollabType, Platform } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
 type Props = {
@@ -9,10 +9,9 @@ type Props = {
   search: string
   onSearch: (v: string) => void
 
-  platform: Platform | "any"
-  onPlatform: (v: Platform | "any") => void
-
-  platformOptions: Array<{ value: Platform | "any"; label: string }>
+  selectedPlatforms: Platform[]
+  onTogglePlatform: (p: Platform) => void
+  onClearPlatforms: () => void
 
   budget: BudgetRange
   onBudget: (v: BudgetRange) => void
@@ -21,10 +20,10 @@ type Props = {
   onCustomBudget: (v: string) => void
   onClearCustomBudget: () => void
 
-  selectedTypes: TypeKey[]
-  onToggleType: (t: TypeKey) => void
-  onClearTypes: () => void
-  typeOptions: Array<{ value: TypeKey | "any"; label: string }>
+  selectedDealTypes: CollabType[]
+  onToggleDealType: (t: CollabType) => void
+  onClearDealTypes: () => void
+  dealTypeOptions: Array<{ value: CollabType; label: string }>
 
   sort: "best_match" | "followers_desc" | "er_desc"
   onSort: (v: "best_match" | "followers_desc" | "er_desc") => void
@@ -69,14 +68,22 @@ export function FiltersBar(props: Props) {
     [mm, props.locale]
   )
 
-  const chipOptions = useMemo(
-    () => props.typeOptions.filter((o) => o.value !== "any") as Array<{ value: TypeKey; label: string }>,
-    [props.typeOptions]
-  )
+  const platformOptions: Array<{ value: Platform; label: string }> = useMemo(() => {
+    const order: Platform[] = ["instagram", "facebook", "youtube", "tiktok"]
+    const labelFor = (p: Platform) => {
+      if (p === "instagram") return mm.platformInstagram
+      if (p === "tiktok") return mm.platformTikTok
+      if (p === "youtube") return mm.platformYouTube
+      return mm.platformFacebook
+    }
+    return order.map((p) => ({ value: p, label: labelFor(p) }))
+  }, [mm.platformFacebook, mm.platformInstagram, mm.platformTikTok, mm.platformYouTube])
+
+  const dealChips = useMemo(() => props.dealTypeOptions, [props.dealTypeOptions])
 
   const chipsCollapsedCount = 6
-  const visibleChips = chipsExpanded ? chipOptions : chipOptions.slice(0, chipsCollapsedCount)
-  const hiddenCount = Math.max(0, chipOptions.length - visibleChips.length)
+  const visibleDealChips = chipsExpanded ? dealChips : dealChips.slice(0, chipsCollapsedCount)
+  const hiddenCount = Math.max(0, dealChips.length - visibleDealChips.length)
 
   return (
     <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
@@ -91,18 +98,6 @@ export function FiltersBar(props: Props) {
                   placeholder={copy.common.searchPlaceholder}
                   className="h-11 w-full sm:flex-1 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
                 />
-
-                <select
-                  value={props.platform}
-                  onChange={(e) => props.onPlatform(e.target.value as any)}
-                  className="h-11 w-full sm:w-auto min-w-0 sm:min-w-[140px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
-                >
-                  {props.platformOptions.map((o) => (
-                    <option key={o.value} value={o.value} className="bg-slate-900">
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
 
                 <select
                   value={props.budget}
@@ -157,10 +152,13 @@ export function FiltersBar(props: Props) {
                   ) : null}
                 </div>
 
-                {props.selectedTypes.length ? (
+                {props.selectedPlatforms.length || props.selectedDealTypes.length ? (
                   <button
                     type="button"
-                    onClick={props.onClearTypes}
+                    onClick={() => {
+                      props.onClearPlatforms()
+                      props.onClearDealTypes()
+                    }}
                     className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 whitespace-nowrap"
                   >
                     {copy.common.all}
@@ -169,13 +167,31 @@ export function FiltersBar(props: Props) {
               </div>
 
               <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-                {visibleChips.map((o) => {
-                  const active = props.selectedTypes.includes(o.value)
+                {platformOptions.map((o) => {
+                  const active = props.selectedPlatforms.includes(o.value)
                   return (
                     <button
                       key={o.value}
                       type="button"
-                      onClick={() => props.onToggleType(o.value)}
+                      onClick={() => props.onTogglePlatform(o.value)}
+                      className={`h-11 px-3 rounded-full border text-sm whitespace-nowrap max-w-full truncate min-w-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
+                        active
+                          ? "bg-gradient-to-r from-emerald-500/15 to-cyan-400/10 border-emerald-400/30 text-white/90 ring-1 ring-emerald-400/25"
+                          : "bg-white/5 border-white/10 text-white/70 hover:bg-white/[0.08] hover:text-white/85"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  )
+                })}
+
+                {visibleDealChips.map((o) => {
+                  const active = props.selectedDealTypes.includes(o.value)
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => props.onToggleDealType(o.value)}
                       className={`h-11 px-3 rounded-full border text-sm whitespace-nowrap max-w-full truncate min-w-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
                         active
                           ? "bg-gradient-to-r from-emerald-500/15 to-cyan-400/10 border-emerald-400/30 text-white/90 ring-1 ring-emerald-400/25"
@@ -197,7 +213,7 @@ export function FiltersBar(props: Props) {
                   </button>
                 ) : null}
 
-                {chipsExpanded && chipOptions.length > chipsCollapsedCount ? (
+                {chipsExpanded && dealChips.length > chipsCollapsedCount ? (
                   <button
                     type="button"
                     onClick={() => setChipsExpanded(false)}

@@ -42,6 +42,7 @@ export type CreatorCardData = {
   avatarUrl?: string
   topics?: string[]
   platforms?: Platform[]
+  dealTypes?: string[]
   collabTypes?: CollabType[]
   deliverables?: string[]
   budgetMin?: number

@@ -98,5 +98,9 @@ export type CopyDictionary = {
 
     updatingStats: string
     retryStatsAria: string
+
+    paginationPrev: string
+    paginationNext: string
+    paginationPage: (page: number, total: number) => string
   }
 }

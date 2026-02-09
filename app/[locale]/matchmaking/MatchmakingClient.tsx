@@ -12,9 +12,7 @@ import type {
   BudgetRange,
   CollabType,
   CreatorCardData,
-  FormatKey,
   Platform,
-  TypeKey,
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
 const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
@@ -128,23 +126,6 @@ function derivePlatformsFromDeliverables(input?: string[]): Platform[] {
     ) {
       set.add("instagram")
     }
-  }
-
-  return Array.from(set)
-}
-
-function deriveFormatKeysFromDeliverables(input?: string[]): FormatKey[] {
-  const d = Array.isArray(input) ? input : []
-  const set = new Set<FormatKey>()
-
-  for (const raw of d) {
-    const id = String(raw || "").trim().toLowerCase()
-    if (!id) continue
-
-    if (id === "reels") set.add("reels")
-    else if (id === "posts") set.add("posts")
-    else if (id === "stories") set.add("stories")
-    else set.add("other")
   }
 
   return Array.from(set)
@@ -282,6 +263,15 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
   const deliverables = Array.isArray(input?.deliverables) ? (input.deliverables as unknown[]).filter((x): x is string => typeof x === "string") : []
   const isPublic = typeof input?.is_public === "boolean" ? input.is_public : typeof input?.isPublic === "boolean" ? input.isPublic : false
 
+  const rawMinPrice =
+    typeof input?.min_price === "number" && Number.isFinite(input.min_price)
+      ? input.min_price
+      : typeof input?.minPrice === "number" && Number.isFinite(input.minPrice)
+        ? input.minPrice
+        : null
+
+  const contact = typeof input?.contact === "string" ? input.contact : typeof input?.contactInfo === "string" ? input.contactInfo : null
+
   return {
     id,
     igUserId,
@@ -289,6 +279,8 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
     avatarUrl,
     category: niche || "Creator",
     deliverables,
+    minPrice: typeof rawMinPrice === "number" ? rawMinPrice : null,
+    contact,
     followerCount: 0,
     engagementRate: null,
     isVerified: false,
@@ -333,10 +325,11 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const [q, setQ] = useState("")
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
-  const [platform, setPlatform] = useState<Platform | "any">("any")
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
+  const [selectedDealTypes, setSelectedDealTypes] = useState<CollabType[]>([])
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
-  const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
+  const [page, setPage] = useState(1)
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
   const cardsRef = useRef(cards)
@@ -393,15 +386,22 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   useEffect(() => {
     const qp = searchParams
     const nextQ = (qp.get("q") ?? "").slice(0, 120)
-    const nextPlatform = (qp.get("platform") ?? "any") as Platform | "any"
     const nextBudget = (qp.get("budget") ?? "any") as BudgetRange
     const nextCollab = (qp.get("collab") ?? "any") as CollabType | "any"
+    const nextPageRaw = qp.get("page")
+    const nextPageNum = nextPageRaw ? Number(nextPageRaw) : 1
+    const nextPage = Number.isFinite(nextPageNum) ? Math.max(1, Math.floor(nextPageNum)) : 1
 
     setQ(nextQ)
-    setPlatform(nextPlatform)
     setBudget(nextBudget)
 
-    // Keep URL compatibility: initialize selected types from the existing collab param (single value).
+    // Backward-compat: if platform exists in URL, seed selectedPlatforms.
+    const qpPlatform = (qp.get("platform") ?? "") as any
+    const knownPlatforms: Platform[] = ["instagram", "facebook", "youtube", "tiktok"]
+    if (knownPlatforms.includes(qpPlatform)) setSelectedPlatforms([qpPlatform as Platform])
+    else setSelectedPlatforms([])
+
+    // Backward-compat: initialize dealTypes from legacy collab param (single value).
     const isKnownCollab: boolean =
       nextCollab === "short_video" ||
       nextCollab === "long_video" ||
@@ -410,7 +410,9 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       nextCollab === "review_unboxing" ||
       nextCollab === "event" ||
       nextCollab === "other"
-    setSelectedTypes(isKnownCollab ? ([nextCollab as CollabType] as TypeKey[]) : [])
+    setSelectedDealTypes(isKnownCollab ? [nextCollab as CollabType] : [])
+
+    setPage(nextPage)
 
     // If budget param is not one of the known presets, fall back to any.
     const isKnownBudget: boolean =
@@ -426,7 +428,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     setBudget(isKnownBudget ? nextBudget : "any")
     setCustomBudget("")
 
-    setPlatform(nextPlatform)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -448,27 +449,20 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   useEffect(() => {
     const params = new URLSearchParams()
     if (q.trim()) params.set("q", q.trim())
-    if (platform !== "any") params.set("platform", platform)
     // Do not introduce new URL values. Only persist known preset budgets.
     if (budget !== "any" && budget !== "custom") params.set("budget", budget)
 
-    // URL compatibility: only persist to the existing "collab" param when exactly one collab type is selected.
-    const single = selectedTypes.length === 1 ? selectedTypes[0] : null
-    const collabValue: CollabType | null =
-      single === "short_video" ||
-      single === "long_video" ||
-      single === "ugc" ||
-      single === "live" ||
-      single === "review_unboxing" ||
-      single === "event" ||
-      single === "other"
-        ? single
-        : null
-    if (collabValue) params.set("collab", collabValue)
+    if (page > 1) params.set("page", String(page))
 
     const qs = params.toString()
     router.replace(qs ? `?${qs}` : "?", { scroll: false })
-  }, [q, platform, budget, selectedTypes, router])
+  }, [q, budget, page, router])
+
+  // Reset to page 1 when filters change.
+  useEffect(() => {
+    setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, sort, budget, customBudget, selectedPlatforms.join("|"), selectedDealTypes.join("|")])
 
   useEffect(() => {
     let cancelled = false
@@ -624,6 +618,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
+      const dealTypes = derivedCollabTypes as unknown as string[]
 
       const creatorIdStr = typeof c.igUserId === "string" && /^\d+$/.test(c.igUserId) ? c.igUserId : null
       const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
@@ -679,6 +674,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         avatarUrl: c.avatarUrl,
         topics,
         platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
+        dealTypes,
         collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
         deliverables,
         minPrice: typeof rawMinPrice === "number" ? Math.max(0, Math.floor(rawMinPrice)) : undefined,
@@ -694,47 +690,14 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     })
   }, [cards, statsVersion])
 
-  const creatorFormatsById = useMemo(() => {
-    const map = new Map<string, FormatKey[]>()
-    creators.forEach((c) => {
-      map.set(c.id, deriveFormatKeysFromDeliverables(c.deliverables))
-    })
-    return map
-  }, [creators])
-
-  const platformOptions = useMemo(() => {
+  const dealTypeOptions = useMemo(() => {
     const mm = uiCopy.matchmaking
-    const present = new Set<Platform>()
+    const present = new Set<CollabType>()
     creators.forEach((c) => {
-      ;(c.platforms ?? []).forEach((p) => present.add(p))
+      ;((c.collabTypes ?? []) as CollabType[]).forEach((t) => present.add(t))
     })
 
-    const order: Platform[] = ["instagram", "facebook", "youtube", "tiktok"]
-    const labelFor = (p: Platform) => {
-      if (p === "instagram") return mm.platformInstagram
-      if (p === "tiktok") return mm.platformTikTok
-      if (p === "youtube") return mm.platformYouTube
-      return mm.platformFacebook
-    }
-
-    return [
-      { value: "any" as const, label: mm.allPlatforms },
-      ...order.filter((p) => present.has(p)).map((p) => ({ value: p, label: labelFor(p) })),
-    ]
-  }, [creators, uiCopy.matchmaking])
-
-  const typeOptions = useMemo(() => {
-    const mm = uiCopy.matchmaking
-    const present = new Set<TypeKey>()
-    creators.forEach((c) => {
-      ;(c.collabTypes ?? []).forEach((t) => present.add(t))
-      ;(creatorFormatsById.get(c.id) ?? []).forEach((f) => present.add(f))
-    })
-
-    const order: TypeKey[] = [
-      "reels",
-      "posts",
-      "stories",
+    const order: CollabType[] = [
       "short_video",
       "long_video",
       "ugc",
@@ -744,10 +707,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       "other",
     ]
 
-    const labelFor = (t: TypeKey) => {
-      if (t === "reels") return mm.formatReels
-      if (t === "posts") return mm.formatPosts
-      if (t === "stories") return mm.formatStories
+    const labelFor = (t: CollabType) => {
       if (t === "short_video") return mm.typeShortVideo
       if (t === "long_video") return mm.typeLongVideo
       if (t === "ugc") return mm.typeUGC
@@ -757,11 +717,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       return mm.typeOther
     }
 
-    return [
-      { value: "any" as const, label: mm.allTypes },
-      ...order.filter((t) => present.has(t)).map((t) => ({ value: t, label: labelFor(t) })),
-    ]
-  }, [creators, creatorFormatsById, uiCopy.matchmaking])
+    return order.filter((t) => present.has(t)).map((t) => ({ value: t, label: labelFor(t) }))
+  }, [creators, uiCopy.matchmaking])
 
   function budgetMaxForRange(range: BudgetRange): number | null {
     if (range === "1000") return 1000
@@ -791,27 +748,16 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return mp <= max
   }
 
-  function platformMatch(p: Platform | "any", ps?: Platform[]) {
-    if (p === "any") return true
-    return (ps ?? []).includes(p)
-  }
-
-  function collabMatch(c: CollabType | "any", types?: CollabType[]) {
-    if (c === "any") return true
-    return (types ?? []).includes(c)
-  }
-
-  function typeMatchAny(selected: TypeKey[], creatorId: string, types?: CollabType[]) {
+  function platformMatchAny(selected: Platform[], ps?: Platform[]) {
     if (!selected.length) return true
+    const set = new Set(ps ?? [])
+    return selected.some((p) => set.has(p))
+  }
 
-    for (const t of selected) {
-      if (t === "reels" || t === "posts" || t === "stories" || t === "other") {
-        if ((creatorFormatsById.get(creatorId) ?? []).includes(t)) return true
-      } else {
-        if ((types ?? []).includes(t)) return true
-      }
-    }
-    return false
+  function dealTypeMatchAny(selected: CollabType[], types?: CollabType[]) {
+    if (!selected.length) return true
+    const set = new Set(types ?? [])
+    return selected.some((t) => set.has(t))
   }
 
   function budgetMatchCustom(amount: number, min?: number, max?: number) {
@@ -830,9 +776,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     let out = creators.filter((c) => {
       const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")}`.toLowerCase()
       const okQ = !qq || hay.includes(qq)
-      const okPlatform = platformMatch(platform, c.platforms)
-
-      const okType = typeMatchAny(selectedTypes, c.id, c.collabTypes)
+      const okPlatform = platformMatchAny(selectedPlatforms, c.platforms)
+      const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
 
       let okBudget = true
       if (budget === "custom") {
@@ -841,7 +786,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         okBudget = budgetEligibleByMinPrice(budget, c.minPrice)
       }
 
-      return okQ && okPlatform && okType && okBudget
+      return okQ && okPlatform && okDealType && okBudget
     })
 
     if (sort === "best_match") {
@@ -871,7 +816,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
 
     return out
-  }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
+  }, [creators, q, sort, budget, customBudget, selectedPlatforms, selectedDealTypes])
 
   const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string }) | null => {
     if (!meCard) return null
@@ -880,6 +825,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const deliverables = Array.isArray((meCard as any).deliverables) ? ((meCard as any).deliverables as string[]) : []
     const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
     const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
+    const dealTypes = derivedCollabTypes as unknown as string[]
 
     const creatorIdStr =
       typeof (meCard as any)?.igUserId === "string" && /^\d+$/.test(String((meCard as any).igUserId))
@@ -919,6 +865,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               : ""
     const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
 
+    const rawMinPrice =
+      typeof (meCard as any)?.minPrice === "number" && Number.isFinite((meCard as any).minPrice)
+        ? Math.floor((meCard as any).minPrice)
+        : typeof (meCard as any)?.min_price === "number" && Number.isFinite((meCard as any).min_price)
+          ? Math.floor((meCard as any).min_price)
+          : undefined
+
     return {
       id: meCard.id,
       creatorId: creatorIdStr ?? undefined,
@@ -927,12 +880,15 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       avatarUrl: meCard.avatarUrl,
       topics,
       platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
+      dealTypes,
       collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
       deliverables,
+      minPrice: rawMinPrice,
       stats: {
         followers: rawFollowers,
         engagementRate: rawER,
       },
+      contact: typeof (meCard as any)?.contact === "string" ? (meCard as any).contact : null,
       href: meCard.profileUrl,
       isDemo: Boolean((meCard as any).isDemo),
     }
@@ -953,11 +909,30 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return out
   }, [filtered, pinnedCreator])
 
-  const demoCards = useMemo((): CreatorCardData[] => {
-    // Show ~2 rows worth of demo cards on desktop (4 cols => 8 cards).
-    const count = 8
+  const pageSize = 8
+
+  const totalPages = useMemo(() => {
+    const n = finalCards.length
+    return Math.max(1, Math.ceil(n / pageSize))
+  }, [finalCards.length])
+
+  const clampedPage = useMemo(() => Math.min(Math.max(1, page), totalPages), [page, totalPages])
+
+  useEffect(() => {
+    if (page !== clampedPage) setPage(clampedPage)
+  }, [clampedPage, page])
+
+  const pagedRealCards = useMemo(() => {
+    const start = (clampedPage - 1) * pageSize
+    return finalCards.slice(start, start + pageSize)
+  }, [clampedPage, finalCards])
+
+  const demoFillCards = useMemo((): CreatorCardData[] => {
+    const need = Math.max(0, pageSize - pagedRealCards.length)
+    if (!need) return []
+
     const existingIds = new Set(finalCards.map((c) => c.id))
-    const demos = buildDemoCreators({ locale, existingIds, count, seedBase: "matchmaking" })
+    const demos = buildDemoCreators({ locale, existingIds, count: need, seedBase: `matchmaking:page:${clampedPage}` })
 
     return demos.map((c) => {
       const followers = typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) ? (c as any).followerCount : undefined
@@ -970,6 +945,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         avatarUrl: c.avatarUrl,
         topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
         platforms: ["instagram"],
+        dealTypes: ["other"],
         collabTypes: ["other"],
         deliverables: [],
         minPrice: 8000,
@@ -981,29 +957,12 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         isDemo: true,
       }
     })
-  }, [finalCards, locale])
+  }, [clampedPage, finalCards, locale, pagedRealCards.length])
 
   const renderCards = useMemo((): Array<CreatorCardData & { creatorId?: string }> => {
-    const pinned = pinnedCreator
-    const real = finalCards
-
-    const fillerCount = pinned ? 3 : 4
-    const filler = demoCards.slice(0, fillerCount).map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
-
-    if (pinned) {
-      const rest = real.filter((c) => c.id !== pinned.id)
-      return [pinned, ...filler, ...rest]
-    }
-
-    return [...filler, ...real]
-  }, [demoCards, finalCards, pinnedCreator])
-
-  const lowerDemoCards = useMemo((): CreatorCardData[] => {
-    // Re-introduce a demo-only grid below only when there are too few real creators.
-    if (finalCards.length >= 8) return []
-    const fillerCount = pinnedCreator ? 3 : 4
-    return demoCards.slice(fillerCount)
-  }, [demoCards, finalCards.length, pinnedCreator])
+    const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
+    return [...pagedRealCards, ...filler]
+  }, [demoFillCards, pagedRealCards])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
@@ -1015,7 +974,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [budget, customBudget])
 
   const visibleCreatorIds = useMemo(() => {
-    const ids = finalCards.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
+    const ids = pagedRealCards.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
     const uniqueOrdered: string[] = []
@@ -1026,7 +985,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
 
     return uniqueOrdered
-  }, [finalCards])
+  }, [pagedRealCards])
 
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
@@ -1236,9 +1195,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           locale={locale}
           search={q}
           onSearch={setQ}
-          platform={platform}
-          onPlatform={setPlatform}
-          platformOptions={platformOptions}
+          selectedPlatforms={selectedPlatforms}
+          onTogglePlatform={(p: Platform) =>
+            setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
+          }
+          onClearPlatforms={() => setSelectedPlatforms([])}
+          selectedDealTypes={selectedDealTypes}
+          onToggleDealType={(t: CollabType) =>
+            setSelectedDealTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+          }
+          onClearDealTypes={() => setSelectedDealTypes([])}
+          dealTypeOptions={dealTypeOptions}
           budget={budget}
           onBudget={(v) => {
             setBudget(v)
@@ -1250,12 +1217,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
             setBudget("any")
             setCustomBudget("")
           }}
-          selectedTypes={selectedTypes}
-          onToggleType={(t: TypeKey) =>
-            setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
-          }
-          onClearTypes={() => setSelectedTypes([])}
-          typeOptions={typeOptions}
           sort={sort}
           onSort={(v) => {
             try {
@@ -1304,30 +1265,31 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           })}
         </CreatorGrid>
 
-        {lowerDemoCards.length ? (
-          <>
-            <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-8">
-              <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.demoSectionTitle}</div>
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-6">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={clampedPage <= 1}
+              className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5"
+            >
+              {uiCopy.matchmaking.paginationPrev}
+            </button>
+
+            <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
+              {uiCopy.matchmaking.paginationPage(clampedPage, totalPages)}
             </div>
 
-            <CreatorGrid>
-              {lowerDemoCards.map((c) => (
-                <MatchmakingCreatorCard
-                  key={c.id}
-                  creator={({ ...(c as CreatorCardData), creatorId: undefined } as CreatorCardData & {
-                    creatorId?: string
-                  })}
-                  locale={locale}
-                  isFav={false}
-                  onToggleFav={() => {}}
-                  statsLoading={false}
-                  statsError={false}
-                  selectedBudgetMax={selectedBudgetMax}
-                />
-              ))}
-            </CreatorGrid>
-          </>
-        ) : null}
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={clampedPage >= totalPages}
+              className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5"
+            >
+              {uiCopy.matchmaking.paginationNext}
+            </button>
+          </div>
+        </div>
       </div>
 
       <FavoritesDrawer

@@ -100,5 +100,9 @@ export const zhTW: CopyDictionary = {
 
     updatingStats: "更新數據中…",
     retryStatsAria: "重新取得數據",
+
+    paginationPrev: "上一頁",
+    paginationNext: "下一頁",
+    paginationPage: (page: number, total: number) => `第 ${page} / ${total} 頁`,
   },
 }

@@ -184,13 +184,10 @@ export function CreatorCard({
     return p
   }
 
-  const primaryType = (creator.collabTypes ?? [])[0]
-  const primaryFormat = deliverableFormats[0]
-  const topChips: Array<{ key: string; label: string }> = []
-  if (allPlatforms[0]) topChips.push({ key: allPlatforms[0], label: platformLabel(allPlatforms[0]) })
-  if (primaryType) topChips.push({ key: primaryType, label: typeLabel(primaryType) })
-  else if (primaryFormat) topChips.push({ key: primaryFormat, label: typeLabel(primaryFormat) })
-  const displayChips = topChips.slice(0, 2)
+  const platformBadges = (creator.platforms ?? []).filter(Boolean)
+  const dealTypeBadges = (creator.dealTypes ?? []).filter((x): x is string => typeof x === "string" && x.length > 0)
+  const topBadges = [...platformBadges.map((p) => ({ key: `p:${p}`, label: platformLabel(p) })), ...dealTypeBadges.map((t) => ({ key: `t:${t}`, label: typeLabel(t) }))]
+  const displayBadges = topBadges.slice(0, 4)
 
   const contactItems = (() => {
     const out: Array<{
@@ -262,7 +259,18 @@ export function CreatorCard({
       }
     }
 
-    if (line) out.push({ key: "line", value: line, className: "" })
+    if (line) {
+      const trimmed = line.trim()
+      const isLikelyUrl = /^https?:\/\//i.test(trimmed) || /^line:\/\//i.test(trimmed) || /line\.me\//i.test(trimmed)
+      const lineId = trimmed.replace(/^@/, "").replace(/\s+/g, "")
+      const href = isLikelyUrl
+        ? trimmed
+        : lineId
+          ? `https://line.me/R/ti/p/~${encodeURIComponent(lineId)}`
+          : undefined
+
+      out.push({ key: "line", value: trimmed, className: "", href, ariaLabel: `LINE ${creator.name}` })
+    }
     return out
   })()
 
@@ -292,8 +300,8 @@ export function CreatorCard({
             {shouldShowHandle ? <div className="text-xs text-white/50 truncate min-w-0">@{creator.handle}</div> : null}
 
             <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
-              {displayChips.length ? (
-                displayChips.map((c) => (
+              {displayBadges.length ? (
+                displayBadges.map((c) => (
                   <span
                     key={c.key}
                     className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
