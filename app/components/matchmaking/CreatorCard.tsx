@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { usePathname, useSearchParams } from "next/navigation"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
@@ -93,6 +94,8 @@ export function CreatorCard({
   onRetryStats?: () => void
   selectedBudgetMax?: number | null
 }) {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const copy = getCopy(locale)
   const mm = copy.matchmaking
   const isEmpty = Boolean(creator.isDemo)
@@ -138,6 +141,25 @@ export function CreatorCard({
     const normalizedName = name.replace(/^@/, "").toLowerCase()
     const normalizedHandle = handle.replace(/^@/, "").toLowerCase()
     return normalizedName !== normalizedHandle
+  })()
+
+  const href = (() => {
+    const raw = typeof creator.href === "string" ? creator.href : ""
+    if (!raw) return raw
+
+    const fromPath = (() => {
+      const p = typeof pathname === "string" ? pathname : ""
+      const q = typeof searchParams?.toString === "function" ? searchParams.toString() : ""
+      return q ? `${p}?${q}` : p
+    })()
+
+    // Only propagate `from` when navigating from matchmaking to the read-only creator card preview.
+    if (!fromPath || !/\/matchmaking(\/|$)/i.test(fromPath)) return raw
+    if (!/\/creator-card\/view(\?|$|\/)/i.test(raw)) return raw
+    if (/[?&]from=/.test(raw)) return raw
+
+    const encoded = encodeURIComponent(fromPath)
+    return raw.includes("?") ? `${raw}&from=${encoded}` : `${raw}?from=${encoded}`
   })()
 
   const typeLabel = (t: string) => {
@@ -256,13 +278,20 @@ export function CreatorCard({
         </div>
       ) : null}
 
-      <Link href={creator.href} className="block flex-1 relative z-0">
+      <Link href={href} className="block flex-1 relative z-0">
         <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
           {creator.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={creator.avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+            <img
+              src={creator.avatarUrl}
+              alt={creator.name || ""}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
           ) : (
-            <div className="h-full w-full bg-gradient-to-br from-white/10 to-white/5" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-white/10" />
+            </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
         </div>

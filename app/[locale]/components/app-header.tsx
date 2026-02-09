@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Eye } from "lucide-react"
 import Logo from "../../../components/Logo"
 import LocaleSwitcher from "../../components/locale-switcher"
@@ -10,7 +10,9 @@ import { BUTTON_BASE_CLASSES } from "@/app/components/TopRightActions"
 export default function AppHeader({ locale }: { locale: string }) {
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const isCreatorCard = pathname?.includes("/creator-card")
+  const isCreatorCardView = Boolean(pathname && /\/creator-card\/view(\/|$)/i.test(pathname))
   
   const isZh = locale === "zh-TW"
   const copy = isZh
@@ -39,6 +41,33 @@ export default function AppHeader({ locale }: { locale: string }) {
     }
   }
 
+  const handleBack = () => {
+    if (typeof window === "undefined") return
+
+    // On /creator-card/view we must return to the originating list page (usually matchmaking).
+    // We do NOT use router.back() because it is unstable across entry points / redirects.
+    if (isCreatorCardView) {
+      const fromRaw = searchParams?.get("from")
+      if (fromRaw && fromRaw.trim()) {
+        try {
+          const decoded = decodeURIComponent(fromRaw)
+          // Only allow same-site relative navigation.
+          if (decoded.startsWith("/")) {
+            router.push(decoded)
+            return
+          }
+        } catch {
+          // ignore and fall back
+        }
+      }
+
+      router.push(`/${locale}/matchmaking`)
+      return
+    }
+
+    handleBackToResults()
+  }
+
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0b1220]/85 backdrop-blur-md">
@@ -56,14 +85,14 @@ export default function AppHeader({ locale }: { locale: string }) {
             <div className="flex items-center justify-end gap-2 flex-wrap">
               {isCreatorCard && (
                 <>
-                  <button onClick={handleBackToResults} className={BUTTON_BASE_CLASSES}>
+                  <button onClick={handleBack} className={BUTTON_BASE_CLASSES + " min-h-[44px]"}>
                     <ArrowLeft className="w-4 h-4" />
                     <span className="hidden sm:inline">{copy.back}</span>
                     <span className="sr-only sm:hidden">{copy.back}</span>
                   </button>
                   <Link
                     href={`/${locale}/matchmaking`}
-                    className={BUTTON_BASE_CLASSES}
+                    className={BUTTON_BASE_CLASSES + " min-h-[44px]"}
                     aria-label={copy.opportunities}
                   >
                     <Eye className="w-4 h-4" />
