@@ -78,6 +78,8 @@ export type CopyDictionary = {
     showMoreChips: (n: number) => string
     showLessChips: string
 
+    creatorTypeLabel: string
+
     noTopics: string
     viewDetails: string
 

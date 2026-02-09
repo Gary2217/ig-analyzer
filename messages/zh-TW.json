@@ -82,7 +82,7 @@
         "contact": "聯絡方式",
         "formats": "合作形式",
         "featured": "精選貼文",
-        "niches": "合作品類",
+        "niches": "創作者類型",
         "pastCollaborations": "過往合作"
       },
       "steps": {
@@ -137,7 +137,7 @@
     },
     "empty": {
       "title": "開始填寫名片資料",
-      "body": "我們已為你建立名片。你可以先填寫合作形式、合作品類與曾合作品牌。"
+      "body": "我們已為你建立名片。你可以先填寫合作形式、創作者類型與曾合作品牌。"
     },
     "success": {
       "saved": "已儲存",
@@ -187,7 +187,7 @@
       }
     },
     "niches": {
-      "title": "合作品類／擅長領域",
+      "title": "創作者類型",
       "subtitle": "選擇你最擅長合作的品類。",
       "options": {
         "beauty": "美妝",
@@ -272,8 +272,8 @@
         "noData": "尚無資料"
       },
       "collaborationNiches": {
-        "label": "合作品類",
-        "empty": "尚未設定合作品類"
+        "label": "創作者類型",
+        "empty": "尚未設定創作者類型"
       },
       "about": {
         "title": "自我介紹",

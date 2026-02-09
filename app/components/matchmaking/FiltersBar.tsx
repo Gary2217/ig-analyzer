@@ -182,7 +182,7 @@ export function FiltersBar(props: Props) {
                 </div>
 
                 <div className="w-full sm:w-auto min-w-0">
-                  <div className="text-[11px] text-white/45 mb-1">類型</div>
+                  <div className="text-[11px] text-white/45 mb-1">{mm.creatorTypeLabel}</div>
                   <div className="relative">
                     <button
                       type="button"
@@ -197,7 +197,7 @@ export function FiltersBar(props: Props) {
                     {tagsOpen ? (
                       <div className="absolute z-50 mt-2 w-full sm:w-[280px] rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
                         <div className="flex items-center justify-between gap-2 px-2 py-1">
-                          <div className="text-[11px] text-white/55">類型</div>
+                          <div className="text-[11px] text-white/55">{mm.creatorTypeLabel}</div>
                           {props.selectedTagCategories.length ? (
                             <button
                               type="button"

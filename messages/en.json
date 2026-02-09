@@ -82,7 +82,7 @@
         "contact": "Contact",
         "formats": "Formats",
         "featured": "Featured",
-        "niches": "Niches",
+        "niches": "Creator Type",
         "pastCollaborations": "Past Collabs"
       },
       "steps": {
@@ -187,7 +187,7 @@
       }
     },
     "niches": {
-      "title": "Collaboration niches / categories",
+      "title": "Creator Type",
       "subtitle": "Select the categories you are best at.",
       "options": {
         "beauty": "Beauty",
@@ -273,8 +273,8 @@
         "noData": "No data"
       },
       "collaborationNiches": {
-        "label": "Collaboration niches",
-        "empty": "No collaboration niches specified"
+        "label": "Creator Type",
+        "empty": "No creator type specified"
       },
       "about": {
         "title": "About",

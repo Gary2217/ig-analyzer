@@ -416,7 +416,7 @@ export function CreatorCard({
 
             {displayTagBadges.length ? (
               <div className="mt-2 min-w-0">
-                <div className="text-[11px] text-white/45 mb-1">合作品類</div>
+                <div className="text-[11px] text-white/45 mb-1">{mm.creatorTypeLabel}</div>
                 <div className="flex flex-wrap gap-1.5 min-w-0">
                   {displayTagBadges.map((tag) => (
                     <span

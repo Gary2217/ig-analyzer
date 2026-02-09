@@ -80,6 +80,8 @@ export const en: CopyDictionary = {
     showMoreChips: (n: number) => `+${n} more`,
     showLessChips: "Show less",
 
+    creatorTypeLabel: "Creator Type",
+
     noTopics: "No topics",
     viewDetails: "Click to view details →",
 

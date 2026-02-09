@@ -4929,8 +4929,8 @@ export default function CreatorCardPage() {
                 },
                 {
                   key: "niches",
-                  titleZh: "合作品類",
-                  titleEn: "Niches",
+                  titleZh: "創作者類型",
+                  titleEn: "Creator Type",
                   render: () => (
                     <>
                       <div className="flex flex-wrap gap-2">

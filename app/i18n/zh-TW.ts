@@ -80,6 +80,8 @@ export const zhTW: CopyDictionary = {
     showMoreChips: (n: number) => `+${n} 更多`,
     showLessChips: "收合",
 
+    creatorTypeLabel: "創作者類型",
+
     noTopics: "尚無標籤",
     viewDetails: "點擊查看 →",
 

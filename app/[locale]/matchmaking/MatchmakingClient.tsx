@@ -640,6 +640,18 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       return ""
     }
 
+    const deriveTagsFromNicheText = (input: unknown): string[] => {
+      const raw = typeof input === "string" ? input.trim() : ""
+      if (!raw) return []
+      return raw
+        .split(/[·・,，、/|]+/g)
+        .map((x) => x.trim())
+        .filter(Boolean)
+        .slice(0, 30)
+    }
+
+    const uniqTags = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 30)
+
     return cards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const tagCategories = (() => {
@@ -649,12 +661,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           (Array.isArray((c as any).tagCategories) ? (c as any).tagCategories : null) ??
           (Array.isArray((c as any).tags) ? (c as any).tags : null) ??
           []
-        return Array.isArray(raw)
-          ? raw
-              .map(normalizeTagItem)
-              .filter(Boolean)
-              .slice(0, 30)
-          : ([] as string[])
+        const fromArr = Array.isArray(raw) ? raw.map(normalizeTagItem).filter(Boolean).slice(0, 30) : ([] as string[])
+        if (fromArr.length) return uniqTags(fromArr)
+        const fallbackText =
+          typeof (c as any)?.niche === "string" && String((c as any).niche).trim()
+            ? String((c as any).niche).trim()
+            : typeof (c as any)?.primaryNiche === "string" && String((c as any).primaryNiche).trim()
+              ? String((c as any).primaryNiche).trim()
+              : typeof c.category === "string"
+                ? c.category
+                : ""
+        return uniqTags(deriveTagsFromNicheText(fallbackText))
       })()
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
@@ -934,18 +951,35 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         return ""
       }
 
+      const deriveTagsFromNicheText = (input: unknown): string[] => {
+        const raw = typeof input === "string" ? input.trim() : ""
+        if (!raw) return []
+        return raw
+          .split(/[·・,，、/|]+/g)
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .slice(0, 30)
+      }
+
+      const uniqTags = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 30)
+
       const raw =
         (Array.isArray((meCard as any).collaborationNiches) ? (meCard as any).collaborationNiches : null) ??
         (Array.isArray((meCard as any).collaboration_niches) ? (meCard as any).collaboration_niches : null) ??
         (Array.isArray((meCard as any).tagCategories) ? (meCard as any).tagCategories : null) ??
         (Array.isArray((meCard as any).tags) ? (meCard as any).tags : null) ??
         []
-      return Array.isArray(raw)
-        ? raw
-            .map(normalizeTagItem)
-            .filter(Boolean)
-            .slice(0, 30)
-        : ([] as string[])
+      const fromArr = Array.isArray(raw) ? raw.map(normalizeTagItem).filter(Boolean).slice(0, 30) : ([] as string[])
+      if (fromArr.length) return uniqTags(fromArr)
+      const fallbackText =
+        typeof (meCard as any)?.niche === "string" && String((meCard as any).niche).trim()
+          ? String((meCard as any).niche).trim()
+          : typeof (meCard as any)?.primaryNiche === "string" && String((meCard as any).primaryNiche).trim()
+            ? String((meCard as any).primaryNiche).trim()
+            : typeof meCard.category === "string"
+              ? meCard.category
+              : ""
+      return uniqTags(deriveTagsFromNicheText(fallbackText))
     })()
     const deliverables = Array.isArray((meCard as any).deliverables) ? ((meCard as any).deliverables as string[]) : []
     const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
