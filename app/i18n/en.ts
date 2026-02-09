@@ -15,7 +15,6 @@ export const en: CopyDictionary = {
     pageSubheadline: "Compare by engagement and price, then start a collaboration in one click.",
     bestMatchHelper: "Best Match combines engagement, audience size, and your selected budget.",
     ctaStartCollaboration: "Start Collaboration",
-    ctaPreviewMyCard: "Preview my card",
     badgeWorkedWithBrands: "Worked with brands",
     badgeProfileComplete: "Profile complete",
     labelFollowers: "Followers",
@@ -70,9 +69,6 @@ export const en: CopyDictionary = {
 
     myCardBadge: "My Card",
     myCardFirstToggle: "My card first",
-
-    demoSectionTitle: "Demo cards",
-    demoBadge: "Demo",
 
     filtersButton: "Filters",
     profileNotSet: "Profile not set",

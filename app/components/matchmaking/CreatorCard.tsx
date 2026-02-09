@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
@@ -94,13 +94,11 @@ export function CreatorCard({
   onRetryStats?: () => void
   selectedBudgetMax?: number | null
 }) {
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const copy = getCopy(locale)
   const mm = copy.matchmaking
   const isEmpty = Boolean(creator.isDemo)
-  const isPinned = Boolean((creator as any).isPinned)
   const [showContact, setShowContact] = useState(false)
   const [ctaToast, setCtaToast] = useState<string | null>(null)
   const ctaToastTimerRef = useRef<number | null>(null)
@@ -272,22 +270,6 @@ export function CreatorCard({
     <div
       className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full"
     >
-      {isPinned && !isEmpty ? (
-        <div className="absolute top-2 right-2 z-10">
-          <div className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/25 text-emerald-200/90 whitespace-nowrap">
-            {mm.myCardBadge}
-          </div>
-        </div>
-      ) : null}
-
-      {isEmpty ? (
-        <div className="absolute top-2 right-2 z-10">
-          <div className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 whitespace-nowrap">
-            {mm.demoBadge}
-          </div>
-        </div>
-      ) : null}
-
       {isPopular && !isEmpty ? (
         <div className="absolute top-2 left-2 z-10">
           <div className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-200/90 whitespace-nowrap">
@@ -296,62 +278,8 @@ export function CreatorCard({
         </div>
       ) : null}
 
-      {isEmpty ? (
-        <div className="block flex-1 relative z-0 cursor-default">
-          <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5] max-h-[320px] sm:max-h-[420px]">
-            {creator.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={creator.avatarUrl} alt={creator.name || ""} className="w-full h-full object-cover" loading="lazy" />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-14 h-14 rounded-full bg-white/10" />
-              </div>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
-          </div>
-
-          <div className="p-3 sm:p-4 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-white/90 truncate min-w-0">{creator.name}</div>
-                {shouldShowHandle ? <div className="text-xs text-white/50 truncate min-w-0">@{creator.handle}</div> : null}
-
-                <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
-                  {displayChips.length ? (
-                    displayChips.map((c) => (
-                      <span
-                        key={c.key}
-                        className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
-                      >
-                        {c.label}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-[11px] text-white/40">{mm.noTopics}</span>
-                  )}
-                </div>
-
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                  <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0">
-                    <div className="text-[11px] text-white/45 truncate min-w-0">{mm.labelFollowers}</div>
-                    <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-white/70">
-                      {formatNumber(creator.stats?.followers)}
-                    </div>
-                  </div>
-                  <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 min-w-0">
-                    <div className="text-[11px] text-white/45 truncate min-w-0">{mm.labelEngagement}</div>
-                    <div className="mt-1 text-[clamp(18px,4.5vw,26px)] leading-none font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-white/70">
-                      {formatER(creator.stats?.engagementRate)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <Link href={href} className="block flex-1 relative z-0">
-        <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5] max-h-[320px] sm:max-h-[420px]">
+      <Link href={href} className="block flex-1 relative z-0">
+        <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
           {creator.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -447,50 +375,31 @@ export function CreatorCard({
           </div>
         </div>
       </Link>
-      )}
 
       <div className="px-3 pb-3 sm:px-4 sm:pb-4 mt-3 relative z-20 pointer-events-auto">
-        {isPinned ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              if (!href) return
-              router.push(href)
-            }}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
-          >
-            <span className="min-w-0 truncate">{mm.ctaPreviewMyCard}</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={isEmpty}
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              if (isEmpty) return
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (!contactItems.length) {
+              setShowContact(false)
+              setCtaToast("沒有提供聯絡方式 / No contact info provided")
+              if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
+              ctaToastTimerRef.current = window.setTimeout(() => {
+                setCtaToast(null)
+                ctaToastTimerRef.current = null
+              }, 1600)
+              return
+            }
 
-              if (!contactItems.length) {
-                setShowContact(false)
-                setCtaToast("沒有提供聯絡方式 / No contact info provided")
-                if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
-                ctaToastTimerRef.current = window.setTimeout(() => {
-                  setCtaToast(null)
-                  ctaToastTimerRef.current = null
-                }, 1600)
-                return
-              }
-
-              setCtaToast(null)
-              setShowContact((v) => !v)
-            }}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0 disabled:opacity-60 disabled:hover:brightness-100"
-          >
-            <span className="min-w-0 truncate">{mm.ctaStartCollaboration}</span>
-          </button>
-        )}
+            setCtaToast(null)
+            setShowContact((v) => !v)
+          }}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0"
+        >
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">{mm.ctaStartCollaboration}</span>
+        </button>
 
         <div aria-live="polite" className="sr-only">
           {ctaToast ?? ""}
