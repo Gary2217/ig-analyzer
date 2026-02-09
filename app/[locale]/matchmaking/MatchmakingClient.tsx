@@ -8,6 +8,7 @@ import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmak
 import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
 import { useFavorites } from "@/app/components/matchmaking/useFavorites"
 import { getCopy, type Locale } from "@/app/i18n"
+import { CREATOR_TYPE_MASTER, deriveCreatorTypesFromText, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
 import type {
   BudgetRange,
   CollabType,
@@ -629,29 +630,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [])
 
   const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
-    const normalizeTagItem = (x: unknown): string => {
-      if (typeof x === "string") return x.trim()
-      if (!x || typeof x !== "object") return ""
-      const obj = x as any
-      const candidates = [obj.label, obj.value, obj.name, obj.title]
-      for (const c of candidates) {
-        if (typeof c === "string" && c.trim()) return c.trim()
-      }
-      return ""
-    }
-
-    const deriveTagsFromNicheText = (input: unknown): string[] => {
-      const raw = typeof input === "string" ? input.trim() : ""
-      if (!raw) return []
-      return raw
-        .split(/[·・,，、/|]+/g)
-        .map((x) => x.trim())
-        .filter(Boolean)
-        .slice(0, 30)
-    }
-
-    const uniqTags = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 30)
-
     return cards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const tagCategories = (() => {
@@ -661,8 +639,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           (Array.isArray((c as any).tagCategories) ? (c as any).tagCategories : null) ??
           (Array.isArray((c as any).tags) ? (c as any).tags : null) ??
           []
-        const fromArr = Array.isArray(raw) ? raw.map(normalizeTagItem).filter(Boolean).slice(0, 30) : ([] as string[])
-        if (fromArr.length) return uniqTags(fromArr)
+        const fromArr = normalizeCreatorTypes(raw).slice(0, 30)
+        if (fromArr.length) return fromArr
         const fallbackText =
           typeof (c as any)?.niche === "string" && String((c as any).niche).trim()
             ? String((c as any).niche).trim()
@@ -671,7 +649,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               : typeof c.category === "string"
                 ? c.category
                 : ""
-        return uniqTags(deriveTagsFromNicheText(fallbackText))
+        return deriveCreatorTypesFromText(fallbackText).slice(0, 30)
       })()
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
@@ -756,41 +734,9 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [cards, statsVersion])
 
   const tagCategoryOptions = useMemo(() => {
-    const master: string[] = [
-      "電商",
-      "美妝",
-      "保養",
-      "穿搭",
-      "時尚",
-      "旅遊",
-      "美食",
-      "健身",
-      "運動",
-      "母嬰",
-      "親子",
-      "3C",
-      "科技",
-      "遊戲",
-      "寵物",
-      "居家",
-      "生活",
-      "理財",
-      "教育",
-      "職場",
-      "攝影",
-      "藝術",
-      "音樂",
-      "娛樂",
-      "動漫",
-      "汽機車",
-      "房產",
-      "餐飲",
-      "公益",
-      "其他",
-    ]
     const set = new Set<string>()
-    master.forEach((x) => {
-      const s = String(x || "").trim()
+    CREATOR_TYPE_MASTER.forEach((x: { zh: string }) => {
+      const s = String(x?.zh || "").trim()
       if (s) set.add(s)
     })
     creators.forEach((c) => {
@@ -1104,7 +1050,18 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const existingIds = new Set(finalCards.map((c) => c.id))
     const demos = buildDemoCreators({ locale, existingIds, count: need, seedBase: `matchmaking:page:${clampedPage}` })
 
-    return demos.map((c) => {
+    const demoTagSets: string[][] = [
+      ["美妝", "保養", "開箱"],
+      ["旅遊", "美食", "探店"],
+      ["健身", "運動"],
+      ["電商", "開箱", "3C"],
+      ["居家", "生活", "手作"],
+      ["露營", "戶外", "攝影"],
+      ["職場", "教育", "理財"],
+      ["娛樂", "音樂", "Vlog"],
+    ]
+
+    return demos.map((c, idx) => {
       const followers = typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) ? (c as any).followerCount : undefined
       const er = typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate) ? (c as any).engagementRate : undefined
 
@@ -1114,6 +1071,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         handle: locale === "zh-TW" ? "demo" : "demo",
         avatarUrl: c.avatarUrl,
         topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
+        tagCategories: demoTagSets[idx % demoTagSets.length],
         platforms: ["instagram"],
         dealTypes: ["other"],
         collabTypes: ["other"],
