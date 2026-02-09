@@ -342,6 +342,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedDealTypes, setSelectedDealTypes] = useState<CollabType[]>([])
+  const [selectedTagCategories, setSelectedTagCategories] = useState<string[]>([])
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
   const [page, setPage] = useState(1)
@@ -477,7 +478,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   useEffect(() => {
     setPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, sort, budget, customBudget, selectedPlatforms.join("|"), selectedDealTypes.join("|")])
+  }, [q, sort, budget, customBudget, selectedPlatforms.join("|"), selectedDealTypes.join("|"), selectedTagCategories.join("|")])
 
   useEffect(() => {
     let cancelled = false
@@ -630,6 +631,20 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
     return cards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
+      const tagCategories = (() => {
+        const raw =
+          (Array.isArray((c as any).collaborationNiches) ? (c as any).collaborationNiches : null) ??
+          (Array.isArray((c as any).collaboration_niches) ? (c as any).collaboration_niches : null) ??
+          (Array.isArray((c as any).tagCategories) ? (c as any).tagCategories : null) ??
+          (Array.isArray((c as any).tags) ? (c as any).tags : null) ??
+          []
+        return Array.isArray(raw)
+          ? raw
+              .map((x) => (typeof x === "string" ? x.trim() : ""))
+              .filter(Boolean)
+              .slice(0, 30)
+          : ([] as string[])
+      })()
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
@@ -690,6 +705,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         handle,
         avatarUrl: c.avatarUrl,
         topics,
+        tagCategories,
         platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
         dealTypes,
         collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
@@ -708,6 +724,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       }
     })
   }, [cards, statsVersion])
+
+  const tagCategoryOptions = useMemo(() => {
+    const set = new Set<string>()
+    creators.forEach((c) => {
+      ;(c.tagCategories ?? []).forEach((x) => {
+        const s = String(x || "").trim()
+        if (s) set.add(s)
+      })
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hant"))
+  }, [creators])
 
   const dealTypeOptions = useMemo(() => {
     const mm = uiCopy.matchmaking
@@ -793,10 +820,15 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const qq = q.trim().toLowerCase()
 
     let out = creators.filter((c) => {
-      const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")}`.toLowerCase()
+      const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")} ${(c.tagCategories ?? []).join(" ")}`.toLowerCase()
       const okQ = !qq || hay.includes(qq)
       const okPlatform = platformMatchAny(selectedPlatforms, c.platforms)
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
+      const okTags = (() => {
+        if (!selectedTagCategories.length) return true
+        const set = new Set((c.tagCategories ?? []).map((x) => String(x || "").trim()).filter(Boolean))
+        return selectedTagCategories.some((t) => set.has(String(t || "").trim()))
+      })()
 
       let okBudget = true
       if (budget === "custom") {
@@ -805,7 +837,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         okBudget = budgetEligibleByMinPrice(budget, c.minPrice)
       }
 
-      return okQ && okPlatform && okDealType && okBudget
+      return okQ && okPlatform && okDealType && okTags && okBudget
     })
 
     if (sort === "best_match") {
@@ -835,12 +867,26 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
 
     return out
-  }, [creators, q, sort, budget, customBudget, selectedPlatforms, selectedDealTypes])
+  }, [creators, q, sort, budget, customBudget, selectedPlatforms, selectedDealTypes, selectedTagCategories])
 
   const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string }) | null => {
     if (!meCard) return null
 
     const topics = (meCard.category ? [meCard.category] : []).filter(Boolean)
+    const tagCategories = (() => {
+      const raw =
+        (Array.isArray((meCard as any).collaborationNiches) ? (meCard as any).collaborationNiches : null) ??
+        (Array.isArray((meCard as any).collaboration_niches) ? (meCard as any).collaboration_niches : null) ??
+        (Array.isArray((meCard as any).tagCategories) ? (meCard as any).tagCategories : null) ??
+        (Array.isArray((meCard as any).tags) ? (meCard as any).tags : null) ??
+        []
+      return Array.isArray(raw)
+        ? raw
+            .map((x) => (typeof x === "string" ? x.trim() : ""))
+            .filter(Boolean)
+            .slice(0, 30)
+        : ([] as string[])
+    })()
     const deliverables = Array.isArray((meCard as any).deliverables) ? ((meCard as any).deliverables as string[]) : []
     const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
     const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
@@ -889,7 +935,11 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         ? Math.floor((meCard as any).minPrice)
         : typeof (meCard as any)?.min_price === "number" && Number.isFinite((meCard as any).min_price)
           ? Math.floor((meCard as any).min_price)
-          : undefined
+          : typeof (meCard as any)?.minPrice === "string" && (meCard as any).minPrice.trim() && Number.isFinite(Number((meCard as any).minPrice))
+            ? Math.floor(Number((meCard as any).minPrice))
+            : typeof (meCard as any)?.min_price === "string" && (meCard as any).min_price.trim() && Number.isFinite(Number((meCard as any).min_price))
+              ? Math.floor(Number((meCard as any).min_price))
+              : undefined
 
     return {
       id: meCard.id,
@@ -898,6 +948,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       handle,
       avatarUrl: meCard.avatarUrl,
       topics,
+      tagCategories,
       platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
       dealTypes,
       collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
@@ -1223,6 +1274,23 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
             setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
           }
           onClearPlatforms={() => setSelectedPlatforms([])}
+          selectedTagCategories={selectedTagCategories}
+          tagCategoryOptions={tagCategoryOptions}
+          onToggleTagCategory={(tag: string) =>
+            setSelectedTagCategories((prev) => {
+              const t = String(tag || "").trim()
+              if (!t) return prev
+              return prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+            })
+          }
+          onAddCustomTagCategory={(tag: string) =>
+            setSelectedTagCategories((prev) => {
+              const t = String(tag || "").trim()
+              if (!t) return prev
+              return prev.includes(t) ? prev : [...prev, t]
+            })
+          }
+          onClearTagCategories={() => setSelectedTagCategories([])}
           selectedDealTypes={selectedDealTypes}
           onToggleDealType={(t: CollabType) =>
             setSelectedDealTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))

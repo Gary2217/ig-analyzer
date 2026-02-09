@@ -13,6 +13,12 @@ type Props = {
   onTogglePlatform: (p: Platform) => void
   onClearPlatforms: () => void
 
+  selectedTagCategories: string[]
+  tagCategoryOptions: string[]
+  onToggleTagCategory: (tag: string) => void
+  onAddCustomTagCategory: (tag: string) => void
+  onClearTagCategories: () => void
+
   budget: BudgetRange
   onBudget: (v: BudgetRange) => void
 
@@ -38,6 +44,13 @@ export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
   const [chipsExpanded, setChipsExpanded] = useState(false)
+  const [platformOpen, setPlatformOpen] = useState(false)
+  const [tagsOpen, setTagsOpen] = useState(false)
+  const [tagSearch, setTagSearch] = useState("")
+  const [customTagDraft, setCustomTagDraft] = useState("")
+
+  const clearLabel = props.locale === "zh-TW" ? "清除" : "Clear"
+  const addLabel = props.locale === "zh-TW" ? "新增" : "Add"
 
   const budgetLabelFor = (range: Exclude<BudgetRange, "any" | "custom">) => {
     const isZh = props.locale === "zh-TW"
@@ -79,6 +92,26 @@ export function FiltersBar(props: Props) {
     return order.map((p) => ({ value: p, label: labelFor(p) }))
   }, [mm.platformFacebook, mm.platformInstagram, mm.platformTikTok, mm.platformYouTube])
 
+  const selectedPlatformLabel = useMemo(() => {
+    if (!props.selectedPlatforms.length) return copy.common.all
+    const map = new Map(platformOptions.map((o) => [o.value, o.label]))
+    return props.selectedPlatforms
+      .map((p) => map.get(p) ?? String(p))
+      .slice(0, 3)
+      .join(", ") + (props.selectedPlatforms.length > 3 ? ` +${props.selectedPlatforms.length - 3}` : "")
+  }, [copy.common.all, platformOptions, props.selectedPlatforms])
+
+  const selectedTagsLabel = useMemo(() => {
+    if (!props.selectedTagCategories.length) return copy.common.all
+    return props.selectedTagCategories.slice(0, 3).join(", ") + (props.selectedTagCategories.length > 3 ? ` +${props.selectedTagCategories.length - 3}` : "")
+  }, [copy.common.all, props.selectedTagCategories])
+
+  const filteredTagOptions = useMemo(() => {
+    const q = tagSearch.trim().toLowerCase()
+    if (!q) return props.tagCategoryOptions
+    return props.tagCategoryOptions.filter((x) => String(x || "").toLowerCase().includes(q))
+  }, [props.tagCategoryOptions, tagSearch])
+
   const dealChips = useMemo(() => props.dealTypeOptions, [props.dealTypeOptions])
 
   const chipsCollapsedCount = 6
@@ -98,6 +131,141 @@ export function FiltersBar(props: Props) {
                   placeholder={copy.common.searchPlaceholder}
                   className="h-11 w-full sm:flex-1 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
                 />
+
+                <div className="w-full sm:w-auto min-w-0">
+                  <div className="text-[11px] text-white/45 mb-1">創作者平台</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setPlatformOpen((v) => !v)}
+                      className="h-11 w-full sm:w-[200px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/85 flex items-center justify-between gap-2"
+                      aria-expanded={platformOpen}
+                    >
+                      <span className="min-w-0 truncate">{selectedPlatformLabel}</span>
+                      <span className="shrink-0 text-white/50">▾</span>
+                    </button>
+                    {platformOpen ? (
+                      <div className="absolute z-50 mt-2 w-full sm:w-[240px] rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
+                        <div className="flex items-center justify-between gap-2 px-2 py-1">
+                          <div className="text-[11px] text-white/55">創作者平台</div>
+                          {props.selectedPlatforms.length ? (
+                            <button
+                              type="button"
+                              onClick={() => props.onClearPlatforms()}
+                              className="text-[11px] text-white/60 hover:text-white/80"
+                            >
+                              {clearLabel}
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 space-y-1">
+                          {platformOptions.map((o) => {
+                            const active = props.selectedPlatforms.includes(o.value)
+                            return (
+                              <button
+                                key={o.value}
+                                type="button"
+                                onClick={() => props.onTogglePlatform(o.value)}
+                                className={`w-full flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm text-left transition-colors ${
+                                  active ? "bg-emerald-500/10 border border-emerald-400/25 text-white/90" : "hover:bg-white/5 text-white/80 border border-transparent"
+                                }`}
+                              >
+                                <span className="min-w-0 truncate">{o.label}</span>
+                                <span className={`shrink-0 text-xs ${active ? "text-emerald-200/90" : "text-white/35"}`}>{active ? "✓" : ""}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="w-full sm:w-auto min-w-0">
+                  <div className="text-[11px] text-white/45 mb-1">類型</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setTagsOpen((v) => !v)}
+                      className="h-11 w-full sm:w-[220px] max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/85 flex items-center justify-between gap-2"
+                      aria-expanded={tagsOpen}
+                    >
+                      <span className="min-w-0 truncate">{selectedTagsLabel}</span>
+                      <span className="shrink-0 text-white/50">▾</span>
+                    </button>
+
+                    {tagsOpen ? (
+                      <div className="absolute z-50 mt-2 w-full sm:w-[280px] rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
+                        <div className="flex items-center justify-between gap-2 px-2 py-1">
+                          <div className="text-[11px] text-white/55">類型</div>
+                          {props.selectedTagCategories.length ? (
+                            <button
+                              type="button"
+                              onClick={() => props.onClearTagCategories()}
+                              className="text-[11px] text-white/60 hover:text-white/80"
+                            >
+                              {clearLabel}
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <div className="px-2 pt-1">
+                          <input
+                            value={tagSearch}
+                            onChange={(e) => setTagSearch(e.target.value.slice(0, 60))}
+                            placeholder={copy.common.searchPlaceholder}
+                            className="h-10 w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+                          />
+                        </div>
+
+                        <div className="mt-2 max-h-[280px] overflow-auto px-1">
+                          {filteredTagOptions.map((tag) => {
+                            const t = String(tag || "").trim()
+                            if (!t) return null
+                            const active = props.selectedTagCategories.includes(t)
+                            return (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => props.onToggleTagCategory(t)}
+                                className={`w-full flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm text-left transition-colors ${
+                                  active ? "bg-sky-500/10 border border-sky-400/25 text-white/90" : "hover:bg-white/5 text-white/80 border border-transparent"
+                                }`}
+                              >
+                                <span className="min-w-0 truncate">{t}</span>
+                                <span className={`shrink-0 text-xs ${active ? "text-sky-200/90" : "text-white/35"}`}>{active ? "✓" : ""}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        <div className="mt-2 border-t border-white/10 pt-2 px-2">
+                          <div className="text-[11px] text-white/55">其他</div>
+                          <div className="mt-1 flex items-center gap-2">
+                            <input
+                              value={customTagDraft}
+                              onChange={(e) => setCustomTagDraft(e.target.value.slice(0, 30))}
+                              placeholder="輸入自訂類型"
+                              className="h-10 flex-1 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const t = String(customTagDraft || "").trim()
+                                if (!t) return
+                                props.onAddCustomTagCategory(t)
+                                setCustomTagDraft("")
+                              }}
+                              className="h-10 shrink-0 px-3 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
+                            >
+                              {addLabel}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
 
                 <select
                   value={props.budget}
@@ -152,12 +320,13 @@ export function FiltersBar(props: Props) {
                   ) : null}
                 </div>
 
-                {props.selectedPlatforms.length || props.selectedDealTypes.length ? (
+                {props.selectedPlatforms.length || props.selectedDealTypes.length || props.selectedTagCategories.length ? (
                   <button
                     type="button"
                     onClick={() => {
                       props.onClearPlatforms()
                       props.onClearDealTypes()
+                      props.onClearTagCategories()
                     }}
                     className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 whitespace-nowrap"
                   >
@@ -167,24 +336,6 @@ export function FiltersBar(props: Props) {
               </div>
 
               <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-                {platformOptions.map((o) => {
-                  const active = props.selectedPlatforms.includes(o.value)
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => props.onTogglePlatform(o.value)}
-                      className={`h-11 px-3 rounded-full border text-sm whitespace-nowrap max-w-full truncate min-w-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
-                        active
-                          ? "bg-gradient-to-r from-emerald-500/15 to-cyan-400/10 border-emerald-400/30 text-white/90 ring-1 ring-emerald-400/25"
-                          : "bg-white/5 border-white/10 text-white/70 hover:bg-white/[0.08] hover:text-white/85"
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  )
-                })}
-
                 {visibleDealChips.map((o) => {
                   const active = props.selectedDealTypes.includes(o.value)
                   return (

@@ -227,8 +227,16 @@ export function CreatorCard({
 
   const platformBadges = (creator.platforms ?? []).filter(Boolean)
   const dealTypeBadges = (creator.dealTypes ?? []).filter((x): x is string => typeof x === "string" && x.length > 0)
+  const tagBadges = (creator.tagCategories ?? []).filter((x): x is string => typeof x === "string" && x.trim().length > 0)
   const topBadges = [...platformBadges.map((p) => ({ key: `p:${p}`, label: platformLabel(p) })), ...dealTypeBadges.map((t) => ({ key: `t:${t}`, label: typeLabel(t) }))]
   const displayBadges = topBadges.slice(0, 4)
+  const displayTagBadges = tagBadges.slice(0, 6)
+
+  const badgeClassName = (key: string) => {
+    if (key.startsWith("p:")) return "bg-emerald-500/10 border-emerald-400/20 text-emerald-100/85"
+    if (key.startsWith("t:")) return "bg-violet-500/10 border-violet-400/20 text-violet-100/85"
+    return "bg-sky-500/10 border-sky-400/20 text-sky-100/85"
+  }
 
   const parsedContact = safeParseCreatorContact((creator as any)?.contact)
   const primaryContactMethod = (() => {
@@ -395,7 +403,7 @@ export function CreatorCard({
                 displayBadges.map((c) => (
                   <span
                     key={c.key}
-                    className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
+                    className={`text-[11px] px-2 py-0.5 rounded-full border max-w-full truncate whitespace-nowrap ${badgeClassName(c.key)}`}
                     title={c.label}
                   >
                     {c.label}
@@ -405,6 +413,20 @@ export function CreatorCard({
                 <span className="text-[11px] text-white/40">{mm.noTopics}</span>
               )}
             </div>
+
+            {displayTagBadges.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
+                {displayTagBadges.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[11px] px-2 py-0.5 rounded-full border bg-sky-500/10 border-sky-400/20 text-sky-100/85 max-w-full truncate whitespace-nowrap"
+                    title={tag}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
               <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.20),0_12px_30px_-18px_rgba(59,130,246,0.35)]">
