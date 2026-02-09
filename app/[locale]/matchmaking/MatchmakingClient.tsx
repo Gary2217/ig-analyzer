@@ -196,11 +196,11 @@ function buildDemoCreators({
 
 function safeParseContact(input: unknown): {
   emails: string[]
-  instagrams: string[]
-  others: string[]
+  phones: string[]
+  lines: string[]
   primaryContactMethod?: "email" | "phone" | "line"
 } {
-  const empty = { emails: [] as string[], instagrams: [] as string[], others: [] as string[], primaryContactMethod: undefined as any }
+  const empty = { emails: [] as string[], phones: [] as string[], lines: [] as string[], primaryContactMethod: undefined as any }
   if (typeof input !== "string") return empty
   const raw = input.trim()
   if (!raw) return empty
@@ -209,23 +209,29 @@ function safeParseContact(input: unknown): {
     if (!obj || typeof obj !== "object") return empty
     const readArr = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean) : [])
     const emails = readArr((obj as any).emails)
-    const instagrams = readArr((obj as any).instagrams)
-    const others = readArr((obj as any).others)
+    const phones = readArr((obj as any).phones)
+    const lines = readArr((obj as any).lines)
+    const legacyOthers = readArr((obj as any).others)
     const email1 = typeof (obj as any).email === "string" ? String((obj as any).email).trim() : ""
-    const ig1 = typeof (obj as any).instagram === "string" ? String((obj as any).instagram).trim() : ""
+    const phone1 = typeof (obj as any).phone === "string" ? String((obj as any).phone).trim() : ""
+    const line1 = typeof (obj as any).line === "string" ? String((obj as any).line).trim() : ""
     const other1 = typeof (obj as any).other === "string" ? String((obj as any).other).trim() : ""
-    const mergedEmails = [...(email1 ? [email1] : []), ...emails]
-    const mergedIgs = [...(ig1 ? [ig1] : []), ...instagrams]
-    const mergedOthers = [...(other1 ? [other1] : []), ...others]
 
     const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
 
     const pcmRaw = typeof (obj as any)?.primaryContactMethod === "string" ? String((obj as any).primaryContactMethod).trim() : ""
     const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? (pcmRaw as any) : undefined
+
+    const finalLines = (() => {
+      const merged = uniq([...(line1 ? [line1] : []), ...lines])
+      if (merged.length > 0) return merged
+      // Back-compat: treat legacy others/other as lines when lines is empty.
+      return uniq([...(other1 ? [other1] : []), ...legacyOthers])
+    })()
     return {
       emails: uniq([...(email1 ? [email1] : []), ...emails]),
-      instagrams: uniq([...(ig1 ? [ig1] : []), ...instagrams]),
-      others: uniq([...(other1 ? [other1] : []), ...others]),
+      phones: uniq([...(phone1 ? [phone1] : []), ...phones]),
+      lines: finalLines,
       primaryContactMethod,
     }
   } catch {
@@ -646,7 +652,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
       const parsedContact = safeParseContact((c as any).contact)
       const contactEmail = parsedContact.emails[0] || undefined
-      const contactLine = parsedContact.others[0] || undefined
+      const contactPhone = parsedContact.phones[0] || undefined
+      const contactLine = parsedContact.lines[0] || undefined
       const primaryContactMethod = parsedContact.primaryContactMethod
 
       const rawFollowers =
@@ -693,6 +700,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           engagementRate: rawER,
         },
         contactEmail,
+        contactPhone,
         contactLine,
         primaryContactMethod,
         href: c.isDemo ? "" : c.profileUrl,

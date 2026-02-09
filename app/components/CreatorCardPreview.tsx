@@ -603,19 +603,13 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
   const parsedContact = useMemo(() => {
     const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
-    const readStrArr = (v: unknown) =>
+    const readArr = (v: unknown) =>
       Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
-    const readStrOrArr = (v: unknown) => {
-      const arr = readStrArr(v)
-      if (arr.length > 0) return arr
-      const s = readStr(v)
-      return s ? [s] : ([] as string[])
-    }
 
     let obj: unknown = contact
     if (typeof obj === "string") {
       const raw = obj.trim()
-      if (!raw) return { email: "", instagram: "", other: "" }
+      if (!raw) return { emails: [] as string[], phones: [] as string[], lines: [] as string[], primaryContactMethod: undefined as any }
       try {
         obj = JSON.parse(raw)
       } catch {
@@ -625,40 +619,35 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
 
     const contactObj: Record<string, unknown> = isPlainRecord(obj) ? obj : {}
 
-    const emails = readStrArr(contactObj.emails)
-    const instagrams = readStrArr(contactObj.instagrams)
-    const others = readStrArr(contactObj.others)
+    const emails = readArr(contactObj.emails)
+    const phones = readArr((contactObj as any).phones)
+    const lines = readArr((contactObj as any).lines)
+    const legacyOthers = readArr((contactObj as any).others)
 
-    const emailArrFromEmailKey = readStrOrArr(contactObj.email)
-    const instagramArrFromInstagramKey = readStrOrArr(contactObj.instagram)
-    const otherArrFromOtherKey = readStrOrArr(contactObj.other)
+    const email1 = readStr(contactObj.email) || readStr((contactObj as any).contactEmail)
+    const phone1 = readStr((contactObj as any).phone) || readStr((contactObj as any).contactPhone)
+    const line1 = readStr((contactObj as any).line) || readStr((contactObj as any).contactLine)
+    const other1 = readStr(contactObj.other) || readStr((contactObj as any).contactOther)
 
-    const emailArrFromLegacyKey = readStrOrArr(contactObj.contactEmail)
-    const instagramArrFromLegacyKey = readStrOrArr(contactObj.contactInstagram)
-    const otherArrFromLegacyKey = readStrOrArr(contactObj.contactOther)
+    const pcmRaw = readStr((contactObj as any).primaryContactMethod)
+    const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? (pcmRaw as any) : undefined
 
-    const finalEmails =
-      emails.length ? emails : emailArrFromEmailKey.length ? emailArrFromEmailKey : emailArrFromLegacyKey
-    const finalInstagrams =
-      instagrams.length
-        ? instagrams
-        : instagramArrFromInstagramKey.length
-          ? instagramArrFromInstagramKey
-          : instagramArrFromLegacyKey
-    const finalOthers =
-      others.length ? others : otherArrFromOtherKey.length ? otherArrFromOtherKey : otherArrFromLegacyKey
+    const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
+    const finalLines = (() => {
+      const merged = uniq([...(line1 ? [line1] : []), ...lines])
+      if (merged.length > 0) return merged
+      return uniq([...(other1 ? [other1] : []), ...legacyOthers])
+    })()
 
     return {
-      email: finalEmails.join(", "),
-      instagram: finalInstagrams.join(", "),
-      other: finalOthers.join(", "),
+      emails: uniq([...(email1 ? [email1] : []), ...emails]),
+      phones: uniq([...(phone1 ? [phone1] : []), ...phones]),
+      lines: finalLines,
+      primaryContactMethod,
     }
   }, [contact])
 
-  const hasContact =
-    (typeof parsedContact.email === "string" && parsedContact.email.trim().length > 0) ||
-    (typeof parsedContact.instagram === "string" && parsedContact.instagram.trim().length > 0) ||
-    (typeof parsedContact.other === "string" && parsedContact.other.trim().length > 0)
+  const hasContact = parsedContact.emails.length > 0 || parsedContact.phones.length > 0 || parsedContact.lines.length > 0
 
   const featuredTiles = useMemo(() => {
     // Robust fallback: try multiple possible sources for featured items
@@ -944,7 +933,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             collaborationNiches={nicheText}
             formats={formats.map((id) => ({ id, label: formatLabelMap[id] || id }))}
             brands={brands}
-            contact={parsedContact}
+            contact={parsedContact as any}
             featuredItems={sortableIg}
             onOpenIg={setOpenIg}
           />
@@ -1307,12 +1296,30 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
             <div className={"rounded-xl border border-white/8 bg-black/20 px-3 py-2.5 min-w-0 transition-colors " + sectionRing("contact")}>
               <div className="text-[10px] tracking-widest font-semibold text-white/55">{t("results.mediaKit.contact.title")}</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                <Pill title={String(parsedContact.email || "")}>
-                  {parsedContact.email ? parsedContact.email : t("results.mediaKit.contact.notProvided")}
-                </Pill>
-                <Pill title={String(parsedContact.other || "")}>
-                  {parsedContact.other ? parsedContact.other : t("results.mediaKit.contact.notProvided")}
-                </Pill>
+                {(() => {
+                  const pcm = parsedContact.primaryContactMethod
+                  const firstEmail = parsedContact.emails[0] ?? ""
+                  const firstPhone = parsedContact.phones[0] ?? ""
+                  const firstLine = parsedContact.lines[0] ?? ""
+                  const ordered = [
+                    { key: "email" as const, value: firstEmail },
+                    { key: "phone" as const, value: firstPhone },
+                    { key: "line" as const, value: firstLine },
+                  ]
+                    .filter((x) => x.value && x.value.trim().length > 0)
+                    .sort((a, b) => {
+                      const pa = pcm && a.key === pcm ? 1 : 0
+                      const pb = pcm && b.key === pcm ? 1 : 0
+                      if (pa !== pb) return pb - pa
+                      const order = ["email", "phone", "line"]
+                      return order.indexOf(a.key) - order.indexOf(b.key)
+                    })
+                  return ordered.map((it) => (
+                    <Pill key={it.key} title={String(it.value || "")}>
+                      {it.value}
+                    </Pill>
+                  ))
+                })()}
               </div>
             </div>
           ) : null}

@@ -39,7 +39,12 @@ interface MobileCreatorCardLayoutProps {
   collaborationNiches?: string | null
   formats?: Array<{ id: string; label: string }>
   brands?: string[]
-  contact?: { email?: string; other?: string }
+  contact?: {
+    emails?: string[]
+    phones?: string[]
+    lines?: string[]
+    primaryContactMethod?: "email" | "phone" | "line"
+  }
   featuredItems?: Array<{
     id: string
     url: string
@@ -109,7 +114,7 @@ export function MobileCreatorCardLayout({
     el.scrollTo({ left: slideWidth * index, behavior: 'smooth' })
   }
 
-  const hasContact = contact?.email || contact?.other
+  const hasContact = (contact?.emails ?? []).length > 0 || (contact?.phones ?? []).length > 0 || (contact?.lines ?? []).length > 0
 
   return (
     <div className="flex flex-col gap-4 min-w-0">
@@ -405,16 +410,36 @@ export function MobileCreatorCardLayout({
             {t("results.mediaKit.contact.title")}
           </div>
           <div className="flex flex-col gap-2 min-w-0">
-            {contact?.email && (
-              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 truncate">
-                {contact.email}
-              </div>
-            )}
-            {contact?.other && (
-              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 truncate">
-                {contact.other}
-              </div>
-            )}
+            {(() => {
+              const pcm = contact?.primaryContactMethod
+              const firstEmail = (contact?.emails ?? [])[0] ?? ""
+              const firstPhone = (contact?.phones ?? [])[0] ?? ""
+              const firstLine = (contact?.lines ?? [])[0] ?? ""
+              const order = ["email", "phone", "line"] as const
+              type ContactKey = (typeof order)[number]
+              const items: Array<{ key: ContactKey; value: string }> = [
+                { key: "email" as const, value: firstEmail },
+                { key: "phone" as const, value: firstPhone },
+                { key: "line" as const, value: firstLine },
+              ]
+                .filter((x) => x.value && x.value.trim().length > 0)
+                .sort((a, b) => {
+                  const pa = pcm && a.key === pcm ? 1 : 0
+                  const pb = pcm && b.key === pcm ? 1 : 0
+                  if (pa !== pb) return pb - pa
+                  return order.indexOf(a.key) - order.indexOf(b.key)
+                })
+
+              return items.map((it) => (
+                <div
+                  key={it.key}
+                  className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 truncate"
+                  title={it.value}
+                >
+                  {it.value}
+                </div>
+              ))
+            })()}
           </div>
         </div>
       )}

@@ -39,8 +39,13 @@ function deriveFormatKeysFromDeliverables(input?: string[]) {
   return Array.from(set)
 }
 
-function safeParseCreatorContact(input: unknown): { emails: string[]; others: string[] } {
-  const empty = { emails: [] as string[], others: [] as string[] }
+function safeParseCreatorContact(input: unknown): {
+  emails: string[]
+  phones: string[]
+  lines: string[]
+  primaryContactMethod?: "email" | "phone" | "line"
+} {
+  const empty = { emails: [] as string[], phones: [] as string[], lines: [] as string[], primaryContactMethod: undefined as any }
   if (typeof input !== "string") return empty
   const raw = input.trim()
   if (!raw) return empty
@@ -51,14 +56,31 @@ function safeParseCreatorContact(input: unknown): { emails: string[]; others: st
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean) : []
 
     const emails = readArr((obj as any).emails)
-    const others = readArr((obj as any).others)
+    const phones = readArr((obj as any).phones)
+    const lines = readArr((obj as any).lines)
+    const legacyOthers = readArr((obj as any).others)
+
     const email1 = typeof (obj as any).email === "string" ? String((obj as any).email).trim() : ""
+    const phone1 = typeof (obj as any).phone === "string" ? String((obj as any).phone).trim() : ""
+    const line1 = typeof (obj as any).line === "string" ? String((obj as any).line).trim() : ""
     const other1 = typeof (obj as any).other === "string" ? String((obj as any).other).trim() : ""
 
+    const pcmRaw = typeof (obj as any).primaryContactMethod === "string" ? String((obj as any).primaryContactMethod).trim() : ""
+    const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? (pcmRaw as any) : undefined
+
     const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
+
+    const finalLines = (() => {
+      const merged = uniq([...(line1 ? [line1] : []), ...lines])
+      if (merged.length > 0) return merged
+      // Back-compat: treat legacy others/other as lines when lines is empty.
+      return uniq([...(other1 ? [other1] : []), ...legacyOthers])
+    })()
     return {
       emails: uniq([...(email1 ? [email1] : []), ...emails]),
-      others: uniq([...(other1 ? [other1] : []), ...others]),
+      phones: uniq([...(phone1 ? [phone1] : []), ...phones]),
+      lines: finalLines,
+      primaryContactMethod,
     }
   } catch {
     return empty
@@ -208,9 +230,11 @@ export function CreatorCard({
   const topBadges = [...platformBadges.map((p) => ({ key: `p:${p}`, label: platformLabel(p) })), ...dealTypeBadges.map((t) => ({ key: `t:${t}`, label: typeLabel(t) }))]
   const displayBadges = topBadges.slice(0, 4)
 
+  const parsedContact = safeParseCreatorContact((creator as any)?.contact)
   const primaryContactMethod = (() => {
     const raw = typeof (creator as any)?.primaryContactMethod === "string" ? String((creator as any).primaryContactMethod).trim() : ""
-    return raw === "email" || raw === "phone" || raw === "line" ? raw : null
+    if (raw === "email" || raw === "phone" || raw === "line") return raw
+    return parsedContact.primaryContactMethod ?? null
   })()
 
   const contactItems = (() => {
@@ -222,7 +246,6 @@ export function CreatorCard({
       ariaLabel?: string
       isPrimary?: boolean
     }> = []
-    const parsedContact = safeParseCreatorContact((creator as any)?.contact)
     const email =
       typeof creator.contactEmail === "string"
         ? creator.contactEmail.trim()
@@ -237,22 +260,24 @@ export function CreatorCard({
     const phone =
       typeof creator.contactPhone === "string"
         ? creator.contactPhone.trim()
-        : typeof (creator as any)?.creatorCard?.contactPhone === "string"
-          ? String((creator as any)?.creatorCard?.contactPhone).trim()
-          : typeof (creator as any)?.profile?.contactPhone === "string"
-            ? String((creator as any)?.profile?.contactPhone).trim()
-            : ""
+        : typeof parsedContact.phones[0] === "string"
+          ? parsedContact.phones[0].trim()
+          : typeof (creator as any)?.creatorCard?.contactPhone === "string"
+            ? String((creator as any)?.creatorCard?.contactPhone).trim()
+            : typeof (creator as any)?.profile?.contactPhone === "string"
+              ? String((creator as any)?.profile?.contactPhone).trim()
+              : ""
 
     const line =
       typeof creator.contactLine === "string"
         ? creator.contactLine.trim()
-        : typeof parsedContact.others[0] === "string"
-          ? parsedContact.others[0].trim()
-        : typeof (creator as any)?.creatorCard?.contactLine === "string"
-          ? String((creator as any)?.creatorCard?.contactLine).trim()
-          : typeof (creator as any)?.profile?.contactLine === "string"
-            ? String((creator as any)?.profile?.contactLine).trim()
-            : ""
+        : typeof parsedContact.lines[0] === "string"
+          ? parsedContact.lines[0].trim()
+          : typeof (creator as any)?.creatorCard?.contactLine === "string"
+            ? String((creator as any)?.creatorCard?.contactLine).trim()
+            : typeof (creator as any)?.profile?.contactLine === "string"
+              ? String((creator as any)?.profile?.contactLine).trim()
+              : ""
 
     if (email) {
       const subject = encodeURIComponent("合作洽談 / Collaboration request")

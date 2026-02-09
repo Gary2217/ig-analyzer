@@ -1871,55 +1871,9 @@ export default function CreatorCardPage() {
     const phones = normalizeStringArray(contactPhones, 20)
     const lines = normalizeStringArray(contactLines, 20)
 
-    const email = (emails[0] ?? "").trim()
-    const phone = (phones[0] ?? "").trim()
-    const line = (lines[0] ?? "").trim()
-
-    if (!email && !phone && !line && emails.length === 0 && phones.length === 0 && lines.length === 0) return null
-    return JSON.stringify({ email, phone, line, emails, phones, lines, primaryContactMethod })
+    if (emails.length === 0 && phones.length === 0 && lines.length === 0) return null
+    return JSON.stringify({ primaryContactMethod, emails, phones, lines })
   }, [contactEmails, contactLines, contactPhones, primaryContactMethod])
-
-  const previewContact = useMemo(() => {
-    const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
-    const readStrArr = (v: unknown) =>
-      Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
-
-    const normalizeContact = (raw: unknown) => {
-      let obj: unknown = raw
-      if (typeof obj === "string") {
-        try {
-          obj = JSON.parse(obj)
-        } catch {
-          obj = {}
-        }
-      }
-
-      const contactObj: Record<string, unknown> = isPlainRecord(obj) ? (obj as Record<string, unknown>) : {}
-
-      const email1 = readStr(contactObj.email) || readStr(contactObj.contactEmail)
-      const ig1 = readStr(contactObj.instagram) || readStr(contactObj.contactInstagram)
-      const other1 = readStr(contactObj.other) || readStr(contactObj.contactOther)
-
-      const emails = readStrArr(contactObj.emails)
-      const instagrams = readStrArr(contactObj.instagrams)
-      const others = readStrArr(contactObj.others)
-
-      const finalEmails = emails.length ? emails : email1 ? [email1] : ([] as string[])
-      const finalInstagrams = instagrams.length ? instagrams : ig1 ? [ig1] : ([] as string[])
-      const finalOthers = others.length ? others : other1 ? [other1] : ([] as string[])
-
-      contactObj.email = finalEmails[0] ?? ""
-      contactObj.instagram = finalInstagrams[0] ?? ""
-      contactObj.other = finalOthers[0] ?? ""
-      contactObj.emails = finalEmails
-      contactObj.instagrams = finalInstagrams
-      contactObj.others = finalOthers
-
-      return contactObj
-    }
-
-    return normalizeContact(serializedContact)
-  }, [serializedContact])
 
   const deferredDisplayName = useDeferredValue(displayName)
   const deferredUsername = useDeferredValue(displayUsername)
@@ -1932,7 +1886,42 @@ export default function CreatorCardPage() {
   const deferredCollaborationNiches = useDeferredValue(collaborationNiches)
   const deferredDeliverables = useDeferredValue(deliverables)
   const deferredPastCollaborations = useDeferredValue(pastCollaborations)
-  const deferredPreviewContact = useDeferredValue(previewContact)
+
+  const draftCard = useMemo(() => {
+    return {
+      ...(baseCard ?? {}),
+      profileImageUrl: currentAvatarSrc,
+      avatarUrl: currentAvatarSrc,
+      displayName: deferredDisplayName,
+      handle: deferredUsername || null,
+      username: deferredUsername || null,
+      audience: deferredAboutText,
+      niche: deferredPrimaryNiche,
+      minPrice: deferredMinPrice ?? null,
+      contact: serializedContact,
+      themeTypes: deferredThemeTypes,
+      audienceProfiles: deferredAudienceProfiles,
+      collaborationNiches: deferredCollaborationNiches,
+      deliverables: deferredDeliverables,
+      pastCollaborations: deferredPastCollaborations,
+      portfolio: deferredFeaturedItems,
+    }
+  }, [
+    baseCard,
+    currentAvatarSrc,
+    deferredAboutText,
+    deferredAudienceProfiles,
+    deferredCollaborationNiches,
+    deferredDeliverables,
+    deferredDisplayName,
+    deferredFeaturedItems,
+    deferredMinPrice,
+    deferredPastCollaborations,
+    deferredPrimaryNiche,
+    deferredThemeTypes,
+    deferredUsername,
+    serializedContact,
+  ])
 
   const [otherFormatEnabled, setOtherFormatEnabled] = useState(false)
   const [otherFormatInput, setOtherFormatInput] = useState("")
@@ -5632,19 +5621,19 @@ export default function CreatorCardPage() {
                     ...previewData,
                     creatorCard: {
                       ...(previewData.creatorCard ?? {}),
-                      profileImageUrl: currentAvatarSrc,
-                      displayName: deferredDisplayName,
-                      username: deferredUsername || null,
-                      aboutText: deferredAboutText,
-                      primaryNiche: deferredPrimaryNiche,
-                      minPrice: deferredMinPrice ?? null,
-                      contact: deferredPreviewContact,
-                      featuredItems: deferredFeaturedItems,
-                      themeTypes: deferredThemeTypes,
-                      audienceProfiles: deferredAudienceProfiles,
-                      collaborationNiches: deferredCollaborationNiches,
-                      deliverables: deferredDeliverables,
-                      pastCollaborations: deferredPastCollaborations,
+                      profileImageUrl: draftCard.profileImageUrl,
+                      displayName: draftCard.displayName,
+                      username: (draftCard as any).username ?? null,
+                      aboutText: (draftCard as any).audience ?? null,
+                      primaryNiche: (draftCard as any).niche ?? null,
+                      minPrice: (draftCard as any).minPrice ?? null,
+                      contact: (draftCard as any).contact,
+                      featuredItems: (draftCard as any).portfolio,
+                      themeTypes: (draftCard as any).themeTypes,
+                      audienceProfiles: (draftCard as any).audienceProfiles,
+                      collaborationNiches: (draftCard as any).collaborationNiches,
+                      deliverables: (draftCard as any).deliverables,
+                      pastCollaborations: (draftCard as any).pastCollaborations,
                     },
                   }}
                   username={displayUsername || undefined}
@@ -5703,7 +5692,7 @@ export default function CreatorCardPage() {
                       aboutText={baseCard?.audience ?? null}
                       primaryNiche={baseCard?.niche ?? null}
                       minPrice={minPrice ?? null}
-                      contact={previewContact}
+                      contact={serializedContact}
                       featuredItems={featuredItems}
                       onReorderIgIds={(nextIgIds) => {
                         setFeaturedItems((prev) => {

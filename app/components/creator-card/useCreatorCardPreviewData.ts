@@ -105,15 +105,60 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
   const primaryNiche = pick<string>(base, "primaryNiche", "primary_niche", "niche")
 
   const contactRaw = pick<any>(base, "contact", "contactInfo", "contact_info")
-  const contact = isRecord(contactRaw)
-    ? {
-        email: pick<string>(contactRaw, "email", "Email"),
-        other: pick<string>(contactRaw, "other", "Other", "line", "whatsapp"),
-      }
-    : {
-        email: pick<string>(base, "email", "contactEmail", "contact_email"),
-        other: pick<string>(base, "other", "contactOther", "contact_other"),
-      }
+  const contact = (() => {
+    // If API returns the JSON string (current canonical form), keep it as-is.
+    if (typeof contactRaw === "string") return contactRaw
+
+    // If API returns an object, normalize into the new structure.
+    if (isRecord(contactRaw)) {
+      const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
+      const readArr = (v: unknown) =>
+        Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
+
+      const emails = readArr((contactRaw as any).emails)
+      const phones = readArr((contactRaw as any).phones)
+      const lines = readArr((contactRaw as any).lines)
+      const legacyOthers = readArr((contactRaw as any).others)
+
+      const email1 = readStr((contactRaw as any).email) || readStr((contactRaw as any).Email)
+      const phone1 = readStr((contactRaw as any).phone)
+      const line1 = readStr((contactRaw as any).line)
+      const other1 = readStr((contactRaw as any).other) || readStr((contactRaw as any).Other)
+
+      const pcmRaw = readStr((contactRaw as any).primaryContactMethod)
+      const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? pcmRaw : ""
+
+      const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
+      const finalEmails = uniq([...(email1 ? [email1] : []), ...emails])
+      const finalPhones = uniq([...(phone1 ? [phone1] : []), ...phones])
+      const finalLines = (() => {
+        const merged = uniq([...(line1 ? [line1] : []), ...lines])
+        if (merged.length > 0) return merged
+        return uniq([...(other1 ? [other1] : []), ...legacyOthers])
+      })()
+
+      if (finalEmails.length === 0 && finalPhones.length === 0 && finalLines.length === 0) return null
+      return JSON.stringify({
+        primaryContactMethod: primaryContactMethod || undefined,
+        emails: finalEmails,
+        phones: finalPhones,
+        lines: finalLines,
+      })
+    }
+
+    // Legacy fallback: accept top-level fields (older payload shapes)
+    const emailLegacy = pick<string>(base, "email", "contactEmail", "contact_email") ?? ""
+    const phoneLegacy = pick<string>(base, "phone", "contactPhone", "contact_phone") ?? ""
+    const lineLegacy = pick<string>(base, "line", "contactLine", "contact_line") ?? ""
+    const otherLegacy = pick<string>(base, "other", "contactOther", "contact_other") ?? ""
+
+    const emails = emailLegacy ? [String(emailLegacy).trim()] : ([] as string[])
+    const phones = phoneLegacy ? [String(phoneLegacy).trim()] : ([] as string[])
+    const lines = lineLegacy ? [String(lineLegacy).trim()] : otherLegacy ? [String(otherLegacy).trim()] : ([] as string[])
+
+    if (emails.length === 0 && phones.length === 0 && lines.length === 0) return null
+    return JSON.stringify({ emails, phones, lines, primaryContactMethod: "email" })
+  })()
 
   // Extract featured items from various possible locations
   // Support nested structures like payload.card.portfolio.items

@@ -3705,33 +3705,42 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     const readStrArr = (v: unknown) =>
       Array.isArray(v) ? v.map((x) => readStr(x)).filter(Boolean) : ([] as string[])
 
-    const email1 = readStr(contactObj.email) || readStr(contactObj.contactEmail)
-    const ig1 = readStr(contactObj.instagram) || readStr(contactObj.contactInstagram)
-    const other1 = readStr(contactObj.other) || readStr(contactObj.contactOther)
+    const email1 = readStr((contactObj as any).email) || readStr((contactObj as any).contactEmail)
+    const phone1 = readStr((contactObj as any).phone) || readStr((contactObj as any).contactPhone)
+    const line1 = readStr((contactObj as any).line) || readStr((contactObj as any).contactLine)
+    const other1 = readStr((contactObj as any).other) || readStr((contactObj as any).contactOther)
 
-    const emails = readStrArr(contactObj.emails)
-    const instagrams = readStrArr(contactObj.instagrams)
-    const others = readStrArr(contactObj.others)
+    const emails = readStrArr((contactObj as any).emails)
+    const phones = readStrArr((contactObj as any).phones)
+    const lines = readStrArr((contactObj as any).lines)
+    const legacyOthers = readStrArr((contactObj as any).others)
 
-    const finalEmails = emails.length ? emails : email1 ? [email1] : ([] as string[])
-    const finalInstagrams = instagrams.length ? instagrams : ig1 ? [ig1] : ([] as string[])
-    const finalOthers = others.length ? others : other1 ? [other1] : ([] as string[])
+    const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
+
+    const finalEmails = uniq([...(email1 ? [email1] : []), ...emails])
+    const finalPhones = uniq([...(phone1 ? [phone1] : []), ...phones])
+    const finalLines = (() => {
+      const merged = uniq([...(line1 ? [line1] : []), ...lines])
+      if (merged.length > 0) return merged
+      return uniq([...(other1 ? [other1] : []), ...legacyOthers])
+    })()
+
+    const pcmRaw = readStr((contactObj as any).primaryContactMethod)
+    const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? pcmRaw : ""
 
     out.emails = finalEmails
-    out.instagrams = finalInstagrams
-    out.others = finalOthers
+    out.phones = finalPhones
+    out.lines = finalLines
+    out.primaryContactMethod = primaryContactMethod
 
     out.contactEmail = finalEmails[0] ?? ""
-    out.contactInstagram = finalInstagrams[0] ?? ""
-    out.contactOther = finalOthers[0] ?? ""
+    out.contactPhone = finalPhones[0] ?? ""
+    out.contactLine = finalLines[0] ?? ""
 
-    contactObj.email = finalEmails[0] ?? ""
-    contactObj.instagram = finalInstagrams[0] ?? ""
-    contactObj.other = finalOthers[0] ?? ""
-
-    contactObj.emails = finalEmails
-    contactObj.instagrams = finalInstagrams
-    contactObj.others = finalOthers
+    ;(contactObj as any).emails = finalEmails
+    ;(contactObj as any).phones = finalPhones
+    ;(contactObj as any).lines = finalLines
+    ;(contactObj as any).primaryContactMethod = primaryContactMethod
 
     out.contact = contactObj
 
