@@ -11,11 +11,37 @@ const __THUMB_DEBUG_LOG_MAX = 50
 // Includes all Instagram/Facebook CDN patterns commonly used in production
 const ALLOWED_CDN_HOSTNAMES = [
   "cdninstagram.com",
+  "igcdn.com",
   "fbcdn.net",
   "fna.fbcdn.net",
   "fbsbx.com",
   "akamaihd.net",
 ]
+
+function isPrivateOrLocalHostname(hostnameRaw: string): boolean {
+  const h = String(hostnameRaw || "").toLowerCase().replace(/\.$/, "")
+  if (!h) return true
+  if (h === "localhost" || h.endsWith(".localhost")) return true
+  if (h === "0.0.0.0") return true
+  if (h === "::1") return true
+
+  // Block obvious private IPv4 ranges.
+  // Note: we intentionally do NOT do DNS resolution here.
+  const ipv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(h)
+  if (!ipv4) return false
+
+  const parts = h.split(".").map((x) => Number(x))
+  if (parts.length !== 4) return true
+  if (parts.some((x) => !Number.isFinite(x) || x < 0 || x > 255)) return true
+
+  const [a, b] = parts
+  if (a === 10) return true
+  if (a === 127) return true
+  if (a === 192 && b === 168) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 169 && b === 254) return true
+  return false
+}
 
 // Regex for Instagram media path: /(p|reel|tv)/{shortcode}/media/
 const INSTAGRAM_MEDIA_PATH_REGEX = /^\/(p|reel|reels|tv)\/[A-Za-z0-9_-]+\/media\/$/
@@ -55,6 +81,8 @@ function isAllowedImageUrl(url: string): boolean {
     }
     
     const hostname = parsed.hostname.toLowerCase()
+
+    if (isPrivateOrLocalHostname(hostname)) return false
     
     // Allow CDN domains (cdninstagram.com, fbcdn.net and subdomains)
     const isCDN = ALLOWED_CDN_HOSTNAMES.some(allowed => 
@@ -79,6 +107,7 @@ function isAllowedImageUrl(url: string): boolean {
 
 function isCDNHostname(hostname: string): boolean {
   const lower = hostname.toLowerCase().replace(/\.$/, "") // strip trailing dot
+  if (isPrivateOrLocalHostname(lower)) return false
   return ALLOWED_CDN_HOSTNAMES.some(allowed => 
     lower === allowed || lower.endsWith(`.${allowed}`)
   )

@@ -1050,15 +1050,22 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const existingIds = new Set(finalCards.map((c) => c.id))
     const demos = buildDemoCreators({ locale, existingIds, count: need, seedBase: `matchmaking:page:${clampedPage}` })
 
+    const masterZh = CREATOR_TYPE_MASTER.map((x) => String(x?.zh || "").trim()).filter(Boolean)
+    const pick = (arr: string[]) => arr.filter((x) => masterZh.includes(x))
+
     const demoTagSets: string[][] = [
-      ["美妝", "保養", "開箱"],
-      ["旅遊", "美食", "探店"],
-      ["健身", "運動"],
-      ["電商", "開箱", "3C"],
-      ["居家", "生活", "手作"],
-      ["露營", "戶外", "攝影"],
-      ["職場", "教育", "理財"],
-      ["娛樂", "音樂", "Vlog"],
+      pick(["美妝", "保養", "開箱", "時尚"]),
+      pick(["穿搭", "時尚", "生活"]),
+      pick(["旅遊", "美食", "探店"]),
+      pick(["餐飲", "美食", "探店"]),
+      pick(["健身", "運動"]),
+      pick(["露營", "戶外", "攝影"]),
+      pick(["3C", "科技", "開箱"]),
+      pick(["電商", "開箱"]),
+      pick(["居家", "生活", "手作"]),
+      pick(["親子", "母嬰", "生活"]),
+      pick(["理財", "職場", "教育"]),
+      pick(["娛樂", "音樂", "Vlog"]),
     ]
 
     return demos.map((c, idx) => {
@@ -1071,7 +1078,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         handle: locale === "zh-TW" ? "demo" : "demo",
         avatarUrl: c.avatarUrl,
         topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
-        tagCategories: demoTagSets[idx % demoTagSets.length],
+        tagCategories: (demoTagSets[idx % demoTagSets.length] || []).filter(Boolean).slice(0, 6),
         platforms: ["instagram"],
         dealTypes: ["other"],
         collabTypes: ["other"],

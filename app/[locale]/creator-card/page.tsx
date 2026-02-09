@@ -3759,7 +3759,9 @@ export default function CreatorCardPage() {
                             disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                           >
                             <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
-                            <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
+                            <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                              {activeLocale === "zh-TW" ? "上傳頭貼" : "Upload avatar"}
+                            </span>
                           </Button>
                         </div>
 
@@ -4969,7 +4971,7 @@ export default function CreatorCardPage() {
                           <div className="flex flex-col sm:flex-row gap-2 min-w-0">
                             <Input
                               value={otherNicheInput}
-                              placeholder="Enter other niche"
+                              placeholder={activeLocale === "zh-TW" ? "輸入其他類型" : "Enter other type"}
                               className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               disabled={!otherNicheEnabled}
                               onChange={(e) => setOtherNicheInput(e.target.value)}
@@ -5169,17 +5171,14 @@ export default function CreatorCardPage() {
                                   <Button
                                     type="button"
                                     variant="outline"
-                                    className="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px]"
-                                    onClick={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                      avatarUploadInputRef.current?.click()
-                                    }}
-                                    aria-busy={avatarUploading}
+                                    className="mt-3 w-full justify-center min-w-0"
+                                    onClick={() => avatarUploadInputRef.current?.click()}
                                     disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
                                   >
                                     <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
-                                    <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">上傳頭貼 / Upload avatar</span>
+                                    <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
+                                      {activeLocale === "zh-TW" ? "上傳頭貼" : "Upload avatar"}
+                                    </span>
                                   </Button>
                                 </div>
 
@@ -5558,7 +5557,7 @@ export default function CreatorCardPage() {
                           <CardHeader className="px-4 pt-3 lg:px-6 lg:pt-4 pb-2">
                             <div className="flex items-start gap-3 min-w-0">
                               <CardTitle className="text-[14px] font-semibold text-white/70 min-w-0 truncate">
-                                {s.titleZh} / {s.titleEn}
+                                {activeLocale === "zh-TW" ? s.titleZh : s.titleEn}
                               </CardTitle>
                               {s.key === "formats" ? (
                                 <span
