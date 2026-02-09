@@ -19,6 +19,7 @@ export function FavoritesDrawer({
 }) {
   const copy = getCopy(locale)
   const mm = copy.matchmaking
+  const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
 
   return (
     <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`}>
@@ -58,7 +59,7 @@ export function FavoritesDrawer({
               {favorites.map((c) => (
                 <Link
                   key={c.id}
-                  href={c.href}
+                  href={(typeof c.href === "string" && c.href.trim().length > 0 ? c.href : `${localePrefix}/creator-card/view`) as any}
                   className="block rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 p-3"
                   onClick={onClose}
                 >

@@ -53,6 +53,7 @@ export type CreatorCardData = {
   contactEmail?: string
   contactPhone?: string
   contactLine?: string
-  href: string
+  primaryContactMethod?: "email" | "phone" | "line"
+  href?: string
   isDemo?: boolean
 }

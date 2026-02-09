@@ -198,8 +198,9 @@ function safeParseContact(input: unknown): {
   emails: string[]
   instagrams: string[]
   others: string[]
+  primaryContactMethod?: "email" | "phone" | "line"
 } {
-  const empty = { emails: [] as string[], instagrams: [] as string[], others: [] as string[] }
+  const empty = { emails: [] as string[], instagrams: [] as string[], others: [] as string[], primaryContactMethod: undefined as any }
   if (typeof input !== "string") return empty
   const raw = input.trim()
   if (!raw) return empty
@@ -218,7 +219,15 @@ function safeParseContact(input: unknown): {
     const mergedOthers = [...(other1 ? [other1] : []), ...others]
 
     const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
-    return { emails: uniq(mergedEmails), instagrams: uniq(mergedIgs), others: uniq(mergedOthers) }
+
+    const pcmRaw = typeof (obj as any)?.primaryContactMethod === "string" ? String((obj as any).primaryContactMethod).trim() : ""
+    const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? (pcmRaw as any) : undefined
+    return {
+      emails: uniq([...(email1 ? [email1] : []), ...emails]),
+      instagrams: uniq([...(ig1 ? [ig1] : []), ...instagrams]),
+      others: uniq([...(other1 ? [other1] : []), ...others]),
+      primaryContactMethod,
+    }
   } catch {
     return empty
   }
@@ -638,6 +647,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       const parsedContact = safeParseContact((c as any).contact)
       const contactEmail = parsedContact.emails[0] || undefined
       const contactLine = parsedContact.others[0] || undefined
+      const primaryContactMethod = parsedContact.primaryContactMethod
 
       const rawFollowers =
         typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
@@ -684,7 +694,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         },
         contactEmail,
         contactLine,
-        href: c.isDemo ? "#" : c.profileUrl,
+        primaryContactMethod,
+        href: c.isDemo ? "" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
       }
     })
@@ -889,6 +900,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         engagementRate: rawER,
       },
       contact: typeof (meCard as any)?.contact === "string" ? (meCard as any).contact : null,
+      primaryContactMethod: (() => {
+        const parsed = safeParseContact(typeof (meCard as any)?.contact === "string" ? (meCard as any).contact : null)
+        return parsed.primaryContactMethod
+      })(),
       href: meCard.profileUrl,
       isDemo: Boolean((meCard as any).isDemo),
     }
@@ -953,7 +968,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           followers,
           engagementRate: er,
         },
-        href: "#",
+        href: "",
         isDemo: true,
       }
     })

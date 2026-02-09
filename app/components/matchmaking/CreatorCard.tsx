@@ -75,6 +75,22 @@ function normalizeTelNumber(input: string) {
   return core
 }
 
+function normalizeLineToHrefOrNull(input: string): { display: string; href?: string } {
+  const trimmed = String(input || "").trim()
+  if (!trimmed) return { display: "" }
+
+  const isLikelyUrl = /^https?:\/\//i.test(trimmed) || /^line:\/\//i.test(trimmed) || /line\.me\//i.test(trimmed)
+  if (isLikelyUrl) return { display: trimmed, href: trimmed }
+
+  const lineId = trimmed.replace(/^@/, "").replace(/\s+/g, "")
+  if (!lineId) return { display: trimmed }
+  return { display: lineId, href: `https://line.me/R/ti/p/~${encodeURIComponent(lineId)}` }
+}
+
+function normalizePhoneDisplay(raw: string) {
+  return String(raw || "").trim()
+}
+
 export function CreatorCard({
   creator,
   locale,
@@ -102,12 +118,15 @@ export function CreatorCard({
   const [showContact, setShowContact] = useState(false)
   const [ctaToast, setCtaToast] = useState<string | null>(null)
   const ctaToastTimerRef = useRef<number | null>(null)
+  const [copiedKey, setCopiedKey] = useState<null | "email" | "phone" | "line">(null)
+  const copiedTimerRef = useRef<number | null>(null)
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
 
   useEffect(() => {
     return () => {
       if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
+      if (copiedTimerRef.current != null) window.clearTimeout(copiedTimerRef.current)
     }
   }, [])
 
@@ -189,6 +208,11 @@ export function CreatorCard({
   const topBadges = [...platformBadges.map((p) => ({ key: `p:${p}`, label: platformLabel(p) })), ...dealTypeBadges.map((t) => ({ key: `t:${t}`, label: typeLabel(t) }))]
   const displayBadges = topBadges.slice(0, 4)
 
+  const primaryContactMethod = (() => {
+    const raw = typeof (creator as any)?.primaryContactMethod === "string" ? String((creator as any).primaryContactMethod).trim() : ""
+    return raw === "email" || raw === "phone" || raw === "line" ? raw : null
+  })()
+
   const contactItems = (() => {
     const out: Array<{
       key: "email" | "phone" | "line"
@@ -196,6 +220,7 @@ export function CreatorCard({
       className: string
       href?: string
       ariaLabel?: string
+      isPrimary?: boolean
     }> = []
     const parsedContact = safeParseCreatorContact((creator as any)?.contact)
     const email =
@@ -241,38 +266,79 @@ export function CreatorCard({
         className: "",
         href,
         ariaLabel: `Email ${creator.name}`,
+        isPrimary: primaryContactMethod === "email",
       })
     }
 
     if (phone) {
-      const tel = normalizeTelNumber(phone)
+      const display = normalizePhoneDisplay(phone)
+      const tel = normalizeTelNumber(display)
       if (tel) {
         out.push({
           key: "phone",
-          value: phone,
+          value: display,
           className: "",
           href: `tel:${tel}`,
           ariaLabel: `Call ${creator.name}`,
+          isPrimary: primaryContactMethod === "phone",
         })
       } else {
-        out.push({ key: "phone", value: phone, className: "" })
+        out.push({ key: "phone", value: display, className: "", isPrimary: primaryContactMethod === "phone" })
       }
     }
 
     if (line) {
-      const trimmed = line.trim()
-      const isLikelyUrl = /^https?:\/\//i.test(trimmed) || /^line:\/\//i.test(trimmed) || /line\.me\//i.test(trimmed)
-      const lineId = trimmed.replace(/^@/, "").replace(/\s+/g, "")
-      const href = isLikelyUrl
-        ? trimmed
-        : lineId
-          ? `https://line.me/R/ti/p/~${encodeURIComponent(lineId)}`
-          : undefined
-
-      out.push({ key: "line", value: trimmed, className: "", href, ariaLabel: `LINE ${creator.name}` })
+      const normalized = normalizeLineToHrefOrNull(line)
+      if (normalized.display) {
+        out.push({
+          key: "line",
+          value: normalized.display,
+          className: "",
+          href: normalized.href,
+          ariaLabel: `LINE ${creator.name}`,
+          isPrimary: primaryContactMethod === "line",
+        })
+      }
     }
-    return out
+
+    // Primary first, stable order.
+    const order: Array<(typeof out)[number]["key"]> = ["email", "phone", "line"]
+    return [...out]
+      .sort((a, b) => {
+        const pa = a.isPrimary ? 1 : 0
+        const pb = b.isPrimary ? 1 : 0
+        if (pa !== pb) return pb - pa
+        return order.indexOf(a.key) - order.indexOf(b.key)
+      })
   })()
+
+  const copyValue = async (key: "email" | "phone" | "line", value: string) => {
+    const v = String(value || "").trim()
+    if (!v) return
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(v)
+      } else {
+        const ta = document.createElement("textarea")
+        ta.value = v
+        ta.style.position = "fixed"
+        ta.style.left = "-9999px"
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+      }
+      setCopiedKey(key)
+      if (copiedTimerRef.current != null) window.clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = window.setTimeout(() => {
+        setCopiedKey(null)
+        copiedTimerRef.current = null
+      }, 1400)
+    } catch {
+      // swallow
+    }
+  }
 
   const CardBody = (
     <>
@@ -305,6 +371,7 @@ export function CreatorCard({
                   <span
                     key={c.key}
                     className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/70 max-w-full truncate whitespace-nowrap"
+                    title={c.label}
                   >
                     {c.label}
                   </span>
@@ -391,10 +458,14 @@ export function CreatorCard({
           </div>
           {CardBody}
         </div>
-      ) : (
+      ) : href ? (
         <Link href={href} className="block flex-1 relative z-0">
           {CardBody}
         </Link>
+      ) : (
+        <div className="block flex-1 relative z-0">
+          {CardBody}
+        </div>
       )}
 
       <div className="px-3 pb-3 sm:px-3 sm:pb-3 mt-3 relative z-20 pointer-events-auto">
@@ -436,27 +507,60 @@ export function CreatorCard({
         ) : null}
 
         {showContact && contactItems.length ? (
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/80 transition-opacity duration-200 opacity-100 min-w-0">
-            {contactItems.map((it) => (
-              <span
-                key={it.key}
-                className={`max-w-full overflow-hidden rounded-full bg-white/10 px-3 py-1 ${it.className}`}
-                title={it.value}
-              >
-                {it.href ? (
-                  <a
-                    href={it.href}
-                    onClick={(e) => e.stopPropagation()}
-                    className="block max-w-[220px] sm:max-w-[260px] truncate underline underline-offset-2 decoration-white/20 hover:decoration-white/50"
-                    aria-label={it.ariaLabel}
-                  >
-                    {it.value}
-                  </a>
-                ) : (
-                  <span className="block max-w-[220px] sm:max-w-[260px] truncate">{it.value}</span>
-                )}
-              </span>
-            ))}
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/80 min-w-0">
+            {contactItems.map((it) => {
+              const isPrimary = Boolean(it.isPrimary)
+              const copied = copiedKey === it.key
+              return (
+                <div
+                  key={it.key}
+                  className={`max-w-full overflow-hidden rounded-xl border px-3 py-2 min-w-0 ${
+                    isPrimary ? "border-emerald-400/30 bg-emerald-500/10" : "border-white/10 bg-white/5"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-white/50 uppercase tracking-wider">{it.key}</div>
+                      <div className="mt-1">
+                        {it.href ? (
+                          <a
+                            href={it.href}
+                            onClick={(e) => e.stopPropagation()}
+                            className="block max-w-full truncate underline underline-offset-2 decoration-white/20 hover:decoration-white/50"
+                            aria-label={it.ariaLabel}
+                            title={it.value}
+                          >
+                            {it.value}
+                          </a>
+                        ) : (
+                          <span className="block max-w-full truncate" title={it.value}>
+                            {it.value}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        copyValue(it.key, it.value)
+                      }}
+                      className={`shrink-0 h-8 px-3 rounded-lg border text-xs whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
+                        copied
+                          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+                          : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                      }`}
+                      aria-label={copied ? "Copied" : "Copy"}
+                      title={copied ? "Copied" : "Copy"}
+                    >
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         ) : null}
       </div>
