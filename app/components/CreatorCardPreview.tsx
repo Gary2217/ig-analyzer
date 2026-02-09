@@ -1314,8 +1314,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                       const order = ["email", "phone", "line"]
                       return order.indexOf(a.key) - order.indexOf(b.key)
                     })
+                  const label = (k: "email" | "phone" | "line") => (k === "email" ? "Email: " : k === "phone" ? "Phone: " : "LINE: ")
                   return ordered.map((it) => (
                     <Pill key={it.key} title={String(it.value || "")}>
+                      {label(it.key)}
                       {it.value}
                     </Pill>
                   ))

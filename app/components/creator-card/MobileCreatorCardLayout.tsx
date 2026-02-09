@@ -430,12 +430,14 @@ export function MobileCreatorCardLayout({
                   return order.indexOf(a.key) - order.indexOf(b.key)
                 })
 
+              const label = (k: ContactKey) => (k === "email" ? "Email: " : k === "phone" ? "Phone: " : "LINE: ")
               return items.map((it) => (
                 <div
                   key={it.key}
                   className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 truncate"
                   title={it.value}
                 >
+                  {label(it.key)}
                   {it.value}
                 </div>
               ))

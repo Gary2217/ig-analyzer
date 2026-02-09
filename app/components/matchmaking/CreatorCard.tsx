@@ -536,6 +536,7 @@ export function CreatorCard({
             {contactItems.map((it) => {
               const isPrimary = Boolean(it.isPrimary)
               const copied = copiedKey === it.key
+              const label = it.key === "email" ? "Email: " : it.key === "phone" ? "Phone: " : "LINE: "
               return (
                 <div
                   key={it.key}
@@ -555,10 +556,12 @@ export function CreatorCard({
                             aria-label={it.ariaLabel}
                             title={it.value}
                           >
+                            {label}
                             {it.value}
                           </a>
                         ) : (
                           <span className="block max-w-full truncate" title={it.value}>
+                            {label}
                             {it.value}
                           </span>
                         )}
