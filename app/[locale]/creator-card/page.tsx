@@ -26,6 +26,7 @@ import { useInstagramConnection } from "@/app/components/InstagramConnectionProv
 import { useSiteSessionContext } from "@/app/components/SiteSessionProvider"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "../../components/creator-card/igOEmbedTypes"
+import { CREATOR_TYPE_MASTER, creatorTypeToDisplayLabel, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
 
 // Strict oEmbed types live in a shared module (see igOEmbedTypes.ts)
 
@@ -1219,28 +1220,9 @@ export default function CreatorCardPage() {
     []
   )
 
-  const nicheOptions = useMemo(
-    () =>
-      [
-        { id: "beauty", labelKey: "creatorCardEditor.niches.options.beauty" },
-        { id: "fashion", labelKey: "creatorCardEditor.niches.options.fashion" },
-        { id: "food", labelKey: "creatorCardEditor.niches.options.food" },
-        { id: "travel", labelKey: "creatorCardEditor.niches.options.travel" },
-        { id: "parenting", labelKey: "creatorCardEditor.niches.options.parenting" },
-        { id: "fitness", labelKey: "creatorCardEditor.niches.options.fitness" },
-        { id: "tech", labelKey: "creatorCardEditor.niches.options.tech" },
-        { id: "finance", labelKey: "creatorCardEditor.niches.options.finance" },
-        { id: "education", labelKey: "creatorCardEditor.niches.options.education" },
-        { id: "gaming", labelKey: "creatorCardEditor.niches.options.gaming" },
-        { id: "lifestyle", labelKey: "creatorCardEditor.niches.options.lifestyle" },
-        { id: "pets", labelKey: "creatorCardEditor.niches.options.pets" },
-        { id: "home", labelKey: "creatorCardEditor.niches.options.home" },
-        { id: "ecommerce", labelKey: "creatorCardEditor.niches.options.ecommerce" },
-      ] as const,
-    []
-  )
+  const nicheOptions = useMemo(() => CREATOR_TYPE_MASTER.map((x) => x.zh), [])
 
-  const knownNicheIds = useMemo<Set<string>>(() => new Set(nicheOptions.map((x) => x.id as string)), [nicheOptions])
+  const knownNicheIds = useMemo<Set<string>>(() => new Set(nicheOptions.map((x) => x as string)), [nicheOptions])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -2229,7 +2211,7 @@ export default function CreatorCardPage() {
           setMinPriceDraft(nextMinPrice != null ? String(nextMinPrice) : "")
           const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
           setDeliverables(nextDeliverables)
-          setCollaborationNiches(normalizeStringArray(nextBase?.collaborationNiches ?? [], 20))
+          setCollaborationNiches(normalizeCreatorTypes(nextBase?.collaborationNiches ?? []).slice(0, 20))
           setPastCollaborations(normalizeStringArray(nextBase?.pastCollaborations ?? [], 20))
           setThemeTypes(normalizeStringArray(nextBase?.themeTypes ?? [], 20))
           setAudienceProfiles(normalizeStringArray(nextBase?.audienceProfiles ?? [], 20))
@@ -2516,7 +2498,7 @@ export default function CreatorCardPage() {
         }
 
         if (shouldHydrateDrafts) {
-          const nicheCustoms = normalizeStringArray(nextBase?.collaborationNiches ?? [], 20).filter((x) => !knownNicheIds.has(x))
+          const nicheCustoms = normalizeCreatorTypes(nextBase?.collaborationNiches ?? []).slice(0, 20).filter((x) => !knownNicheIds.has(x))
           setOtherNicheEnabled(nicheCustoms.length > 0)
           setOtherNicheInput("")
         }
@@ -2829,14 +2811,17 @@ export default function CreatorCardPage() {
     const trimmed = otherNicheInput.trim()
     if (!trimmed) return
     setCollaborationNiches((prev) => {
-      const lower = trimmed.toLowerCase()
+      const canonical = normalizeCreatorTypes([trimmed]).slice(0, 1)[0] ?? ""
+      if (!canonical) return prev
+      const lower = canonical.toLowerCase()
       const hasDup = prev.some((x) => x.toLowerCase() === lower)
       if (hasDup) return prev
-      return [...prev, trimmed]
+      return normalizeCreatorTypes([...prev, canonical]).slice(0, 20)
     })
     setOtherNicheInput("")
     flashHighlight("niches")
-  }, [flashHighlight, otherNicheInput])
+    markDirty()
+  }, [flashHighlight, markDirty, otherNicheInput])
 
   useEffect(() => {
     setBaseCard((prev) => {
@@ -2860,7 +2845,7 @@ export default function CreatorCardPage() {
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         deliverables: normalizeStringArray(deliverables, 50),
-        collaborationNiches: normalizeStringArray(collaborationNiches, 20),
+        collaborationNiches: normalizeCreatorTypes(collaborationNiches).slice(0, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
         contact: serializedContact,
         draftUpdatedAt: Date.now(),
@@ -3007,7 +2992,7 @@ export default function CreatorCardPage() {
       })()
 
       const nextAudience = baseCard?.audience ?? ""
-
+ 
       const payload: any = {
         handle: baseCard?.handle ?? undefined,
         displayName: baseCard?.displayName ?? undefined,
@@ -3070,7 +3055,7 @@ export default function CreatorCardPage() {
         }) as any,
         isPublic: baseCard?.isPublic ?? undefined,
         deliverables: normalizeStringArray(deliverables, 50),
-        collaborationNiches: normalizeStringArray(collaborationNiches, 20),
+        collaborationNiches: normalizeCreatorTypes(collaborationNiches).slice(0, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
       }
 
@@ -3165,7 +3150,7 @@ export default function CreatorCardPage() {
         themeTypes: normalizeStringArray(themeTypes, 20),
         audienceProfiles: normalizeStringArray(audienceProfiles, 20),
         deliverables: normalizeStringArray(deliverables, 50),
-        collaborationNiches: normalizeStringArray(collaborationNiches, 20),
+        collaborationNiches: normalizeCreatorTypes(collaborationNiches).slice(0, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
         contact: serializedContact,
         portfolio: featuredItems
@@ -3685,9 +3670,9 @@ export default function CreatorCardPage() {
               const nicheLabels = (() => {
                 const out: string[] = []
                 const seen = new Set<string>()
-                for (const id of collaborationNiches) {
-                  const opt = nicheOptions.find((x) => x.id === id)
-                  const label = opt ? t(opt.labelKey) : id
+                const normalized = normalizeCreatorTypes(collaborationNiches).slice(0, 20)
+                for (const id of normalized) {
+                  const label = creatorTypeToDisplayLabel(id, activeLocale as any)
                   const s = typeof label === "string" ? label.trim() : ""
                   if (!s) continue
                   const key = s.toLowerCase()
@@ -4934,8 +4919,8 @@ export default function CreatorCardPage() {
                   render: () => (
                     <>
                       <div className="flex flex-wrap gap-2">
-                        {nicheOptions.map((opt) => {
-                          const isActive = collaborationNiches.includes(opt.id)
+                        {nicheOptions.map((optId) => {
+                          const isActive = collaborationNiches.includes(optId)
                           const pillClassName =
                             "h-7 px-2.5 text-xs rounded-full border " +
                             (isActive
@@ -4943,17 +4928,20 @@ export default function CreatorCardPage() {
                               : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10")
                           return (
                             <Button
-                              key={opt.id}
+                              key={optId}
                               type="button"
                               variant="pill"
                               active={isActive}
                               className={pillClassName}
                               onClick={() => {
-                                setCollaborationNiches((prev) => toggleInArray(prev, opt.id))
+                                setCollaborationNiches((prev) =>
+                                  normalizeCreatorTypes(toggleInArray(prev, optId)).slice(0, 20)
+                                )
                                 flashHighlight("niches")
+                                markDirty()
                               }}
                             >
-                              {t(opt.labelKey)}
+                              {creatorTypeToDisplayLabel(optId, activeLocale as any)}
                             </Button>
                           )
                         })}
@@ -5006,7 +4994,7 @@ export default function CreatorCardPage() {
                           </div>
 
                           {(() => {
-                            const customs = collaborationNiches.filter((x) => !knownNicheIds.has(x))
+                            const customs = normalizeCreatorTypes(collaborationNiches).slice(0, 20).filter((x) => !knownNicheIds.has(x))
                             if (customs.length === 0) return null
                             return (
                               <div className="mt-2 flex flex-wrap gap-2">
@@ -5015,7 +5003,7 @@ export default function CreatorCardPage() {
                                     key={tag}
                                     className="inline-flex items-center gap-1 rounded-full border border-emerald-400/50 bg-white/[0.06] px-3 py-1 text-sm text-white"
                                   >
-                                    <span className="min-w-0 truncate max-w-[240px]">{tag}</span>
+                                    <span className="min-w-0 truncate max-w-[240px]">{creatorTypeToDisplayLabel(tag, activeLocale as any)}</span>
                                     <button
                                       type="button"
                                       className="shrink-0 rounded-full p-1 hover:bg-white/10"

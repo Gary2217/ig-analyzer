@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
+import { creatorTypeToDisplayLabel } from "@/app/lib/creatorTypes"
 
 function formatNumber(n?: number) {
   if (typeof n !== "number" || !Number.isFinite(n)) return "—"
@@ -227,7 +228,10 @@ export function CreatorCard({
 
   const platformBadges = (creator.platforms ?? []).filter(Boolean)
   const dealTypeBadges = (creator.dealTypes ?? []).filter((x): x is string => typeof x === "string" && x.length > 0)
-  const tagBadges = (creator.tagCategories ?? []).filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+  const tagBadges = (creator.tagCategories ?? [])
+    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    .map((t) => creatorTypeToDisplayLabel(t, locale))
+    .filter((x) => typeof x === "string" && x.trim().length > 0)
   const topBadges = [...platformBadges.map((p) => ({ key: `p:${p}`, label: platformLabel(p) })), ...dealTypeBadges.map((t) => ({ key: `t:${t}`, label: typeLabel(t) }))]
   const displayBadges = topBadges.slice(0, 4)
   const displayTagBadges = tagBadges.slice(0, 6)
