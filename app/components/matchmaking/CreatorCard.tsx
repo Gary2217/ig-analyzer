@@ -297,7 +297,7 @@ export function CreatorCard({
 
       {isEmpty ? (
         <div className="block flex-1 relative z-0 cursor-default">
-          <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
+          <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5] max-h-[320px] sm:max-h-[420px]">
             {creator.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={creator.avatarUrl} alt={creator.name || ""} className="w-full h-full object-cover" loading="lazy" />
@@ -350,7 +350,7 @@ export function CreatorCard({
         </div>
       ) : (
         <Link href={href} className="block flex-1 relative z-0">
-        <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
+        <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5] max-h-[320px] sm:max-h-[420px]">
           {creator.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
