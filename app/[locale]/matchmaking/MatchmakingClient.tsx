@@ -692,11 +692,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               : undefined
 
       const rawMinPrice =
-        typeof (c as any).minPrice === "number" && Number.isFinite((c as any).minPrice)
-          ? (c as any).minPrice
-          : typeof (c as any).min_price === "number" && Number.isFinite((c as any).min_price)
+        typeof (c as any)?.minPrice === "number" && Number.isFinite((c as any).minPrice)
+          ? Math.floor((c as any).minPrice)
+          : typeof (c as any)?.min_price === "number" && Number.isFinite((c as any).min_price)
             ? (c as any).min_price
             : undefined
+
+      const normalizedMinPrice = typeof rawMinPrice === "number" && Number.isFinite(rawMinPrice) ? Math.max(0, Math.floor(rawMinPrice)) : undefined
 
       return {
         id: c.id,
@@ -710,7 +712,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         dealTypes,
         collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
         deliverables,
-        minPrice: typeof rawMinPrice === "number" ? Math.max(0, Math.floor(rawMinPrice)) : undefined,
+        minPrice: normalizedMinPrice,
         stats: {
           followers: rawFollowers,
           engagementRate: rawER,
@@ -726,7 +728,43 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [cards, statsVersion])
 
   const tagCategoryOptions = useMemo(() => {
+    const master: string[] = [
+      "電商",
+      "美妝",
+      "保養",
+      "穿搭",
+      "時尚",
+      "旅遊",
+      "美食",
+      "健身",
+      "運動",
+      "母嬰",
+      "親子",
+      "3C",
+      "科技",
+      "遊戲",
+      "寵物",
+      "居家",
+      "生活",
+      "理財",
+      "教育",
+      "職場",
+      "攝影",
+      "藝術",
+      "音樂",
+      "娛樂",
+      "動漫",
+      "汽機車",
+      "房產",
+      "餐飲",
+      "公益",
+      "其他",
+    ]
     const set = new Set<string>()
+    master.forEach((x) => {
+      const s = String(x || "").trim()
+      if (s) set.add(s)
+    })
     creators.forEach((c) => {
       ;(c.tagCategories ?? []).forEach((x) => {
         const s = String(x || "").trim()
@@ -941,6 +979,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               ? Math.floor(Number((meCard as any).min_price))
               : undefined
 
+    const normalizedMinPrice = typeof rawMinPrice === "number" && Number.isFinite(rawMinPrice) ? Math.max(0, Math.floor(rawMinPrice)) : undefined
+
     return {
       id: meCard.id,
       creatorId: creatorIdStr ?? undefined,
@@ -953,7 +993,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       dealTypes,
       collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
       deliverables,
-      minPrice: rawMinPrice,
+      minPrice: normalizedMinPrice,
       stats: {
         followers: rawFollowers,
         engagementRate: rawER,

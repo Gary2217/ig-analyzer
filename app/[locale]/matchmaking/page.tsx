@@ -59,7 +59,7 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
 
     const { data, error } = await supabase
       .from("creator_cards")
-      .select("id, ig_user_id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, min_price, contact")
+      .select("id, ig_user_id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, min_price, contact, collaboration_niches")
       .eq("is_public", true)
       .order("updated_at", { ascending: false })
 
@@ -83,6 +83,7 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
         deliverables: Array.isArray((card as any).deliverables) ? ((card as any).deliverables as string[]) : [],
         minPrice: typeof (card as any).min_price === "number" ? (card as any).min_price : null,
         contact: typeof (card as any).contact === "string" ? (card as any).contact : null,
+        collaborationNiches: Array.isArray((card as any).collaboration_niches) ? ((card as any).collaboration_niches as string[]) : [],
         followerCount: 0,
         engagementRate: null,
         isVerified: false,
@@ -104,7 +105,7 @@ async function fetchMyCreatorCardPublicSafe(localePrefix: string): Promise<Creat
 
     const { data, error } = await authed
       .from("creator_cards")
-      .select("id, ig_user_id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, is_public")
+      .select("id, ig_user_id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, is_public, min_price, contact, collaboration_niches")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -123,6 +124,9 @@ async function fetchMyCreatorCardPublicSafe(localePrefix: string): Promise<Creat
       avatarUrl,
       category: (data as any).niche || "Creator",
       deliverables: Array.isArray((data as any).deliverables) ? ((data as any).deliverables as string[]) : [],
+      minPrice: typeof (data as any).min_price === "number" ? (data as any).min_price : null,
+      contact: typeof (data as any).contact === "string" ? (data as any).contact : null,
+      collaborationNiches: Array.isArray((data as any).collaboration_niches) ? ((data as any).collaboration_niches as string[]) : [],
       followerCount: 0,
       engagementRate: null,
       isVerified: false,

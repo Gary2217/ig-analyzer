@@ -6,6 +6,7 @@ export interface CreatorCard {
   category: string
   deliverables?: string[]
   minPrice?: number | null
+  collaborationNiches?: string[]
   contact?: string | null
   followerCount: number
   avgLikes?: number | null
