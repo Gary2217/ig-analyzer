@@ -1066,7 +1066,27 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return (best as any)?.creatorId || (best as any)?.id || null
   }, [creators])
 
+  const hasAnyFilter = useMemo(() => {
+    const hasSearch = Boolean(q && q.trim())
+    const hasPlatform = (selectedPlatforms?.length ?? 0) > 0
+    const hasTags = (selectedTagCategories?.length ?? 0) > 0
+    const hasDealType = (selectedDealTypes?.length ?? 0) > 0
+
+    const hasBudget = (() => {
+      if (budget === "any") return false
+      if (budget === "custom") {
+        const amt = Number(customBudget.trim())
+        return Number.isFinite(amt) && amt > 0
+      }
+      return true
+    })()
+
+    const hasSort = Boolean(sort && sort !== "best_match")
+    return hasSearch || hasPlatform || hasTags || hasBudget || hasDealType || hasSort
+  }, [q, selectedPlatforms, selectedTagCategories, selectedDealTypes, budget, customBudget, sort])
+
   const demoFillCards = useMemo((): CreatorCardData[] => {
+    if (hasAnyFilter) return []
     const need = Math.max(0, pageSize - pagedRealCards.length)
     if (!need) return []
 
@@ -1133,7 +1153,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         isDemo: true,
       }
     })
-  }, [clampedPage, demoAvatarMap, finalCards, locale, pagedRealCards.length])
+  }, [clampedPage, demoAvatarMap, finalCards, hasAnyFilter, locale, pagedRealCards.length])
 
   const renderCards = useMemo((): Array<CreatorCardData & { creatorId?: string }> => {
     const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
@@ -1144,7 +1164,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     if (budget === "any") return null
     if (budget === "custom") {
       const amt = Number(customBudget.trim())
-      return Number.isFinite(amt) ? amt : null
+      return Number.isFinite(amt) && amt > 0 ? amt : null
     }
     return budgetMaxForRange(budget)
   }, [budget, customBudget])
