@@ -418,11 +418,11 @@ export function CreatorCard({
             {displayTagBadges.length ? (
               <div className="mt-2 min-w-0">
                 <div className="text-[11px] text-white/45 mb-1">{mm.creatorTypeLabel}</div>
-                <div className="flex flex-wrap gap-1.5 min-w-0">
+                <div className="flex gap-1.5 min-w-0 overflow-x-auto sm:flex-wrap sm:overflow-visible [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {displayTagBadges.map((tag) => (
                     <span
                       key={tag}
-                      className="text-[11px] px-2 py-0.5 rounded-full border bg-sky-500/10 border-sky-400/20 text-sky-100/85 max-w-full truncate whitespace-nowrap"
+                      className="shrink-0 text-[11px] px-2 py-0.5 rounded-full border bg-sky-500/10 border-sky-400/20 text-sky-100/85 max-w-full truncate whitespace-nowrap"
                       title={tag}
                     >
                       {tag}

@@ -279,6 +279,14 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
   const deliverables = Array.isArray(input?.deliverables) ? (input.deliverables as unknown[]).filter((x): x is string => typeof x === "string") : []
   const isPublic = typeof input?.is_public === "boolean" ? input.is_public : typeof input?.isPublic === "boolean" ? input.isPublic : false
 
+  const collaborationNiches = (() => {
+    const raw =
+      (Array.isArray(input?.collaborationNiches) ? input.collaborationNiches : null) ??
+      (Array.isArray(input?.collaboration_niches) ? input.collaboration_niches : null) ??
+      []
+    return raw.filter((x: unknown): x is string => typeof x === "string").map((s: string) => s.trim()).filter(Boolean)
+  })()
+
   const rawMinPrice =
     typeof input?.min_price === "number" && Number.isFinite(input.min_price)
       ? input.min_price
@@ -295,6 +303,7 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
     avatarUrl,
     category: niche || "Creator",
     deliverables,
+    collaborationNiches,
     minPrice: typeof rawMinPrice === "number" ? rawMinPrice : null,
     contact,
     followerCount: 0,
@@ -312,8 +321,28 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
 
+  const initialMeCardResolved = useMemo(() => {
+    const raw = initialMeCard as any
+    const nested = raw && typeof raw === "object" && raw.card && typeof raw.card === "object" ? raw.card : null
+
+    if (process.env.NODE_ENV !== "production") {
+      if (nested && typeof raw?.ok !== "undefined") {
+        console.warn("[matchmaking] initialMeCard looks like API response; using .card", {
+          keys: Object.keys(raw || {}),
+          cardKeys: Object.keys(nested || {}),
+        })
+      } else if (raw && typeof raw === "object" && !raw.id) {
+        console.warn("[matchmaking] initialMeCard missing id; me card may not render", {
+          keys: Object.keys(raw || {}),
+        })
+      }
+    }
+
+    return (nested ?? initialMeCard) as any
+  }, [initialMeCard])
+
   const [meCard, setMeCard] = useState<CreatorCard | null>(() => {
-    return initialMeCard ? sanitizeMeCard(initialMeCard, localePrefix) : null
+    return initialMeCardResolved ? sanitizeMeCard(initialMeCardResolved, localePrefix) : null
   })
 
   const statsCacheRef = useRef(
