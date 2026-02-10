@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
 import type { CreatorCardData } from "./types"
@@ -41,80 +41,6 @@ function deriveFormatKeysFromDeliverables(input?: string[]) {
   return Array.from(set)
 }
 
-function safeParseCreatorContact(input: unknown): {
-  emails: string[]
-  phones: string[]
-  lines: string[]
-  primaryContactMethod?: "email" | "phone" | "line"
-} {
-  const empty = { emails: [] as string[], phones: [] as string[], lines: [] as string[], primaryContactMethod: undefined as any }
-  if (typeof input !== "string") return empty
-  const raw = input.trim()
-  if (!raw) return empty
-  try {
-    const obj = JSON.parse(raw)
-    if (!obj || typeof obj !== "object") return empty
-    const readArr = (v: unknown) =>
-      Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean) : []
-
-    const emails = readArr((obj as any).emails)
-    const phones = readArr((obj as any).phones)
-    const lines = readArr((obj as any).lines)
-    const legacyOthers = readArr((obj as any).others)
-
-    const email1 = typeof (obj as any).email === "string" ? String((obj as any).email).trim() : ""
-    const phone1 = typeof (obj as any).phone === "string" ? String((obj as any).phone).trim() : ""
-    const line1 = typeof (obj as any).line === "string" ? String((obj as any).line).trim() : ""
-    const other1 = typeof (obj as any).other === "string" ? String((obj as any).other).trim() : ""
-
-    const pcmRaw = typeof (obj as any).primaryContactMethod === "string" ? String((obj as any).primaryContactMethod).trim() : ""
-    const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? (pcmRaw as any) : undefined
-
-    const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
-
-    const finalLines = (() => {
-      const merged = uniq([...(line1 ? [line1] : []), ...lines])
-      if (merged.length > 0) return merged
-      // Back-compat: treat legacy others/other as lines when lines is empty.
-      return uniq([...(other1 ? [other1] : []), ...legacyOthers])
-    })()
-    return {
-      emails: uniq([...(email1 ? [email1] : []), ...emails]),
-      phones: uniq([...(phone1 ? [phone1] : []), ...phones]),
-      lines: finalLines,
-      primaryContactMethod,
-    }
-  } catch {
-    return empty
-  }
-}
-
-function normalizeTelNumber(input: string) {
-  const raw = String(input || "").trim()
-  if (!raw) return ""
-  const hasPlus = raw.startsWith("+")
-  const stripped = raw.replace(/[\s\-().]/g, "")
-  const digits = stripped.replace(/[^0-9+]/g, "")
-  const core = hasPlus ? digits.replace(/\+/g, "+") : digits.replace(/\+/g, "")
-  return core
-}
-
-function normalizeLineToHrefOrNull(input: string): { display: string; href?: string } {
-  const trimmed = String(input || "").trim()
-  if (!trimmed) return { display: "" }
-
-  const isLikelyUrl = /^https?:\/\//i.test(trimmed) || /^line:\/\//i.test(trimmed) || /line\.me\//i.test(trimmed)
-  if (isLikelyUrl) return { display: trimmed, href: trimmed }
-
-  const lineId = trimmed.replace(/^@/, "").replace(/\s+/g, "")
-  if (!lineId) return { display: trimmed }
-  return { display: lineId, href: `https://line.me/R/ti/p/~${encodeURIComponent(lineId)}` }
-}
-
-function normalizePhoneDisplay(raw: string) {
-  return String(raw || "").trim()
-}
-
 export function CreatorCard({
   creator,
   locale,
@@ -143,11 +69,6 @@ export function CreatorCard({
   const copy = getCopy(locale)
   const mm = copy.matchmaking
   const isEmpty = Boolean(creator.isDemo)
-  const [showContact, setShowContact] = useState(false)
-  const [ctaToast, setCtaToast] = useState<string | null>(null)
-  const ctaToastTimerRef = useRef<number | null>(null)
-  const [copiedKey, setCopiedKey] = useState<null | "email" | "phone" | "line">(null)
-  const copiedTimerRef = useRef<number | null>(null)
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
 
@@ -155,8 +76,7 @@ export function CreatorCard({
 
   useEffect(() => {
     return () => {
-      if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
-      if (copiedTimerRef.current != null) window.clearTimeout(copiedTimerRef.current)
+      // no-op
     }
   }, [])
 
@@ -166,9 +86,6 @@ export function CreatorCard({
 
   const showPopularBadge =
     isPopularPicked === true ? true : isPopularPicked === false ? false : isPopular && !isEmpty
-
-  const showHighEngagement =
-    typeof creator.stats?.engagementRate === "number" && Number.isFinite(creator.stats.engagementRate) && creator.stats.engagementRate > 0.02
 
   const profileComplete =
     !isEmpty &&
@@ -249,141 +166,6 @@ export function CreatorCard({
     return "bg-sky-500/10 border-sky-400/20 text-sky-100/85"
   }
 
-  const parsedContact = safeParseCreatorContact((creator as any)?.contact)
-  const primaryContactMethod = (() => {
-    const raw = typeof (creator as any)?.primaryContactMethod === "string" ? String((creator as any).primaryContactMethod).trim() : ""
-    if (raw === "email" || raw === "phone" || raw === "line") return raw
-    return parsedContact.primaryContactMethod ?? null
-  })()
-
-  const contactItems = (() => {
-    const out: Array<{
-      key: "email" | "phone" | "line"
-      value: string
-      className: string
-      href?: string
-      ariaLabel?: string
-      isPrimary?: boolean
-    }> = []
-    const email =
-      typeof creator.contactEmail === "string"
-        ? creator.contactEmail.trim()
-        : typeof parsedContact.emails[0] === "string"
-          ? parsedContact.emails[0].trim()
-        : typeof (creator as any)?.creatorCard?.contactEmail === "string"
-          ? String((creator as any)?.creatorCard?.contactEmail).trim()
-          : typeof (creator as any)?.profile?.contactEmail === "string"
-            ? String((creator as any)?.profile?.contactEmail).trim()
-            : ""
-
-    const phone =
-      typeof creator.contactPhone === "string"
-        ? creator.contactPhone.trim()
-        : typeof parsedContact.phones[0] === "string"
-          ? parsedContact.phones[0].trim()
-          : typeof (creator as any)?.creatorCard?.contactPhone === "string"
-            ? String((creator as any)?.creatorCard?.contactPhone).trim()
-            : typeof (creator as any)?.profile?.contactPhone === "string"
-              ? String((creator as any)?.profile?.contactPhone).trim()
-              : ""
-
-    const line =
-      typeof creator.contactLine === "string"
-        ? creator.contactLine.trim()
-        : typeof parsedContact.lines[0] === "string"
-          ? parsedContact.lines[0].trim()
-          : typeof (creator as any)?.creatorCard?.contactLine === "string"
-            ? String((creator as any)?.creatorCard?.contactLine).trim()
-            : typeof (creator as any)?.profile?.contactLine === "string"
-              ? String((creator as any)?.profile?.contactLine).trim()
-              : ""
-
-    if (email) {
-      const subject = encodeURIComponent("合作洽談 / Collaboration request")
-      const body = encodeURIComponent(
-        `你好 ${creator.name}，\n我在 Matchmaking 上看到你的資料，想跟你合作。\n\nHi ${creator.name},\nI saw your profile on Matchmaking and would like to collaborate.\n`,
-      )
-      const href = `mailto:${email}?subject=${subject}&body=${body}`
-      out.push({
-        key: "email",
-        value: email,
-        className: "",
-        href,
-        ariaLabel: `Email ${creator.name}`,
-        isPrimary: primaryContactMethod === "email",
-      })
-    }
-
-    if (phone) {
-      const display = normalizePhoneDisplay(phone)
-      const tel = normalizeTelNumber(display)
-      if (tel) {
-        out.push({
-          key: "phone",
-          value: display,
-          className: "",
-          href: `tel:${tel}`,
-          ariaLabel: `Call ${creator.name}`,
-          isPrimary: primaryContactMethod === "phone",
-        })
-      } else {
-        out.push({ key: "phone", value: display, className: "", isPrimary: primaryContactMethod === "phone" })
-      }
-    }
-
-    if (line) {
-      const normalized = normalizeLineToHrefOrNull(line)
-      if (normalized.display) {
-        out.push({
-          key: "line",
-          value: normalized.display,
-          className: "",
-          href: normalized.href,
-          ariaLabel: `LINE ${creator.name}`,
-          isPrimary: primaryContactMethod === "line",
-        })
-      }
-    }
-
-    // Primary first, stable order.
-    const order: Array<(typeof out)[number]["key"]> = ["email", "phone", "line"]
-    return [...out]
-      .sort((a, b) => {
-        const pa = a.isPrimary ? 1 : 0
-        const pb = b.isPrimary ? 1 : 0
-        if (pa !== pb) return pb - pa
-        return order.indexOf(a.key) - order.indexOf(b.key)
-      })
-  })()
-
-  const copyValue = async (key: "email" | "phone" | "line", value: string) => {
-    const v = String(value || "").trim()
-    if (!v) return
-    try {
-      if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        await navigator.clipboard.writeText(v)
-      } else {
-        const ta = document.createElement("textarea")
-        ta.value = v
-        ta.style.position = "fixed"
-        ta.style.left = "-9999px"
-        document.body.appendChild(ta)
-        ta.focus()
-        ta.select()
-        document.execCommand("copy")
-        document.body.removeChild(ta)
-      }
-      setCopiedKey(key)
-      if (copiedTimerRef.current != null) window.clearTimeout(copiedTimerRef.current)
-      copiedTimerRef.current = window.setTimeout(() => {
-        setCopiedKey(null)
-        copiedTimerRef.current = null
-      }, 1400)
-    } catch {
-      // swallow
-    }
-  }
-
   const CardBody = (
     <>
       <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
@@ -400,11 +182,31 @@ export function CreatorCard({
             <div className="w-14 h-14 rounded-full bg-white/10" />
           </div>
         )}
+
+        <div className="absolute bottom-2 right-2 z-10">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onToggleFav()
+            }}
+            className={`h-10 w-10 rounded-full border grid place-items-center backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
+              isFav
+                ? "bg-emerald-500/25 border-emerald-400/30 text-emerald-100"
+                : "bg-black/40 border-white/15 text-white/85 hover:bg-black/55"
+            }`}
+            aria-label={isFav ? "Remove favorite / 取消收藏" : "Add favorite / 加入收藏"}
+            title={isFav ? "Remove favorite / 取消收藏" : "Add favorite / 加入收藏"}
+          >
+            <span className="text-base leading-none">{isFav ? "♥" : "♡"}</span>
+          </button>
+        </div>
         <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/70 via-black/25 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
       </div>
 
-      {isDemo ? (
+      {isDemo && process.env.NODE_ENV !== "production" ? (
         <div className="px-3 pt-3 sm:px-3">
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center justify-center h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10 cursor-pointer whitespace-nowrap">
@@ -531,7 +333,6 @@ export function CreatorCard({
               ) : null}
             </div>
 
-            {showHighEngagement ? <div className="mt-2 text-[11px] text-white/55 truncate min-w-0">{mm.highEngagementLabel}</div> : null}
           </div>
         </div>
       </div>
@@ -568,106 +369,6 @@ export function CreatorCard({
           {CardBody}
         </div>
       )}
-
-      <div className="px-3 pb-3 sm:px-3 sm:pb-3 mt-3 relative z-20 pointer-events-auto">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (isEmpty) return
-            if (!contactItems.length) {
-              setShowContact(false)
-              setCtaToast("沒有提供聯絡方式 / No contact info provided")
-              if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
-              ctaToastTimerRef.current = window.setTimeout(() => {
-                setCtaToast(null)
-                ctaToastTimerRef.current = null
-              }, 1600)
-              return
-            }
-
-            setCtaToast(null)
-            setShowContact((v) => !v)
-          }}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500/85 to-cyan-500/70 px-4 h-11 text-sm font-medium text-white hover:brightness-110 transition-all min-w-0 disabled:opacity-60 disabled:hover:brightness-100"
-          disabled={isEmpty}
-        >
-          <span className="min-w-0 truncate">{mm.ctaStartCollaboration}</span>
-        </button>
-
-        <div aria-live="polite" className="sr-only">
-          {ctaToast ?? ""}
-        </div>
-        {ctaToast ? (
-          <div className="mt-2">
-            <div className="rounded-xl border border-white/10 bg-[#0b1220]/85 backdrop-blur-md px-3 py-2 text-xs text-slate-200 shadow-lg break-words [overflow-wrap:anywhere]">
-              {ctaToast}
-            </div>
-          </div>
-        ) : null}
-
-        {showContact && contactItems.length ? (
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/80 min-w-0">
-            {contactItems.map((it) => {
-              const isPrimary = Boolean(it.isPrimary)
-              const copied = copiedKey === it.key
-              const label = it.key === "email" ? "Email: " : it.key === "phone" ? "Phone: " : "LINE: "
-              return (
-                <div
-                  key={it.key}
-                  className={`max-w-full overflow-hidden rounded-xl border px-3 py-2 min-w-0 ${
-                    isPrimary ? "border-emerald-400/30 bg-emerald-500/10" : "border-white/10 bg-white/5"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 min-w-0">
-                    <div className="min-w-0">
-                      <div className="text-[11px] text-white/50 uppercase tracking-wider">{it.key}</div>
-                      <div className="mt-1">
-                        {it.href ? (
-                          <a
-                            href={it.href}
-                            onClick={(e) => e.stopPropagation()}
-                            className="block max-w-full truncate underline underline-offset-2 decoration-white/20 hover:decoration-white/50"
-                            aria-label={it.ariaLabel}
-                            title={it.value}
-                          >
-                            {label}
-                            {it.value}
-                          </a>
-                        ) : (
-                          <span className="block max-w-full truncate" title={it.value}>
-                            {label}
-                            {it.value}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        copyValue(it.key, it.value)
-                      }}
-                      className={`shrink-0 h-8 px-3 rounded-lg border text-xs whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
-                        copied
-                          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
-                          : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
-                      }`}
-                      aria-label={copied ? "Copied" : "Copy"}
-                      title={copied ? "Copied" : "Copy"}
-                    >
-                      {copied ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : null}
-      </div>
     </div>
   )
 }
