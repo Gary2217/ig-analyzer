@@ -54,19 +54,25 @@ export function FiltersBar(props: Props) {
     setTagsOpen(false)
   }, [])
 
+  const closeOthers = useCallback(
+    (except: "platform" | "tags") => {
+      if (except !== "platform") setPlatformOpen(false)
+      if (except !== "tags") setTagsOpen(false)
+    },
+    []
+  )
+
   useEffect(() => {
-    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+    const onPointerDown = (e: PointerEvent) => {
       const t = e.target as HTMLElement | null
       if (!t) return
       if (t.closest('[data-mm-filters="root"]')) return
       closeAll()
     }
 
-    window.addEventListener("mousedown", onPointerDown)
-    window.addEventListener("touchstart", onPointerDown, { passive: true })
+    window.addEventListener("pointerdown", onPointerDown)
     return () => {
-      window.removeEventListener("mousedown", onPointerDown)
-      window.removeEventListener("touchstart", onPointerDown)
+      window.removeEventListener("pointerdown", onPointerDown)
     }
   }, [closeAll])
 
@@ -162,7 +168,7 @@ export function FiltersBar(props: Props) {
                       onClick={() => {
                         setPlatformOpen((v) => {
                           if (v) return false
-                          closeAll()
+                          closeOthers("platform")
                           return true
                         })
                       }}
@@ -217,7 +223,7 @@ export function FiltersBar(props: Props) {
                       onClick={() => {
                         setTagsOpen((v) => {
                           if (v) return false
-                          closeAll()
+                          closeOthers("tags")
                           return true
                         })
                       }}
