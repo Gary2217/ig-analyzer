@@ -178,7 +178,18 @@ export function normalizeCreatorTypesFromCard(card: unknown): string[] {
     null
 
   const coerced = coerceToStringArrayOrNull(rawCandidate)
-  const fromArr = coerced == null ? [] : normalizeCreatorTypes(coerced).slice(0, 20)
+  const cleaned = (() => {
+    const arr = coerced == null ? [] : coerced
+    return arr.map((s) => String(s || "").trim()).filter(Boolean)
+  })()
+
+  const hasCJK = (s: string) => /[\u4E00-\u9FFF]/.test(s)
+
+  if (cleaned.length && cleaned.some(hasCJK)) {
+    return Array.from(new Set(cleaned)).slice(0, 20)
+  }
+
+  const fromArr = cleaned.length ? normalizeCreatorTypes(cleaned).slice(0, 20) : []
   if (fromArr.length) return fromArr
 
   const fallbackText =
