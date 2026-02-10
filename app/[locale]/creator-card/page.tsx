@@ -400,6 +400,11 @@ type CreatorCardPayload = {
   pastCollaborations?: string[] | null
 }
 
+type CreatorCardPayloadWithTags = CreatorCardPayload & {
+  themeTypes?: string[] | null
+  audienceProfiles?: string[] | null
+}
+
 type FeaturedItem = {
   id: string
   url: string
@@ -1288,7 +1293,7 @@ export default function CreatorCardPage() {
     return displayUsername ? displayUsername : "—"
   }, [displayUsername, igProfile?.displayName, igProfile?.display_name, igProfile?.name])
 
-  const [baseCard, setBaseCard] = useState<CreatorCardPayload | null>(null)
+  const [baseCard, setBaseCard] = useState<CreatorCardPayloadWithTags | null>(null)
   const [deliverables, setDeliverables] = useState<string[]>([])
   const [collaborationNiches, setCollaborationNiches] = useState<string[]>([])
   const [pastCollaborations, setPastCollaborations] = useState<string[]>([])
@@ -1328,6 +1333,11 @@ export default function CreatorCardPage() {
       engagementRate: engagementRatePct ?? undefined,
     }
   }, [cardId, creatorId, creatorStats?.engagementRatePct, igProfile, loading])
+  const [themeTypes, setThemeTypes] = useState<string[]>([])
+  const [audienceProfiles, setAudienceProfiles] = useState<string[]>([])
+
+  const themeChipOverflow = useTwoRowChipOverflow(themeTypes)
+  const audienceChipOverflow = useTwoRowChipOverflow(audienceProfiles)
   const [primaryTypeTags, setPrimaryTypeTags] = useState<string[]>([])
 
   const [contactEmails, setContactEmails] = useState<string[]>([])
@@ -2116,7 +2126,7 @@ export default function CreatorCardPage() {
         const nextEng = statsObj ? readNumber((statsObj as any).engagementRatePct ?? (statsObj as any).engagement_rate_pct) : null
         setCreatorStats(nextEng == null ? null : { engagementRatePct: nextEng })
 
-        const nextBase: CreatorCardPayload | null = card
+        const nextBase: CreatorCardPayloadWithTags | null = card
           ? {
               handle: readString(card?.handle) ?? null,
               displayName: readString(card?.display_name) ?? null,
@@ -2170,7 +2180,7 @@ export default function CreatorCardPage() {
           const nextAvatar = typeof (nextBase as any)?.avatarUrl === "string" ? String((nextBase as any).avatarUrl).trim() : ""
           const nextProfile = typeof (nextBase as any)?.profileImageUrl === "string" ? String((nextBase as any).profileImageUrl).trim() : ""
 
-          const merged: CreatorCardPayload = {
+          const merged: CreatorCardPayloadWithTags = {
             ...(prev ?? {}),
             ...nextBase,
             avatarUrl: nextAvatar || prevAvatar || null,
