@@ -25,7 +25,7 @@ export function CreatorCardList({ cards, locale }: CreatorCardListProps) {
             key={`skeleton-${i}`}
             className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden animate-pulse"
           >
-            <div className="relative w-full bg-white/10 aspect-[16/10]" />
+            <div className="relative w-full bg-white/10 aspect-[16/10] rounded-xl" />
             <div className="p-4">
               <div className="h-4 w-32 rounded bg-white/10" />
               <div className="mt-2 h-3 w-20 rounded bg-white/10" />

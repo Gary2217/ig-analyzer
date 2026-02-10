@@ -1365,7 +1365,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         />
         </div>
 
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4 min-w-0">
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-5 sm:mt-6 min-w-0">
           <div className="flex items-center justify-between gap-3 min-w-0">
             <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
             {statsPrefetchRunning ? (
