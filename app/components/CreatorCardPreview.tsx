@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Plus, Sparkles, X, GripVertical } from "luci
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
 import { MobileCreatorCardLayout } from "./creator-card/MobileCreatorCardLayout"
-import { localizeCreatorTypes, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
+import { localizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
 import { normalizeIgThumbnailUrlOrNull } from "./creator-card/useCreatorCardPreviewData"
 import type { OEmbedState } from "./creator-card/igOEmbedTypes"
 import {
@@ -521,7 +521,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     highlightSection,
   } = props
 
-  const normalizedLocale = locale === "zh-TW" ? "zh-TW" : "en"
+  const normalizedLocale = /^zh(-|$)/i.test(String(locale || "")) ? "zh-TW" : "en"
 
   const isMobile = useMemo(() => isMobileViewport(), [])
   const eagerCount = isMobile ? 2 : 3
@@ -845,7 +845,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     : "max-w-[240px] md:max-w-[280px] lg:max-w-[320px]"
 
   const nicheText = useMemo(() => {
-    const ids = normalizeCreatorTypes(collaborationNiches ?? []).slice(0, 20)
+    const ids = normalizeCreatorTypesFromCard({ collaborationNiches })
     if (ids.length === 0) return t("results.mediaKit.collaborationNiches.empty")
     return localizeCreatorTypes(ids, normalizedLocale).join(" · ")
   }, [collaborationNiches, normalizedLocale, t])

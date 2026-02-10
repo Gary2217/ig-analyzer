@@ -4931,7 +4931,7 @@ export default function CreatorCardPage() {
                                 markDirty()
                               }}
                             >
-                              {creatorTypeToDisplayLabel(optId, activeLocale as any)}
+                              {localizeCreatorTypes([optId], activeLocale as any)[0] ?? ""}
                             </Button>
                           )
                         })}
@@ -4993,7 +4993,7 @@ export default function CreatorCardPage() {
                                     key={tag}
                                     className="inline-flex items-center gap-1 rounded-full border border-emerald-400/50 bg-white/[0.06] px-3 py-1 text-sm text-white"
                                   >
-                                    <span className="min-w-0 truncate max-w-[240px]">{creatorTypeToDisplayLabel(tag, activeLocale as any)}</span>
+                                    <span className="min-w-0 truncate max-w-[240px]">{localizeCreatorTypes([tag], activeLocale as any)[0] ?? ""}</span>
                                     <button
                                       type="button"
                                       className="shrink-0 rounded-full p-1 hover:bg-white/10"

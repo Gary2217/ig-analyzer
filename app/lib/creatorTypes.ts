@@ -171,6 +171,8 @@ export function normalizeCreatorTypesFromCard(card: unknown): string[] {
     c.creator_type ??
     c.tagCategories ??
     c.tag_categories ??
+    c.tags ??
+    c.tag ??
     c.collaborationNiches ??
     c.collaboration_niches ??
     null
@@ -193,10 +195,21 @@ export function localizeCreatorTypes(
   types: unknown,
   locale: CreatorTypeLocale,
 ): string[] {
+  const normalizedLocale = (() => {
+    const raw = String(locale || "").trim()
+    if (!raw) return "en" as CreatorTypeLocale
+    if (/^zh(-|$)/i.test(raw)) return "zh-TW" as CreatorTypeLocale
+    return raw as CreatorTypeLocale
+  })()
+
   const normalized = normalizeCreatorTypes(types).slice(0, 20)
   return normalized
-    .map((id) => creatorTypeToDisplayLabel(id, locale))
-    .map((x) => String(x || "").trim())
+    .map((id) => {
+      const s = String(id || "").trim()
+      if (!s) return ""
+      if (/[\u4E00-\u9FFF]/.test(s)) return s
+      return String(creatorTypeToDisplayLabel(s, normalizedLocale) || "").trim()
+    })
     .filter(Boolean)
 }
 

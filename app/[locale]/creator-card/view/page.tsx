@@ -16,7 +16,7 @@ function pickString(v: unknown): string {
 }
 
 export default function CreatorCardPreviewViewPage({ params }: CreatorCardPreviewViewPageProps) {
-  const locale = params.locale === "zh-TW" ? "zh-TW" : "en"
+  const locale = /^zh(-|$)/i.test(String(params.locale || "")) ? "zh-TW" : "en"
   const { t } = useI18n()
   const igConn = useInstagramConnection()
 
