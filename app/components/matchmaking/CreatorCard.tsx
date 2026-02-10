@@ -47,6 +47,7 @@ export function CreatorCard({
   isFav,
   onToggleFav,
   onDemoAvatarChanged,
+  canEditDemoAvatars,
   isPopularPicked,
   statsLoading,
   statsError,
@@ -58,6 +59,7 @@ export function CreatorCard({
   isFav: boolean
   onToggleFav: () => void
   onDemoAvatarChanged?: () => void
+  canEditDemoAvatars?: boolean
   isPopularPicked?: boolean
   statsLoading?: boolean
   statsError?: boolean
@@ -71,6 +73,8 @@ export function CreatorCard({
   const isEmpty = Boolean(creator.isDemo)
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
+
+  const canEditDemos = Boolean(canEditDemoAvatars)
 
   const isDemo = Boolean((creator as any)?.isDemo) || String((creator as any)?.id || "").startsWith("demo-")
 
@@ -206,11 +210,11 @@ export function CreatorCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
       </div>
 
-      {isDemo && process.env.NODE_ENV !== "production" ? (
+      {isDemo && canEditDemos ? (
         <div className="px-3 pt-3 sm:px-3">
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center justify-center h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10 cursor-pointer whitespace-nowrap">
-              Upload image
+              {locale === "zh-TW" ? "上傳圖片" : "Upload image"}
               <input
                 type="file"
                 accept="image/*"
@@ -239,7 +243,7 @@ export function CreatorCard({
                 onDemoAvatarChanged?.()
               }}
             >
-              Reset
+              {locale === "zh-TW" ? "重設" : "Reset"}
             </button>
           </div>
         </div>

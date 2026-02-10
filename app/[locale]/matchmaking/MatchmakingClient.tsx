@@ -323,6 +323,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
   const [demoAvatarMap, setDemoAvatarMap] = useState<Record<string, string>>({})
+  const [canEditDemoAvatars, setCanEditDemoAvatars] = useState(false)
 
   const refreshDemoAvatars = useCallback(() => {
     try {
@@ -343,6 +344,30 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     window.addEventListener("storage", onStorage)
     return () => window.removeEventListener("storage", onStorage)
   }, [refreshDemoAvatars])
+
+  useEffect(() => {
+    const LS_KEY = "mm_demo_edit_enabled_v1"
+    try {
+      const sp = searchParams
+      if (sp?.get("demoEdit") === "1") {
+        window.localStorage.setItem(LS_KEY, "1")
+      }
+      setCanEditDemoAvatars(window.localStorage.getItem(LS_KEY) === "1")
+    } catch {
+      setCanEditDemoAvatars(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const disableDemoEdit = useCallback(() => {
+    const LS_KEY = "mm_demo_edit_enabled_v1"
+    try {
+      if (typeof window !== "undefined") window.localStorage.removeItem(LS_KEY)
+    } catch {
+      // swallow
+    }
+    setCanEditDemoAvatars(false)
+  }, [])
 
   const initialMeCardResolved = useMemo(() => {
     const raw = initialMeCard as any
@@ -1391,6 +1416,19 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
                 {uiCopy.matchmaking.pageSubtitleLine2}
               </p>
             </div>
+
+            {canEditDemoAvatars ? (
+              <div className="mt-3 flex items-center gap-2">
+                <div className="text-xs text-emerald-200/80">{locale === "zh-TW" ? "示範編輯模式" : "Demo edit mode"}</div>
+                <button
+                  type="button"
+                  onClick={disableDemoEdit}
+                  className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10"
+                >
+                  {locale === "zh-TW" ? "關閉" : "Turn off"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1504,6 +1542,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
                   isFav={fav.isFav(c.id)}
                   onToggleFav={() => fav.toggleFav(c.id)}
                   onDemoAvatarChanged={refreshDemoAvatars}
+                  canEditDemoAvatars={canEditDemoAvatars}
                   isPopularPicked={isPopularPicked}
                   statsLoading={loading}
                   statsError={error}
