@@ -164,7 +164,8 @@ export function CreatorCard({
     (typeof creator.stats?.followers === "number" && Number.isFinite(creator.stats.followers) && creator.stats.followers > 5000) ||
     (typeof creator.stats?.engagementRate === "number" && Number.isFinite(creator.stats.engagementRate) && creator.stats.engagementRate > 0.03)
 
-  const showPopularBadge = Boolean(isPopularPicked ?? (isPopular && !isEmpty))
+  const showPopularBadge =
+    isPopularPicked === true ? true : isPopularPicked === false ? false : isPopular && !isEmpty
 
   const showHighEngagement =
     typeof creator.stats?.engagementRate === "number" && Number.isFinite(creator.stats.engagementRate) && creator.stats.engagementRate > 0.02

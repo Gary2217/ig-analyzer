@@ -1071,10 +1071,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     if (!need) return []
 
     const existingIds = new Set(finalCards.map((c) => c.id))
+    const pickedSeeds: typeof demoCreators = []
     const offset = ((clampedPage - 1) * pageSize) % Math.max(1, demoCreators.length)
-    const pickedSeeds = Array.from({ length: need })
-      .map((_, i) => demoCreators[(offset + i) % demoCreators.length])
-      .filter((d) => d && !existingIds.has(d.id))
+    let i = 0
+
+    while (pickedSeeds.length < need && i < need * 10) {
+      const d = demoCreators[(offset + i) % demoCreators.length]
+      if (d && !existingIds.has(d.id) && !pickedSeeds.some((x) => x.id === d.id)) {
+        pickedSeeds.push(d)
+      }
+      i++
+    }
 
     const masterZh = CREATOR_TYPE_MASTER.map((x) => String(x?.zh || "").trim()).filter(Boolean)
     const pick = (arr: string[]) => arr.filter((x) => masterZh.includes(x))
@@ -1467,7 +1474,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
               const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
               const popularKey = String(creatorId || c.id)
-              const isPopularPicked = Boolean(popularCreatorId && popularKey === String(popularCreatorId))
+              const isPopularPicked = popularCreatorId ? popularKey === String(popularCreatorId) : undefined
 
               return (
                 <MatchmakingCreatorCard
