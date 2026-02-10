@@ -376,8 +376,6 @@ type CreatorCardUpsertPayload = {
   niche?: string
   audience?: string
   minPrice?: number | null
-  themeTypes?: string[]
-  audienceProfiles?: string[]
   contact?: string | null
   portfolio?: CreatorCardPortfolioItem[]
   isPublic?: boolean
@@ -394,12 +392,10 @@ type CreatorCardPayload = {
   niche?: string | null
   audience?: string | null
   minPrice?: number | null
-  themeTypes?: string[] | null
-  audienceProfiles?: string[] | null
-  deliverables?: string[] | null
   contact?: string | null
   portfolio?: unknown[] | null
   isPublic?: boolean | null
+  deliverables?: string[] | null
   collaborationNiches?: string[] | null
   pastCollaborations?: string[] | null
 }
@@ -1332,12 +1328,6 @@ export default function CreatorCardPage() {
       engagementRate: engagementRatePct ?? undefined,
     }
   }, [cardId, creatorId, creatorStats?.engagementRatePct, igProfile, loading])
-  const [themeTypes, setThemeTypes] = useState<string[]>([])
-  const [audienceProfiles, setAudienceProfiles] = useState<string[]>([])
-
-  const themeChipOverflow = useTwoRowChipOverflow(themeTypes)
-  const audienceChipOverflow = useTwoRowChipOverflow(audienceProfiles)
-
   const [primaryTypeTags, setPrimaryTypeTags] = useState<string[]>([])
 
   const [contactEmails, setContactEmails] = useState<string[]>([])
