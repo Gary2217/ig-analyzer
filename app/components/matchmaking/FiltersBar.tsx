@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { BudgetRange, CollabType, Platform } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
@@ -48,6 +48,27 @@ export function FiltersBar(props: Props) {
   const [tagsOpen, setTagsOpen] = useState(false)
   const [tagSearch, setTagSearch] = useState("")
   const [customTagDraft, setCustomTagDraft] = useState("")
+
+  const closeAll = useCallback(() => {
+    setPlatformOpen(false)
+    setTagsOpen(false)
+  }, [])
+
+  useEffect(() => {
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t) return
+      if (t.closest('[data-mm-filters="root"]')) return
+      closeAll()
+    }
+
+    window.addEventListener("mousedown", onPointerDown)
+    window.addEventListener("touchstart", onPointerDown, { passive: true })
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown)
+      window.removeEventListener("touchstart", onPointerDown)
+    }
+  }, [closeAll])
 
   const clearLabel = props.locale === "zh-TW" ? "清除" : "Clear"
   const addLabel = props.locale === "zh-TW" ? "新增" : "Add"
@@ -119,7 +140,7 @@ export function FiltersBar(props: Props) {
   const hiddenCount = Math.max(0, dealChips.length - visibleDealChips.length)
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
+    <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6" data-mm-filters="root">
       <div className="flex flex-col gap-3">
         <div className="sticky top-[52px] sm:top-[72px] z-40 -mx-3 sm:mx-0 px-3 sm:px-0">
           <div className="rounded-2xl border border-white/10 bg-[#0b1220]/75 backdrop-blur-md">
@@ -128,6 +149,7 @@ export function FiltersBar(props: Props) {
                 <input
                   value={props.search}
                   onChange={(e) => props.onSearch(e.target.value)}
+                  onFocus={closeAll}
                   placeholder={copy.common.searchPlaceholder}
                   className="h-10 w-full col-span-12 lg:col-span-4 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
                 />
@@ -137,7 +159,13 @@ export function FiltersBar(props: Props) {
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setPlatformOpen((v) => !v)}
+                      onClick={() => {
+                        setPlatformOpen((v) => {
+                          if (v) return false
+                          closeAll()
+                          return true
+                        })
+                      }}
                       className="h-10 w-full max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/85 flex items-center justify-between gap-2"
                       aria-expanded={platformOpen}
                     >
@@ -166,7 +194,7 @@ export function FiltersBar(props: Props) {
                                 key={o.value}
                                 type="button"
                                 onClick={() => props.onTogglePlatform(o.value)}
-                                className={`w-full flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm text-left transition-colors ${
+                                className={`w-full min-h-10 flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm text-left transition-colors ${
                                   active ? "bg-emerald-500/10 border border-emerald-400/25 text-white/90" : "hover:bg-white/5 text-white/80 border border-transparent"
                                 }`}
                               >
@@ -186,7 +214,13 @@ export function FiltersBar(props: Props) {
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setTagsOpen((v) => !v)}
+                      onClick={() => {
+                        setTagsOpen((v) => {
+                          if (v) return false
+                          closeAll()
+                          return true
+                        })
+                      }}
                       className="h-10 w-full max-w-full rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/85 flex items-center justify-between gap-2"
                       aria-expanded={tagsOpen}
                     >
@@ -228,7 +262,7 @@ export function FiltersBar(props: Props) {
                                 key={t}
                                 type="button"
                                 onClick={() => props.onToggleTagCategory(t)}
-                                className={`w-full flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm text-left transition-colors ${
+                                className={`w-full min-h-10 flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm text-left transition-colors ${
                                   active ? "bg-sky-500/10 border border-sky-400/25 text-white/90" : "hover:bg-white/5 text-white/80 border border-transparent"
                                 }`}
                               >
@@ -270,6 +304,8 @@ export function FiltersBar(props: Props) {
                 <select
                   value={props.budget}
                   onChange={(e) => props.onBudget(e.target.value as any)}
+                  onFocus={closeAll}
+                  onClick={closeAll}
                   className="h-10 w-full col-span-12 sm:col-span-6 lg:col-span-2 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
                 >
                   {budgetOptions.map((o) => (
@@ -282,6 +318,8 @@ export function FiltersBar(props: Props) {
                 <select
                   value={props.sort}
                   onChange={(e) => props.onSort(e.target.value as any)}
+                  onFocus={closeAll}
+                  onClick={closeAll}
                   className="h-10 w-full col-span-12 sm:col-span-6 lg:col-span-2 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90"
                 >
                   <option value="best_match" className="bg-slate-900">
@@ -297,7 +335,10 @@ export function FiltersBar(props: Props) {
 
                 <button
                   type="button"
-                  onClick={props.onOpenFavorites}
+                  onClick={() => {
+                    closeAll()
+                    props.onOpenFavorites()
+                  }}
                   className="h-10 w-full col-span-12 lg:col-span-2 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 whitespace-nowrap"
                 >
                   {copy.common.favorites} ({props.favoritesCount})
@@ -342,7 +383,10 @@ export function FiltersBar(props: Props) {
                     <button
                       key={o.value}
                       type="button"
-                      onClick={() => props.onToggleDealType(o.value)}
+                      onClick={() => {
+                        closeAll()
+                        props.onToggleDealType(o.value)
+                      }}
                       className={`h-10 px-3 rounded-full border text-sm whitespace-nowrap max-w-full truncate min-w-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
                         active
                           ? "bg-gradient-to-r from-emerald-500/15 to-cyan-400/10 border-emerald-400/30 text-white/90 ring-1 ring-emerald-400/25"
