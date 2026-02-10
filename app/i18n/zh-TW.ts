@@ -11,6 +11,9 @@ export const zhTW: CopyDictionary = {
   matchmaking: {
     title: "媒合配對",
     description: "依平台、預算、合作形式篩選創作者",
+    pageTitle: "創作者名片區",
+    pageSubtitleLine1: "找到符合預算、能帶轉換的創作者",
+    pageSubtitleLine2: "用互動率與價格快速比較，一鍵開始洽談合作。",
     pageHeadline: "找到符合預算、能帶轉換的創作者",
     pageSubheadline: "用互動率與價格快速比較，一鍵開始洽談合作。",
     bestMatchHelper: "最可能成交會綜合互動、粉絲規模與你選的預算。",

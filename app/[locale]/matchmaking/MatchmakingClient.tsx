@@ -1287,12 +1287,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       <div className="pt-6 sm:pt-8">
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
           <div className="min-w-0">
-            <h1 className="text-[clamp(20px,4.2vw,28px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
-              {uiCopy.matchmaking.pageHeadline}
+            <h1 className="text-[clamp(18px,3.6vw,26px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
+              {uiCopy.matchmaking.pageTitle}
             </h1>
-            <p className="mt-1 text-xs sm:text-sm text-white/55 max-w-full break-words min-w-0">
-              {uiCopy.matchmaking.pageSubheadline}
-            </p>
+            <div className="mt-2 max-w-2xl min-w-0">
+              <p className="text-xs sm:text-sm leading-relaxed text-white/60 min-w-0 break-words">
+                {uiCopy.matchmaking.pageSubtitleLine1}
+              </p>
+              <p className="mt-1 text-xs sm:text-sm leading-relaxed text-white/55 min-w-0 break-words">
+                {uiCopy.matchmaking.pageSubtitleLine2}
+              </p>
+            </div>
           </div>
         </div>
 

@@ -11,6 +11,9 @@ export const en: CopyDictionary = {
   matchmaking: {
     title: "Matchmaking",
     description: "Filter creators by platform, budget, and collaboration type.",
+    pageTitle: "Creator Cards",
+    pageSubtitleLine1: "Find creators that fit your budget and convert",
+    pageSubtitleLine2: "Compare by engagement and price, then start a collaboration in one click.",
     pageHeadline: "Find creators that fit your budget and convert",
     pageSubheadline: "Compare by engagement and price, then start a collaboration in one click.",
     bestMatchHelper: "Best Match combines engagement, audience size, and your selected budget.",

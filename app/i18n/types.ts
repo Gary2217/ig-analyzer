@@ -9,6 +9,9 @@ export type CopyDictionary = {
   matchmaking: {
     title: string
     description: string
+    pageTitle: string
+    pageSubtitleLine1: string
+    pageSubtitleLine2: string
     pageHeadline: string
     pageSubheadline: string
     bestMatchHelper: string
