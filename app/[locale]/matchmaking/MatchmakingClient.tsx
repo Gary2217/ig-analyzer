@@ -8,7 +8,7 @@ import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmak
 import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
 import { useFavorites } from "@/app/components/matchmaking/useFavorites"
 import { getCopy, type Locale } from "@/app/i18n"
-import { CREATOR_TYPE_MASTER, deriveCreatorTypesFromText, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
+import { CREATOR_TYPE_MASTER, normalizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
 import type {
   BudgetRange,
   CollabType,
@@ -632,25 +632,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
     return cards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
-      const tagCategories = (() => {
-        const raw =
-          (Array.isArray((c as any).collaborationNiches) ? (c as any).collaborationNiches : null) ??
-          (Array.isArray((c as any).collaboration_niches) ? (c as any).collaboration_niches : null) ??
-          (Array.isArray((c as any).tagCategories) ? (c as any).tagCategories : null) ??
-          (Array.isArray((c as any).tags) ? (c as any).tags : null) ??
-          []
-        const fromArr = normalizeCreatorTypes(raw).slice(0, 30)
-        if (fromArr.length) return fromArr
-        const fallbackText =
-          typeof (c as any)?.niche === "string" && String((c as any).niche).trim()
-            ? String((c as any).niche).trim()
-            : typeof (c as any)?.primaryNiche === "string" && String((c as any).primaryNiche).trim()
-              ? String((c as any).primaryNiche).trim()
-              : typeof c.category === "string"
-                ? c.category
-                : ""
-        return deriveCreatorTypesFromText(fallbackText).slice(0, 30)
-      })()
+      const tagCategories = normalizeCreatorTypesFromCard(c as any)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
@@ -885,48 +867,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     if (!meCard) return null
 
     const topics = (meCard.category ? [meCard.category] : []).filter(Boolean)
-    const tagCategories = (() => {
-      const normalizeTagItem = (x: unknown): string => {
-        if (typeof x === "string") return x.trim()
-        if (!x || typeof x !== "object") return ""
-        const obj = x as any
-        const candidates = [obj.label, obj.value, obj.name, obj.title]
-        for (const c of candidates) {
-          if (typeof c === "string" && c.trim()) return c.trim()
-        }
-        return ""
-      }
-
-      const deriveTagsFromNicheText = (input: unknown): string[] => {
-        const raw = typeof input === "string" ? input.trim() : ""
-        if (!raw) return []
-        return raw
-          .split(/[·・,，、/|]+/g)
-          .map((x) => x.trim())
-          .filter(Boolean)
-          .slice(0, 30)
-      }
-
-      const uniqTags = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 30)
-
-      const raw =
-        (Array.isArray((meCard as any).collaborationNiches) ? (meCard as any).collaborationNiches : null) ??
-        (Array.isArray((meCard as any).collaboration_niches) ? (meCard as any).collaboration_niches : null) ??
-        (Array.isArray((meCard as any).tagCategories) ? (meCard as any).tagCategories : null) ??
-        (Array.isArray((meCard as any).tags) ? (meCard as any).tags : null) ??
-        []
-      const fromArr = Array.isArray(raw) ? raw.map(normalizeTagItem).filter(Boolean).slice(0, 30) : ([] as string[])
-      if (fromArr.length) return uniqTags(fromArr)
-      const fallbackText =
-        typeof (meCard as any)?.niche === "string" && String((meCard as any).niche).trim()
-          ? String((meCard as any).niche).trim()
-          : typeof (meCard as any)?.primaryNiche === "string" && String((meCard as any).primaryNiche).trim()
-            ? String((meCard as any).primaryNiche).trim()
-            : typeof meCard.category === "string"
-              ? meCard.category
-              : ""
-      return uniqTags(deriveTagsFromNicheText(fallbackText))
-    })()
+    const tagCategories = normalizeCreatorTypesFromCard(meCard as any)
     const deliverables = Array.isArray((meCard as any).deliverables) ? ((meCard as any).deliverables as string[]) : []
     const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
     const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)

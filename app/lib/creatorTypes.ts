@@ -147,6 +147,59 @@ export function normalizeCreatorTypes(raw: unknown): string[] {
   return out
 }
 
+function coerceToStringArrayOrNull(raw: unknown): string[] | null {
+  if (Array.isArray(raw)) return raw.filter((x): x is string => typeof x === "string")
+  if (typeof raw === "string") {
+    const s = raw.trim()
+    if (!s) return []
+    return s
+      .split(/[,，、/|·・]+/g)
+      .map((x) => x.trim())
+      .filter(Boolean)
+  }
+  return null
+}
+
+export function normalizeCreatorTypesFromCard(card: unknown): string[] {
+  const c = (card && typeof card === "object") ? (card as any) : null
+  if (!c) return []
+
+  const rawCandidate =
+    c.creatorTypes ??
+    c.creator_types ??
+    c.creatorType ??
+    c.creator_type ??
+    c.tagCategories ??
+    c.tag_categories ??
+    c.collaborationNiches ??
+    c.collaboration_niches ??
+    null
+
+  const coerced = coerceToStringArrayOrNull(rawCandidate)
+  const fromArr = coerced == null ? [] : normalizeCreatorTypes(coerced).slice(0, 20)
+  if (fromArr.length) return fromArr
+
+  const fallbackText =
+    (typeof c.niche === "string" && c.niche.trim() ? c.niche.trim() : "") ||
+    (typeof c.primaryNiche === "string" && c.primaryNiche.trim() ? c.primaryNiche.trim() : "") ||
+    (typeof c.category === "string" && c.category.trim() ? c.category.trim() : "") ||
+    ""
+
+  if (!fallbackText) return []
+  return deriveCreatorTypesFromText(fallbackText).slice(0, 20)
+}
+
+export function localizeCreatorTypes(
+  types: unknown,
+  locale: CreatorTypeLocale,
+): string[] {
+  const normalized = normalizeCreatorTypes(types).slice(0, 20)
+  return normalized
+    .map((id) => creatorTypeToDisplayLabel(id, locale))
+    .map((x) => String(x || "").trim())
+    .filter(Boolean)
+}
+
 export function deriveCreatorTypesFromText(text: string): string[] {
   const raw = String(text || "").trim()
   if (!raw) return []

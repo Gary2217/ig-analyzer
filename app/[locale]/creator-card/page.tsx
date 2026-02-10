@@ -26,7 +26,7 @@ import { useInstagramConnection } from "@/app/components/InstagramConnectionProv
 import { useSiteSessionContext } from "@/app/components/SiteSessionProvider"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "../../components/creator-card/igOEmbedTypes"
-import { CREATOR_TYPE_MASTER, creatorTypeToDisplayLabel, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
+import { CREATOR_TYPE_MASTER, creatorTypeToDisplayLabel, localizeCreatorTypes, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
 
 // Strict oEmbed types live in a shared module (see igOEmbedTypes.ts)
 
@@ -3668,19 +3668,7 @@ export default function CreatorCardPage() {
               })()
 
               const nicheLabels = (() => {
-                const out: string[] = []
-                const seen = new Set<string>()
-                const normalized = normalizeCreatorTypes(collaborationNiches).slice(0, 20)
-                for (const id of normalized) {
-                  const label = creatorTypeToDisplayLabel(id, activeLocale as any)
-                  const s = typeof label === "string" ? label.trim() : ""
-                  if (!s) continue
-                  const key = s.toLowerCase()
-                  if (seen.has(key)) continue
-                  seen.add(key)
-                  out.push(s)
-                }
-                return out
+                return localizeCreatorTypes(normalizeCreatorTypes(collaborationNiches), activeLocale as any)
               })()
 
               const formatsSummary = selectedSummary(formatLabels, activeLocale, t)

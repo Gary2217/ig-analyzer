@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Plus, Sparkles, X, GripVertical } from "luci
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
 import { MobileCreatorCardLayout } from "./creator-card/MobileCreatorCardLayout"
-import { creatorTypeToDisplayLabel, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
+import { localizeCreatorTypes, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
 import { normalizeIgThumbnailUrlOrNull } from "./creator-card/useCreatorCardPreviewData"
 import type { OEmbedState } from "./creator-card/igOEmbedTypes"
 import {
@@ -847,7 +847,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const nicheText = useMemo(() => {
     const ids = normalizeCreatorTypes(collaborationNiches ?? []).slice(0, 20)
     if (ids.length === 0) return t("results.mediaKit.collaborationNiches.empty")
-    return ids.map((id) => creatorTypeToDisplayLabel(id, normalizedLocale)).join(" · ")
+    return localizeCreatorTypes(ids, normalizedLocale).join(" · ")
   }, [collaborationNiches, normalizedLocale, t])
 
   const formats = useMemo(() => normalizeStringArray(deliverables ?? [], 50), [deliverables])

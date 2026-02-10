@@ -30,6 +30,7 @@ export function PublicCreatorCardClient({ locale, creatorCard, messages }: Publi
       <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
         <CreatorCardPreview
           t={t}
+          locale={locale}
           className="border-0 bg-transparent"
           headerClassName="px-4 py-3 sm:px-6 sm:py-4 border-b border-white/10"
           profileImageUrl={creatorCard.profileImageUrl}
