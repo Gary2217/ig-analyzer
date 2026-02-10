@@ -23,13 +23,26 @@ export function CreatorCardList({ cards, locale }: CreatorCardListProps) {
         {Array.from({ length: fillers }).map((_, i) => (
           <div
             key={`skeleton-${i}`}
-            className="rounded-2xl border border-white/10 bg-white/5 p-4 animate-pulse"
+            className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden animate-pulse"
           >
-            <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white/10" />
-            <div className="mt-4 space-y-2">
+            <div className="relative w-full bg-white/10 aspect-[16/10]" />
+            <div className="p-4">
               <div className="h-4 w-32 rounded bg-white/10" />
-              <div className="h-3 w-20 rounded bg-white/10" />
-              <div className="mt-3 h-9 w-full rounded-xl bg-white/10" />
+              <div className="mt-2 h-3 w-20 rounded bg-white/10" />
+
+              <div className="mt-3 flex gap-2">
+                <div className="h-5 w-14 rounded-full bg-white/10" />
+                <div className="h-5 w-16 rounded-full bg-white/10" />
+                <div className="h-5 w-12 rounded-full bg-white/10" />
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="h-12 rounded-xl bg-white/10" />
+                <div className="h-12 rounded-xl bg-white/10" />
+                <div className="col-span-2 h-12 rounded-xl bg-white/10" />
+              </div>
+
+              <div className="mt-4 h-11 w-full rounded-xl bg-white/10" />
             </div>
           </div>
         ))}

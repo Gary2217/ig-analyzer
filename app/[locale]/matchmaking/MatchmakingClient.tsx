@@ -1282,9 +1282,11 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     [creators, fav.favoriteIds]
   )
 
+  const isEmptyResults = useMemo(() => filtered.length === 0 && !pinnedCreator, [filtered.length, pinnedCreator])
+
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
-      <div className="pt-6 sm:pt-8">
+      <div className="pt-6 sm:pt-8 pb-1 sm:pb-2">
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
           <div className="min-w-0">
             <h1 className="text-[clamp(18px,3.6vw,26px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
@@ -1301,6 +1303,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           </div>
         </div>
 
+        <div className="mt-4">
         <FiltersBar
           locale={locale}
           search={q}
@@ -1360,37 +1363,65 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           onOpenFavorites={() => setFavOpen(true)}
           statsUpdating={statsPrefetchRunning}
         />
-
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
-          <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
         </div>
 
-        <CreatorGrid>
-          {renderCards.map((c) => {
-            const creatorId = c.creatorId
-            const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
-            const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
-            const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
-            const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4 min-w-0">
+          <div className="flex items-center justify-between gap-3 min-w-0">
+            <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
+            {statsPrefetchRunning ? (
+              <div className="hidden sm:flex items-center gap-2 text-xs text-white/45 min-w-0">
+                <div className="h-3 w-3 rounded-full border border-white/20 border-t-white/60 animate-spin shrink-0" />
+                <span className="min-w-0 truncate">{uiCopy.matchmaking.loadingHelper}</span>
+              </div>
+            ) : null}
+          </div>
+          {statsPrefetchRunning ? (
+            <div className="sm:hidden mt-2 flex items-center gap-2 text-xs text-white/45 min-w-0">
+              <div className="h-3 w-3 rounded-full border border-white/20 border-t-white/60 animate-spin shrink-0" />
+              <span className="min-w-0 break-words">{uiCopy.matchmaking.loadingHelper}</span>
+            </div>
+          ) : null}
+        </div>
 
-            return (
-              <MatchmakingCreatorCard
-                key={c.id}
-                creator={c}
-                locale={locale}
-                isFav={fav.isFav(c.id)}
-                onToggleFav={() => fav.toggleFav(c.id)}
-                statsLoading={loading}
-                statsError={error}
-                selectedBudgetMax={selectedBudgetMax}
-                onRetryStats={() => {
-                  if (!creatorId) return
-                  retryStats(creatorId)
-                }}
-              />
-            )
-          })}
-        </CreatorGrid>
+        {isEmptyResults ? (
+          <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6 min-w-0">
+              <div className="text-sm sm:text-base font-semibold text-white/85 min-w-0 truncate">
+                {uiCopy.matchmaking.emptyResultsTitle}
+              </div>
+              <div className="mt-2 text-xs sm:text-sm text-white/55 leading-relaxed break-words max-w-2xl min-w-0">
+                {uiCopy.matchmaking.emptyResultsHint}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <CreatorGrid>
+            {renderCards.map((c) => {
+              const creatorId = c.creatorId
+              const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
+              const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
+              const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
+              const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
+
+              return (
+                <MatchmakingCreatorCard
+                  key={c.id}
+                  creator={c}
+                  locale={locale}
+                  isFav={fav.isFav(c.id)}
+                  onToggleFav={() => fav.toggleFav(c.id)}
+                  statsLoading={loading}
+                  statsError={error}
+                  selectedBudgetMax={selectedBudgetMax}
+                  onRetryStats={() => {
+                    if (!creatorId) return
+                    retryStats(creatorId)
+                  }}
+                />
+              )
+            })}
+          </CreatorGrid>
+        )}
 
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-6">
           <div className="flex items-center justify-between gap-3">

@@ -145,7 +145,7 @@ export function FiltersBar(props: Props) {
                       <span className="shrink-0 text-white/50">▾</span>
                     </button>
                     {platformOpen ? (
-                      <div className="absolute z-50 mt-2 w-full sm:w-[240px] rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
+                      <div className="absolute z-50 mt-2 w-full sm:w-[240px] max-h-[70vh] overflow-auto overscroll-contain rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
                         <div className="flex items-center justify-between gap-2 px-2 py-1">
                           <div className="text-[11px] text-white/55">創作者平台</div>
                           {props.selectedPlatforms.length ? (
@@ -195,7 +195,7 @@ export function FiltersBar(props: Props) {
                     </button>
 
                     {tagsOpen ? (
-                      <div className="absolute z-50 mt-2 w-full sm:w-[280px] rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
+                      <div className="absolute z-50 mt-2 w-full sm:w-[280px] max-h-[70vh] overflow-auto overscroll-contain rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
                         <div className="flex items-center justify-between gap-2 px-2 py-1">
                           <div className="text-[11px] text-white/55">{mm.creatorTypeLabel}</div>
                           {props.selectedTagCategories.length ? (
@@ -218,7 +218,7 @@ export function FiltersBar(props: Props) {
                           />
                         </div>
 
-                        <div className="mt-2 max-h-[280px] overflow-auto px-1">
+                        <div className="mt-2 max-h-[280px] overflow-auto overscroll-contain px-1">
                           {filteredTagOptions.map((tag) => {
                             const t = String(tag || "").trim()
                             if (!t) return null

@@ -14,6 +14,9 @@ export type CopyDictionary = {
     pageSubtitleLine2: string
     pageHeadline: string
     pageSubheadline: string
+    loadingHelper: string
+    emptyResultsTitle: string
+    emptyResultsHint: string
     bestMatchHelper: string
     ctaStartCollaboration: string
     badgeWorkedWithBrands: string
