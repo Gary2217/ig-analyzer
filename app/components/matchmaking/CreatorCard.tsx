@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 import { localizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
+import { clearDemoAvatar, fileToCompressedDataUrl, setDemoAvatar } from "@/app/components/matchmaking/demoAvatarStorage"
 
 function formatNumber(n?: number) {
   if (typeof n !== "number" || !Number.isFinite(n)) return "—"
@@ -119,6 +120,8 @@ export function CreatorCard({
   locale,
   isFav,
   onToggleFav,
+  onDemoAvatarChanged,
+  isPopularPicked,
   statsLoading,
   statsError,
   onRetryStats,
@@ -128,6 +131,8 @@ export function CreatorCard({
   locale: Locale
   isFav: boolean
   onToggleFav: () => void
+  onDemoAvatarChanged?: () => void
+  isPopularPicked?: boolean
   statsLoading?: boolean
   statsError?: boolean
   onRetryStats?: () => void
@@ -146,6 +151,8 @@ export function CreatorCard({
   const allPlatforms = (creator.platforms ?? []).filter(Boolean)
   const deliverableFormats = deriveFormatKeysFromDeliverables(creator.deliverables)
 
+  const isDemo = Boolean((creator as any)?.isDemo) || String((creator as any)?.id || "").startsWith("demo-")
+
   useEffect(() => {
     return () => {
       if (ctaToastTimerRef.current != null) window.clearTimeout(ctaToastTimerRef.current)
@@ -156,6 +163,8 @@ export function CreatorCard({
   const isPopular =
     (typeof creator.stats?.followers === "number" && Number.isFinite(creator.stats.followers) && creator.stats.followers > 5000) ||
     (typeof creator.stats?.engagementRate === "number" && Number.isFinite(creator.stats.engagementRate) && creator.stats.engagementRate > 0.03)
+
+  const showPopularBadge = Boolean(isPopularPicked ?? (isPopular && !isEmpty))
 
   const showHighEngagement =
     typeof creator.stats?.engagementRate === "number" && Number.isFinite(creator.stats.engagementRate) && creator.stats.engagementRate > 0.02
@@ -390,8 +399,48 @@ export function CreatorCard({
             <div className="w-14 h-14 rounded-full bg-white/10" />
           </div>
         )}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/70 via-black/25 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
       </div>
+
+      {isDemo ? (
+        <div className="px-3 pt-3 sm:px-3">
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center justify-center h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10 cursor-pointer whitespace-nowrap">
+              Upload image
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0]
+                  if (!f) return
+                  try {
+                    const dataUrl = await fileToCompressedDataUrl(f)
+                    setDemoAvatar(String((creator as any).id), dataUrl)
+                    onDemoAvatarChanged?.()
+                  } catch {
+                    // swallow
+                  } finally {
+                    e.currentTarget.value = ""
+                  }
+                }}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/60 hover:bg-white/10 whitespace-nowrap"
+              onClick={() => {
+                clearDemoAvatar(String((creator as any).id))
+                onDemoAvatarChanged?.()
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="p-3 sm:p-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -492,9 +541,9 @@ export function CreatorCard({
     <div
       className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full"
     >
-      {isPopular && !isEmpty ? (
+      {showPopularBadge && !isEmpty ? (
         <div className="absolute top-2 left-2 z-10">
-          <div className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-200/90 whitespace-nowrap">
+          <div className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold bg-black/55 text-emerald-200 border border-white/15 shadow-sm backdrop-blur-sm whitespace-nowrap">
             {mm.popularBadge}
           </div>
         </div>

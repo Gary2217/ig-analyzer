@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { FiltersBar } from "@/app/components/matchmaking/FiltersBar"
 import { CreatorGrid } from "@/app/components/matchmaking/CreatorGrid"
 import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmaking/CreatorCard"
 import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
 import { useFavorites } from "@/app/components/matchmaking/useFavorites"
+import { demoCreators } from "@/app/components/matchmaking/demoCreators"
+import { loadDemoAvatars } from "@/app/components/matchmaking/demoAvatarStorage"
 import { getCopy, type Locale } from "@/app/i18n"
 import { CREATOR_TYPE_MASTER, normalizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
 import type {
@@ -320,6 +322,27 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
+  const [demoAvatarMap, setDemoAvatarMap] = useState<Record<string, string>>({})
+
+  const refreshDemoAvatars = useCallback(() => {
+    try {
+      setDemoAvatarMap(loadDemoAvatars())
+    } catch {
+      setDemoAvatarMap({})
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshDemoAvatars()
+  }, [refreshDemoAvatars])
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "mm_demo_avatars_v1") refreshDemoAvatars()
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [refreshDemoAvatars])
 
   const initialMeCardResolved = useMemo(() => {
     const raw = initialMeCard as any
@@ -1013,12 +1036,45 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return finalCards.slice(start, start + pageSize)
   }, [clampedPage, finalCards])
 
+  const popularCreatorId = useMemo(() => {
+    function calcPopularScore(c: any): number {
+      const er = typeof c?.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
+      const followers = typeof c?.stats?.followers === "number" ? c.stats.followers : 0
+
+      const followerFactor = Math.log10(Math.max(1, followers))
+      const erClamped = Math.max(0, Math.min(er, 0.25))
+      return erClamped * 100 + followerFactor * 6
+    }
+
+    const candidates = creators.filter((c: any) => !c?.isDemo && !String(c?.id || "").startsWith("demo-"))
+    if (!candidates.length) return null
+
+    const MIN_FOLLOWERS = 3000
+    const filtered = candidates.filter((c: any) => (c?.stats?.followers ?? 0) >= MIN_FOLLOWERS)
+    const pool = filtered.length ? filtered : candidates
+
+    let best = pool[0]
+    let bestScore = calcPopularScore(best)
+    for (let i = 1; i < pool.length; i++) {
+      const s = calcPopularScore(pool[i])
+      if (s > bestScore) {
+        best = pool[i]
+        bestScore = s
+      }
+    }
+
+    return (best as any)?.creatorId || (best as any)?.id || null
+  }, [creators])
+
   const demoFillCards = useMemo((): CreatorCardData[] => {
     const need = Math.max(0, pageSize - pagedRealCards.length)
     if (!need) return []
 
     const existingIds = new Set(finalCards.map((c) => c.id))
-    const demos = buildDemoCreators({ locale, existingIds, count: need, seedBase: `matchmaking:page:${clampedPage}` })
+    const offset = ((clampedPage - 1) * pageSize) % Math.max(1, demoCreators.length)
+    const pickedSeeds = Array.from({ length: need })
+      .map((_, i) => demoCreators[(offset + i) % demoCreators.length])
+      .filter((d) => d && !existingIds.has(d.id))
 
     const masterZh = CREATOR_TYPE_MASTER.map((x) => String(x?.zh || "").trim()).filter(Boolean)
     const pick = (arr: string[]) => arr.filter((x) => masterZh.includes(x))
@@ -1038,15 +1094,23 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       pick(["娛樂", "音樂", "Vlog"]),
     ]
 
-    return demos.map((c, idx) => {
-      const followers = typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) ? (c as any).followerCount : undefined
-      const er = typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate) ? (c as any).engagementRate : undefined
+    const synthStatsFor = (seedId: string) => {
+      const h = hashStringToInt(String(seedId))
+      const rand = mulberry32(h)
+      const followers = Math.round(Math.pow(rand(), 0.42) * 160_000 + 2_500)
+      const erPct = clampNumber(1.0 + rand() * 7.0, 0.6, 12)
+      return { followers, engagementRate: Math.round((erPct / 100) * 10000) / 10000 }
+    }
+
+    return pickedSeeds.map((d, idx) => {
+      const st = synthStatsFor(d.id)
+      const avatarUrl = demoAvatarMap[d.id] || svgAvatarDataUrl(d.id, d.displayName)
 
       return {
-        id: c.id,
-        name: locale === "zh-TW" ? "示範創作者" : "Demo Creator",
-        handle: locale === "zh-TW" ? "demo" : "demo",
-        avatarUrl: c.avatarUrl,
+        id: d.id,
+        name: d.displayName,
+        handle: d.handle,
+        avatarUrl,
         topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
         tagCategories: (demoTagSets[idx % demoTagSets.length] || []).filter(Boolean).slice(0, 6),
         platforms: ["instagram"],
@@ -1055,14 +1119,14 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         deliverables: [],
         minPrice: 8000,
         stats: {
-          followers,
-          engagementRate: er,
+          followers: st.followers,
+          engagementRate: st.engagementRate,
         },
         href: "",
         isDemo: true,
       }
     })
-  }, [clampedPage, finalCards, locale, pagedRealCards.length])
+  }, [clampedPage, demoAvatarMap, finalCards, locale, pagedRealCards.length])
 
   const renderCards = useMemo((): Array<CreatorCardData & { creatorId?: string }> => {
     const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
@@ -1402,6 +1466,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
               const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
               const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
+              const popularKey = String(creatorId || c.id)
+              const isPopularPicked = Boolean(popularCreatorId && popularKey === String(popularCreatorId))
 
               return (
                 <MatchmakingCreatorCard
@@ -1410,6 +1476,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
                   locale={locale}
                   isFav={fav.isFav(c.id)}
                   onToggleFav={() => fav.toggleFav(c.id)}
+                  onDemoAvatarChanged={refreshDemoAvatars}
+                  isPopularPicked={isPopularPicked}
                   statsLoading={loading}
                   statsError={error}
                   selectedBudgetMax={selectedBudgetMax}
