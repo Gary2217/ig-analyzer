@@ -1529,6 +1529,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         ) : (
           <CreatorGrid>
             {renderCards.map((c) => {
+              const isOwnerCard = Boolean(pinnedCreator && c.id === pinnedCreator.id)
               const creatorId = c.creatorId
               const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
               const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
@@ -1542,6 +1543,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
                   key={c.id}
                   creator={c}
                   locale={locale}
+                  isOwner={isOwnerCard}
                   isFav={fav.isFav(c.id)}
                   onToggleFav={() => fav.toggleFav(c.id)}
                   onDemoAvatarChanged={refreshDemoAvatars}

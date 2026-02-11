@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 import { localizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
@@ -46,6 +46,7 @@ function deriveFormatKeysFromDeliverables(input?: string[]) {
 export function CreatorCard({
   creator,
   locale,
+  isOwner,
   isFav,
   onToggleFav,
   onDemoAvatarChanged,
@@ -58,6 +59,7 @@ export function CreatorCard({
 }: {
   creator: CreatorCardData
   locale: Locale
+  isOwner?: boolean
   isFav: boolean
   onToggleFav: () => void
   onDemoAvatarChanged?: () => void
@@ -70,6 +72,7 @@ export function CreatorCard({
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const copy = getCopy(locale)
   const mm = copy.matchmaking
   const isEmpty = Boolean(creator.isDemo)
@@ -96,13 +99,14 @@ export function CreatorCard({
   const showPopularBadge =
     isPopularPicked === true ? true : isPopularPicked === false ? false : isPopular && !isEmpty
 
+  const hasPrice = creator.minPrice === null || (typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice))
+
   const profileComplete =
     !isEmpty &&
     Boolean((creator.platforms ?? []).length) &&
     Boolean((creator.topics ?? []).length) &&
     Boolean((creator.deliverables ?? []).length || (creator.collabTypes ?? []).length) &&
-    typeof creator.minPrice === "number" &&
-    Number.isFinite(creator.minPrice)
+    hasPrice
 
   const withinBudget =
     !isEmpty &&
@@ -193,6 +197,23 @@ export function CreatorCard({
             <div className="w-14 h-14 rounded-full bg-white/10" />
           </div>
         )}
+
+        {isOwner ? (
+          <div className="absolute right-2 top-2 z-10">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                router.push(`/${locale}/creator-card?from=matchmaking`)
+              }}
+              className="inline-flex items-center justify-center h-10 px-3 rounded-full border border-white/15 bg-black/40 text-[12px] font-semibold text-white/85 backdrop-blur-sm hover:bg-black/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 whitespace-nowrap"
+              style={{ minHeight: "44px" }}
+            >
+              {locale === "zh-TW" ? "編輯名片" : "Edit card"}
+            </button>
+          </div>
+        ) : null}
 
         <div className="absolute bottom-2 right-2 z-10">
           <button
@@ -333,15 +354,13 @@ export function CreatorCard({
                 )}
               </div>
 
-              {typeof creator.minPrice === "number" && Number.isFinite(creator.minPrice) ? (
-                <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.22),0_12px_30px_-18px_rgba(34,211,238,0.25)] sm:col-span-2">
-                  <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
-                  <div className="text-[11px] text-white/45 truncate min-w-0">{mm.budgetLabel}</div>
-                  <div className="mt-1 text-sm font-semibold text-white/85 tabular-nums whitespace-nowrap truncate min-w-0">
-                    {priceText}
-                  </div>
+              <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 min-w-0 transition-shadow sm:hover:shadow-[0_0_0_1px_rgba(52,211,153,0.22),0_12px_30px_-18px_rgba(34,211,238,0.25)] sm:col-span-2">
+                <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
+                <div className="text-[11px] text-white/45 truncate min-w-0">{mm.budgetLabel}</div>
+                <div className="mt-1 text-sm font-semibold text-white/85 tabular-nums whitespace-nowrap truncate min-w-0">
+                  {priceText}
                 </div>
-              ) : null}
+              </div>
             </div>
 
           </div>
