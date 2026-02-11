@@ -2147,6 +2147,7 @@ export default function CreatorCardPage() {
             : null
           setMinPrice(nextMinPrice)
           setMinPriceDraft(nextMinPrice != null ? String(nextMinPrice) : "")
+          setContactForQuote(nextMinPrice == null)
           const nextDeliverables = normalizeStringArray(nextBase?.deliverables ?? [], 50)
           setDeliverables(nextDeliverables)
           setCollaborationNiches(normalizeCreatorTypes(nextBase?.collaborationNiches ?? []).slice(0, 20))
@@ -3694,7 +3695,16 @@ export default function CreatorCardPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.minPriceLabel")}</div>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <div className="text-[12px] font-semibold text-white/55 min-w-0 truncate">{t("creatorCardEditor.minPriceLabel")}</div>
+                          {(() => {
+                            const raw = (baseCard as any)?.minPrice
+                            const isPriceComplete = raw === null || (typeof raw === "number" && Number.isFinite(raw))
+                            return isPriceComplete ? (
+                              <div className="shrink-0 text-xs font-semibold text-emerald-400/80">✓ {activeLocale === "zh-TW" ? "已完成" : "Done"}</div>
+                            ) : null
+                          })()}
+                        </div>
                         <div className="mt-2">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                             <Input
@@ -5078,7 +5088,16 @@ export default function CreatorCardPage() {
                               </div>
 
                               <div className="min-w-0">
-                                <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.minPriceLabel")}</div>
+                                <div className="flex items-center justify-between gap-2 min-w-0">
+                                  <div className="text-[12px] font-semibold text-white/55 min-w-0 truncate">{t("creatorCardEditor.minPriceLabel")}</div>
+                                  {(() => {
+                                    const raw = (baseCard as any)?.minPrice
+                                    const isPriceComplete = raw === null || (typeof raw === "number" && Number.isFinite(raw))
+                                    return isPriceComplete ? (
+                                      <div className="shrink-0 text-xs font-semibold text-emerald-400/80">✓ {activeLocale === "zh-TW" ? "已完成" : "Done"}</div>
+                                    ) : null
+                                  })()}
+                                </div>
                                 <div className="mt-2">
                                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                                     <Input
