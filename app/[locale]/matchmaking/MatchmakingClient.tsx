@@ -449,7 +449,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const [statsVersion, setStatsVersion] = useState(0)
 
-  const [cards, setCards] = useState<CreatorCard[]>(initialCards)
+  const [allCards, setAllCards] = useState<CreatorCard[]>(initialCards)
 
   const [q, setQ] = useState("")
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
@@ -461,10 +461,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const [page, setPage] = useState(1)
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
-  const cardsRef = useRef(cards)
+  const cardsRef = useRef(allCards)
   useEffect(() => {
-    cardsRef.current = cards
-  }, [cards])
+    cardsRef.current = allCards
+  }, [allCards])
 
   const ownerLookupStartedRef = useRef(false)
 
@@ -508,7 +508,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [])
 
   useEffect(() => {
-    setCards(initialCards)
+    setAllCards(initialCards)
   }, [initialCards])
 
   // Initialize from URL query params on first client render
@@ -573,19 +573,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Sync state -> URL
-  useEffect(() => {
-    const params = new URLSearchParams()
-    if (q.trim()) params.set("q", q.trim())
-    // Do not introduce new URL values. Only persist known preset budgets.
-    if (budget !== "any" && budget !== "custom") params.set("budget", budget)
-
-    if (page > 1) params.set("page", String(page))
-
-    const qs = params.toString()
-    router.replace(qs ? `?${qs}` : "?", { scroll: false })
-  }, [q, budget, page, router])
 
   // Reset to page 1 when filters change.
   useEffect(() => {
@@ -701,8 +688,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         statsErrorRef.current.delete(creatorIdStr)
         setStatsUiVersion((v) => v + 1)
 
-        setCards((prev) =>
-          prev.map((c) => {
+        setAllCards((prev: CreatorCard[]) =>
+          prev.map((c: CreatorCard) => {
             const cId = c?.id != null ? String(c.id) : ""
 
             const matches = cId === String(meCardId)
@@ -742,7 +729,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [])
 
   const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
-    return cards.map((c) => {
+    return allCards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const tagCategories = normalizeCreatorTypesFromCard(c as any)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
@@ -825,7 +812,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         isDemo: Boolean(c.isDemo),
       }
     })
-  }, [cards, statsVersion])
+  }, [allCards, statsVersion])
 
   const tagCategoryOptions = useMemo(() => {
     const set = new Set<string>()
