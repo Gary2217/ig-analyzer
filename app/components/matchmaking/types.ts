@@ -48,7 +48,7 @@ export type CreatorCardData = {
   deliverables?: string[]
   budgetMin?: number
   budgetMax?: number
-  minPrice?: number
+  minPrice?: number | null
   stats?: CreatorStats
   contact?: string | null
   contactEmail?: string
