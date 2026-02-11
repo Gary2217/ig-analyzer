@@ -21,9 +21,11 @@ import { extractLocaleFromPathname } from "../../lib/locale-path"
 import { CreatorCardPreview } from "../../components/CreatorCardPreview"
 import { normalizeIgThumbnailUrlOrNull } from "../../components/creator-card/useCreatorCardPreviewData"
 import { CreatorCardPreviewShell } from "@/app/components/creator-card/CreatorCardPreviewShell"
+import { CreatorAvatarEditor } from "@/app/components/creator-card/CreatorAvatarEditor"
 import { CardMobilePreviewShell } from "@/app/components/creator-card/CardMobilePreviewShell"
 import { useInstagramConnection } from "@/app/components/InstagramConnectionProvider"
 import { useSiteSessionContext } from "@/app/components/SiteSessionProvider"
+import { bumpAvatarBuster } from "@/app/lib/client/avatarBuster"
 import { COLLAB_TYPE_OPTIONS, COLLAB_TYPE_OTHER_VALUE, collabTypeLabelKey, type CollabTypeOptionId } from "../../lib/creatorCardOptions"
 import type { OEmbedError, OEmbedResponse, OEmbedState, OEmbedSuccess } from "../../components/creator-card/igOEmbedTypes"
 import { CREATOR_TYPE_MASTER, creatorTypeToDisplayLabel, localizeCreatorTypes, normalizeCreatorTypes } from "@/app/lib/creatorTypes"
@@ -1301,6 +1303,8 @@ export default function CreatorCardPage() {
   const [minPrice, setMinPrice] = useState<number | null>(null)
   const [minPriceDraft, setMinPriceDraft] = useState("")
 
+  const [contactForQuote, setContactForQuote] = useState(false)
+
   const previewData = useMemo(() => {
     const engagementRatePct = typeof creatorStats?.engagementRatePct === "number" && Number.isFinite(creatorStats.engagementRatePct)
       ? creatorStats.engagementRatePct
@@ -1350,80 +1354,14 @@ export default function CreatorCardPage() {
 
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
 
-  const [avatarPreviewBuster, setAvatarPreviewBuster] = useState<number>(0)
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const raw = window.localStorage.getItem("creator_card_avatar_buster")
-      const n = raw ? Number(raw) : 0
-      if (Number.isFinite(n) && n > 0) setAvatarPreviewBuster(n)
-    } catch {
-    }
-  }, [])
-
-  const avatarUploadInputRef = useRef<HTMLInputElement | null>(null)
-  const [avatarUploading, setAvatarUploading] = useState(false)
-
-  const uploadAvatar = useCallback(
-    async (file: File) => {
-      if (avatarUploading) return
-
-      try {
-        setAvatarUploading(true)
-        const fd = new FormData()
-        fd.append("file", file)
-
-        const res = await fetch("/api/creator-card/avatar/upload", {
-          method: "POST",
-          credentials: "same-origin",
-          body: fd,
-        })
-
-        const json: any = await res.json().catch(() => null)
-        const avatarUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
-
-        if (!res.ok || json?.ok !== true || !avatarUrl) {
-          showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
-          return
-        }
-
-        const buster = Date.now()
-        setAvatarPreviewBuster(buster)
-        try {
-          if (typeof window !== "undefined") window.localStorage.setItem("creator_card_avatar_buster", String(buster))
-        } catch {
-        }
-
-        setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl }))
-        markDirty()
-        showToast(
-          activeLocale === "zh-TW"
-            ? "頭貼已更新（已立即保存），其他內容記得按右上儲存"
-            : "Avatar updated (saved immediately). Remember to Save other edits."
-        )
-      } catch (e: unknown) {
-        showToast(activeLocale === "zh-TW" ? "上傳頭貼失敗（請稍後再試）" : "Upload avatar failed (please try again)")
-      } finally {
-        setAvatarUploading(false)
-      }
-    },
-    [activeLocale, avatarUploading, markDirty, showToast]
-  )
-
   const currentAvatarSrc = useMemo(() => {
     const u0 = typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : ""
     const u1 = typeof baseCard?.profileImageUrl === "string" ? String(baseCard.profileImageUrl) : ""
     const u2 = typeof igProfile?.profile_picture_url === "string" ? String(igProfile.profile_picture_url) : ""
     const picked = (u0 || u1 || u2).trim()
     if (!picked) return null
-
-    const shouldBust = avatarPreviewBuster > 0 && (picked === u0.trim() || picked === u1.trim())
-    if (!shouldBust) return picked
-
-    const sep = picked.includes("?") ? "&" : "?"
-    return `${picked}${sep}v=${avatarPreviewBuster}`
-  }, [avatarPreviewBuster, baseCard, igProfile?.profile_picture_url])
+    return picked
+  }, [baseCard, igProfile?.profile_picture_url])
 
   const [featuredItems, setFeaturedItems] = useState<FeaturedItem[]>([])
   const featuredItemsRef = useRef<FeaturedItem[]>([])
@@ -2932,14 +2870,16 @@ export default function CreatorCardPage() {
   }, [baseCard, introDraft, minPrice, themeTypes, audienceProfiles, deliverables, collaborationNiches, pastCollaborations, serializedContact])
 
   const applyMinPriceDraft = useCallback(() => {
+    if (contactForQuote) return
     const nextDigits = String(minPriceDraft ?? "").replace(/[^0-9]/g, "").slice(0, 9)
     const rawParsed = normalizeMinPriceInputToIntOrNull(nextDigits)
     const parsed = rawParsed == null ? null : Math.max(1000, rawParsed)
     setMinPriceDraft(nextDigits)
     setMinPrice(parsed)
     setBaseCard((prev) => ({ ...(prev ?? {}), minPrice: parsed }))
+    if (parsed != null) setContactForQuote(false)
     markDirty()
-  }, [minPriceDraft, markDirty])
+  }, [contactForQuote, minPriceDraft, markDirty])
 
   const isNotLoggedIn = !isSiteSignedIn
 
@@ -3687,76 +3627,34 @@ export default function CreatorCardPage() {
                   titleEn: "Basic Info",
                   render: () => (
                     <>
-                      <div className="min-w-0">
-                        <input
-                          ref={avatarUploadInputRef}
-                          type="file"
-                          accept="image/png,image/jpeg,image/jpg,image/webp"
-                          className="hidden"
-                          onChange={async (e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            const file = e.target.files?.[0] ?? null
-                            if (!file) return
-                            e.currentTarget.value = ""
-
-                            if (avatarUploading) return
-                            if (file.size > 5 * 1024 * 1024) {
-                              showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
-                              return
-                            }
-                            const okType = /^(image\/png|image\/jpeg|image\/jpg|image\/webp)$/i.test(file.type)
-                            if (!okType) {
-                              showToast(activeLocale === "zh-TW" ? "請上傳 PNG/JPG/WebP 圖片" : "Please upload a PNG/JPG/WebP image")
-                              return
-                            }
-
-                            await uploadAvatar(file)
-                          }}
-                        />
-
-                        <div className="flex items-center gap-3">
-                          <div className="shrink-0">
-                            <div className="relative h-12 w-12 overflow-hidden rounded-full border border-white/10 bg-slate-950/40">
-                              {currentAvatarSrc ? (
-                                <img
-                                  src={currentAvatarSrc}
-                                  alt={displayName || displayUsername || "Profile"}
-                                  className="absolute inset-0 h-full w-full object-cover"
-                                  loading="lazy"
-                                  decoding="async"
-                                  referrerPolicy="no-referrer"
-                                  crossOrigin="anonymous"
-                                />
-                              ) : (
-                                <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 to-pink-500/20" />
-                              )}
-                            </div>
-                          </div>
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere] min-h-[44px]"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              avatarUploadInputRef.current?.click()
-                            }}
-                            aria-busy={avatarUploading}
-                            disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
-                          >
-                            <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
-                            <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
-                              {activeLocale === "zh-TW" ? "上傳頭貼" : "Upload avatar"}
-                            </span>
-                          </Button>
-                        </div>
-
-                        <div className="mt-2 text-xs text-white/55 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
-                          {activeLocale === "zh-TW" ? "顯示於公開名片" : "Shown on public creator card"}
-                        </div>
-                      </div>
+                      <CreatorAvatarEditor
+                        locale={activeLocale as any}
+                        avatarUrl={typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : null}
+                        fallbackUrl={
+                          (typeof baseCard?.profileImageUrl === "string" && baseCard.profileImageUrl.trim())
+                            ? baseCard.profileImageUrl
+                            : (typeof igProfile?.profile_picture_url === "string" && igProfile.profile_picture_url.trim())
+                              ? igProfile.profile_picture_url
+                              : null
+                        }
+                        canEdit={true}
+                        onChanged={(nextUrl) => {
+                          bumpAvatarBuster()
+                          setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl: nextUrl }))
+                          markDirty()
+                          showToast(
+                            activeLocale === "zh-TW"
+                              ? (nextUrl ? "頭貼已更新（已立即保存），其他內容記得按右上儲存" : "頭貼已重設（已立即保存），其他內容記得按右上儲存")
+                              : (nextUrl
+                                ? "Avatar updated (saved immediately). Remember to Save other edits."
+                                : "Avatar reset (saved immediately). Remember to Save other edits.")
+                          )
+                          try {
+                            router.refresh()
+                          } catch {
+                          }
+                        }}
+                      />
 
                       <div className="min-w-0">
                         <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
@@ -3798,13 +3696,14 @@ export default function CreatorCardPage() {
                       <div className="min-w-0">
                         <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.minPriceLabel")}</div>
                         <div className="mt-2">
-                          <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                             <Input
                               inputMode="numeric"
                               value={minPriceDraft}
                               placeholder={t("creatorCardEditor.minPricePlaceholder")}
                               className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                               onChange={(e) => {
+                                if (contactForQuote) return
                                 const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
                                 setMinPriceDraft(next)
                               }}
@@ -3814,6 +3713,7 @@ export default function CreatorCardPage() {
                                   applyMinPriceDraft()
                                 }
                               }}
+                              disabled={contactForQuote}
                             />
                             <Button
                               type="button"
@@ -3821,11 +3721,37 @@ export default function CreatorCardPage() {
                               size="sm"
                               className="shrink-0 h-10 px-4"
                               onClick={() => applyMinPriceDraft()}
-                              disabled={!minPriceDraft.trim() && minPrice == null}
+                              disabled={contactForQuote || (!minPriceDraft.trim() && minPrice == null)}
                             >
                               {t("creatorCardEditor.addButton")}
                             </Button>
+
+                            <label className="flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/20 px-3 h-11 min-w-0 sm:ml-2">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 shrink-0 accent-emerald-400"
+                                checked={contactForQuote}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                  setContactForQuote(next)
+                                  if (next) {
+                                    setMinPriceDraft("")
+                                    setMinPrice(null)
+                                    setBaseCard((prev) => ({ ...(prev ?? {}), minPrice: null }))
+                                    markDirty()
+                                  }
+                                }}
+                              />
+                              <span className="text-sm text-white/75 min-w-0 truncate">
+                                {activeLocale === "zh-TW" ? "洽談報價" : "Contact for quote"}
+                              </span>
+                            </label>
                           </div>
+                          {!contactForQuote && minPrice == null && !minPriceDraft.trim() ? (
+                            <div className="mt-2 text-xs text-slate-500">
+                              {activeLocale === "zh-TW" ? "請輸入金額" : "Enter a price"}
+                            </div>
+                          ) : null}
                           <div className="mt-2 text-xs text-slate-500">{t("creatorCardEditor.minPriceHelp")}</div>
                         </div>
                       </div>
@@ -5109,71 +5035,34 @@ export default function CreatorCardPage() {
                           titleKey: "creatorCardEditor.mobile.sections.profile",
                           render: () => (
                             <div className="space-y-4">
-                              <div className="min-w-0">
-                                <input
-                                  ref={avatarUploadInputRef}
-                                  type="file"
-                                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                                  className="hidden"
-                                  onChange={async (e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    const file = e.target.files?.[0] ?? null
-                                    if (!file) return
-                                    e.currentTarget.value = ""
-
-                                    if (avatarUploading) return
-                                    if (file.size > 5 * 1024 * 1024) {
-                                      showToast(activeLocale === "zh-TW" ? "檔案太大（上限 5MB）" : "File too large (max 5MB)")
-                                      return
-                                    }
-                                    const okType = /^(image\/png|image\/jpeg|image\/jpg|image\/webp)$/i.test(file.type)
-                                    if (!okType) {
-                                      showToast(activeLocale === "zh-TW" ? "請上傳 PNG/JPG/WebP 圖片" : "Please upload a PNG/JPG/WebP image")
-                                      return
-                                    }
-
-                                    await uploadAvatar(file)
-                                  }}
-                                />
-
-                                <div className="flex items-center gap-3">
-                                  <div className="shrink-0">
-                                    <div className="relative h-12 w-12 overflow-hidden rounded-full border border-white/10 bg-slate-950/40">
-                                      {currentAvatarSrc ? (
-                                        <img
-                                          src={currentAvatarSrc}
-                                          alt={displayName || displayUsername || "Profile"}
-                                          className="absolute inset-0 h-full w-full object-cover"
-                                          loading="lazy"
-                                          decoding="async"
-                                          referrerPolicy="no-referrer"
-                                          crossOrigin="anonymous"
-                                        />
-                                      ) : (
-                                        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 to-pink-500/20" />
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="mt-3 w-full justify-center min-w-0"
-                                    onClick={() => avatarUploadInputRef.current?.click()}
-                                    disabled={avatarUploading || loading || loadErrorKind === "not_connected" || loadErrorKind === "supabase_invalid_key"}
-                                  >
-                                    <span className="mr-2 h-4 w-4 shrink-0">{avatarUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}</span>
-                                    <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
-                                      {activeLocale === "zh-TW" ? "上傳頭貼" : "Upload avatar"}
-                                    </span>
-                                  </Button>
-                                </div>
-
-                                <div className="mt-2 text-xs text-white/55 min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">
-                                  {activeLocale === "zh-TW" ? "顯示於公開名片" : "Shown on public creator card"}
-                                </div>
-                              </div>
+                              <CreatorAvatarEditor
+                                locale={activeLocale as any}
+                                avatarUrl={typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : null}
+                                fallbackUrl={
+                                  (typeof baseCard?.profileImageUrl === "string" && baseCard.profileImageUrl.trim())
+                                    ? baseCard.profileImageUrl
+                                    : (typeof igProfile?.profile_picture_url === "string" && igProfile.profile_picture_url.trim())
+                                      ? igProfile.profile_picture_url
+                                      : null
+                                }
+                                canEdit={true}
+                                onChanged={(nextUrl) => {
+                                  bumpAvatarBuster()
+                                  setBaseCard((prev) => ({ ...(prev ?? {}), avatarUrl: nextUrl }))
+                                  markDirty()
+                                  showToast(
+                                    activeLocale === "zh-TW"
+                                      ? (nextUrl ? "頭貼已更新（已立即保存），其他內容記得按右上儲存" : "頭貼已重設（已立即保存），其他內容記得按右上儲存")
+                                      : (nextUrl
+                                        ? "Avatar updated (saved immediately). Remember to Save other edits."
+                                        : "Avatar reset (saved immediately). Remember to Save other edits.")
+                                  )
+                                  try {
+                                    router.refresh()
+                                  } catch {
+                                  }
+                                }}
+                              />
 
                               <div className="min-w-0">
                                 <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.profile.bioTitle")}</div>
@@ -5191,13 +5080,14 @@ export default function CreatorCardPage() {
                               <div className="min-w-0">
                                 <div className="text-[12px] font-semibold text-white/55">{t("creatorCardEditor.minPriceLabel")}</div>
                                 <div className="mt-2">
-                                  <div className="flex items-center gap-2 min-w-0">
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
                                     <Input
                                       inputMode="numeric"
                                       value={minPriceDraft}
                                       placeholder={t("creatorCardEditor.minPricePlaceholder")}
                                       className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
                                       onChange={(e) => {
+                                        if (contactForQuote) return
                                         const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
                                         setMinPriceDraft(next)
                                       }}
@@ -5207,6 +5097,7 @@ export default function CreatorCardPage() {
                                           applyMinPriceDraft()
                                         }
                                       }}
+                                      disabled={contactForQuote}
                                     />
                                     <Button
                                       type="button"
@@ -5214,11 +5105,37 @@ export default function CreatorCardPage() {
                                       size="sm"
                                       className="shrink-0 h-10 px-4"
                                       onClick={() => applyMinPriceDraft()}
-                                      disabled={!minPriceDraft.trim() && minPrice == null}
+                                      disabled={contactForQuote || (!minPriceDraft.trim() && minPrice == null)}
                                     >
                                       {t("creatorCardEditor.addButton")}
                                     </Button>
+
+                                    <label className="flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/20 px-3 h-11 min-w-0 sm:ml-2">
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 shrink-0 accent-emerald-400"
+                                        checked={contactForQuote}
+                                        onChange={(e) => {
+                                          const next = e.target.checked
+                                          setContactForQuote(next)
+                                          if (next) {
+                                            setMinPriceDraft("")
+                                            setMinPrice(null)
+                                            setBaseCard((prev) => ({ ...(prev ?? {}), minPrice: null }))
+                                            markDirty()
+                                          }
+                                        }}
+                                      />
+                                      <span className="text-sm text-white/75 min-w-0 truncate">
+                                        {activeLocale === "zh-TW" ? "洽談報價" : "Contact for quote"}
+                                      </span>
+                                    </label>
                                   </div>
+                                  {!contactForQuote && minPrice == null && !minPriceDraft.trim() ? (
+                                    <div className="mt-2 text-xs text-slate-500">
+                                      {activeLocale === "zh-TW" ? "請輸入金額" : "Enter a price"}
+                                    </div>
+                                  ) : null}
                                   <div className="mt-2 text-xs text-slate-500">{t("creatorCardEditor.minPriceHelp")}</div>
                                 </div>
                               </div>

@@ -7,6 +7,8 @@ import type { CreatorCardData } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 import { localizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
 import { clearDemoAvatar, fileToCompressedDataUrl, setDemoAvatar } from "@/app/components/matchmaking/demoAvatarStorage"
+import { useAvatarBuster, withAvatarBuster } from "@/app/lib/client/avatarBuster"
+import { formatPriceLabel } from "@/app/lib/client/priceLabel"
 
 function formatNumber(n?: number) {
   if (typeof n !== "number" || !Number.isFinite(n)) return "—"
@@ -76,6 +78,9 @@ export function CreatorCard({
 
   const canEditDemos = Boolean(canEditDemoAvatars)
 
+  const avatarBuster = useAvatarBuster()
+  const avatarSrc = withAvatarBuster(creator.avatarUrl, avatarBuster)
+
   const isDemo = Boolean((creator as any)?.isDemo) || String((creator as any)?.id || "").startsWith("demo-")
 
   useEffect(() => {
@@ -106,6 +111,8 @@ export function CreatorCard({
     typeof creator.minPrice === "number" &&
     Number.isFinite(creator.minPrice) &&
     creator.minPrice <= selectedBudgetMax
+
+  const priceText = formatPriceLabel({ minPrice: creator.minPrice ?? null, locale })
 
   const shouldShowHandle = (() => {
     const handle = typeof creator.handle === "string" ? creator.handle.trim() : ""
@@ -173,10 +180,10 @@ export function CreatorCard({
   const CardBody = (
     <>
       <div className="relative w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
-        {creator.avatarUrl ? (
+        {avatarSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={creator.avatarUrl}
+            src={avatarSrc}
             alt={creator.name || ""}
             className="w-full h-full object-cover"
             loading="lazy"
@@ -331,7 +338,7 @@ export function CreatorCard({
                   <div className="absolute left-0 top-0 h-full w-[3px] bg-gradient-to-b from-emerald-400/40 to-cyan-300/30" />
                   <div className="text-[11px] text-white/45 truncate min-w-0">{mm.budgetLabel}</div>
                   <div className="mt-1 text-sm font-semibold text-white/85 tabular-nums whitespace-nowrap truncate min-w-0">
-                    {mm.minPriceFrom(formatNTD(creator.minPrice) ?? "")}
+                    {priceText}
                   </div>
                 </div>
               ) : null}

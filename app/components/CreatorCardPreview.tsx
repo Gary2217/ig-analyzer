@@ -7,6 +7,8 @@ import { ChevronLeft, ChevronRight, Plus, Sparkles, X, GripVertical } from "luci
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { COLLAB_TYPE_OPTIONS, collabTypeLabelKey, type CollabTypeOptionId } from "../lib/creatorCardOptions"
 import { MobileCreatorCardLayout } from "./creator-card/MobileCreatorCardLayout"
+import { useAvatarBuster, withAvatarBuster } from "@/app/lib/client/avatarBuster"
+import { formatPriceLabel } from "@/app/lib/client/priceLabel"
 import { localizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
 import { normalizeIgThumbnailUrlOrNull } from "./creator-card/useCreatorCardPreviewData"
 import type { OEmbedState } from "./creator-card/igOEmbedTypes"
@@ -521,6 +523,8 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     highlightSection,
   } = props
 
+  const avatarBuster = useAvatarBuster()
+
   const normalizedLocale = /^zh(-|$)/i.test(String(locale || "")) ? "zh-TW" : "en"
 
   const isMobile = useMemo(() => isMobileViewport(), [])
@@ -597,10 +601,8 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   const resolvedUsername = typeof username === "string" && username.trim() ? username.trim() : "—"
 
   const minPriceText = useMemo(() => {
-    const v = typeof minPrice === "number" && Number.isFinite(minPrice) ? Math.max(0, Math.floor(minPrice)) : null
-    if (v == null) return null
-    return t("creatorCardPreview.yourRate").replace("{amount}", v.toLocaleString())
-  }, [minPrice, t])
+    return formatPriceLabel({ minPrice, locale: normalizedLocale })
+  }, [minPrice, normalizedLocale])
 
   const parsedContact = useMemo(() => {
     const readStr = (v: unknown) => (typeof v === "string" ? v.trim() : "")
@@ -836,7 +838,10 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     }
   }, [photoOverrideUrl])
 
-  const effectivePhotoUrl = photoOverrideUrl ?? profileImageUrl ?? null
+  const effectivePhotoUrl = useMemo(() => {
+    const raw = (photoOverrideUrl ?? profileImageUrl ?? null) as string | null
+    return withAvatarBuster(raw, avatarBuster)
+  }, [avatarBuster, photoOverrideUrl, profileImageUrl])
   const wideLayout = Boolean(useWidePhotoLayout)
   const leftSpanClassName = wideLayout ? "md:col-span-4" : "md:col-span-3"
   const rightSpanClassName = wideLayout ? "md:col-span-8" : "md:col-span-9"
@@ -990,11 +995,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
                 >
                   @{resolvedUsername}
                 </div>
-                {minPriceText ? (
-                  <div className="mt-1 text-xs font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-emerald-200/90 to-cyan-100/90">
-                    {minPriceText}
-                  </div>
-                ) : null}
+                <div className="mt-1 text-xs font-semibold tabular-nums whitespace-nowrap truncate min-w-0 text-transparent bg-clip-text bg-gradient-to-r from-emerald-200/90 to-cyan-100/90">
+                  {minPriceText}
+                </div>
               </div>
             </div>
 

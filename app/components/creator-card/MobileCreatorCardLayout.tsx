@@ -166,11 +166,9 @@ export function MobileCreatorCardLayout({
           <div className="text-sm text-white/55 truncate">
             @{username || "—"}
           </div>
-          {minPriceText ? (
-            <div className="mt-1 text-xs text-white/60 tabular-nums whitespace-nowrap truncate min-w-0">
-              {minPriceText}
-            </div>
-          ) : null}
+          <div className="mt-1 text-xs text-white/60 tabular-nums whitespace-nowrap truncate min-w-0">
+            {minPriceText}
+          </div>
         </div>
       </div>
 
