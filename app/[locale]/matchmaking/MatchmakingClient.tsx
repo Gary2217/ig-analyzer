@@ -1019,9 +1019,20 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       const okPlatform = platformMatchAny(selectedPlatforms, c.platforms)
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
       const okTags = (() => {
-        if (!selectedTagCategories.length) return true
-        const set = new Set((c.tagCategories ?? []).map((x) => String(x || "").trim()).filter(Boolean))
-        return selectedTagCategories.some((t) => set.has(String(t || "").trim()))
+        const cleanedSelectedTags = (selectedTagCategories ?? [])
+          .map((x) => String(x || "").trim())
+          .filter(Boolean)
+          .filter((x) => x !== "全部" && x.toLowerCase() !== "all")
+
+        if (!cleanedSelectedTags.length) return true
+
+        const set = new Set(
+          (c.tagCategories ?? [])
+            .map((x) => String(x || "").trim())
+            .filter(Boolean)
+        )
+
+        return cleanedSelectedTags.some((t) => set.has(t))
       })()
 
       const minPriceNumberOrUndef = typeof c.minPrice === "number" && Number.isFinite(c.minPrice) ? c.minPrice : undefined
@@ -1168,7 +1179,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       dealTypes,
       collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
       deliverables,
-      minPrice: normalizedMinPrice,
+      minPrice: rawMinPriceCandidate === null ? null : normalizedMinPrice,
       __rawMinPrice: rawMinPriceCandidate,
       stats: {
         followers: rawFollowers,
@@ -1194,8 +1205,24 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       return true
     })()
 
+    const cleanedSelectedTags = (selectedTagCategories ?? [])
+      .map((x) => String(x || "").trim())
+      .filter(Boolean)
+      .filter((x) => x !== "全部" && x.toLowerCase() !== "all")
+
+    const isFilteringActive =
+      Boolean(q && q.trim().length > 0) ||
+      (selectedPlatforms?.length ?? 0) > 0 ||
+      (selectedDealTypes?.length ?? 0) > 0 ||
+      cleanedSelectedTags.length > 0 ||
+      (budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0))
+
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
-    const combined = pinnedCreator && pinnedMatches ? [pinnedCreator, ...rest] : rest
+    const combined = (() => {
+      if (!pinnedCreator) return rest
+      if (!isFilteringActive) return [pinnedCreator, ...rest]
+      return pinnedMatches ? [pinnedCreator, ...rest] : rest
+    })()
 
     const seen = new Set<string>()
     const out: typeof combined = []
@@ -1206,7 +1233,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       out.push(c)
     }
     return out
-  }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch])
+  }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch, q, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
 
   const pageSize = 8
 
