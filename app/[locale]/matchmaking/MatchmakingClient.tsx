@@ -35,31 +35,119 @@ function normalizeSearchText(input: string): string {
   }
 }
 
-function buildSearchableText(input: {
-  name?: string
-  handle?: string
-  topics?: string[]
-  tagCategories?: string[]
-  platforms?: Platform[]
-  deliverables?: string[]
-  collabTypes?: string[]
-  dealTypes?: string[]
-  contact?: string | null
-  minPrice?: number
+function pushFlattenedStrings(out: string[], v: unknown, depth = 0): void {
+  if (v == null) return
+  if (typeof v === "string") {
+    const s = v.trim()
+    if (s) out.push(s)
+    return
+  }
+  if (typeof v === "number") {
+    if (Number.isFinite(v)) out.push(String(v))
+    return
+  }
+  if (typeof v === "boolean") {
+    return
+  }
+  if (Array.isArray(v)) {
+    for (const item of v) pushFlattenedStrings(out, item, depth + 1)
+    return
+  }
+  if (typeof v === "object") {
+    if (depth >= 2) return
+    const obj = v as Record<string, unknown>
+    for (const vv of Object.values(obj)) {
+      if (typeof vv === "string") pushFlattenedStrings(out, vv, depth + 1)
+    }
+    for (const vv of Object.values(obj)) {
+      if (vv != null && typeof vv === "object") pushFlattenedStrings(out, vv, depth + 1)
+    }
+  }
+}
+
+function buildCreatorTypeSearchParts(input: {
+  tagCategories?: unknown
+  creatorTypeOptions: string[]
+}): string[] {
+  const rawParts: string[] = []
+  pushFlattenedStrings(rawParts, input.tagCategories)
+  const normalizedRaw = new Set(rawParts.map((s) => normalizeSearchText(s)).filter(Boolean))
+  if (!normalizedRaw.size) return []
+
+  const out: string[] = []
+  for (const opt of input.creatorTypeOptions) {
+    const o = String(opt || "").trim()
+    if (!o) continue
+    if (normalizedRaw.has(normalizeSearchText(o))) out.push(o)
+  }
+
+  for (const s of rawParts) {
+    const t = String(s || "").trim()
+    if (t) out.push(t)
+  }
+  return out
+}
+
+function buildCardHaystack(input: {
+  creator: CreatorCardData & {
+    handle?: string
+    topics?: string[]
+    tagCategories?: string[]
+    platforms?: Platform[]
+    deliverables?: string[]
+    collabTypes?: CollabType[]
+    dealTypes?: string[]
+    minPrice?: number
+    contact?: string | null
+    __rawCard?: unknown
+    __rawMinPrice?: number | null | undefined
+  }
+  creatorTypeOptions: string[]
 }): string {
+  const c = input.creator
+  const raw = (c.__rawCard && typeof c.__rawCard === "object") ? (c.__rawCard as any) : null
   const parts: string[] = []
-  if (input.name) parts.push(input.name)
-  if (input.handle) parts.push(input.handle)
-  ;(input.topics ?? []).forEach((x) => x && parts.push(String(x)))
-  ;(input.tagCategories ?? []).forEach((x) => x && parts.push(String(x)))
-  ;(input.platforms ?? []).forEach((x) => x && parts.push(String(x)))
-  ;(input.deliverables ?? []).forEach((x) => x && parts.push(String(x)))
-  ;(input.collabTypes ?? []).forEach((x) => x && parts.push(String(x)))
-  ;(input.dealTypes ?? []).forEach((x) => x && parts.push(String(x)))
-  if (typeof input.contact === "string" && input.contact.trim()) parts.push(input.contact)
-  if (typeof input.minPrice === "number" && Number.isFinite(input.minPrice)) parts.push(String(Math.floor(input.minPrice)))
+
+  pushFlattenedStrings(parts, c.name)
+  pushFlattenedStrings(parts, c.handle)
+  pushFlattenedStrings(parts, raw?.handle)
+  pushFlattenedStrings(parts, raw?.username)
+  pushFlattenedStrings(parts, raw?.slug)
+  pushFlattenedStrings(parts, raw?.title)
+
+  pushFlattenedStrings(parts, c.topics)
+  pushFlattenedStrings(parts, buildCreatorTypeSearchParts({ tagCategories: c.tagCategories, creatorTypeOptions: input.creatorTypeOptions }))
+  pushFlattenedStrings(parts, raw?.topics)
+  pushFlattenedStrings(parts, raw?.tags)
+  pushFlattenedStrings(parts, raw?.tagCategories)
+  pushFlattenedStrings(parts, raw?.tag_categories)
+  pushFlattenedStrings(parts, raw?.creatorTypes)
+  pushFlattenedStrings(parts, raw?.creator_types)
+
+  pushFlattenedStrings(parts, c.platforms)
+  pushFlattenedStrings(parts, c.deliverables)
+  pushFlattenedStrings(parts, c.collabTypes)
+  pushFlattenedStrings(parts, c.dealTypes)
+
+  if (typeof c.minPrice === "number" && Number.isFinite(c.minPrice)) {
+    parts.push(String(Math.floor(c.minPrice)))
+  } else if (c.__rawMinPrice === null) {
+    parts.push("洽談報價")
+    parts.push("contact for quote")
+  }
+
+  pushFlattenedStrings(parts, c.contact)
+  pushFlattenedStrings(parts, raw?.bio)
+  pushFlattenedStrings(parts, raw?.intro)
+  pushFlattenedStrings(parts, raw?.description)
+  pushFlattenedStrings(parts, raw?.location)
+  pushFlattenedStrings(parts, raw?.language)
+  pushFlattenedStrings(parts, raw?.languages)
+
   return normalizeSearchText(parts.join(" "))
 }
+
+ 
 
 function clampNumber(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n))
@@ -408,19 +496,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const raw = initialMeCard as any
     const nested = raw && typeof raw === "object" && raw.card && typeof raw.card === "object" ? raw.card : null
 
-    if (process.env.NODE_ENV !== "production") {
-      if (nested && typeof raw?.ok !== "undefined") {
-        console.warn("[matchmaking] initialMeCard looks like API response; using .card", {
-          keys: Object.keys(raw || {}),
-          cardKeys: Object.keys(nested || {}),
-        })
-      } else if (raw && typeof raw === "object" && !raw.id) {
-        console.warn("[matchmaking] initialMeCard missing id; me card may not render", {
-          keys: Object.keys(raw || {}),
-        })
-      }
-    }
-
     return (nested ?? initialMeCard) as any
   }, [initialMeCard])
 
@@ -657,9 +732,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           const creatorIdStr = String(ownerIgUserId)
           statsErrorRef.current.set(creatorIdStr, true)
           setStatsUiVersion((v) => v + 1)
-          if (process.env.NODE_ENV !== "production") {
-            console.debug("[matchmaking] owner stats non-ok", creatorIdStr, statsRes.status)
-          }
           return
         }
 
@@ -728,7 +800,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [])
 
-  const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
+  const creators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
     return allCards.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const tagCategories = normalizeCreatorTypesFromCard(c as any)
@@ -778,14 +850,18 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               ? (c as any).engagementRate
               : undefined
 
-      const rawMinPrice =
+      const rawMinPriceCandidate =
         typeof (c as any)?.minPrice === "number" && Number.isFinite((c as any).minPrice)
           ? Math.floor((c as any).minPrice)
-          : typeof (c as any)?.min_price === "number" && Number.isFinite((c as any).min_price)
-            ? (c as any).min_price
-            : undefined
+          : (c as any)?.minPrice === null
+            ? null
+            : typeof (c as any)?.min_price === "number" && Number.isFinite((c as any).min_price)
+              ? Math.floor((c as any).min_price)
+              : (c as any)?.min_price === null
+                ? null
+                : undefined
 
-      const normalizedMinPrice = typeof rawMinPrice === "number" && Number.isFinite(rawMinPrice) ? Math.max(0, Math.floor(rawMinPrice)) : undefined
+      const normalizedMinPrice = typeof rawMinPriceCandidate === "number" && Number.isFinite(rawMinPriceCandidate) ? Math.max(0, Math.floor(rawMinPriceCandidate)) : undefined
 
       return {
         id: c.id,
@@ -800,6 +876,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
         deliverables,
         minPrice: normalizedMinPrice,
+        __rawMinPrice: rawMinPriceCandidate,
         stats: {
           followers: rawFollowers,
           engagementRate: rawER,
@@ -810,6 +887,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         primaryContactMethod,
         href: c.isDemo ? "" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
+        __rawCard: c as any,
       }
     })
   }, [allCards, statsVersion])
@@ -912,29 +990,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const filtered = useMemo(() => {
     const qq = normalizeSearchText(q)
 
-    const searchIndex = new Map<string, string>()
-    for (const c of creators) {
-      if (!c?.id) continue
-      searchIndex.set(
-        c.id,
-        buildSearchableText({
-          name: c.name,
-          handle: c.handle,
-          topics: c.topics,
-          tagCategories: c.tagCategories,
-          platforms: c.platforms,
-          deliverables: c.deliverables,
-          collabTypes: c.collabTypes as any,
-          dealTypes: c.dealTypes,
-          contact: (c as any).contact ?? null,
-          minPrice: typeof c.minPrice === "number" ? c.minPrice : undefined,
-        })
-      )
-    }
-
-    let out = creators.filter((c) => {
-      const hay = searchIndex.get(c.id) ?? ""
-      const okQ = !qq || hay.includes(qq)
+    const matchesDropdownFilters = (c: (typeof creators)[number]) => {
       const okPlatform = platformMatchAny(selectedPlatforms, c.platforms)
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
       const okTags = (() => {
@@ -943,15 +999,25 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         return selectedTagCategories.some((t) => set.has(String(t || "").trim()))
       })()
 
-      let okBudget = true
-      if (budget === "custom") {
-        okBudget = budgetEligibleByMinPrice(budget, c.minPrice, customBudget)
-      } else {
-        okBudget = budgetEligibleByMinPrice(budget, c.minPrice)
-      }
+      const okBudget =
+        budget === "custom"
+          ? budgetEligibleByMinPrice(budget, c.minPrice, customBudget)
+          : budgetEligibleByMinPrice(budget, c.minPrice)
 
-      return okQ && okPlatform && okDealType && okTags && okBudget
-    })
+      return okPlatform && okDealType && okTags && okBudget
+    }
+
+    const baseList = creators.filter(matchesDropdownFilters)
+    const creatorTypeOptions = tagCategoryOptions
+
+    const visibleList = !qq
+      ? baseList
+      : baseList.filter((c) => {
+          const hay = buildCardHaystack({ creator: c as any, creatorTypeOptions })
+          return hay.includes(qq)
+        })
+
+    let out = visibleList
 
     if (sort === "best_match") {
       const maxFollowers = out.reduce((m, c) => {
@@ -980,9 +1046,9 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
 
     return out
-  }, [creators, q, sort, budget, customBudget, selectedPlatforms, selectedDealTypes, selectedTagCategories])
+  }, [creators, q, sort, budget, customBudget, selectedPlatforms, selectedDealTypes, selectedTagCategories, tagCategoryOptions])
 
-  const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string }) | null => {
+  const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }) | null => {
     if (!meCard) return null
 
     const topics = (meCard.category ? [meCard.category] : []).filter(Boolean)
@@ -1030,18 +1096,25 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
               : ""
     const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
 
-    const rawMinPrice =
+    const rawMinPriceCandidate =
       typeof (meCard as any)?.minPrice === "number" && Number.isFinite((meCard as any).minPrice)
         ? Math.floor((meCard as any).minPrice)
-        : typeof (meCard as any)?.min_price === "number" && Number.isFinite((meCard as any).min_price)
-          ? Math.floor((meCard as any).min_price)
-          : typeof (meCard as any)?.minPrice === "string" && (meCard as any).minPrice.trim() && Number.isFinite(Number((meCard as any).minPrice))
-            ? Math.floor(Number((meCard as any).minPrice))
-            : typeof (meCard as any)?.min_price === "string" && (meCard as any).min_price.trim() && Number.isFinite(Number((meCard as any).min_price))
-              ? Math.floor(Number((meCard as any).min_price))
-              : undefined
+        : (meCard as any)?.minPrice === null
+          ? null
+          : typeof (meCard as any)?.min_price === "number" && Number.isFinite((meCard as any).min_price)
+            ? Math.floor((meCard as any).min_price)
+            : (meCard as any)?.min_price === null
+              ? null
+              : typeof (meCard as any)?.minPrice === "string" && (meCard as any).minPrice.trim() && Number.isFinite(Number((meCard as any).minPrice))
+                ? Math.floor(Number((meCard as any).minPrice))
+                : typeof (meCard as any)?.min_price === "string" && (meCard as any).min_price.trim() && Number.isFinite(Number((meCard as any).min_price))
+                  ? Math.floor(Number((meCard as any).min_price))
+                  : undefined
 
-    const normalizedMinPrice = typeof rawMinPrice === "number" && Number.isFinite(rawMinPrice) ? Math.max(0, Math.floor(rawMinPrice)) : undefined
+    const normalizedMinPrice =
+      typeof rawMinPriceCandidate === "number" && Number.isFinite(rawMinPriceCandidate)
+        ? Math.max(0, Math.floor(rawMinPriceCandidate))
+        : undefined
 
     return {
       id: meCard.id,
@@ -1056,6 +1129,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
       deliverables,
       minPrice: normalizedMinPrice,
+      __rawMinPrice: rawMinPriceCandidate,
       stats: {
         followers: rawFollowers,
         engagementRate: rawER,
@@ -1067,28 +1141,34 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       })(),
       href: meCard.profileUrl,
       isDemo: Boolean((meCard as any).isDemo),
+      __rawCard: meCard as any,
     }
   }, [meCard, statsVersion])
 
   const finalCards = useMemo(() => {
     const qq = normalizeSearchText(q)
-    const pinnedMatches = pinnedCreator
-      ? (() => {
-          const hay = buildSearchableText({
-            name: pinnedCreator.name,
-            handle: pinnedCreator.handle,
-            topics: pinnedCreator.topics,
-            tagCategories: pinnedCreator.tagCategories,
-            platforms: pinnedCreator.platforms,
-            deliverables: pinnedCreator.deliverables,
-            collabTypes: pinnedCreator.collabTypes as any,
-            dealTypes: pinnedCreator.dealTypes,
-            contact: (pinnedCreator as any).contact ?? null,
-            minPrice: typeof pinnedCreator.minPrice === "number" ? pinnedCreator.minPrice : undefined,
-          })
-          return !qq || hay.includes(qq)
-        })()
-      : false
+    const pinnedMatches = (() => {
+      if (!pinnedCreator) return false
+
+      const okPlatform = platformMatchAny(selectedPlatforms, pinnedCreator.platforms)
+      const okDealType = dealTypeMatchAny(selectedDealTypes, pinnedCreator.collabTypes)
+      const okTags = (() => {
+        if (!selectedTagCategories.length) return true
+        const set = new Set((pinnedCreator.tagCategories ?? []).map((x) => String(x || "").trim()).filter(Boolean))
+        return selectedTagCategories.some((t) => set.has(String(t || "").trim()))
+      })()
+
+      const okBudget =
+        budget === "custom"
+          ? budgetEligibleByMinPrice(budget, pinnedCreator.minPrice, customBudget)
+          : budgetEligibleByMinPrice(budget, pinnedCreator.minPrice)
+
+      if (!(okPlatform && okDealType && okTags && okBudget)) return false
+
+      if (!qq) return true
+      const hay = buildCardHaystack({ creator: pinnedCreator as any, creatorTypeOptions: tagCategoryOptions })
+      return hay.includes(qq)
+    })()
 
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
     const combined = pinnedCreator && pinnedMatches ? [pinnedCreator, ...rest] : rest
@@ -1102,7 +1182,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       out.push(c)
     }
     return out
-  }, [filtered, pinnedCreator])
+  }, [filtered, pinnedCreator, q, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget, tagCategoryOptions])
 
   const pageSize = 8
 
@@ -1278,10 +1358,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const missing = unique.filter((id) => !statsCacheRef.current.has(id) && !statsInFlightRef.current.has(id))
     if (!missing.length) return () => ac.abort()
 
-    if (process.env.NODE_ENV !== "production") {
-      console.debug("[matchmaking] stats prefetch start", missing.slice(0, 3))
-    }
-
     let didCancel = false
     const concurrency = 3
     let cursor = 0
@@ -1301,12 +1377,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       })
       const json = (await res.json().catch(() => null)) as any
       const stats = json?.ok === true ? json?.stats : null
-
-      if (process.env.NODE_ENV !== "production") {
-        if (!res.ok || json?.ok !== true) {
-          console.debug("[matchmaking] stats prefetch non-ok", creatorId, res.status)
-        }
-      }
 
       const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
       const engagementRatePct =
