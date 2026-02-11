@@ -21,6 +21,19 @@ import type {
 import type { CreatorCard } from "./types"
 const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
 
+const sanitizeSelectedTagCategories = (input: unknown): string[] => {
+  const arr = Array.isArray(input) ? input : []
+  return arr
+    .map((x) => String(x ?? "").trim())
+    .filter(Boolean)
+    .filter((x) => x !== "全部" && x.toLowerCase() !== "all")
+}
+
+const toCreatorTagSet = (tagCategories: unknown): Set<string> => {
+  const arr = Array.isArray(tagCategories) ? tagCategories : []
+  return new Set(arr.map((x) => String(x ?? "").trim()).filter(Boolean))
+}
+
 interface MatchmakingClientProps {
   locale: Locale
   initialCards: CreatorCard[]
@@ -1019,19 +1032,9 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       const okPlatform = platformMatchAny(selectedPlatforms, c.platforms)
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
       const okTags = (() => {
-        const cleanedSelectedTags = (selectedTagCategories ?? [])
-          .map((x) => String(x || "").trim())
-          .filter(Boolean)
-          .filter((x) => x !== "全部" && x.toLowerCase() !== "all")
-
+        const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
         if (!cleanedSelectedTags.length) return true
-
-        const set = new Set(
-          (c.tagCategories ?? [])
-            .map((x) => String(x || "").trim())
-            .filter(Boolean)
-        )
-
+        const set = toCreatorTagSet(c.tagCategories)
         return cleanedSelectedTags.some((t) => set.has(t))
       })()
 
@@ -1205,10 +1208,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       return true
     })()
 
-    const cleanedSelectedTags = (selectedTagCategories ?? [])
-      .map((x) => String(x || "").trim())
-      .filter(Boolean)
-      .filter((x) => x !== "全部" && x.toLowerCase() !== "all")
+    const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
 
     const isFilteringActive =
       Boolean(q && q.trim().length > 0) ||
