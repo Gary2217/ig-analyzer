@@ -887,6 +887,15 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         id: c.id,
         creatorId: creatorIdStr ?? undefined,
         name: c.displayName,
+        displayName: c.displayName,
+        username:
+          typeof (c as any).username === "string"
+            ? String((c as any).username).trim()
+            : undefined,
+        igUsername:
+          typeof (c as any).igUsername === "string"
+            ? String((c as any).igUsername).trim()
+            : undefined,
         handle,
         avatarUrl: c.avatarUrl,
         topics,
