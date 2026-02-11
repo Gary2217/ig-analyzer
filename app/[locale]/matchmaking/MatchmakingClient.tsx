@@ -105,6 +105,9 @@ function buildCreatorTypeSearchParts(input: {
 function buildCardHaystack(input: {
   creator: CreatorCardData & {
     handle?: string
+    displayName?: string
+    username?: string
+    igUsername?: string
     topics?: string[]
     tagCategories?: string[]
     platforms?: Platform[]
@@ -123,8 +126,11 @@ function buildCardHaystack(input: {
   const c = input.creator
   const parts: string[] = []
 
+  pushFlattenedStrings(parts, (c as any).displayName)
   pushFlattenedStrings(parts, c.name)
   pushFlattenedStrings(parts, c.handle)
+  pushFlattenedStrings(parts, (c as any).igUsername)
+  pushFlattenedStrings(parts, (c as any).username)
 
   // CreatorCard renders the visible title as `creator.name`.
   // Search haystack must be derived from the same normalized object (`creator`) used for rendering.
