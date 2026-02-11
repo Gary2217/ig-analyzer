@@ -3701,7 +3701,7 @@ export default function CreatorCardPage() {
                               inputMode="numeric"
                               value={minPriceDraft}
                               placeholder={t("creatorCardEditor.minPricePlaceholder")}
-                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                              className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20 sm:w-32 sm:shrink-0"
                               onChange={(e) => {
                                 if (contactForQuote) return
                                 const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
@@ -3726,7 +3726,7 @@ export default function CreatorCardPage() {
                               {t("creatorCardEditor.addButton")}
                             </Button>
 
-                            <label className="flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/20 px-3 h-11 min-w-0 sm:ml-2">
+                            <label className="flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/20 px-3 h-11 min-w-0 sm:flex-1 sm:min-w-0 sm:ml-2">
                               <input
                                 type="checkbox"
                                 className="h-4 w-4 shrink-0 accent-emerald-400"
@@ -3742,7 +3742,7 @@ export default function CreatorCardPage() {
                                   }
                                 }}
                               />
-                              <span className="text-sm text-white/75 min-w-0 truncate">
+                              <span className="text-sm text-white/75 min-w-0 truncate sm:overflow-visible sm:text-clip sm:whitespace-nowrap">
                                 {activeLocale === "zh-TW" ? "洽談報價" : "Contact for quote"}
                               </span>
                             </label>
@@ -5085,7 +5085,7 @@ export default function CreatorCardPage() {
                                       inputMode="numeric"
                                       value={minPriceDraft}
                                       placeholder={t("creatorCardEditor.minPricePlaceholder")}
-                                      className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20"
+                                      className="bg-slate-950/40 border-white/10 text-slate-100 placeholder:text-slate-400 focus-visible:ring-white/20 sm:w-32 sm:shrink-0"
                                       onChange={(e) => {
                                         if (contactForQuote) return
                                         const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 9)
@@ -5110,7 +5110,7 @@ export default function CreatorCardPage() {
                                       {t("creatorCardEditor.addButton")}
                                     </Button>
 
-                                    <label className="flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/20 px-3 h-11 min-w-0 sm:ml-2">
+                                    <label className="flex items-center gap-2 rounded-md border border-white/10 bg-slate-950/20 px-3 h-11 min-w-0 sm:flex-1 sm:min-w-0 sm:ml-2">
                                       <input
                                         type="checkbox"
                                         className="h-4 w-4 shrink-0 accent-emerald-400"
@@ -5126,7 +5126,7 @@ export default function CreatorCardPage() {
                                           }
                                         }}
                                       />
-                                      <span className="text-sm text-white/75 min-w-0 truncate">
+                                      <span className="text-sm text-white/75 min-w-0 truncate sm:overflow-visible sm:text-clip sm:whitespace-nowrap">
                                         {activeLocale === "zh-TW" ? "洽談報價" : "Contact for quote"}
                                       </span>
                                     </label>
