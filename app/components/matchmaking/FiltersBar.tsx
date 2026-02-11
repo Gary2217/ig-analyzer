@@ -152,13 +152,29 @@ export function FiltersBar(props: Props) {
           <div className="rounded-2xl border border-white/10 bg-[#0b1220]/75 backdrop-blur-md">
             <div className="p-2.5 sm:p-3">
               <div className="grid grid-cols-12 gap-2 sm:gap-3 items-end min-w-0">
-                <input
-                  value={props.search}
-                  onChange={(e) => props.onSearch(e.target.value)}
-                  onFocus={closeAll}
-                  placeholder={copy.common.searchPlaceholder}
-                  className="h-10 w-full col-span-12 lg:col-span-4 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
-                />
+                <div className="col-span-12 lg:col-span-4 min-w-0 w-full">
+                  <div className="relative min-w-0 w-full lg:max-w-[360px]">
+                    <input
+                      value={props.search}
+                      onChange={(e) => props.onSearch(e.target.value)}
+                      onFocus={closeAll}
+                      placeholder={copy.common.searchPlaceholder}
+                      className="h-10 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 pl-3 pr-12 text-sm text-white/90 placeholder:text-white/30"
+                    />
+                    {props.search.trim() ? (
+                      <button
+                        type="button"
+                        onClick={() => props.onSearch("")}
+                        className="absolute right-1 top-1 h-10 w-10 grid place-items-center rounded-md text-white/60 hover:text-white/85 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
+                        aria-label={props.locale === "zh-TW" ? "清除搜尋" : "Clear search"}
+                        title={props.locale === "zh-TW" ? "清除搜尋" : "Clear search"}
+                        style={{ minHeight: "44px", minWidth: "44px" }}
+                      >
+                        <span className="text-lg leading-none">×</span>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
 
                 <div className="col-span-12 sm:col-span-6 lg:col-span-2 min-w-0">
                   <div className="text-[11px] text-white/45 mb-1">創作者平台</div>

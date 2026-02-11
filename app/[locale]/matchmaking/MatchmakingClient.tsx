@@ -26,6 +26,41 @@ interface MatchmakingClientProps {
   initialMeCard?: CreatorCard | null
 }
 
+function normalizeSearchText(input: string): string {
+  const s = String(input ?? "")
+  try {
+    return s.normalize("NFKC").toLowerCase().trim()
+  } catch {
+    return s.toLowerCase().trim()
+  }
+}
+
+function buildSearchableText(input: {
+  name?: string
+  handle?: string
+  topics?: string[]
+  tagCategories?: string[]
+  platforms?: Platform[]
+  deliverables?: string[]
+  collabTypes?: string[]
+  dealTypes?: string[]
+  contact?: string | null
+  minPrice?: number
+}): string {
+  const parts: string[] = []
+  if (input.name) parts.push(input.name)
+  if (input.handle) parts.push(input.handle)
+  ;(input.topics ?? []).forEach((x) => x && parts.push(String(x)))
+  ;(input.tagCategories ?? []).forEach((x) => x && parts.push(String(x)))
+  ;(input.platforms ?? []).forEach((x) => x && parts.push(String(x)))
+  ;(input.deliverables ?? []).forEach((x) => x && parts.push(String(x)))
+  ;(input.collabTypes ?? []).forEach((x) => x && parts.push(String(x)))
+  ;(input.dealTypes ?? []).forEach((x) => x && parts.push(String(x)))
+  if (typeof input.contact === "string" && input.contact.trim()) parts.push(input.contact)
+  if (typeof input.minPrice === "number" && Number.isFinite(input.minPrice)) parts.push(String(Math.floor(input.minPrice)))
+  return normalizeSearchText(parts.join(" "))
+}
+
 function clampNumber(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n))
 }
@@ -888,10 +923,30 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }
 
   const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase()
+    const qq = normalizeSearchText(q)
+
+    const searchIndex = new Map<string, string>()
+    for (const c of creators) {
+      if (!c?.id) continue
+      searchIndex.set(
+        c.id,
+        buildSearchableText({
+          name: c.name,
+          handle: c.handle,
+          topics: c.topics,
+          tagCategories: c.tagCategories,
+          platforms: c.platforms,
+          deliverables: c.deliverables,
+          collabTypes: c.collabTypes as any,
+          dealTypes: c.dealTypes,
+          contact: (c as any).contact ?? null,
+          minPrice: typeof c.minPrice === "number" ? c.minPrice : undefined,
+        })
+      )
+    }
 
     let out = creators.filter((c) => {
-      const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")} ${(c.tagCategories ?? []).join(" ")}`.toLowerCase()
+      const hay = searchIndex.get(c.id) ?? ""
       const okQ = !qq || hay.includes(qq)
       const okPlatform = platformMatchAny(selectedPlatforms, c.platforms)
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
@@ -1029,8 +1084,27 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [meCard, statsVersion])
 
   const finalCards = useMemo(() => {
+    const qq = normalizeSearchText(q)
+    const pinnedMatches = pinnedCreator
+      ? (() => {
+          const hay = buildSearchableText({
+            name: pinnedCreator.name,
+            handle: pinnedCreator.handle,
+            topics: pinnedCreator.topics,
+            tagCategories: pinnedCreator.tagCategories,
+            platforms: pinnedCreator.platforms,
+            deliverables: pinnedCreator.deliverables,
+            collabTypes: pinnedCreator.collabTypes as any,
+            dealTypes: pinnedCreator.dealTypes,
+            contact: (pinnedCreator as any).contact ?? null,
+            minPrice: typeof pinnedCreator.minPrice === "number" ? pinnedCreator.minPrice : undefined,
+          })
+          return !qq || hay.includes(qq)
+        })()
+      : false
+
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
-    const combined = pinnedCreator ? [pinnedCreator, ...rest] : rest
+    const combined = pinnedCreator && pinnedMatches ? [pinnedCreator, ...rest] : rest
 
     const seen = new Set<string>()
     const out: typeof combined = []
