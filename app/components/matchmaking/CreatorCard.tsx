@@ -345,7 +345,7 @@ export function CreatorCard({
 
   return (
     <div
-      className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full"
+      className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full md:hover:border-white/20 md:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_46px_-28px_rgba(0,0,0,0.65)] md:focus-within:border-white/20 md:focus-within:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_46px_-28px_rgba(0,0,0,0.65)]"
     >
       {showPopularBadge && !isEmpty ? (
         <div className="absolute top-2 left-2 z-10">
@@ -357,11 +357,6 @@ export function CreatorCard({
 
       {isEmpty ? (
         <div className="block flex-1 relative z-0 cursor-default">
-          <div className="absolute top-2 right-2 z-10">
-            <div className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 border border-white/15 text-white/70 whitespace-nowrap">
-              {mm.demoBadge}
-            </div>
-          </div>
           {CardBody}
         </div>
       ) : href ? (
