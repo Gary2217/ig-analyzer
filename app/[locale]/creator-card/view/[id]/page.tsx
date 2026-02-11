@@ -67,7 +67,7 @@ export default async function CreatorCardViewPage({ params }: CreatorCardViewPag
     }
 
     const messages = locale === "zh-TW" ? messagesZhTW : messagesEn
-    return <PublicCardClient locale={locale} creatorCard={json.card} messages={messages} />
+    return <PublicCardClient locale={locale} creatorCard={json.card} messages={messages} isOwner={true} />
   } catch {
     return <PublicCardErrorState locale={locale} errorType="service_error" />
   }

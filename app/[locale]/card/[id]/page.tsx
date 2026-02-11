@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { createServiceClient } from "@/lib/supabase/server"
+import { createAuthedClient, createServiceClient } from "@/lib/supabase/server"
 import { PublicCardClient } from "./PublicCardClient"
 import { PublicCardErrorState } from "./PublicCardErrorState"
 import messagesZhTW from "@/messages/zh-TW.json"
@@ -399,6 +399,9 @@ function normalizeCreatorCardForPreview(card: CreatorCardData) {
     .filter(Boolean)
 
   return {
+    ownerUserId: typeof (card as any).user_id === "string" ? String((card as any).user_id) : null,
+    avatarUrl: typeof (card as any).avatar_url === "string" ? String((card as any).avatar_url) : null,
+    fallbackUrl: typeof (card as any).profile_image_url === "string" ? String((card as any).profile_image_url) : null,
     profileImageUrl: card.avatar_url || card.profile_image_url,
     displayName: card.display_name || card.ig_username,
     username: card.ig_username,
@@ -432,5 +435,10 @@ export default async function PublicCardPage({ params }: PublicCardPageProps) {
   const normalizedCard = normalizeCreatorCardForPreview(card)
   const messages = locale === "zh-TW" ? messagesZhTW : messagesEn
 
-  return <PublicCardClient locale={locale} creatorCard={normalizedCard} messages={messages} />
+  const authed = await createAuthedClient()
+  const userRes = await authed.auth.getUser()
+  const authedUser = userRes?.data?.user ?? null
+  const isOwner = Boolean(authedUser?.id && normalizedCard.ownerUserId && authedUser.id === normalizedCard.ownerUserId)
+
+  return <PublicCardClient locale={locale} creatorCard={normalizedCard} messages={messages} isOwner={isOwner} />
 }
