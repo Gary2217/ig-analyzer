@@ -822,6 +822,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const creators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
     return allCards.map((c) => {
+      const displayNameResolved =
+        typeof (c as any).displayName === "string" && String((c as any).displayName).trim()
+          ? String((c as any).displayName).trim()
+          : typeof (c as any).name === "string" && String((c as any).name).trim()
+            ? String((c as any).name).trim()
+            : typeof (c as any).creatorName === "string" && String((c as any).creatorName).trim()
+              ? String((c as any).creatorName).trim()
+              : typeof (c as any).title === "string" && String((c as any).title).trim()
+                ? String((c as any).title).trim()
+                : ""
+
       const topics = (c.category ? [c.category] : []).filter(Boolean)
       const tagCategories = normalizeCreatorTypesFromCard(c as any)
       const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
@@ -839,9 +850,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
             ? String((c as any).igUsername).trim()
             : typeof (c as any).username === "string"
               ? String((c as any).username).trim()
-              : typeof (c as any).displayName === "string"
-                ? String((c as any).displayName).trim()
-                : ""
+              : displayNameResolved
       const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
 
       const parsedContact = safeParseContact((c as any).contact)
@@ -886,8 +895,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       return {
         id: c.id,
         creatorId: creatorIdStr ?? undefined,
-        name: c.displayName,
-        displayName: c.displayName,
+        name: displayNameResolved,
+        displayName: displayNameResolved,
         username:
           typeof (c as any).username === "string"
             ? String((c as any).username).trim()
