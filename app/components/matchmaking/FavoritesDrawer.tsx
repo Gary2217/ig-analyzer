@@ -8,18 +8,24 @@ export function FavoritesDrawer({
   locale,
   open,
   onClose,
-  favorites,
+  favoriteIds,
+  getCreatorById,
   onClearAll,
 }: {
   locale: Locale
   open: boolean
   onClose: () => void
-  favorites: CreatorCardData[]
+  favoriteIds: string[]
+  getCreatorById: (id: string) => CreatorCardData | undefined
   onClearAll: () => void
 }) {
   const copy = getCopy(locale)
   const mm = copy.matchmaking
   const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
+
+  const resolved = favoriteIds
+    .map((id) => getCreatorById(id))
+    .filter((c): c is CreatorCardData => Boolean(c))
 
   return (
     <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`}>
@@ -43,20 +49,20 @@ export function FavoritesDrawer({
         </div>
 
         <div className="p-3 flex items-center justify-between">
-          <div className="text-xs text-white/50 tabular-nums whitespace-nowrap">{mm.favoritesCount(favorites.length)}</div>
+          <div className="text-xs text-white/50 tabular-nums whitespace-nowrap">{mm.favoritesCount(favoriteIds.length)}</div>
           <button
             className="h-8 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10"
             onClick={onClearAll}
-            disabled={!favorites.length}
+            disabled={!favoriteIds.length}
           >
             {mm.clearAll}
           </button>
         </div>
 
         <div className="px-3 pb-6 overflow-y-auto h-[calc(100%-110px)]">
-          {favorites.length ? (
+          {favoriteIds.length ? (
             <div className="space-y-2">
-              {favorites.map((c) => (
+              {resolved.map((c) => (
                 <Link
                   key={c.id}
                   href={(typeof c.href === "string" && c.href.trim().length > 0 ? c.href : `${localePrefix}/creator-card/view`) as any}

@@ -1393,10 +1393,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return () => ac.abort()
   }
 
-  const favoritesList = useMemo(
-    () => creators.filter((c) => fav.favoriteIds.has(c.id)),
-    [creators, fav.favoriteIds]
-  )
+  const creatorsById = useMemo(() => {
+    const map = new Map<string, CreatorCardData>()
+    for (const c of renderCards) map.set(String(c.id), c)
+    return map
+  }, [renderCards])
+
+  const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
 
   const isEmptyResults = useMemo(() => filtered.length === 0 && !pinnedCreator, [filtered.length, pinnedCreator])
 
@@ -1588,7 +1591,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         locale={locale}
         open={favOpen}
         onClose={() => setFavOpen(false)}
-        favorites={favoritesList}
+        favoriteIds={favoriteIdsArray}
+        getCreatorById={(id) => creatorsById.get(String(id))}
         onClearAll={fav.clearAll}
       />
     </div>
