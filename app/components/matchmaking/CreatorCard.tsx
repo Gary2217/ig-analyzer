@@ -210,7 +210,7 @@ export function CreatorCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
       </div>
 
-      {isDemo && canEditDemos ? (
+      {isDemo && canEditDemos && process.env.NODE_ENV !== "production" ? (
         <div className="px-3 pt-3 sm:px-3">
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center justify-center h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10 cursor-pointer whitespace-nowrap">
