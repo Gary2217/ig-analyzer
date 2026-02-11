@@ -626,6 +626,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       nextCollab === "other"
     setSelectedDealTypes(isKnownCollab ? [nextCollab as CollabType] : [])
 
+    // Ensure creator-type tag filters start clean on hydration (NO-OP by default).
+    // Prevent stale/rehydrated tag state from collapsing baseList to only the pinned card.
+    setSelectedTagCategories([])
+
     setPage(nextPage)
 
     // If budget param is not one of the known presets, fall back to any.
