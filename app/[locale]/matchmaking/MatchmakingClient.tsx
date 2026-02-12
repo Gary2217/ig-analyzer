@@ -43,9 +43,16 @@ interface MatchmakingClientProps {
 function normalizeSearchText(input: string): string {
   const s = String(input ?? "")
   try {
-    return s.normalize("NFKC").toLowerCase().trim()
+    return s
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ")
   } catch {
-    return s.toLowerCase().trim()
+    return s
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ")
   }
 }
 
@@ -1005,7 +1012,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [searchParams])
 
-  const qq = useMemo(() => normalizeSearchText(typeof q === "string" ? q : ""), [q])
+  const hasSearch = useMemo(() => String(q ?? "").trim().length > 0, [q])
+
+  const qq = useMemo(() => {
+    const raw = String(q ?? "").trim()
+    const norm = normalizeSearchText(raw)
+    return norm || raw.toLowerCase()
+  }, [q])
 
   function budgetMaxForRange(range: BudgetRange): number | null {
     if (range === "1000") return 1000
@@ -1250,6 +1263,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
     const combined = (() => {
       if (!pinnedCreator) return rest
+      if (hasSearch) return rest
       if (!isFilteringActive) return [pinnedCreator, ...rest]
       return pinnedMatches ? [pinnedCreator, ...rest] : rest
     })()
@@ -1263,7 +1277,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       out.push(c)
     }
     return out
-  }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch, q, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+  }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch, q, hasSearch, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
 
   const pageSize = 8
 
@@ -1403,10 +1417,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [clampedPage, demoAvatarMap, finalCards, hasAnyFilter, locale, pagedRealCards.length])
 
   const renderCards = useMemo((): Array<CreatorCardData & { creatorId?: string }> => {
-    if (qq || hasAnyFilter) return pagedRealCards
+    if (hasSearch || hasAnyFilter) return pagedRealCards
     const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
     return [...pagedRealCards, ...filler]
-  }, [demoFillCards, hasAnyFilter, pagedRealCards, qq])
+  }, [demoFillCards, hasAnyFilter, hasSearch, pagedRealCards])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
@@ -1614,7 +1628,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
 
-  const isEmptyResults = useMemo(() => filtered.length === 0 && !pinnedCreator, [filtered.length, pinnedCreator])
+  const isEmptyResults = useMemo(() => filtered.length === 0 && (hasSearch || hasAnyFilter), [filtered.length, hasSearch, hasAnyFilter])
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
