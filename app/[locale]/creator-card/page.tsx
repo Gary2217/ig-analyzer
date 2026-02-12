@@ -1017,6 +1017,26 @@ function getCollabTypeDisplayLabel(collabType: string, t: (key: string) => strin
   return raw
 }
 
+function deriveCollabTypesFromDeliverables(input?: string[]): string[] {
+  const d = Array.isArray(input) ? input : []
+  const set = new Set<string>()
+
+  for (const raw of d) {
+    const id = String(raw || "").trim().toLowerCase()
+    if (!id) continue
+
+    if (id === "ugc") set.add("ugc")
+    else if (id === "live") set.add("live")
+    else if (id === "unboxing") set.add("review_unboxing")
+    else if (id === "event") set.add("event")
+    else if (id === "youtube") set.add("long_video")
+    else if (id === "tiktok" || id === "reels" || id === "stories") set.add("short_video")
+    else set.add("other")
+  }
+
+  return Array.from(set)
+}
+
 function toggleInArray(values: string[], value: string) {
   const idx = values.indexOf(value)
   if (idx >= 0) return [...values.slice(0, idx), ...values.slice(idx + 1)]
@@ -2996,6 +3016,7 @@ export default function CreatorCardPage() {
         }) as any,
         isPublic: baseCard?.isPublic ?? undefined,
         deliverables: normalizeStringArray(deliverables, 50),
+        collabTypes: deriveCollabTypesFromDeliverables(normalizeStringArray(deliverables, 50)),
         collaborationNiches: normalizeCreatorTypes(collaborationNiches).slice(0, 20),
         pastCollaborations: normalizeStringArray(pastCollaborations, 20),
       }

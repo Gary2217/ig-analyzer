@@ -117,6 +117,21 @@ const normDigits = (s: string) => (s ?? "").toString().replace(/\D/g, "")
 
 const getCardDisplayName = (c: any) => String(c?.displayName ?? c?.name ?? "").trim()
 
+const toTagLabel = (tag: any) => {
+  const raw = String(tag ?? "").trim()
+  if (!raw) return ""
+
+  const key = raw.toLowerCase()
+  const found = CREATOR_TYPE_MASTER.find((x) => {
+    const zh = String((x as any)?.zh ?? "").trim().toLowerCase()
+    const en = String((x as any)?.en ?? "").trim().toLowerCase()
+    const slug = String((x as any)?.slug ?? "").trim().toLowerCase()
+    return key === zh || key === en || key === slug
+  })
+
+  return String((found as any)?.zh ?? raw).trim()
+}
+
 const toArray = (v: any): string[] => (Array.isArray(v) ? v.map(String) : v ? [String(v)] : [])
 
 const buildSearchHaystack = (c: any) => {
@@ -153,21 +168,23 @@ const buildSearchHaystack = (c: any) => {
       ...toArray(r?.topics)
     )
   }
-
-  const platforms = toArray(c?.platforms)
   const collabTypes = toArray(c?.collabTypes)
 
-  return [name, username, ...creatorTypes, ...platforms, ...collabTypes]
+  const tagLabels = creatorTypes.map(toTagLabel)
+
+  return [name, username, ...creatorTypes, ...tagLabels, ...collabTypes]
     .filter(Boolean)
     .join(" ")
 }
 
-const buildNumericHaystack = (c: any) => {
+const buildMoneyDigits = (c: any) => {
   const nums: string[] = []
 
   nums.push(String(c?.dealMin ?? ""))
   nums.push(String(c?.dealMax ?? ""))
   nums.push(String(c?.deal ?? ""))
+  nums.push(String(c?.negotiationAmount ?? ""))
+  nums.push(String(c?.quote ?? ""))
   nums.push(String(c?.budgetMin ?? ""))
   nums.push(String(c?.budgetMax ?? ""))
   nums.push(String(c?.priceMin ?? ""))
@@ -175,10 +192,18 @@ const buildNumericHaystack = (c: any) => {
   nums.push(String(c?.minPrice ?? ""))
   nums.push(String(c?.min_price ?? ""))
 
-  nums.push(String(c?.followers ?? ""))
-  nums.push(String(c?.stats?.followers ?? ""))
-  nums.push(String(c?.engagementRate ?? ""))
-  nums.push(String(c?.stats?.engagementRate ?? ""))
+  nums.push(String(c?.maxPrice ?? ""))
+  nums.push(String(c?.max_price ?? ""))
+
+  nums.push(String(c?.__rawCard?.minPrice ?? ""))
+  nums.push(String(c?.__rawCard?.maxPrice ?? ""))
+  nums.push(String(c?.__rawCard?.budgetMin ?? ""))
+  nums.push(String(c?.__rawCard?.budgetMax ?? ""))
+  nums.push(String(c?.__rawCard?.dealMin ?? ""))
+  nums.push(String(c?.__rawCard?.dealMax ?? ""))
+  nums.push(String(c?.__rawCard?.deal ?? ""))
+  nums.push(String(c?.__rawCard?.negotiationAmount ?? ""))
+  nums.push(String(c?.__rawCard?.quote ?? ""))
 
   return normDigits(nums.join(" "))
 }
@@ -198,15 +223,29 @@ const matchesCreatorQuery = (c: any, rawQuery: string) => {
       c?.username ?? c?.handle ?? c?.igHandle ?? c?.ig_handle ?? c?.instagram ?? c?.instagramHandle ?? ""
     )
     if (name.startsWith(qText) || username.startsWith(qText)) return true
-
-    if (qDigits.length === 1 && buildNumericHaystack(c).includes(qDigits)) return true
     return false
   }
 
   if (hay.includes(qText)) return true
-  if (qDigits.length >= 1 && buildNumericHaystack(c).includes(qDigits)) return true
+
+  if (qDigits.length >= 2 && buildMoneyDigits(c).includes(qDigits)) return true
   return false
 }
+
+const dedupeByKey = <T,>(arr: T[], keyFn: (x: T) => string) => {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const x of arr) {
+    const k = keyFn(x)
+    if (!k) continue
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(x)
+  }
+  return out
+}
+
+const creatorKey = (c: any) => String(c?.creatorId ?? c?.id ?? c?.username ?? c?.handle ?? getCardDisplayName(c) ?? "")
 
 function cardSearchBlob(card: CreatorCardData): string {
   const c: any = card as any
@@ -1249,10 +1288,41 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return mp <= max
   }
 
-  function platformMatchAny(selected: Platform[], ps?: Platform[]) {
-    if (!selected.length) return true
-    const set = new Set(ps ?? [])
-    return selected.some((p) => set.has(p))
+  type PlatformCanon = "instagram" | "youtube" | "tiktok" | "facebook"
+
+  const canonPlatform = (v: any): PlatformCanon | null => {
+    const s = String(v?.value ?? v?.id ?? v?.platform ?? v?.name ?? v ?? "")
+      .trim()
+      .toLowerCase()
+    if (!s) return null
+
+    if (s === "instagram" || s === "ig" || s === "insta") return "instagram"
+    if (s === "youtube" || s === "yt") return "youtube"
+    if (s === "tiktok" || s === "tt") return "tiktok"
+    if (s === "facebook" || s === "fb") return "facebook"
+    return null
+  }
+
+  const canonSet = (arr: any[] | undefined | null) => {
+    const set = new Set<PlatformCanon>()
+    for (const x of arr ?? []) {
+      const c = canonPlatform(x)
+      if (c) set.add(c)
+    }
+    return set
+  }
+
+  function platformMatchAny(selected: any[], creatorPlatforms: any[] | undefined | null) {
+    if (!selected || selected.length === 0) return true
+
+    const sel = canonSet(selected)
+    if (sel.size === 0) return true
+
+    const cps = canonSet(creatorPlatforms)
+    if (cps.size === 0) return false
+
+    for (const p of sel) if (cps.has(p)) return true
+    return false
   }
 
   function dealTypeMatchAny(selected: CollabType[], types?: CollabType[]) {
@@ -1376,42 +1446,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return [...creators, ...filler]
   }, [baseList, creators, demoFillCards, hasAnyExplicitFilter])
 
-  const searchedList = useMemo(() => {
-    return searchPool.filter((c) => matchesCreatorQuery(c, searchInput ?? ""))
-  }, [searchPool, searchInput])
-
-  const filtered = useMemo(() => {
-    let out = searchedList
-
-    if (sort === "best_match") {
-      const maxFollowers = out.reduce((m, c) => {
-        const f = typeof c.stats?.followers === "number" ? c.stats.followers : 0
-        return Math.max(m, f)
-      }, 0)
-
-      const scoreFor = (c: (typeof out)[number]) => {
-        const er = typeof c.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
-        const followers = typeof c.stats?.followers === "number" ? c.stats.followers : 0
-        const followersNormalized = maxFollowers > 0 ? Math.min(1, Math.max(0, followers / maxFollowers)) : 0
-        const seed = hashStringToInt(String(c.id))
-        const rand = mulberry32(seed)()
-        const randomSmallVar = Math.min(1, Math.max(0, rand))
-        const budgetFit = 0.5
-        return er * 0.4 + budgetFit * 0.3 + followersNormalized * 0.2 + randomSmallVar * 0.1
-      }
-
-      out = [...out].sort((a, b) => scoreFor(b) - scoreFor(a))
-    } else if (sort === "followers_desc") {
-      out = [...out].sort((a, b) => (b.stats?.followers ?? -1) - (a.stats?.followers ?? -1))
-    } else if (sort === "er_desc") {
-      out = [...out].sort((a, b) => (b.stats?.engagementRate ?? -1) - (a.stats?.engagementRate ?? -1))
-    } else {
-      out = [...out]
-    }
-
-    return out
-  }, [searchedList, sort])
-
   const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }) | null => {
     if (!meCard) return null
 
@@ -1509,6 +1543,48 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [meCard, statsVersion])
 
+  const searchPoolWithPinned = useMemo(() => {
+    const pool = searchPool
+    if (!pinnedCreator) return pool
+    return dedupeByKey([...pool, pinnedCreator], creatorKey)
+  }, [searchPool, pinnedCreator])
+
+  const searchedList = useMemo(() => {
+    return searchPoolWithPinned.filter((c) => matchesCreatorQuery(c, searchInput ?? ""))
+  }, [searchPoolWithPinned, searchInput])
+
+  const filtered = useMemo(() => {
+    let out = searchedList
+
+    if (sort === "best_match") {
+      const maxFollowers = out.reduce((m, c) => {
+        const f = typeof c.stats?.followers === "number" ? c.stats.followers : 0
+        return Math.max(m, f)
+      }, 0)
+
+      const scoreFor = (c: (typeof out)[number]) => {
+        const er = typeof c.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
+        const followers = typeof c.stats?.followers === "number" ? c.stats.followers : 0
+        const followersNormalized = maxFollowers > 0 ? Math.min(1, Math.max(0, followers / maxFollowers)) : 0
+        const seed = hashStringToInt(String(c.id))
+        const rand = mulberry32(seed)()
+        const randomSmallVar = Math.min(1, Math.max(0, rand))
+        const budgetFit = 0.5
+        return er * 0.4 + budgetFit * 0.3 + followersNormalized * 0.2 + randomSmallVar * 0.1
+      }
+
+      out = [...out].sort((a, b) => scoreFor(b) - scoreFor(a))
+    } else if (sort === "followers_desc") {
+      out = [...out].sort((a, b) => (b.stats?.followers ?? -1) - (a.stats?.followers ?? -1))
+    } else if (sort === "er_desc") {
+      out = [...out].sort((a, b) => (b.stats?.engagementRate ?? -1) - (a.stats?.engagementRate ?? -1))
+    } else {
+      out = [...out]
+    }
+
+    return out
+  }, [searchedList, sort])
+
   const finalCards = useMemo(() => {
     const pinnedMatches = (() => {
       if (!pinnedCreator) return false
@@ -1527,10 +1603,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       cleanedSelectedTags.length > 0 ||
       (budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0))
 
-    const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
+    const rest = pinnedCreator ? (hasSearch ? filtered : filtered.filter((c) => c.id !== pinnedCreator.id)) : filtered
     const combined = (() => {
       if (!pinnedCreator) return rest
-      if (hasSearch) return pinnedMatches ? [...rest, pinnedCreator] : rest
+      if (hasSearch) return rest
       if (!isFilteringActive) return [pinnedCreator, ...rest]
       return pinnedMatches ? [pinnedCreator, ...rest] : rest
     })()

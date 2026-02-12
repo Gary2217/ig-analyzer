@@ -43,6 +43,11 @@ function deriveFormatKeysFromDeliverables(input?: string[]) {
   return Array.from(set)
 }
 
+const getCollabTypes = (c: any): string[] => {
+  const v = c?.collabTypes ?? c?.collab_types ?? c?.__rawCard?.collabTypes ?? c?.__rawCard?.collab_types
+  return Array.isArray(v) ? v.map(String).filter(Boolean) : v ? [String(v)] : []
+}
+
 export function CreatorCard({
   creator,
   locale,
@@ -169,7 +174,7 @@ export function CreatorCard({
   }
 
   const platformBadges = (creator.platforms ?? []).filter(Boolean)
-  const dealTypeBadges = (creator.dealTypes ?? []).filter((x): x is string => typeof x === "string" && x.length > 0)
+  const dealTypeBadges = getCollabTypes(creator)
   const tagBadges = localizeCreatorTypes(normalizeCreatorTypesFromCard(creator as any), locale)
   const topBadges = [...platformBadges.map((p) => ({ key: `p:${p}`, label: platformLabel(p) })), ...dealTypeBadges.map((t) => ({ key: `t:${t}`, label: typeLabel(t) }))]
   const displayBadges = topBadges.slice(0, 4)
