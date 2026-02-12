@@ -410,6 +410,66 @@ function mulberry32(a: number) {
   }
 }
 
+const toArrayAny = (v: any): string[] => (Array.isArray(v) ? v.map(String) : v ? [String(v)] : [])
+
+const getCreatorPlatforms = (c: any): string[] => {
+  const r = c?.__rawCard ?? c?.raw ?? c?.card ?? null
+  const candidates = [
+    ...toArrayAny(c?.platforms),
+    ...toArrayAny(c?.platform),
+    ...toArrayAny(c?.platform_list),
+    ...toArrayAny(c?.platformsUsed),
+    ...toArrayAny(c?.platforms_used),
+    ...toArrayAny(r?.platforms),
+    ...toArrayAny(r?.platform),
+    ...toArrayAny(r?.platform_list),
+    ...toArrayAny(r?.platformsUsed),
+    ...toArrayAny(r?.platforms_used),
+  ]
+
+  return candidates.map((x) => String(x || "").trim()).filter(Boolean)
+}
+
+const chooseSubset = <T,>(items: T[], rng: () => number, minCount: number, maxCount: number): T[] => {
+  const list = Array.isArray(items) ? [...items] : []
+  if (!list.length) return []
+
+  const min = Math.max(0, Math.min(list.length, Math.floor(minCount)))
+  const max = Math.max(min, Math.min(list.length, Math.floor(maxCount)))
+  const count = min === max ? min : min + Math.floor(rng() * (max - min + 1))
+  if (count <= 0) return []
+
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    const tmp = list[i]
+    list[i] = list[j]
+    list[j] = tmp
+  }
+
+  return list.slice(0, count)
+}
+
+const pickDemoBudget = (seedKey: string) => {
+  const seed = hashStringToInt(seedKey)
+  const r = mulberry32(seed)()
+
+  const choices = [
+    1000, 1500, 2000, 2500, 3000, 3500,
+    4000, 4500, 5000, 6000, 7000, 8000,
+    9000, 10000, 12000, 15000, 20000,
+  ]
+
+  const idx = Math.min(choices.length - 1, Math.floor(r * choices.length))
+  const min = choices[idx]
+
+  const r2 = mulberry32(seed + 1)()
+  const spreadChoices = [0, 500, 1000, 2000, 3000]
+  const spread = spreadChoices[Math.min(spreadChoices.length - 1, Math.floor(r2 * spreadChoices.length))]
+  const max = min + spread
+
+  return { min, max }
+}
+
 function svgAvatarDataUrl(seed: string, label: string) {
   const h = hashStringToInt(seed)
   const r1 = 40 + (h % 140)
@@ -1343,7 +1403,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const matchesDropdownFilters = useCallback(
     (c: (typeof creators)[number]) => {
-      const okPlatform = platformMatchAny(selectedPlatforms, c.platforms)
+      const okPlatform = platformMatchAny(selectedPlatforms, getCreatorPlatforms(c))
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
       const okTags = (() => {
         const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
@@ -1418,6 +1478,12 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       const st = synthStatsFor(d.id)
       const avatarUrl = demoAvatarMap[d.id] || svgAvatarDataUrl(d.id, d.displayName)
 
+      const { min, max } = pickDemoBudget(String(d.id ?? d.handle ?? d.displayName ?? "demo"))
+
+      const rng = mulberry32(hashStringToInt(String(d.id ?? d.handle ?? d.displayName ?? "demo")))
+      const ALL_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok", "facebook"]
+      const platforms = chooseSubset(ALL_PLATFORMS, rng, 1, 3)
+
       return {
         id: d.id,
         name: d.displayName,
@@ -1425,18 +1491,32 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         avatarUrl,
         topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
         tagCategories: (demoTagSets[idx % demoTagSets.length] || []).filter(Boolean).slice(0, 6),
-        platforms: ["instagram"],
+        platforms: platforms.length ? platforms : ["instagram"],
         dealTypes: ["other"],
         collabTypes: ["other"],
         deliverables: [],
-        minPrice: 8000,
+        dealMin: min,
+        dealMax: max,
+        budgetMin: min,
+        budgetMax: max,
+        minPrice: min,
+        maxPrice: max,
         stats: {
           followers: st.followers,
           engagementRate: st.engagementRate,
         },
         href: "",
         isDemo: true,
-      }
+        __rawCard: {
+          platforms: platforms.length ? platforms : ["instagram"],
+          dealMin: min,
+          dealMax: max,
+          budgetMin: min,
+          budgetMax: max,
+          minPrice: min,
+          maxPrice: max,
+        },
+      } as any
     })
   }, [page, creators, demoAvatarMap, hasAnyExplicitFilter, locale])
 
