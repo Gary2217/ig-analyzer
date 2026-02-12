@@ -1070,6 +1070,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const hasSearch = useMemo(() => String(q ?? "").trim().length > 0, [q])
 
+  const hasAnyExplicitFilter = useMemo(() => {
+    const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
+    const hasPlatform = (selectedPlatforms?.length ?? 0) > 0
+    const hasDealType = (selectedDealTypes?.length ?? 0) > 0
+    const hasTags = cleanedSelectedTags.length > 0
+    const hasBudget = budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0)
+    return hasPlatform || hasDealType || hasTags || hasBudget
+  }, [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+
+  const isSearchOnly = hasSearch && !hasAnyExplicitFilter
+
   const qq = useMemo(() => {
     const raw = String(q ?? "").trim()
     const norm = normalizeSearchText(raw)
@@ -1148,7 +1159,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget]
   )
 
-  const baseList = useMemo(() => creators.filter(matchesDropdownFilters), [creators, matchesDropdownFilters])
+  const baseList = useMemo(() => {
+    if (isSearchOnly) return creators
+    return creators.filter(matchesDropdownFilters)
+  }, [creators, isSearchOnly, matchesDropdownFilters])
 
   const matchesSearch = useCallback(
     (c: (typeof creators)[number]) => {
@@ -1165,9 +1179,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   )
 
   const searchedList = useMemo(() => {
+    if (isSearchOnly) return creators.filter(matchesSearch)
     if (!qq) return baseList
     return baseList.filter(matchesSearch)
-  }, [baseList, matchesSearch, qq])
+  }, [baseList, creators, isSearchOnly, matchesSearch, qq])
 
   const filtered = useMemo(() => {
     let out = searchedList
