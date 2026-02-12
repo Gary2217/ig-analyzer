@@ -1003,7 +1003,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [searchParams])
 
-  const qq = useMemo(() => normalizeSearchText(q), [q])
+  const qq = useMemo(() => normalizeSearchText(typeof q === "string" ? q : ""), [q])
 
   function budgetMaxForRange(range: BudgetRange): number | null {
     if (range === "1000") return 1000
@@ -1679,7 +1679,14 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         <FiltersBar
           locale={locale}
           search={q}
-          onSearch={setQ}
+          onSearch={(v: any) => {
+            if (typeof v === "string") return setQ(v)
+            const next =
+              v && typeof v === "object"
+                ? String((v.currentTarget && v.currentTarget.value) ?? (v.target && v.target.value) ?? "")
+                : String(v ?? "")
+            setQ(next)
+          }}
           selectedPlatforms={selectedPlatforms}
           onTogglePlatform={(p: Platform) =>
             setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))

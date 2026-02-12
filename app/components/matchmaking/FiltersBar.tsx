@@ -156,7 +156,7 @@ export function FiltersBar(props: Props) {
                   <div className="relative min-w-0 w-full lg:max-w-[360px]">
                     <input
                       value={props.search}
-                      onChange={(e) => props.onSearch(e.target.value)}
+                      onChange={(e) => props.onSearch(e.currentTarget.value)}
                       onFocus={closeAll}
                       placeholder={copy.common.searchPlaceholder}
                       className="h-10 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 pl-3 pr-12 text-sm text-white/90 placeholder:text-white/30"
