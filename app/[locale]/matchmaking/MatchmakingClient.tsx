@@ -445,6 +445,11 @@ function pinOwnerCardFirst<T extends { id: string }>(cards: T[], ownerCardId: st
   return [owner, ...rest]
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null
+  return value as Record<string, unknown>
+}
+
 function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
   const id = typeof input?.id === "string" ? input.id : null
   if (!id) return null
@@ -505,11 +510,13 @@ function sanitizeMeCard(input: any, localePrefix: string): CreatorCard | null {
     followerCount: 0,
     engagementRate: null,
     isVerified: false,
-    profileUrl: `${localePrefix}/creator-card/view`,
+    profileUrl: `${localePrefix}/card/${encodeURIComponent(id)}`,
   }
 }
 
-export function MatchmakingClient({ locale, initialCards, initialMeCard }: MatchmakingClientProps) {
+function MatchmakingClient(props: MatchmakingClientProps) {
+  const { locale, initialCards, initialMeCard } = props
+
   const router = useRouter()
   const searchParams = useSearchParams()
   const uiCopy = getCopy(locale)
@@ -598,6 +605,12 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const [allCards, setAllCards] = useState<CreatorCard[]>(initialCards)
 
   const [searchInput, setSearchInput] = useState("")
+  const [remoteRawCards, setRemoteRawCards] = useState<CreatorCard[]>([])
+  const [remoteLoading, setRemoteLoading] = useState(false)
+  const [remoteError, setRemoteError] = useState<string | null>(null)
+  const remoteAbortRef = useRef<AbortController | null>(null)
+  const remoteDebounceRef = useRef<any>(null)
+
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedDealTypes, setSelectedDealTypes] = useState<CollabType[]>([])
@@ -992,6 +1005,116 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     })
   }, [allCards, statsVersion])
 
+  const remoteCreators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
+    return remoteRawCards.map((c) => {
+      const displayNameResolved =
+        typeof (c as any).displayName === "string" && String((c as any).displayName).trim()
+          ? String((c as any).displayName).trim()
+          : typeof (c as any).name === "string" && String((c as any).name).trim()
+            ? String((c as any).name).trim()
+            : typeof (c as any).creatorName === "string" && String((c as any).creatorName).trim()
+              ? String((c as any).creatorName).trim()
+              : typeof (c as any).title === "string" && String((c as any).title).trim()
+                ? String((c as any).title).trim()
+                : ""
+
+      const topics = (c.category ? [c.category] : []).filter(Boolean)
+      const tagCategories = normalizeCreatorTypesFromCard(c as any)
+      const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
+      const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
+      const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
+      const dealTypes = derivedCollabTypes as unknown as string[]
+
+      const creatorIdStr = typeof c.igUserId === "string" && /^\d+$/.test(c.igUserId) ? c.igUserId : null
+      const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
+
+      const rawHandle =
+        typeof (c as any).handle === "string"
+          ? String((c as any).handle).trim()
+          : typeof (c as any).igUsername === "string"
+            ? String((c as any).igUsername).trim()
+            : typeof (c as any).username === "string"
+              ? String((c as any).username).trim()
+              : displayNameResolved
+      const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
+
+      const parsedContact = safeParseContact((c as any).contact)
+      const contactEmail = parsedContact.emails[0] || undefined
+      const contactPhone = parsedContact.phones[0] || undefined
+      const contactLine = parsedContact.lines[0] || undefined
+      const primaryContactMethod = parsedContact.primaryContactMethod
+
+      const rawFollowers =
+        typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
+          ? Math.floor(cachedStats.followers)
+          : typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
+            ? Math.floor((c as any).stats.followers)
+            : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) && (c as any).followerCount > 0
+              ? Math.floor((c as any).followerCount)
+              : undefined
+
+      const rawER =
+        typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
+          ? cachedStats.engagementRatePct / 100
+          : typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
+            ? (c as any).stats.engagementRatePct / 100
+            : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
+              ? (c as any).stats.engagementRate
+              : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
+                ? (c as any).engagementRate
+                : undefined
+
+      const rawMinPriceCandidate =
+        typeof (c as any)?.minPrice === "number" && Number.isFinite((c as any).minPrice)
+          ? Math.floor((c as any).minPrice)
+          : (c as any)?.minPrice === null
+            ? null
+            : typeof (c as any)?.min_price === "number" && Number.isFinite((c as any).min_price)
+              ? Math.floor((c as any).min_price)
+              : (c as any)?.min_price === null
+                ? null
+                : undefined
+
+      const normalizedMinPrice = typeof rawMinPriceCandidate === "number" && Number.isFinite(rawMinPriceCandidate) ? Math.max(0, Math.floor(rawMinPriceCandidate)) : undefined
+
+      return {
+        id: c.id,
+        creatorId: creatorIdStr ?? undefined,
+        name: displayNameResolved,
+        displayName: displayNameResolved,
+        username:
+          typeof (c as any).username === "string"
+            ? String((c as any).username).trim()
+            : undefined,
+        igUsername:
+          typeof (c as any).igUsername === "string"
+            ? String((c as any).igUsername).trim()
+            : undefined,
+        handle,
+        avatarUrl: c.avatarUrl,
+        topics,
+        tagCategories,
+        platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
+        dealTypes,
+        collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
+        deliverables,
+        minPrice: rawMinPriceCandidate === null ? null : normalizedMinPrice,
+        __rawMinPrice: rawMinPriceCandidate,
+        stats: {
+          followers: rawFollowers,
+          engagementRate: rawER,
+        },
+        contactEmail,
+        contactPhone,
+        contactLine,
+        primaryContactMethod,
+        href: c.isDemo ? "" : c.profileUrl,
+        isDemo: Boolean(c.isDemo),
+        __rawCard: c as any,
+      }
+    })
+  }, [remoteRawCards, statsVersion])
+
   const tagCategoryOptions = useMemo(() => {
     const set = new Set<string>()
     CREATOR_TYPE_MASTER.forEach((x: { zh: string }) => {
@@ -1066,6 +1189,66 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [searchParams])
 
   const hasSearchActive = useMemo(() => (searchInput ?? "").toString().trim().length > 0, [searchInput])
+
+  useEffect(() => {
+    if (remoteDebounceRef.current) clearTimeout(remoteDebounceRef.current)
+    if (remoteAbortRef.current) {
+      remoteAbortRef.current.abort()
+      remoteAbortRef.current = null
+    }
+
+    const q = String(searchInput ?? "").trim()
+    if (!q) {
+      setRemoteLoading(false)
+      setRemoteError(null)
+      setRemoteRawCards([])
+      return
+    }
+
+    remoteDebounceRef.current = setTimeout(() => {
+      const ac = new AbortController()
+      remoteAbortRef.current = ac
+      setRemoteLoading(true)
+      setRemoteError(null)
+
+      ;(async () => {
+        try {
+          const url = `/api/matchmaking/search?q=${encodeURIComponent(q)}&limit=50&offset=0`
+          const res = await fetch(url, { method: "GET", cache: "no-store", signal: ac.signal })
+          const json = (await res.json().catch(() => null)) as any
+
+          if (ac.signal.aborted) return
+          if (!res.ok) {
+            const msg = typeof json?.error === "string" ? json.error : "remote_search_failed"
+            setRemoteRawCards([])
+            setRemoteError(msg)
+            return
+          }
+
+          const items = Array.isArray(json?.items) ? (json.items as CreatorCard[]) : []
+          const publicOnly = items.filter((r: any) => r && ((r as any).is_public === true || (r as any).isPublic === true))
+          setRemoteRawCards(publicOnly)
+          setRemoteError(null)
+        } catch (e: unknown) {
+          if (ac.signal.aborted) return
+          const errObj = asRecord(e)
+          const msg = typeof errObj?.message === "string" ? errObj.message : "remote_search_failed"
+          setRemoteRawCards([])
+          setRemoteError(msg)
+        } finally {
+          if (!ac.signal.aborted) setRemoteLoading(false)
+        }
+      })()
+    }, 200)
+
+    return () => {
+      if (remoteDebounceRef.current) clearTimeout(remoteDebounceRef.current)
+      if (remoteAbortRef.current) {
+        remoteAbortRef.current.abort()
+        remoteAbortRef.current = null
+      }
+    }
+  }, [searchInput])
 
   const hasPlatformFilterActive = useMemo(() => {
     const canonPlatformLocal = (v: any): "instagram" | "youtube" | "tiktok" | "facebook" | null => {
@@ -1229,7 +1412,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget]
   )
 
-  const baseList = useMemo(() => creators.filter(matchesDropdownFilters), [creators, matchesDropdownFilters])
+  const baseList = useMemo(() => {
+    const source = hasSearchActive ? remoteCreators : creators
+    return source.filter(matchesDropdownFilters)
+  }, [creators, remoteCreators, matchesDropdownFilters, hasSearchActive])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
     if (!shouldIncludeDemoFillLocal) return []
@@ -1901,3 +2087,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     </div>
   )
 }
+
+export { MatchmakingClient }
+export default MatchmakingClient
