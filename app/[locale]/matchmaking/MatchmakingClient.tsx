@@ -113,10 +113,6 @@ const normText = (s: string) => (s ?? "").toString().trim().toLowerCase()
 
 const normTextLoose = (s: string) => normText(s).replace(/\s+/g, " ")
 
-const normDigits = (s: string) => (s ?? "").toString().replace(/\D/g, "")
-
-const hasCurrencyMarker = (s: string) => /(\$|nt\$|ntd|twd|元)/i.test(String(s ?? ""))
-
 const getCardDisplayName = (c: any) => String(c?.displayName ?? c?.name ?? "").trim()
 
 const toTagLabel = (tag: any) => {
@@ -179,106 +175,20 @@ const buildSearchHaystack = (c: any) => {
     .join(" ")
 }
 
-const buildMoneyDigits = (c: any) => {
-  const nums: string[] = []
-
-  nums.push(String(c?.dealMin ?? ""))
-  nums.push(String(c?.dealMax ?? ""))
-  nums.push(String(c?.deal ?? ""))
-  nums.push(String(c?.negotiationAmount ?? ""))
-  nums.push(String(c?.quote ?? ""))
-  nums.push(String(c?.budgetMin ?? ""))
-  nums.push(String(c?.budgetMax ?? ""))
-  nums.push(String(c?.priceMin ?? ""))
-  nums.push(String(c?.priceMax ?? ""))
-  nums.push(String(c?.minPrice ?? ""))
-  nums.push(String(c?.min_price ?? ""))
-
-  nums.push(String(c?.maxPrice ?? ""))
-  nums.push(String(c?.max_price ?? ""))
-
-  nums.push(String(c?.__rawCard?.minPrice ?? ""))
-  nums.push(String(c?.__rawCard?.maxPrice ?? ""))
-  nums.push(String(c?.__rawCard?.budgetMin ?? ""))
-  nums.push(String(c?.__rawCard?.budgetMax ?? ""))
-  nums.push(String(c?.__rawCard?.dealMin ?? ""))
-  nums.push(String(c?.__rawCard?.dealMax ?? ""))
-  nums.push(String(c?.__rawCard?.deal ?? ""))
-  nums.push(String(c?.__rawCard?.negotiationAmount ?? ""))
-  nums.push(String(c?.__rawCard?.quote ?? ""))
-
-  return normDigits(nums.join(" "))
-}
-
-const buildMoneyTokens = (c: any): string[] => {
-  const nums: string[] = []
-
-  nums.push(String(c?.dealMin ?? ""))
-  nums.push(String(c?.dealMax ?? ""))
-  nums.push(String(c?.deal ?? ""))
-  nums.push(String(c?.negotiationAmount ?? ""))
-  nums.push(String(c?.quote ?? ""))
-  nums.push(String(c?.budgetMin ?? ""))
-  nums.push(String(c?.budgetMax ?? ""))
-  nums.push(String(c?.priceMin ?? ""))
-  nums.push(String(c?.priceMax ?? ""))
-  nums.push(String(c?.minPrice ?? ""))
-  nums.push(String(c?.min_price ?? ""))
-  nums.push(String(c?.maxPrice ?? ""))
-  nums.push(String(c?.max_price ?? ""))
-
-  nums.push(String(c?.__rawCard?.dealMin ?? ""))
-  nums.push(String(c?.__rawCard?.dealMax ?? ""))
-  nums.push(String(c?.__rawCard?.deal ?? ""))
-  nums.push(String(c?.__rawCard?.negotiationAmount ?? ""))
-  nums.push(String(c?.__rawCard?.quote ?? ""))
-  nums.push(String(c?.__rawCard?.budgetMin ?? ""))
-  nums.push(String(c?.__rawCard?.budgetMax ?? ""))
-  nums.push(String(c?.__rawCard?.minPrice ?? ""))
-  nums.push(String(c?.__rawCard?.maxPrice ?? ""))
-  nums.push(String(c?.__rawCard?.priceMin ?? ""))
-  nums.push(String(c?.__rawCard?.priceMax ?? ""))
-
-  return nums
-    .map((x) => normDigits(x))
-    .filter((x) => x.length > 0)
-}
-
 const matchesCreatorQuery = (c: any, rawQuery: string) => {
-  const qRaw = (rawQuery ?? "").toString().trim()
-  if (!qRaw) return true
+  const raw = (rawQuery ?? "").toString().trim()
+  if (!raw) return true
+  const q = raw.toLowerCase()
 
-  const qText = normTextLoose(qRaw)
-  const qDigits = normDigits(qRaw)
-  const allDigits = /^\d+$/.test(qRaw)
-  const moneyAllowed = hasCurrencyMarker(qRaw) || qDigits.length >= 4
+  const name = String(c?.name ?? c?.displayName ?? "").toLowerCase()
+  const handle = String(c?.handle ?? c?.username ?? c?.igUsername ?? "").toLowerCase()
+  const id = String(c?.id ?? "").toLowerCase()
 
-  const hay = normTextLoose(buildSearchHaystack(c))
+  if (name.startsWith(q) || handle.startsWith(q) || id.startsWith(q)) return true
+  if (name.includes(q) || handle.includes(q) || id.includes(q)) return true
 
-  if (qText.length === 1) {
-    const name = normTextLoose(getCardDisplayName(c))
-    const username = normTextLoose(
-      c?.username ?? c?.handle ?? c?.igHandle ?? c?.ig_handle ?? c?.instagram ?? c?.instagramHandle ?? ""
-    )
-    if (name.startsWith(qText) || username.startsWith(qText)) return true
-    return false
-  }
-
-  if (allDigits && qDigits.length >= 2 && qDigits.length <= 3) {
-    const name = normTextLoose(getCardDisplayName(c))
-    const username = normTextLoose(
-      c?.username ?? c?.handle ?? c?.igHandle ?? c?.ig_handle ?? c?.instagram ?? c?.instagramHandle ?? ""
-    )
-    return name.startsWith(qText) || username.startsWith(qText)
-  }
-
-  if (hay.includes(qText)) return true
-
-  if (moneyAllowed && qDigits.length >= 2) {
-    const moneyTokens = buildMoneyTokens(c)
-    if (moneyTokens.some((t) => t.startsWith(qDigits))) return true
-  }
-  return false
+  const haystack = String(buildSearchHaystack(c) ?? "").toLowerCase()
+  return haystack.includes(q)
 }
 
 const dedupeByKey = <T,>(arr: T[], keyFn: (x: T) => string) => {
@@ -473,6 +383,41 @@ const normalizeSelectedPlatforms = (v: any): any[] => {
       return x
     })
     .filter(Boolean)
+}
+
+const normalizeSelectedCollabTypes = (v: any): string[] => {
+  const arr = Array.isArray(v) ? v : v ? [v] : []
+  return arr
+    .map((x) => {
+      if (x && typeof x === "object") {
+        const inner = (x as any).value
+        if (inner && typeof inner === "object") return inner
+        return x
+      }
+      return x
+    })
+    .map((x) => String((x as any)?.id ?? (x as any)?.name ?? (x as any)?.value ?? x ?? "").trim().toLowerCase())
+    .filter(Boolean)
+}
+
+const getCreatorCollabTypes = (c: any): string[] => {
+  const r = c?.__rawCard ?? c?.raw ?? c?.card ?? null
+  const candidates = [
+    ...toArrayAny(c?.collabTypes),
+    ...toArrayAny(c?.collab_types),
+    ...toArrayAny(c?.collabType),
+    ...toArrayAny(c?.collab_type),
+    ...toArrayAny(r?.collabTypes),
+    ...toArrayAny(r?.collab_types),
+    ...toArrayAny(r?.collabType),
+    ...toArrayAny(r?.collab_type),
+  ]
+
+  const norm = candidates
+    .map((s) => String(s).trim().toLowerCase())
+    .filter(Boolean)
+
+  return Array.from(new Set(norm))
 }
 
 const getCreatorPlatforms = (c: any): string[] => {
@@ -1470,10 +1415,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return false
   }
 
-  function dealTypeMatchAny(selected: CollabType[], types?: CollabType[]) {
-    if (!selected.length) return true
-    const set = new Set(types ?? [])
-    return selected.some((t) => set.has(t))
+  function dealTypeMatchAny(selected: any, c: any) {
+    const selectedNorm = normalizeSelectedCollabTypes(selected)
+    if (!selectedNorm.length) return true
+    const creatorNorm = getCreatorCollabTypes(c)
+    if (!creatorNorm.length) return false
+    const set = new Set(creatorNorm)
+    return selectedNorm.some((t) => set.has(t))
   }
 
   function budgetMatchCustom(amount: number, min?: number, max?: number) {
@@ -1490,7 +1438,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     (c: (typeof creators)[number]) => {
       const selectedPlatformsArr = normalizeSelectedPlatforms(selectedPlatforms)
       const okPlatform = platformMatchAny(selectedPlatformsArr as any, getCreatorPlatforms(c))
-      const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
+      const okDealType = dealTypeMatchAny(selectedDealTypes, c)
       const okTags = (() => {
         const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
         if (!cleanedSelectedTags.length) return true
@@ -1595,6 +1543,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         isDemo: true,
         __rawCard: {
           platforms: platforms.length ? platforms : ["instagram"],
+          collabTypes: ["other"],
           dealMin: min,
           dealMax: max,
           budgetMin: min,
