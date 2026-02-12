@@ -627,9 +627,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const [allCards, setAllCards] = useState<CreatorCard[]>(initialCards)
 
-  const [q, _setQ] = useState<string>("")
-  const setQ = (v: unknown) =>
-    _setQ(typeof v === "string" ? v : String((v as any)?.currentTarget?.value ?? (v as any)?.target?.value ?? v ?? ""))
+  const [searchInput, setSearchInput] = useState("")
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedDealTypes, setSelectedDealTypes] = useState<CollabType[]>([])
@@ -694,35 +692,42 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const qp = searchParams
     const nextQ = (qp.get("q") ?? "").slice(0, 120)
     const nextBudget = (qp.get("budget") ?? "any") as BudgetRange
-    const nextCollab = (qp.get("collab") ?? "any") as CollabType | "any"
     const nextPageRaw = qp.get("page")
     const nextPageNum = nextPageRaw ? Number(nextPageRaw) : 1
     const nextPage = Number.isFinite(nextPageNum) ? Math.max(1, Math.floor(nextPageNum)) : 1
 
-    setQ(nextQ)
+    const platformSet = new Set<Platform>(["instagram", "tiktok", "youtube", "facebook"])
+    const nextPlatforms = qp
+      .getAll("platform")
+      .map((s) => String(s ?? "").trim().toLowerCase())
+      .filter((s): s is Platform => platformSet.has(s as Platform))
+
+    const collabSet = new Set<CollabType>([
+      "short_video",
+      "long_video",
+      "ugc",
+      "live",
+      "review_unboxing",
+      "event",
+      "other",
+    ])
+    const nextDealTypes = qp
+      .getAll("collab")
+      .map((s) => String(s ?? "").trim())
+      .filter((s): s is CollabType => collabSet.has(s as CollabType))
+
+    const nextTagCategories = (() => {
+      const all = qp.getAll("tagCategories").flatMap((x) => String(x ?? "").split(","))
+      const joined = all.map((s) => s.trim()).filter(Boolean)
+      return Array.from(new Set(joined)).slice(0, 50)
+    })()
+
+    setSearchInput(nextQ)
     setBudget(nextBudget)
-
-    // Backward-compat: if platform exists in URL, seed selectedPlatforms.
-    const qpPlatform = (qp.get("platform") ?? "") as any
-    const knownPlatforms: Platform[] = ["instagram", "facebook", "youtube", "tiktok"]
-    if (knownPlatforms.includes(qpPlatform)) setSelectedPlatforms([qpPlatform as Platform])
-    else setSelectedPlatforms([])
-
-    // Backward-compat: initialize dealTypes from legacy collab param (single value).
-    const isKnownCollab: boolean =
-      nextCollab === "short_video" ||
-      nextCollab === "long_video" ||
-      nextCollab === "ugc" ||
-      nextCollab === "live" ||
-      nextCollab === "review_unboxing" ||
-      nextCollab === "event" ||
-      nextCollab === "other"
-    setSelectedDealTypes(isKnownCollab ? [nextCollab as CollabType] : [])
-
-    // Ensure creator-type tag filters start clean on hydration (NO-OP by default).
-    // Prevent stale/rehydrated tag state from collapsing baseList to only the pinned card.
-    setSelectedTagCategories([])
-
+    setCustomBudget(nextBudget === "custom" ? (qp.get("customBudget") ?? "") : "")
+    setSelectedPlatforms(nextPlatforms)
+    setSelectedDealTypes(nextDealTypes)
+    setSelectedTagCategories(nextTagCategories)
     setPage(nextPage)
 
     // If budget param is not one of the known presets, fall back to any.
@@ -760,7 +765,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   useEffect(() => {
     setPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, sort, budget, customBudget, selectedPlatforms.join("|"), selectedDealTypes.join("|"), selectedTagCategories.join("|")])
+  }, [searchInput, sort, budget, customBudget, selectedPlatforms.join("|"), selectedDealTypes.join("|"), selectedTagCategories.join("|")])
 
   useEffect(() => {
     let cancelled = false
@@ -1017,28 +1022,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     })
   }, [allCards, statsVersion])
 
-  useEffect(() => {
-    if (!creators || creators.length === 0) return
-
-    console.group("[SEARCH DEBUG] Visible card fields (prod)")
-    creators.slice(0, 3).forEach((c, i) => {
-      console.log(`card[${i}]`, {
-        name: c.name,
-        displayName: (c as any).displayName,
-        display_name: (c as any).display_name,
-        handle: c.handle,
-        ig_handle: (c as any).ig_handle,
-        igUsername: (c as any).igUsername,
-        username: (c as any).username,
-        platforms: c.platforms,
-        tags: (c as any).tags,
-        tagCategories: c.tagCategories,
-        raw: (c as any).__rawCard,
-      })
-    })
-    console.groupEnd()
-  }, [creators])
-
   const tagCategoryOptions = useMemo(() => {
     const set = new Set<string>()
     CREATOR_TYPE_MASTER.forEach((x: { zh: string }) => {
@@ -1112,7 +1095,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [searchParams])
 
-  const hasSearch = useMemo(() => String(q ?? "").trim().length > 0, [q])
+  const hasSearch = useMemo(() => String(searchInput ?? "").trim().length > 0, [searchInput])
 
   const hasAnyExplicitFilter = useMemo(() => {
     const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
@@ -1126,10 +1109,24 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const isSearchOnly = hasSearch && !hasAnyExplicitFilter
 
   const qq = useMemo(() => {
-    const raw = String(q ?? "").trim()
+    const raw = String(searchInput ?? "").trim()
     const norm = normalizeSearchText(raw)
     return norm || raw.toLowerCase()
-  }, [q])
+  }, [searchInput])
+
+  const onSearchInput = useCallback(
+    (v: unknown) => {
+      const next = typeof v === "string" ? v : String((v as any)?.currentTarget?.value ?? (v as any)?.target?.value ?? v ?? "")
+      setSearchInput(next)
+
+      const sp = new URLSearchParams(searchParams.toString())
+      if (next.trim()) sp.set("q", next)
+      else sp.delete("q")
+      const qs = sp.toString()
+      router.replace(qs ? `?${qs}` : "?", { scroll: false })
+    },
+    [router, searchParams]
+  )
 
   function budgetMaxForRange(range: BudgetRange): number | null {
     if (range === "1000") return 1000
@@ -1227,13 +1224,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
     if (sort === "best_match") {
       const maxFollowers = out.reduce((m, c) => {
-        const f = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers) ? c.stats.followers : 0
+        const f = typeof c.stats?.followers === "number" ? c.stats.followers : 0
         return Math.max(m, f)
       }, 0)
 
       const scoreFor = (c: (typeof out)[number]) => {
-        const er = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate) ? c.stats.engagementRate : 0
-        const followers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers) ? c.stats.followers : 0
+        const er = typeof c.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
+        const followers = typeof c.stats?.followers === "number" ? c.stats.followers : 0
         const followersNormalized = maxFollowers > 0 ? Math.min(1, Math.max(0, followers / maxFollowers)) : 0
         const seed = hashStringToInt(String(c.id))
         const rand = mulberry32(seed)()
@@ -1363,7 +1360,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
 
     const isFilteringActive =
-      Boolean(q && q.trim().length > 0) ||
+      Boolean(searchInput && searchInput.trim().length > 0) ||
       (selectedPlatforms?.length ?? 0) > 0 ||
       (selectedDealTypes?.length ?? 0) > 0 ||
       cleanedSelectedTags.length > 0 ||
@@ -1386,7 +1383,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       out.push(c)
     }
     return out
-  }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch, q, hasSearch, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+  }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
 
   const pageSize = 8
 
@@ -1437,7 +1434,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [creators])
 
   const hasAnyFilter = useMemo(() => {
-    const hasSearch = Boolean(q && q.trim())
+    const hasSearch = Boolean(searchInput && searchInput.trim())
     const hasPlatform = (selectedPlatforms?.length ?? 0) > 0
     const hasTags = (selectedTagCategories?.length ?? 0) > 0
     const hasDealType = (selectedDealTypes?.length ?? 0) > 0
@@ -1453,7 +1450,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
     const hasSort = Boolean(sort && sort !== "best_match")
     return hasSearch || hasPlatform || hasTags || hasBudget || hasDealType || hasSort
-  }, [q, selectedPlatforms, selectedTagCategories, selectedDealTypes, budget, customBudget, sort])
+  }, [searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget, sort])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
     if (hasAnyFilter) return []
@@ -1760,7 +1757,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
             <div>renderCards</div>
             <div className="text-right">{renderCards.length}</div>
           </div>
-          <div className="mt-2 text-white/70">q: <span className="text-white/90">{String(q || "")}</span></div>
+          <div className="mt-2 text-white/70">q: <span className="text-white/90">{String(searchInput || "")}</span></div>
           <div className="mt-2 text-white/70">sample names:</div>
           <div className="mt-1 max-h-[120px] overflow-auto whitespace-pre-wrap break-words text-white/85">
             {filtered
@@ -1804,8 +1801,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         <div className="mt-4">
         <FiltersBar
           locale={locale}
-          search={typeof q === "string" ? q : String(q ?? "")}
-          onSearch={setQ}
+          search={searchInput}
+          onSearch={onSearchInput}
           selectedPlatforms={selectedPlatforms}
           onTogglePlatform={(p: Platform) =>
             setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
