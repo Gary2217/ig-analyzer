@@ -542,7 +542,9 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const [allCards, setAllCards] = useState<CreatorCard[]>(initialCards)
 
-  const [q, setQ] = useState("")
+  const [q, _setQ] = useState<string>("")
+  const setQ = (v: unknown) =>
+    _setQ(typeof v === "string" ? v : String((v as any)?.currentTarget?.value ?? (v as any)?.target?.value ?? v ?? ""))
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedDealTypes, setSelectedDealTypes] = useState<CollabType[]>([])
@@ -1678,15 +1680,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         <div className="mt-4">
         <FiltersBar
           locale={locale}
-          search={q}
-          onSearch={(v: any) => {
-            if (typeof v === "string") return setQ(v)
-            const next =
-              v && typeof v === "object"
-                ? String((v.currentTarget && v.currentTarget.value) ?? (v.target && v.target.value) ?? "")
-                : String(v ?? "")
-            setQ(next)
-          }}
+          search={typeof q === "string" ? q : String(q ?? "")}
+          onSearch={setQ}
           selectedPlatforms={selectedPlatforms}
           onTogglePlatform={(p: Platform) =>
             setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
