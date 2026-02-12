@@ -159,26 +159,31 @@ function cardSearchBlob(card: CreatorCardData): string {
   return normalizeSearchText(parts.join(" "))
 }
 
-function buildVisibleSearchBlob(card: CreatorCardData): string {
+function buildUISearchText(card: CreatorCardData): string {
   const c: any = card
   const parts: string[] = []
 
-  // Primary visible text
-  parts.push(c.name, c.displayName, c.display_name, c.handle, c.ig_handle, c.igHandle, c.igUsername, c.username)
+  parts.push(c.name, c.displayName, c.display_name, c.handle, c.igHandle, c.ig_handle, c.igUsername, c.username)
 
-  // Arrays rendered in UI
-  parts.push(...(c.platforms ?? []))
-  parts.push(...(c.tags ?? []))
-  parts.push(...(c.tagCategories ?? []))
-  parts.push(...(c.topics ?? []))
+  if (Array.isArray(c.platforms)) parts.push(...c.platforms)
+  if (Array.isArray(c.tags)) parts.push(...c.tags)
+  if (Array.isArray(c.tagCategories)) parts.push(...c.tagCategories)
+  if (Array.isArray(c.topics)) parts.push(...c.topics)
 
-  // Raw supabase payload (prod uses snake_case)
   if (c.__rawCard && typeof c.__rawCard === "object") {
     const r: any = c.__rawCard
-    parts.push(r.name, r.display_name, r.ig_handle, r.username, ...(r.tags ?? []), ...(r.tag_categories ?? []))
+    parts.push(r.name, r.display_name, r.username, r.ig_handle)
+    if (Array.isArray(r.tags)) parts.push(...r.tags)
+    if (Array.isArray(r.tag_categories)) parts.push(...r.tag_categories)
+    if (Array.isArray(r.platforms)) parts.push(...r.platforms)
   }
 
-  return normalizeSearchText(parts.filter(Boolean).join(" "))
+  return parts
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
 }
 
 function buildCardHaystack(input: {
@@ -1108,12 +1113,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const isSearchOnly = hasSearch && !hasAnyExplicitFilter
 
-  const qq = useMemo(() => {
-    const raw = String(searchInput ?? "").trim()
-    const norm = normalizeSearchText(raw)
-    return norm || raw.toLowerCase()
-  }, [searchInput])
-
   const onSearchInput = useCallback(
     (v: unknown) => {
       const next = typeof v === "string" ? v : String((v as any)?.currentTarget?.value ?? (v as any)?.target?.value ?? v ?? "")
@@ -1207,17 +1206,17 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const matchesSearch = useCallback(
     (card: CreatorCardData) => {
-      if (!hasSearch) return true
-      return buildVisibleSearchBlob(card).includes(qq)
+      const q = searchInput.trim().toLowerCase()
+      if (!q) return true
+      return buildUISearchText(card).includes(q)
     },
-    [hasSearch, qq]
+    [searchInput]
   )
 
   const searchedList = useMemo(() => {
-    if (isSearchOnly) return creators.filter(matchesSearch)
-    if (!qq) return baseList
-    return baseList.filter(matchesSearch)
-  }, [baseList, creators, isSearchOnly, matchesSearch, qq])
+    const list = isSearchOnly ? creators : baseList
+    return list.filter(matchesSearch)
+  }, [baseList, creators, isSearchOnly, matchesSearch])
 
   const filtered = useMemo(() => {
     let out = searchedList
