@@ -109,6 +109,27 @@ function buildCreatorTypeSearchParts(input: {
   return out
 }
 
+const normalizeQuery = (raw: string) =>
+  raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+
+const getCardDisplayName = (c: any) => String(c?.displayName ?? c?.name ?? "").trim()
+
+const matchesCardNameQuery = (c: any, rawQuery: string) => {
+  const q = normalizeQuery(rawQuery)
+  if (!q) return true
+
+  const name = getCardDisplayName(c)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+
+  if (!name) return false
+  if (q.length === 1) return name.startsWith(q)
+  return name.includes(q)
+}
+
 function cardSearchBlob(card: CreatorCardData): string {
   const c: any = card as any
   const parts: string[] = []
@@ -1095,7 +1116,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [searchParams])
 
-  const hasSearch = useMemo(() => String(searchInput ?? "").trim().length > 0, [searchInput])
+  const hasSearch = useMemo(() => normalizeQuery(String(searchInput ?? "")).length > 0, [searchInput])
 
   const hasAnyExplicitFilter = useMemo(() => {
     const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
@@ -1105,12 +1126,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const hasBudget = budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0)
     return hasPlatform || hasDealType || hasTags || hasBudget
   }, [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
-
-  const qq = useMemo(() => {
-    const raw = String(searchInput ?? "").trim()
-    const norm = normalizeSearchText(raw)
-    return norm || raw.toLowerCase()
-  }, [searchInput])
 
   const pageSize = 8
 
@@ -1202,14 +1217,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const baseList = useMemo(() => creators.filter(matchesDropdownFilters), [creators, matchesDropdownFilters])
 
-  const matchesSearch = useCallback(
-    (card: CreatorCardData) => {
-      if (!hasSearch) return true
-      return buildVisibleSearchBlob(card).includes(qq)
-    },
-    [hasSearch, qq]
-  )
-
   const demoFillCards = useMemo((): CreatorCardData[] => {
     if (hasAnyExplicitFilter) return []
 
@@ -1292,9 +1299,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [baseList, creators, demoFillCards, hasAnyExplicitFilter])
 
   const searchedList = useMemo(() => {
-    if (!qq) return searchPool
-    return searchPool.filter(matchesSearch)
-  }, [matchesSearch, qq, searchPool])
+    return searchPool.filter((c) => matchesCardNameQuery(c, searchInput ?? ""))
+  }, [searchPool, searchInput])
 
   const filtered = useMemo(() => {
     let out = searchedList
@@ -1430,7 +1436,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       if (!pinnedCreator) return false
 
       if (!matchesDropdownFilters(pinnedCreator as any)) return false
-      if (!matchesSearch(pinnedCreator as any)) return false
+      if (!matchesCardNameQuery(pinnedCreator, searchInput ?? "")) return false
       return true
     })()
 
@@ -1460,7 +1466,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       out.push(c)
     }
     return out
-  }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+  }, [filtered, pinnedCreator, matchesDropdownFilters, hasSearch, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
 
   const totalPages = useMemo(() => {
     const n = finalCards.length
@@ -1717,8 +1723,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
 
   const isEmptyResults = useMemo(
-    () => searchedList.length === 0 && (Boolean(searchInput && searchInput.trim()) || hasAnyExplicitFilter),
-    [searchedList.length, searchInput, hasAnyExplicitFilter]
+    () => searchedList.length === 0 && (hasSearch || hasAnyExplicitFilter),
+    [searchedList.length, hasSearch, hasAnyExplicitFilter]
   )
 
   return (
