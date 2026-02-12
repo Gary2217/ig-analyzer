@@ -109,25 +109,103 @@ function buildCreatorTypeSearchParts(input: {
   return out
 }
 
-const normalizeQuery = (raw: string) =>
-  raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
+const normText = (s: string) => (s ?? "").toString().trim().toLowerCase()
+
+const normTextLoose = (s: string) => normText(s).replace(/\s+/g, " ")
+
+const normDigits = (s: string) => (s ?? "").toString().replace(/\D/g, "")
 
 const getCardDisplayName = (c: any) => String(c?.displayName ?? c?.name ?? "").trim()
 
-const matchesCardNameQuery = (c: any, rawQuery: string) => {
-  const q = normalizeQuery(rawQuery)
-  if (!q) return true
+const toArray = (v: any): string[] => (Array.isArray(v) ? v.map(String) : v ? [String(v)] : [])
 
+const buildSearchHaystack = (c: any) => {
   const name = getCardDisplayName(c)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
 
-  if (!name) return false
-  if (q.length === 1) return name.startsWith(q)
-  return name.includes(q)
+  const username =
+    c?.username ?? c?.handle ?? c?.igHandle ?? c?.ig_handle ?? c?.instagram ?? c?.instagramHandle ?? ""
+
+  const creatorTypes = [
+    ...toArray(c?.creatorTypes),
+    ...toArray(c?.creatorType),
+    ...toArray(c?.creator_types),
+    ...toArray(c?.tagCategories),
+    ...toArray(c?.tag_categories),
+    ...toArray(c?.tags),
+    ...toArray(c?.categories),
+    ...toArray(c?.niches),
+    ...toArray(c?.verticals),
+    ...toArray(c?.topics),
+  ]
+
+  if (c?.__rawCard && typeof c.__rawCard === "object") {
+    const r: any = c.__rawCard
+    creatorTypes.push(
+      ...toArray(r?.creatorTypes),
+      ...toArray(r?.creatorType),
+      ...toArray(r?.creator_types),
+      ...toArray(r?.tagCategories),
+      ...toArray(r?.tag_categories),
+      ...toArray(r?.tags),
+      ...toArray(r?.categories),
+      ...toArray(r?.niches),
+      ...toArray(r?.verticals),
+      ...toArray(r?.topics)
+    )
+  }
+
+  const platforms = toArray(c?.platforms)
+  const collabTypes = toArray(c?.collabTypes)
+
+  return [name, username, ...creatorTypes, ...platforms, ...collabTypes]
+    .filter(Boolean)
+    .join(" ")
+}
+
+const buildNumericHaystack = (c: any) => {
+  const nums: string[] = []
+
+  nums.push(String(c?.dealMin ?? ""))
+  nums.push(String(c?.dealMax ?? ""))
+  nums.push(String(c?.deal ?? ""))
+  nums.push(String(c?.budgetMin ?? ""))
+  nums.push(String(c?.budgetMax ?? ""))
+  nums.push(String(c?.priceMin ?? ""))
+  nums.push(String(c?.priceMax ?? ""))
+  nums.push(String(c?.minPrice ?? ""))
+  nums.push(String(c?.min_price ?? ""))
+
+  nums.push(String(c?.followers ?? ""))
+  nums.push(String(c?.stats?.followers ?? ""))
+  nums.push(String(c?.engagementRate ?? ""))
+  nums.push(String(c?.stats?.engagementRate ?? ""))
+
+  return normDigits(nums.join(" "))
+}
+
+const matchesCreatorQuery = (c: any, rawQuery: string) => {
+  const qRaw = (rawQuery ?? "").toString().trim()
+  if (!qRaw) return true
+
+  const qText = normTextLoose(qRaw)
+  const qDigits = normDigits(qRaw)
+
+  const hay = normTextLoose(buildSearchHaystack(c))
+
+  if (qText.length === 1) {
+    const name = normTextLoose(getCardDisplayName(c))
+    const username = normTextLoose(
+      c?.username ?? c?.handle ?? c?.igHandle ?? c?.ig_handle ?? c?.instagram ?? c?.instagramHandle ?? ""
+    )
+    if (name.startsWith(qText) || username.startsWith(qText)) return true
+
+    if (qDigits.length === 1 && buildNumericHaystack(c).includes(qDigits)) return true
+    return false
+  }
+
+  if (hay.includes(qText)) return true
+  if (qDigits.length >= 1 && buildNumericHaystack(c).includes(qDigits)) return true
+  return false
 }
 
 function cardSearchBlob(card: CreatorCardData): string {
@@ -1116,7 +1194,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     }
   }, [searchParams])
 
-  const hasSearch = useMemo(() => normalizeQuery(String(searchInput ?? "")).length > 0, [searchInput])
+  const hasSearch = useMemo(() => (searchInput ?? "").toString().trim().length > 0, [searchInput])
 
   const hasAnyExplicitFilter = useMemo(() => {
     const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
@@ -1299,7 +1377,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [baseList, creators, demoFillCards, hasAnyExplicitFilter])
 
   const searchedList = useMemo(() => {
-    return searchPool.filter((c) => matchesCardNameQuery(c, searchInput ?? ""))
+    return searchPool.filter((c) => matchesCreatorQuery(c, searchInput ?? ""))
   }, [searchPool, searchInput])
 
   const filtered = useMemo(() => {
@@ -1436,7 +1514,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
       if (!pinnedCreator) return false
 
       if (!matchesDropdownFilters(pinnedCreator as any)) return false
-      if (!matchesCardNameQuery(pinnedCreator, searchInput ?? "")) return false
+      if (!matchesCreatorQuery(pinnedCreator, searchInput ?? "")) return false
       return true
     })()
 
@@ -1452,7 +1530,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     const rest = pinnedCreator ? filtered.filter((c) => c.id !== pinnedCreator.id) : filtered
     const combined = (() => {
       if (!pinnedCreator) return rest
-      if (hasSearch) return rest
+      if (hasSearch) return pinnedMatches ? [...rest, pinnedCreator] : rest
       if (!isFilteringActive) return [pinnedCreator, ...rest]
       return pinnedMatches ? [pinnedCreator, ...rest] : rest
     })()
