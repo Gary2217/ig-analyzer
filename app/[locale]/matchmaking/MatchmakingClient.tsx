@@ -159,6 +159,28 @@ function cardSearchBlob(card: CreatorCardData): string {
   return normalizeSearchText(parts.join(" "))
 }
 
+function buildVisibleSearchBlob(card: CreatorCardData): string {
+  const c: any = card
+  const parts: string[] = []
+
+  // Primary visible text
+  parts.push(c.name, c.displayName, c.display_name, c.handle, c.ig_handle, c.igHandle, c.igUsername, c.username)
+
+  // Arrays rendered in UI
+  parts.push(...(c.platforms ?? []))
+  parts.push(...(c.tags ?? []))
+  parts.push(...(c.tagCategories ?? []))
+  parts.push(...(c.topics ?? []))
+
+  // Raw supabase payload (prod uses snake_case)
+  if (c.__rawCard && typeof c.__rawCard === "object") {
+    const r: any = c.__rawCard
+    parts.push(r.name, r.display_name, r.ig_handle, r.username, ...(r.tags ?? []), ...(r.tag_categories ?? []))
+  }
+
+  return normalizeSearchText(parts.filter(Boolean).join(" "))
+}
+
 function buildCardHaystack(input: {
   creator: CreatorCardData & {
     handle?: string
@@ -995,6 +1017,28 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     })
   }, [allCards, statsVersion])
 
+  useEffect(() => {
+    if (!creators || creators.length === 0) return
+
+    console.group("[SEARCH DEBUG] Visible card fields (prod)")
+    creators.slice(0, 3).forEach((c, i) => {
+      console.log(`card[${i}]`, {
+        name: c.name,
+        displayName: (c as any).displayName,
+        display_name: (c as any).display_name,
+        handle: c.handle,
+        ig_handle: (c as any).ig_handle,
+        igUsername: (c as any).igUsername,
+        username: (c as any).username,
+        platforms: c.platforms,
+        tags: (c as any).tags,
+        tagCategories: c.tagCategories,
+        raw: (c as any).__rawCard,
+      })
+    })
+    console.groupEnd()
+  }, [creators])
+
   const tagCategoryOptions = useMemo(() => {
     const set = new Set<string>()
     CREATOR_TYPE_MASTER.forEach((x: { zh: string }) => {
@@ -1165,17 +1209,11 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [creators, isSearchOnly, matchesDropdownFilters])
 
   const matchesSearch = useCallback(
-    (c: (typeof creators)[number]) => {
-      if (!qq) return true
-      const hay = buildCardHaystack({
-        creator: c as any,
-        creatorTypeOptions: tagCategoryOptions,
-        locale,
-        creatorTypeSynonyms,
-      })
-      return hay.includes(qq)
+    (card: CreatorCardData) => {
+      if (!hasSearch) return true
+      return buildVisibleSearchBlob(card).includes(qq)
     },
-    [qq, tagCategoryOptions, locale, creatorTypeSynonyms]
+    [hasSearch, qq]
   )
 
   const searchedList = useMemo(() => {
