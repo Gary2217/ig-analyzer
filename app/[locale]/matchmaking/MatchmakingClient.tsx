@@ -1403,9 +1403,10 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   }, [clampedPage, demoAvatarMap, finalCards, hasAnyFilter, locale, pagedRealCards.length])
 
   const renderCards = useMemo((): Array<CreatorCardData & { creatorId?: string }> => {
+    if (qq || hasAnyFilter) return pagedRealCards
     const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
     return [...pagedRealCards, ...filler]
-  }, [demoFillCards, pagedRealCards])
+  }, [demoFillCards, hasAnyFilter, pagedRealCards, qq])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
