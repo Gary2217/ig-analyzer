@@ -208,6 +208,40 @@ const buildMoneyDigits = (c: any) => {
   return normDigits(nums.join(" "))
 }
 
+const buildMoneyTokens = (c: any): string[] => {
+  const nums: string[] = []
+
+  nums.push(String(c?.dealMin ?? ""))
+  nums.push(String(c?.dealMax ?? ""))
+  nums.push(String(c?.deal ?? ""))
+  nums.push(String(c?.negotiationAmount ?? ""))
+  nums.push(String(c?.quote ?? ""))
+  nums.push(String(c?.budgetMin ?? ""))
+  nums.push(String(c?.budgetMax ?? ""))
+  nums.push(String(c?.priceMin ?? ""))
+  nums.push(String(c?.priceMax ?? ""))
+  nums.push(String(c?.minPrice ?? ""))
+  nums.push(String(c?.min_price ?? ""))
+  nums.push(String(c?.maxPrice ?? ""))
+  nums.push(String(c?.max_price ?? ""))
+
+  nums.push(String(c?.__rawCard?.dealMin ?? ""))
+  nums.push(String(c?.__rawCard?.dealMax ?? ""))
+  nums.push(String(c?.__rawCard?.deal ?? ""))
+  nums.push(String(c?.__rawCard?.negotiationAmount ?? ""))
+  nums.push(String(c?.__rawCard?.quote ?? ""))
+  nums.push(String(c?.__rawCard?.budgetMin ?? ""))
+  nums.push(String(c?.__rawCard?.budgetMax ?? ""))
+  nums.push(String(c?.__rawCard?.minPrice ?? ""))
+  nums.push(String(c?.__rawCard?.maxPrice ?? ""))
+  nums.push(String(c?.__rawCard?.priceMin ?? ""))
+  nums.push(String(c?.__rawCard?.priceMax ?? ""))
+
+  return nums
+    .map((x) => normDigits(x))
+    .filter((x) => x.length > 0)
+}
+
 const matchesCreatorQuery = (c: any, rawQuery: string) => {
   const qRaw = (rawQuery ?? "").toString().trim()
   if (!qRaw) return true
@@ -228,7 +262,10 @@ const matchesCreatorQuery = (c: any, rawQuery: string) => {
 
   if (hay.includes(qText)) return true
 
-  if (qDigits.length >= 2 && buildMoneyDigits(c).includes(qDigits)) return true
+  if (qDigits.length >= 2) {
+    const moneyTokens = buildMoneyTokens(c)
+    if (moneyTokens.some((t) => t.startsWith(qDigits))) return true
+  }
   return false
 }
 
@@ -1295,14 +1332,36 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const hasSearch = useMemo(() => (searchInput ?? "").toString().trim().length > 0, [searchInput])
 
-  const hasAnyExplicitFilter = useMemo(() => {
+  const hasPlatformFilterActive = useMemo(() => {
+    const canonPlatformLocal = (v: any): "instagram" | "youtube" | "tiktok" | "facebook" | null => {
+      const s = String(v?.value ?? v?.id ?? v?.platform ?? v?.name ?? v ?? "")
+        .trim()
+        .toLowerCase()
+      if (!s) return null
+      if (s === "instagram" || s === "ig" || s === "insta") return "instagram"
+      if (s === "youtube" || s === "yt") return "youtube"
+      if (s === "tiktok" || s === "tt") return "tiktok"
+      if (s === "facebook" || s === "fb") return "facebook"
+      return null
+    }
+
+    const set = new Set<string>()
+    for (const x of selectedPlatforms ?? []) {
+      const c = canonPlatformLocal(x)
+      if (c) set.add(c)
+    }
+    return set.size > 0
+  }, [selectedPlatforms])
+
+  const hasOtherExplicitFilters = useMemo(() => {
     const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
-    const hasPlatform = (selectedPlatforms?.length ?? 0) > 0
     const hasDealType = (selectedDealTypes?.length ?? 0) > 0
     const hasTags = cleanedSelectedTags.length > 0
     const hasBudget = budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0)
-    return hasPlatform || hasDealType || hasTags || hasBudget
-  }, [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+    return hasDealType || hasTags || hasBudget || hasSearch
+  }, [selectedDealTypes, selectedTagCategories, budget, customBudget, hasSearch])
+
+  const shouldIncludeDemoFill = !hasOtherExplicitFilters
 
   const pageSize = 8
 
@@ -1403,7 +1462,12 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const matchesDropdownFilters = useCallback(
     (c: (typeof creators)[number]) => {
-      const okPlatform = platformMatchAny(selectedPlatforms, getCreatorPlatforms(c))
+      const selectedPlatformsArr = Array.isArray(selectedPlatforms)
+        ? selectedPlatforms
+        : selectedPlatforms
+          ? [selectedPlatforms]
+          : []
+      const okPlatform = platformMatchAny(selectedPlatformsArr as any, getCreatorPlatforms(c))
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
       const okTags = (() => {
         const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
@@ -1426,7 +1490,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const baseList = useMemo(() => creators.filter(matchesDropdownFilters), [creators, matchesDropdownFilters])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
-    if (hasAnyExplicitFilter) return []
+    if (!shouldIncludeDemoFill) return []
 
     const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1
     const start = (safePage - 1) * pageSize
@@ -1518,13 +1582,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
         },
       } as any
     })
-  }, [page, creators, demoAvatarMap, hasAnyExplicitFilter, locale])
+  }, [page, creators, demoAvatarMap, shouldIncludeDemoFill, locale])
 
   const searchPool = useMemo(() => {
-    if (hasAnyExplicitFilter) return baseList
+    if (!shouldIncludeDemoFill) return baseList
     const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
     return [...creators, ...filler]
-  }, [baseList, creators, demoFillCards, hasAnyExplicitFilter])
+  }, [baseList, creators, demoFillCards, shouldIncludeDemoFill])
 
   const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }) | null => {
     if (!meCard) return null
@@ -1957,8 +2021,8 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
 
   const isEmptyResults = useMemo(
-    () => searchedList.length === 0 && (hasSearch || hasAnyExplicitFilter),
-    [searchedList.length, hasSearch, hasAnyExplicitFilter]
+    () => searchedList.length === 0 && (hasSearch || hasOtherExplicitFilters),
+    [searchedList.length, hasSearch, hasOtherExplicitFilters]
   )
 
   return (
