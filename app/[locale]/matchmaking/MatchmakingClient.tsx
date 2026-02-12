@@ -115,6 +115,8 @@ const normTextLoose = (s: string) => normText(s).replace(/\s+/g, " ")
 
 const normDigits = (s: string) => (s ?? "").toString().replace(/\D/g, "")
 
+const hasCurrencyMarker = (s: string) => /(\$|nt\$|ntd|twd|元)/i.test(String(s ?? ""))
+
 const getCardDisplayName = (c: any) => String(c?.displayName ?? c?.name ?? "").trim()
 
 const toTagLabel = (tag: any) => {
@@ -248,6 +250,8 @@ const matchesCreatorQuery = (c: any, rawQuery: string) => {
 
   const qText = normTextLoose(qRaw)
   const qDigits = normDigits(qRaw)
+  const allDigits = /^\d+$/.test(qRaw)
+  const moneyAllowed = hasCurrencyMarker(qRaw) || qDigits.length >= 4
 
   const hay = normTextLoose(buildSearchHaystack(c))
 
@@ -260,9 +264,17 @@ const matchesCreatorQuery = (c: any, rawQuery: string) => {
     return false
   }
 
+  if (allDigits && qDigits.length >= 2 && qDigits.length <= 3) {
+    const name = normTextLoose(getCardDisplayName(c))
+    const username = normTextLoose(
+      c?.username ?? c?.handle ?? c?.igHandle ?? c?.ig_handle ?? c?.instagram ?? c?.instagramHandle ?? ""
+    )
+    return name.startsWith(qText) || username.startsWith(qText)
+  }
+
   if (hay.includes(qText)) return true
 
-  if (qDigits.length >= 2) {
+  if (moneyAllowed && qDigits.length >= 2) {
     const moneyTokens = buildMoneyTokens(c)
     if (moneyTokens.some((t) => t.startsWith(qDigits))) return true
   }
@@ -448,6 +460,20 @@ function mulberry32(a: number) {
 }
 
 const toArrayAny = (v: any): string[] => (Array.isArray(v) ? v.map(String) : v ? [String(v)] : [])
+
+const normalizeSelectedPlatforms = (v: any): any[] => {
+  const arr = Array.isArray(v) ? v : v ? [v] : []
+  return arr
+    .map((x) => {
+      if (x && typeof x === "object") {
+        const inner = (x as any).value
+        if (inner && typeof inner === "object") return inner
+        return x
+      }
+      return x
+    })
+    .filter(Boolean)
+}
 
 const getCreatorPlatforms = (c: any): string[] => {
   const r = c?.__rawCard ?? c?.raw ?? c?.card ?? null
@@ -1462,11 +1488,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const matchesDropdownFilters = useCallback(
     (c: (typeof creators)[number]) => {
-      const selectedPlatformsArr = Array.isArray(selectedPlatforms)
-        ? selectedPlatforms
-        : selectedPlatforms
-          ? [selectedPlatforms]
-          : []
+      const selectedPlatformsArr = normalizeSelectedPlatforms(selectedPlatforms)
       const okPlatform = platformMatchAny(selectedPlatformsArr as any, getCreatorPlatforms(c))
       const okDealType = dealTypeMatchAny(selectedDealTypes, c.collabTypes)
       const okTags = (() => {
