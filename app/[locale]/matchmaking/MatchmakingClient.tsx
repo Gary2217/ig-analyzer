@@ -109,6 +109,56 @@ function buildCreatorTypeSearchParts(input: {
   return out
 }
 
+function cardSearchBlob(card: CreatorCardData): string {
+  const c: any = card as any
+  const parts: string[] = []
+
+  pushFlattenedStrings(parts, c.name)
+  pushFlattenedStrings(parts, c.displayName)
+  pushFlattenedStrings(parts, c.display_name)
+  pushFlattenedStrings(parts, c.handle)
+  pushFlattenedStrings(parts, c.ig_handle)
+  pushFlattenedStrings(parts, c.igHandle)
+  pushFlattenedStrings(parts, c.igUsername)
+  pushFlattenedStrings(parts, c.ig_username)
+  pushFlattenedStrings(parts, c.username)
+
+  pushFlattenedStrings(parts, c.platforms)
+  pushFlattenedStrings(parts, c.tags)
+  pushFlattenedStrings(parts, c.tagCategories)
+  pushFlattenedStrings(parts, c.topics)
+  pushFlattenedStrings(parts, c.deliverables)
+  pushFlattenedStrings(parts, c.collabTypes)
+  pushFlattenedStrings(parts, c.collab_types)
+  pushFlattenedStrings(parts, c.dealTypes)
+
+  if (typeof c.minPrice === "number" && Number.isFinite(c.minPrice)) parts.push(String(Math.floor(c.minPrice)))
+  if (c.__rawMinPrice === null) parts.push("洽談報價")
+
+  pushFlattenedStrings(parts, c.contact)
+
+  const raw = c.__rawCard
+  if (raw && typeof raw === "object") {
+    const r: any = raw as any
+    pushFlattenedStrings(parts, r.name)
+    pushFlattenedStrings(parts, r.displayName)
+    pushFlattenedStrings(parts, r.display_name)
+    pushFlattenedStrings(parts, r.handle)
+    pushFlattenedStrings(parts, r.ig_handle)
+    pushFlattenedStrings(parts, r.igHandle)
+    pushFlattenedStrings(parts, r.igUsername)
+    pushFlattenedStrings(parts, r.ig_username)
+    pushFlattenedStrings(parts, r.username)
+    pushFlattenedStrings(parts, r.platforms)
+    pushFlattenedStrings(parts, r.tags)
+    pushFlattenedStrings(parts, r.tagCategories)
+    pushFlattenedStrings(parts, r.tag_categories)
+    pushFlattenedStrings(parts, r.topics)
+  }
+
+  return normalizeSearchText(parts.join(" "))
+}
+
 function buildCardHaystack(input: {
   creator: CreatorCardData & {
     handle?: string
@@ -134,13 +184,19 @@ function buildCardHaystack(input: {
   const parts: string[] = []
 
   pushFlattenedStrings(parts, (c as any).displayName)
+  pushFlattenedStrings(parts, (c as any).display_name)
   pushFlattenedStrings(parts, c.name)
   pushFlattenedStrings(parts, c.handle)
+  pushFlattenedStrings(parts, (c as any).ig_handle)
+  pushFlattenedStrings(parts, (c as any).igHandle)
   pushFlattenedStrings(parts, (c as any).igUsername)
+  pushFlattenedStrings(parts, (c as any).ig_username)
   pushFlattenedStrings(parts, (c as any).username)
 
   // CreatorCard renders the visible title as `creator.name`.
   // Search haystack must be derived from the same normalized object (`creator`) used for rendering.
+
+  parts.push(cardSearchBlob(c as any))
 
   pushFlattenedStrings(parts, c.topics)
   const creatorTypeParts = buildCreatorTypeSearchParts({ tagCategories: c.tagCategories, creatorTypeOptions: input.creatorTypeOptions })
