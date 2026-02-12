@@ -159,31 +159,26 @@ function cardSearchBlob(card: CreatorCardData): string {
   return normalizeSearchText(parts.join(" "))
 }
 
-function buildUISearchText(card: CreatorCardData): string {
+function buildVisibleSearchBlob(card: CreatorCardData): string {
   const c: any = card
   const parts: string[] = []
 
-  parts.push(c.name, c.displayName, c.display_name, c.handle, c.igHandle, c.ig_handle, c.igUsername, c.username)
+  // Primary visible text
+  parts.push(c.name, c.displayName, c.display_name, c.handle, c.ig_handle, c.igHandle, c.igUsername, c.username)
 
-  if (Array.isArray(c.platforms)) parts.push(...c.platforms)
-  if (Array.isArray(c.tags)) parts.push(...c.tags)
-  if (Array.isArray(c.tagCategories)) parts.push(...c.tagCategories)
-  if (Array.isArray(c.topics)) parts.push(...c.topics)
+  // Arrays rendered in UI
+  parts.push(...(c.platforms ?? []))
+  parts.push(...(c.tags ?? []))
+  parts.push(...(c.tagCategories ?? []))
+  parts.push(...(c.topics ?? []))
 
+  // Raw supabase payload (prod uses snake_case)
   if (c.__rawCard && typeof c.__rawCard === "object") {
     const r: any = c.__rawCard
-    parts.push(r.name, r.display_name, r.username, r.ig_handle)
-    if (Array.isArray(r.tags)) parts.push(...r.tags)
-    if (Array.isArray(r.tag_categories)) parts.push(...r.tag_categories)
-    if (Array.isArray(r.platforms)) parts.push(...r.platforms)
+    parts.push(r.name, r.display_name, r.ig_handle, r.username, ...(r.tags ?? []), ...(r.tag_categories ?? []))
   }
 
-  return parts
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase()
+  return normalizeSearchText(parts.filter(Boolean).join(" "))
 }
 
 function buildCardHaystack(input: {
@@ -1111,7 +1106,13 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return hasPlatform || hasDealType || hasTags || hasBudget
   }, [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
 
-  const isSearchOnly = hasSearch && !hasAnyExplicitFilter
+  const qq = useMemo(() => {
+    const raw = String(searchInput ?? "").trim()
+    const norm = normalizeSearchText(raw)
+    return norm || raw.toLowerCase()
+  }, [searchInput])
+
+  const pageSize = 8
 
   const onSearchInput = useCallback(
     (v: unknown) => {
@@ -1199,24 +1200,101 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget]
   )
 
-  const baseList = useMemo(() => {
-    if (isSearchOnly) return creators
-    return creators.filter(matchesDropdownFilters)
-  }, [creators, isSearchOnly, matchesDropdownFilters])
+  const baseList = useMemo(() => creators.filter(matchesDropdownFilters), [creators, matchesDropdownFilters])
 
   const matchesSearch = useCallback(
     (card: CreatorCardData) => {
-      const q = searchInput.trim().toLowerCase()
-      if (!q) return true
-      return buildUISearchText(card).includes(q)
+      if (!hasSearch) return true
+      return buildVisibleSearchBlob(card).includes(qq)
     },
-    [searchInput]
+    [hasSearch, qq]
   )
 
+  const demoFillCards = useMemo((): CreatorCardData[] => {
+    if (hasAnyExplicitFilter) return []
+
+    const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1
+    const start = (safePage - 1) * pageSize
+    const remainingReal = Math.max(0, creators.length - start)
+    const realOnPage = Math.max(0, Math.min(pageSize, remainingReal))
+    const need = Math.max(0, pageSize - realOnPage)
+    if (!need) return []
+
+    const existingIds = new Set(creators.map((c) => c.id))
+    const pickedSeeds: typeof demoCreators = []
+    const offset = ((safePage - 1) * pageSize) % Math.max(1, demoCreators.length)
+    let i = 0
+
+    while (pickedSeeds.length < need && i < need * 10) {
+      const d = demoCreators[(offset + i) % demoCreators.length]
+      if (d && !existingIds.has(d.id) && !pickedSeeds.some((x) => x.id === d.id)) {
+        pickedSeeds.push(d)
+      }
+      i++
+    }
+
+    const masterZh = CREATOR_TYPE_MASTER.map((x) => String(x?.zh || "").trim()).filter(Boolean)
+    const pick = (arr: string[]) => arr.filter((x) => masterZh.includes(x))
+
+    const demoTagSets: string[][] = [
+      pick(["美妝", "保養", "開箱", "時尚"]),
+      pick(["穿搭", "時尚", "生活"]),
+      pick(["旅遊", "美食", "探店"]),
+      pick(["餐飲", "美食", "探店"]),
+      pick(["健身", "運動"]),
+      pick(["露營", "戶外", "攝影"]),
+      pick(["3C", "科技", "開箱"]),
+      pick(["電商", "開箱"]),
+      pick(["居家", "生活", "手作"]),
+      pick(["親子", "母嬰", "生活"]),
+      pick(["理財", "職場", "教育"]),
+      pick(["娛樂", "音樂", "Vlog"]),
+    ]
+
+    const synthStatsFor = (seedId: string) => {
+      const h = hashStringToInt(String(seedId))
+      const rand = mulberry32(h)
+      const followers = Math.round(Math.pow(rand(), 0.42) * 160_000 + 2_500)
+      const erPct = clampNumber(1.0 + rand() * 7.0, 0.6, 12)
+      return { followers, engagementRate: Math.round((erPct / 100) * 10000) / 10000 }
+    }
+
+    return pickedSeeds.map((d, idx) => {
+      const st = synthStatsFor(d.id)
+      const avatarUrl = demoAvatarMap[d.id] || svgAvatarDataUrl(d.id, d.displayName)
+
+      return {
+        id: d.id,
+        name: d.displayName,
+        handle: d.handle,
+        avatarUrl,
+        topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
+        tagCategories: (demoTagSets[idx % demoTagSets.length] || []).filter(Boolean).slice(0, 6),
+        platforms: ["instagram"],
+        dealTypes: ["other"],
+        collabTypes: ["other"],
+        deliverables: [],
+        minPrice: 8000,
+        stats: {
+          followers: st.followers,
+          engagementRate: st.engagementRate,
+        },
+        href: "",
+        isDemo: true,
+      }
+    })
+  }, [page, creators, demoAvatarMap, hasAnyExplicitFilter, locale])
+
+  const searchPool = useMemo(() => {
+    if (hasAnyExplicitFilter) return baseList
+    const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
+    return [...creators, ...filler]
+  }, [baseList, creators, demoFillCards, hasAnyExplicitFilter])
+
   const searchedList = useMemo(() => {
-    const list = isSearchOnly ? creators : baseList
-    return list.filter(matchesSearch)
-  }, [baseList, creators, isSearchOnly, matchesSearch])
+    if (!qq) return searchPool
+    return searchPool.filter(matchesSearch)
+  }, [matchesSearch, qq, searchPool])
 
   const filtered = useMemo(() => {
     let out = searchedList
@@ -1384,8 +1462,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return out
   }, [filtered, pinnedCreator, matchesDropdownFilters, matchesSearch, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
 
-  const pageSize = 8
-
   const totalPages = useMemo(() => {
     const n = finalCards.length
     return Math.max(1, Math.ceil(n / pageSize))
@@ -1432,100 +1508,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return (best as any)?.creatorId || (best as any)?.id || null
   }, [creators])
 
-  const hasAnyFilter = useMemo(() => {
-    const hasSearch = Boolean(searchInput && searchInput.trim())
-    const hasPlatform = (selectedPlatforms?.length ?? 0) > 0
-    const hasTags = (selectedTagCategories?.length ?? 0) > 0
-    const hasDealType = (selectedDealTypes?.length ?? 0) > 0
-
-    const hasBudget = (() => {
-      if (budget === "any") return false
-      if (budget === "custom") {
-        const amt = Number(customBudget.trim())
-        return Number.isFinite(amt) && amt > 0
-      }
-      return true
-    })()
-
-    const hasSort = Boolean(sort && sort !== "best_match")
-    return hasSearch || hasPlatform || hasTags || hasBudget || hasDealType || hasSort
-  }, [searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget, sort])
-
-  const demoFillCards = useMemo((): CreatorCardData[] => {
-    if (hasAnyFilter) return []
-    const need = Math.max(0, pageSize - pagedRealCards.length)
-    if (!need) return []
-
-    const existingIds = new Set(finalCards.map((c) => c.id))
-    const pickedSeeds: typeof demoCreators = []
-    const offset = ((clampedPage - 1) * pageSize) % Math.max(1, demoCreators.length)
-    let i = 0
-
-    while (pickedSeeds.length < need && i < need * 10) {
-      const d = demoCreators[(offset + i) % demoCreators.length]
-      if (d && !existingIds.has(d.id) && !pickedSeeds.some((x) => x.id === d.id)) {
-        pickedSeeds.push(d)
-      }
-      i++
-    }
-
-    const masterZh = CREATOR_TYPE_MASTER.map((x) => String(x?.zh || "").trim()).filter(Boolean)
-    const pick = (arr: string[]) => arr.filter((x) => masterZh.includes(x))
-
-    const demoTagSets: string[][] = [
-      pick(["美妝", "保養", "開箱", "時尚"]),
-      pick(["穿搭", "時尚", "生活"]),
-      pick(["旅遊", "美食", "探店"]),
-      pick(["餐飲", "美食", "探店"]),
-      pick(["健身", "運動"]),
-      pick(["露營", "戶外", "攝影"]),
-      pick(["3C", "科技", "開箱"]),
-      pick(["電商", "開箱"]),
-      pick(["居家", "生活", "手作"]),
-      pick(["親子", "母嬰", "生活"]),
-      pick(["理財", "職場", "教育"]),
-      pick(["娛樂", "音樂", "Vlog"]),
-    ]
-
-    const synthStatsFor = (seedId: string) => {
-      const h = hashStringToInt(String(seedId))
-      const rand = mulberry32(h)
-      const followers = Math.round(Math.pow(rand(), 0.42) * 160_000 + 2_500)
-      const erPct = clampNumber(1.0 + rand() * 7.0, 0.6, 12)
-      return { followers, engagementRate: Math.round((erPct / 100) * 10000) / 10000 }
-    }
-
-    return pickedSeeds.map((d, idx) => {
-      const st = synthStatsFor(d.id)
-      const avatarUrl = demoAvatarMap[d.id] || svgAvatarDataUrl(d.id, d.displayName)
-
-      return {
-        id: d.id,
-        name: d.displayName,
-        handle: d.handle,
-        avatarUrl,
-        topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
-        tagCategories: (demoTagSets[idx % demoTagSets.length] || []).filter(Boolean).slice(0, 6),
-        platforms: ["instagram"],
-        dealTypes: ["other"],
-        collabTypes: ["other"],
-        deliverables: [],
-        minPrice: 8000,
-        stats: {
-          followers: st.followers,
-          engagementRate: st.engagementRate,
-        },
-        href: "",
-        isDemo: true,
-      }
-    })
-  }, [clampedPage, demoAvatarMap, finalCards, hasAnyFilter, locale, pagedRealCards.length])
-
-  const renderCards = useMemo((): Array<CreatorCardData & { creatorId?: string }> => {
-    if (hasSearch || hasAnyFilter) return pagedRealCards
-    const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
-    return [...pagedRealCards, ...filler]
-  }, [demoFillCards, hasAnyFilter, hasSearch, pagedRealCards])
+  
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
@@ -1727,13 +1710,16 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
 
   const creatorsById = useMemo(() => {
     const map = new Map<string, CreatorCardData>()
-    for (const c of renderCards) map.set(String(c.id), c)
+    for (const c of pagedRealCards) map.set(String(c.id), c)
     return map
-  }, [renderCards])
+  }, [pagedRealCards])
 
   const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
 
-  const isEmptyResults = useMemo(() => filtered.length === 0 && (hasSearch || hasAnyFilter), [filtered.length, hasSearch, hasAnyFilter])
+  const isEmptyResults = useMemo(
+    () => searchedList.length === 0 && (Boolean(searchInput && searchInput.trim()) || hasAnyExplicitFilter),
+    [searchedList.length, searchInput, hasAnyExplicitFilter]
+  )
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
@@ -1753,8 +1739,6 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
             <div className="text-right">{finalCards.length}</div>
             <div>pagedRealCards</div>
             <div className="text-right">{pagedRealCards.length}</div>
-            <div>renderCards</div>
-            <div className="text-right">{renderCards.length}</div>
           </div>
           <div className="mt-2 text-white/70">q: <span className="text-white/90">{String(searchInput || "")}</span></div>
           <div className="mt-2 text-white/70">sample names:</div>
@@ -1890,7 +1874,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
           </div>
         ) : (
           <CreatorGrid>
-            {renderCards.map((c) => {
+            {pagedRealCards.map((c) => {
               const isOwnerCard = Boolean(pinnedCreator && c.id === pinnedCreator.id)
               const creatorId = c.creatorId
               const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
