@@ -7,10 +7,18 @@ import { CreatorGrid } from "@/app/components/matchmaking/CreatorGrid"
 import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmaking/CreatorCard"
 import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
 import { useFavorites } from "@/app/components/matchmaking/useFavorites"
-import { demoCreators } from "@/app/components/matchmaking/demoCreators"
 import { loadDemoAvatars } from "@/app/components/matchmaking/demoAvatarStorage"
 import { getCopy, type Locale } from "@/app/i18n"
 import { CREATOR_TYPE_MASTER, normalizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
+import {
+  getCreatorCollabTypes,
+  getCreatorPlatforms,
+  matchesCreatorQuery,
+  normalizeSelectedCollabTypes,
+  normalizeSelectedPlatforms,
+  shouldIncludeDemoFill,
+} from "@/app/lib/matchmaking/search"
+import { buildDemoFillCards } from "@/app/lib/matchmaking/demoFill"
 import { formatPriceLabel } from "@/app/lib/client/priceLabel"
 import type {
   BudgetRange,
@@ -109,87 +117,7 @@ function buildCreatorTypeSearchParts(input: {
   return out
 }
 
-const normText = (s: string) => (s ?? "").toString().trim().toLowerCase()
-
-const normTextLoose = (s: string) => normText(s).replace(/\s+/g, " ")
-
 const getCardDisplayName = (c: any) => String(c?.displayName ?? c?.name ?? "").trim()
-
-const toTagLabel = (tag: any) => {
-  const raw = String(tag ?? "").trim()
-  if (!raw) return ""
-
-  const key = raw.toLowerCase()
-  const found = CREATOR_TYPE_MASTER.find((x) => {
-    const zh = String((x as any)?.zh ?? "").trim().toLowerCase()
-    const en = String((x as any)?.en ?? "").trim().toLowerCase()
-    const slug = String((x as any)?.slug ?? "").trim().toLowerCase()
-    return key === zh || key === en || key === slug
-  })
-
-  return String((found as any)?.zh ?? raw).trim()
-}
-
-const toArray = (v: any): string[] => (Array.isArray(v) ? v.map(String) : v ? [String(v)] : [])
-
-const buildSearchHaystack = (c: any) => {
-  const name = getCardDisplayName(c)
-
-  const username =
-    c?.username ?? c?.handle ?? c?.igHandle ?? c?.ig_handle ?? c?.instagram ?? c?.instagramHandle ?? ""
-
-  const creatorTypes = [
-    ...toArray(c?.creatorTypes),
-    ...toArray(c?.creatorType),
-    ...toArray(c?.creator_types),
-    ...toArray(c?.tagCategories),
-    ...toArray(c?.tag_categories),
-    ...toArray(c?.tags),
-    ...toArray(c?.categories),
-    ...toArray(c?.niches),
-    ...toArray(c?.verticals),
-    ...toArray(c?.topics),
-  ]
-
-  if (c?.__rawCard && typeof c.__rawCard === "object") {
-    const r: any = c.__rawCard
-    creatorTypes.push(
-      ...toArray(r?.creatorTypes),
-      ...toArray(r?.creatorType),
-      ...toArray(r?.creator_types),
-      ...toArray(r?.tagCategories),
-      ...toArray(r?.tag_categories),
-      ...toArray(r?.tags),
-      ...toArray(r?.categories),
-      ...toArray(r?.niches),
-      ...toArray(r?.verticals),
-      ...toArray(r?.topics)
-    )
-  }
-  const collabTypes = toArray(c?.collabTypes)
-
-  const tagLabels = creatorTypes.map(toTagLabel)
-
-  return [name, username, ...creatorTypes, ...tagLabels, ...collabTypes]
-    .filter(Boolean)
-    .join(" ")
-}
-
-const matchesCreatorQuery = (c: any, rawQuery: string) => {
-  const raw = (rawQuery ?? "").toString().trim()
-  if (!raw) return true
-  const q = raw.toLowerCase()
-
-  const name = String(c?.name ?? c?.displayName ?? "").toLowerCase()
-  const handle = String(c?.handle ?? c?.username ?? c?.igUsername ?? "").toLowerCase()
-  const id = String(c?.id ?? "").toLowerCase()
-
-  if (name.startsWith(q) || handle.startsWith(q) || id.startsWith(q)) return true
-  if (name.includes(q) || handle.includes(q) || id.includes(q)) return true
-
-  const haystack = String(buildSearchHaystack(c) ?? "").toLowerCase()
-  return haystack.includes(q)
-}
 
 const dedupeByKey = <T,>(arr: T[], keyFn: (x: T) => string) => {
   const seen = new Set<string>()
@@ -369,150 +297,23 @@ function mulberry32(a: number) {
   }
 }
 
-const toArrayAny = (v: any): string[] => (Array.isArray(v) ? v.map(String) : v ? [String(v)] : [])
-
-const normalizeSelectedPlatforms = (v: any): any[] => {
-  const arr = Array.isArray(v) ? v : v ? [v] : []
-  return arr
-    .map((x) => {
-      if (x && typeof x === "object") {
-        const inner = (x as any).value
-        if (inner && typeof inner === "object") return inner
-        return x
-      }
-      return x
-    })
-    .filter(Boolean)
-}
-
-const normalizeSelectedCollabTypes = (v: any): string[] => {
-  const arr = Array.isArray(v) ? v : v ? [v] : []
-  const out: string[] = []
-
-  for (let x of arr) {
-    let cur: any = x
-    let guard = 0
-    while (cur && typeof cur === "object" && "value" in cur && guard < 6) {
-      cur = (cur as any).value
-      guard++
-    }
-
-    const s = String((cur as any)?.id ?? (cur as any)?.name ?? (cur as any)?.value ?? cur ?? "")
-      .trim()
-      .toLowerCase()
-    if (s) out.push(s)
-  }
-
-  return Array.from(new Set(out))
-}
-
-const getCreatorCollabTypes = (c: any): string[] => {
-  const r = c?.__rawCard ?? c?.raw ?? c?.card ?? null
-  const candidates = [
-    ...toArrayAny(c?.collabTypes),
-    ...toArrayAny(c?.collab_types),
-    ...toArrayAny(c?.collabType),
-    ...toArrayAny(c?.collab_type),
-    ...toArrayAny(r?.collabTypes),
-    ...toArrayAny(r?.collab_types),
-    ...toArrayAny(r?.collabType),
-    ...toArrayAny(r?.collab_type),
-  ]
-
-  const norm = candidates
-    .map((s) => String(s).trim().toLowerCase())
-    .filter(Boolean)
-
-  return Array.from(new Set(norm))
-}
-
-const getCreatorPlatforms = (c: any): string[] => {
-  const r = c?.__rawCard ?? c?.raw ?? c?.card ?? null
-  const candidates = [
-    ...toArrayAny(c?.platforms),
-    ...toArrayAny(c?.platform),
-    ...toArrayAny(c?.platform_list),
-    ...toArrayAny(c?.platformsUsed),
-    ...toArrayAny(c?.platforms_used),
-    ...toArrayAny(r?.platforms),
-    ...toArrayAny(r?.platform),
-    ...toArrayAny(r?.platform_list),
-    ...toArrayAny(r?.platformsUsed),
-    ...toArrayAny(r?.platforms_used),
-  ]
-
-  return candidates.map((x) => String(x || "").trim()).filter(Boolean)
-}
-
-const chooseSubset = <T,>(items: T[], rng: () => number, minCount: number, maxCount: number): T[] => {
-  const list = Array.isArray(items) ? [...items] : []
-  if (!list.length) return []
-
-  const min = Math.max(0, Math.min(list.length, Math.floor(minCount)))
-  const max = Math.max(min, Math.min(list.length, Math.floor(maxCount)))
-  const count = min === max ? min : min + Math.floor(rng() * (max - min + 1))
-  if (count <= 0) return []
-
-  for (let i = list.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-    const tmp = list[i]
-    list[i] = list[j]
-    list[j] = tmp
-  }
-
-  return list.slice(0, count)
-}
-
-const pickDemoBudget = (seedKey: string) => {
-  const seed = hashStringToInt(seedKey)
-  const r = mulberry32(seed)()
-
-  const choices = [
-    1000, 1500, 2000, 2500, 3000, 3500,
-    4000, 4500, 5000, 6000, 7000, 8000,
-    9000, 10000, 12000, 15000, 20000,
-  ]
-
-  const idx = Math.min(choices.length - 1, Math.floor(r * choices.length))
-  const min = choices[idx]
-
-  const r2 = mulberry32(seed + 1)()
-  const spreadChoices = [0, 500, 1000, 2000, 3000]
-  const spread = spreadChoices[Math.min(spreadChoices.length - 1, Math.floor(r2 * spreadChoices.length))]
-  const max = min + spread
-
-  return { min, max }
-}
-
 function svgAvatarDataUrl(seed: string, label: string) {
   const h = hashStringToInt(seed)
   const r1 = 40 + (h % 140)
   const g1 = 40 + ((h >>> 8) % 140)
   const b1 = 40 + ((h >>> 16) % 140)
-  const r2 = 40 + ((h >>> 5) % 140)
-  const g2 = 40 + ((h >>> 13) % 140)
-  const b2 = 40 + ((h >>> 21) % 140)
-  const initials = (label || "?")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((x) => x.slice(0, 1).toUpperCase())
-    .join("")
-    .slice(0, 2)
+  const bg = `rgb(${r1},${g1},${b1})`
 
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="rgb(${r1},${g1},${b1})"/>
-      <stop offset="1" stop-color="rgb(${r2},${g2},${b2})"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="80" fill="url(#g)"/>
-  <circle cx="256" cy="220" r="86" fill="rgba(255,255,255,0.22)"/>
-  <path d="M96 448c34-78 92-118 160-118s126 40 160 118" fill="rgba(255,255,255,0.20)"/>
-  <text x="256" y="260" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto" font-size="72" font-weight="800" fill="rgba(255,255,255,0.92)">${initials}</text>
-</svg>`
+  const raw = String(label || "?").trim()
+  const initials = raw
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((x) => x[0])
+    .join("")
+    .toUpperCase()
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">\n  <rect width="512" height="512" rx="96" fill="${bg}"/>\n  <text x="256" y="300" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto" font-size="152" font-weight="800" fill="rgba(255,255,255,0.92)">${initials || "?"}</text>\n</svg>`
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
@@ -588,49 +389,6 @@ function deriveCollabTypesFromDeliverables(input?: string[]): CollabType[] {
   }
 
   return Array.from(set)
-}
-
-function buildDemoCreators({
-  locale,
-  existingIds,
-  count,
-  seedBase,
-}: {
-  locale: "zh-TW" | "en"
-  existingIds: Set<string>
-  count: number
-  seedBase: string
-}): CreatorCard[] {
-  const out: CreatorCard[] = []
-
-  for (let i = 0; i < count; i++) {
-    const seed = `${seedBase}:demo:${i}`
-    const h = hashStringToInt(seed)
-    const rand = mulberry32(h)
-
-    const followers = Math.round(Math.pow(rand(), 0.35) * 480_000 + 5_000)
-    const er = clampNumber(1.2 + rand() * 6.2, 0.6, 9.9)
-    const avgLikes = Math.round((followers * er) / 100 * (0.82 + rand() * 0.22))
-    const avgComments = Math.round(avgLikes * (0.03 + rand() * 0.06))
-    const id = `demo_${h.toString(16)}`
-    if (existingIds.has(id)) continue
-
-    out.push({
-      id,
-      displayName: "",
-      avatarUrl: "",
-      category: "",
-      followerCount: followers,
-      avgLikes,
-      avgComments,
-      engagementRate: Math.round(er * 100) / 10000,
-      isVerified: false,
-      profileUrl: "",
-      isDemo: true,
-    })
-  }
-
-  return out
 }
 
 function safeParseContact(input: unknown): {
@@ -1346,7 +1104,7 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
     return hasCollabTypeFilterActive || hasTagFilterActive || hasBudgetFilterActive
   }, [hasCollabTypeFilterActive, hasTagFilterActive, hasBudgetFilterActive])
 
-  const shouldIncludeDemoFill = !hasTagFilterActive && !hasCollabTypeFilterActive && !hasBudgetFilterActive
+  const shouldIncludeDemoFillLocal = shouldIncludeDemoFill({ hasTagFilterActive, hasCollabTypeFilterActive, hasBudgetFilterActive })
 
   const pageSize = 8
 
@@ -1474,106 +1232,15 @@ export function MatchmakingClient({ locale, initialCards, initialMeCard }: Match
   const baseList = useMemo(() => creators.filter(matchesDropdownFilters), [creators, matchesDropdownFilters])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
-    if (!shouldIncludeDemoFill) return []
-
-    const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1
-    const start = (safePage - 1) * pageSize
-    const remainingReal = Math.max(0, creators.length - start)
-    const realOnPage = Math.max(0, Math.min(pageSize, remainingReal))
-    const need = Math.max(0, pageSize - realOnPage)
-    if (!need) return []
-
-    const existingIds = new Set(creators.map((c) => c.id))
-    const pickedSeeds: typeof demoCreators = []
-    const offset = ((safePage - 1) * pageSize) % Math.max(1, demoCreators.length)
-    let i = 0
-
-    while (pickedSeeds.length < need && i < need * 10) {
-      const d = demoCreators[(offset + i) % demoCreators.length]
-      if (d && !existingIds.has(d.id) && !pickedSeeds.some((x) => x.id === d.id)) {
-        pickedSeeds.push(d)
-      }
-      i++
-    }
-
-    const masterZh = CREATOR_TYPE_MASTER.map((x) => String(x?.zh || "").trim()).filter(Boolean)
-    const pick = (arr: string[]) => arr.filter((x) => masterZh.includes(x))
-
-    const demoTagSets: string[][] = [
-      pick(["美妝", "保養", "開箱", "時尚"]),
-      pick(["穿搭", "時尚", "生活"]),
-      pick(["旅遊", "美食", "探店"]),
-      pick(["餐飲", "美食", "探店"]),
-      pick(["健身", "運動"]),
-      pick(["露營", "戶外", "攝影"]),
-      pick(["3C", "科技", "開箱"]),
-      pick(["電商", "開箱"]),
-      pick(["居家", "生活", "手作"]),
-      pick(["親子", "母嬰", "生活"]),
-      pick(["理財", "職場", "教育"]),
-      pick(["娛樂", "音樂", "Vlog"]),
-    ]
-
-    const synthStatsFor = (seedId: string) => {
-      const h = hashStringToInt(String(seedId))
-      const rand = mulberry32(h)
-      const followers = Math.round(Math.pow(rand(), 0.42) * 160_000 + 2_500)
-      const erPct = clampNumber(1.0 + rand() * 7.0, 0.6, 12)
-      return { followers, engagementRate: Math.round((erPct / 100) * 10000) / 10000 }
-    }
-
-    return pickedSeeds.map((d, idx) => {
-      const st = synthStatsFor(d.id)
-      const avatarUrl = demoAvatarMap[d.id] || svgAvatarDataUrl(d.id, d.displayName)
-
-      const { min, max } = pickDemoBudget(String(d.id ?? d.handle ?? d.displayName ?? "demo"))
-
-      const rng = mulberry32(hashStringToInt(String(d.id ?? d.handle ?? d.displayName ?? "demo")))
-      const ALL_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok", "facebook"]
-      const platforms = chooseSubset(ALL_PLATFORMS, rng, 1, 3)
-
-      return {
-        id: d.id,
-        name: d.displayName,
-        handle: d.handle,
-        avatarUrl,
-        topics: locale === "zh-TW" ? ["示範"] : ["Demo"],
-        tagCategories: (demoTagSets[idx % demoTagSets.length] || []).filter(Boolean).slice(0, 6),
-        platforms: platforms.length ? platforms : ["instagram"],
-        dealTypes: ["other"],
-        collabTypes: ["other"],
-        deliverables: [],
-        dealMin: min,
-        dealMax: max,
-        budgetMin: min,
-        budgetMax: max,
-        minPrice: min,
-        maxPrice: max,
-        stats: {
-          followers: st.followers,
-          engagementRate: st.engagementRate,
-        },
-        href: "",
-        isDemo: true,
-        __rawCard: {
-          platforms: platforms.length ? platforms : ["instagram"],
-          collabTypes: ["other"],
-          dealMin: min,
-          dealMax: max,
-          budgetMin: min,
-          budgetMax: max,
-          minPrice: min,
-          maxPrice: max,
-        },
-      } as any
-    })
-  }, [page, creators, demoAvatarMap, shouldIncludeDemoFill, locale])
+    if (!shouldIncludeDemoFillLocal) return []
+    return buildDemoFillCards({ creators, page, pageSize, locale, demoAvatarMap })
+  }, [page, creators, demoAvatarMap, shouldIncludeDemoFillLocal, locale])
 
   const searchPool = useMemo(() => {
-    if (!shouldIncludeDemoFill) return baseList
+    if (!shouldIncludeDemoFillLocal) return baseList
     const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
     return [...baseList, ...filler]
-  }, [baseList, demoFillCards, shouldIncludeDemoFill])
+  }, [baseList, demoFillCards, shouldIncludeDemoFillLocal])
 
   const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }) | null => {
     if (!meCard) return null
