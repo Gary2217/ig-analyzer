@@ -7,7 +7,8 @@
     "build": "next build",
     "build:onedrive": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\build-onedrive.ps1",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -35,8 +36,10 @@
     "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }
