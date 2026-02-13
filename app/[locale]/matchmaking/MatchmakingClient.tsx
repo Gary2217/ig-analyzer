@@ -1318,7 +1318,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       if (process.env.NODE_ENV !== "production") {
         try {
           // eslint-disable-next-line no-console
-          console.log("[mm] remote skip (too short)", { q, len: q.length })
+          console.debug("[mm] remote skip (too short)", { q, len: q.length })
         } catch {
           // ignore
         }
