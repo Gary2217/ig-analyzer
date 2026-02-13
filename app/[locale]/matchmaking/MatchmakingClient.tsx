@@ -1640,10 +1640,12 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [])
 
   const searchPool = useMemo(() => {
-    if (!shouldIncludeDemoFillLocal) return baseList
-    const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
-    return [...baseList, ...filler]
-  }, [baseList, demoFillCards, shouldIncludeDemoFillLocal])
+    // ALWAYS use baseList as search source.
+    // baseList already handles remote fallback safely:
+    // hasUsableRemoteResults ? remoteCreators : creators
+
+    return baseList
+  }, [baseList])
 
   const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }) | null => {
     if (!meCard) return null
@@ -1752,13 +1754,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     }
   }, [pinnedCreator])
 
-  const searchPoolWithPinned = useMemo(() => {
-    return searchPool
-  }, [searchPool])
-
   const searchedList = useMemo(() => {
-    return searchPoolWithPinned.filter((c) => matchesCreatorQuery(c, localQ ?? ""))
-  }, [searchPoolWithPinned, localQ])
+    return searchPool.filter((c) =>
+      matchesCreatorQuery(c, localQ)
+    )
+  }, [searchPool, localQ])
 
   const filtered = useMemo(() => {
     let out = searchedList
