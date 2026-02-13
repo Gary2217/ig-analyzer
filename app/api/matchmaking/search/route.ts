@@ -25,20 +25,84 @@ export async function GET(req: Request) {
 
     const supabase = createPublicClient()
 
-    const { data, error } = await supabase.rpc("search_creator_cards_public", {
-      search_query: q,
-    })
+    const rpcAttempts: Array<{ key: string; args: Record<string, any> }> = [
+      { key: "search_query", args: { search_query: q } },
+      { key: "q", args: { q } },
+      { key: "query", args: { query: q } },
+      { key: "p_search_query", args: { p_search_query: q } },
+    ]
 
-    if (error) {
+    let data: any = null
+    let lastError: any = null
+    let usedKey: string | null = null
+
+    for (const attempt of rpcAttempts) {
+      usedKey = attempt.key
+      try {
+        const r = await supabase.rpc("search_creator_cards_public", attempt.args)
+        if ((r as any)?.error) {
+          lastError = (r as any).error
+          continue
+        }
+        data = (r as any)?.data
+        lastError = null
+        break
+      } catch (e: unknown) {
+        lastError = e
+      }
+    }
+
+    if (lastError) {
+      const msg =
+        typeof (lastError as any)?.message === "string"
+          ? String((lastError as any).message)
+          : typeof (lastError as any)?.error_description === "string"
+            ? String((lastError as any).error_description)
+            : "rpc_failed"
+
       return NextResponse.json(
-        { items: [], error: error.message, limit, offset },
+        {
+          items: [],
+          error: msg,
+          detail: lastError,
+          tried_keys: rpcAttempts.map((x) => x.key),
+          used_key: usedKey,
+          limit,
+          offset,
+        },
         { status: 500 },
       )
     }
 
     const rows = Array.isArray(data) ? data : []
-    const publicOnly = rows.filter((r: any) => (r as any)?.is_public === true)
+    const items = rows.map((r: any) => {
+      const id = typeof r?.id === "string" ? r.id : ""
+      const igUsername = typeof r?.ig_username === "string" ? r.ig_username : null
+      const handle = typeof r?.handle === "string" ? r.handle : typeof r?.ig_username === "string" ? r.ig_username : null
+      const avatarUrl = typeof r?.avatar_url === "string" ? r.avatar_url : null
+      const minPrice = typeof r?.min_price === "number" && Number.isFinite(r.min_price) ? r.min_price : r?.min_price === null ? null : null
+      const isPublic = r?.is_public === true
 
+      const displayName = typeof r?.display_name === "string" && r.display_name.trim() ? r.display_name.trim() : typeof igUsername === "string" && igUsername.trim() ? igUsername.trim() : handle ? String(handle) : id
+
+      return {
+        id,
+        handle,
+        igUsername,
+        avatarUrl,
+        minPrice,
+        is_public: isPublic,
+        profileUrl: id ? `/card/${encodeURIComponent(id)}` : "",
+        isDemo: false,
+        displayName,
+        category: typeof r?.niche === "string" && r.niche.trim() ? r.niche.trim() : "Creator",
+        followerCount: 0,
+        engagementRate: null,
+        isVerified: false,
+      }
+    })
+
+    const publicOnly = items.filter((r: any) => r?.is_public === true)
     const sliced = publicOnly.slice(offset, offset + limit)
 
     return NextResponse.json({ items: sliced, total: publicOnly.length, limit, offset })

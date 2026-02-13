@@ -28,9 +28,10 @@ describe("matchmaking/search helpers", () => {
     expect(matchesCreatorQuery(c, "50")).toBe(true)
   })
 
-  it("includes: food matches lin.foodnotes", () => {
+  it("prefix-only: food does NOT match lin.foodnotes", () => {
     const c = { id: "demo-03", name: "Lin", handle: "lin.foodnotes" }
-    expect(matchesCreatorQuery(c, "food")).toBe(true)
+    expect(matchesCreatorQuery(c, "food")).toBe(false)
+    expect(matchesCreatorQuery(c, "lin")).toBe(true)
   })
 
   it("demo gating: search active does NOT exclude demos; tags/collab/budget DO exclude demos", () => {

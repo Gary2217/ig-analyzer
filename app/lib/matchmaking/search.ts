@@ -57,27 +57,30 @@ export const buildSearchHaystack = (c: any) => {
       ...toArray((r as any)?.topics)
     )
   }
-
-  const collabTypes = getCreatorCollabTypes(c)
   const tagLabels = creatorTypes.map(toTagLabel)
 
-  return [name, username, ...creatorTypes, ...tagLabels, ...collabTypes].filter(Boolean).join(" ")
+  return [name, username, ...creatorTypes, ...tagLabels].filter(Boolean).join(" ")
 }
 
 export const matchesCreatorQuery = (c: any, rawQuery: string) => {
-  const raw = (rawQuery ?? "").toString().trim()
-  if (!raw) return true
-  const q = raw.toLowerCase()
+  const q = (rawQuery ?? "").toString().trim().toLowerCase()
+  if (!q) return true
 
-  const name = String(c?.name ?? c?.displayName ?? "").toLowerCase()
-  const handle = String(c?.handle ?? c?.username ?? c?.igUsername ?? "").toLowerCase()
-  const id = String(c?.id ?? "").toLowerCase()
+  const startsWithAny = (value: unknown) => {
+    const s = typeof value === "string" ? value.trim().toLowerCase() : ""
+    if (!s) return false
+    const sNoAt = s.startsWith("@") ? s.slice(1) : s
+    return sNoAt.startsWith(q)
+  }
 
-  if (name.startsWith(q) || handle.startsWith(q) || id.startsWith(q)) return true
-  if (name.includes(q) || handle.includes(q) || id.includes(q)) return true
-
-  const haystack = String(buildSearchHaystack(c) ?? "").toLowerCase()
-  return haystack.includes(q)
+  return (
+    startsWithAny((c as any)?.handle) ||
+    startsWithAny((c as any)?.username) ||
+    startsWithAny((c as any)?.igUsername) ||
+    startsWithAny((c as any)?.displayName) ||
+    startsWithAny((c as any)?.name) ||
+    startsWithAny((c as any)?.creatorName)
+  )
 }
 
 export const normalizeSelectedPlatforms = (v: any): any[] => {
