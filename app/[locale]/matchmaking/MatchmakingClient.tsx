@@ -1602,9 +1602,18 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   )
 
   const baseList = useMemo(() => {
-    const source = hasRemoteSearchActive ? remoteCreators : creators
+    const source =
+      hasRemoteSearchActive && remoteCreators.length > 0
+        ? remoteCreators
+        : creators
+
     return source.filter(matchesDropdownFilters)
-  }, [creators, remoteCreators, matchesDropdownFilters, hasRemoteSearchActive])
+  }, [
+    creators,
+    remoteCreators,
+    matchesDropdownFilters,
+    hasRemoteSearchActive,
+  ])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
     if (!shouldIncludeDemoFillLocal) return []
