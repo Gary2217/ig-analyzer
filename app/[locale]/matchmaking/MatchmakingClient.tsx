@@ -655,9 +655,9 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const [remoteRawCards, setRemoteRawCards] = useState<CreatorCard[]>([])
   const [remoteLoading, setRemoteLoading] = useState(false)
   const [remoteError, setRemoteError] = useState<string | null>(null)
-  const remoteAbortRef = useRef<AbortController | null>(null)
   const remoteDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastFetchedQRef = useRef<string>("")
+  const remoteReqIdRef = useRef(0)
   const lastUrlQRef = useRef<string>("")
 
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
@@ -1305,14 +1305,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [debouncedQ, router, searchParams])
 
   useEffect(() => {
-    if (remoteAbortRef.current) {
-      remoteAbortRef.current.abort()
-      remoteAbortRef.current = null
-    }
-
     const q = String(debouncedQ ?? "").trim()
     if (!q) {
       lastFetchedQRef.current = ""
+      remoteReqIdRef.current += 1
       setRemoteLoading(false)
       setRemoteError(null)
       setRemoteRawCards([])
@@ -1322,15 +1318,15 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     if (lastFetchedQRef.current === q) return
     lastFetchedQRef.current = q
 
-    const ac = new AbortController()
-    remoteAbortRef.current = ac
+    remoteReqIdRef.current += 1
+    const reqId = remoteReqIdRef.current
     setRemoteLoading(true)
     setRemoteError(null)
 
     if (MM_DEBUG) {
       try {
         // eslint-disable-next-line no-console
-        console.debug("[Matchmaking] remote search start", { q })
+        console.debug("[Matchmaking] remote search start", { q, reqId })
       } catch {
         // ignore
       }
@@ -1339,10 +1335,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     ;(async () => {
       try {
         const url = `/api/matchmaking/search?q=${encodeURIComponent(q)}&limit=50&offset=0`
-        const res = await fetch(url, { method: "GET", cache: "no-store", signal: ac.signal })
+        const res = await fetch(url, { method: "GET", cache: "no-store" })
         const json = (await res.json().catch(() => null)) as any
 
-        if (ac.signal.aborted) return
+        if (reqId !== remoteReqIdRef.current) return
 
         if (!res.ok) {
           const msg = typeof json?.error === "string" ? json.error : "remote_search_failed"
@@ -1356,30 +1352,23 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         setRemoteRawCards(publicOnly)
         setRemoteError(null)
       } catch (e: any) {
-        if (ac.signal.aborted) return
-        const name = typeof e?.name === "string" ? e.name : ""
-        if (name === "AbortError") return
+        if (reqId !== remoteReqIdRef.current) return
         const errObj = asRecord(e)
         const msg = typeof errObj?.message === "string" ? errObj.message : "remote_search_failed"
         setRemoteRawCards([])
         setRemoteError(msg)
       } finally {
-        if (!ac.signal.aborted) setRemoteLoading(false)
+        if (reqId === remoteReqIdRef.current) setRemoteLoading(false)
         if (MM_DEBUG) {
           try {
             // eslint-disable-next-line no-console
-            console.debug("[Matchmaking] remote search end", { q, aborted: ac.signal.aborted })
+            console.debug("[Matchmaking] remote search end", { q, reqId, applied: reqId === remoteReqIdRef.current })
           } catch {
             // ignore
           }
         }
       }
     })()
-
-    return () => {
-      ac.abort()
-      if (remoteAbortRef.current === ac) remoteAbortRef.current = null
-    }
   }, [debouncedQ])
 
   const hasPlatformFilterActive = useMemo(() => {
@@ -1548,6 +1537,20 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return buildDemoFillCards({ creators, page, pageSize, locale, demoAvatarMap })
   }, [page, creators, demoAvatarMap, shouldIncludeDemoFillLocal, locale])
 
+  const dedupeById = useCallback(<T extends { id?: unknown; creatorId?: unknown }>(list: T[]): T[] => {
+    const seen = new Set<string>()
+    const out: T[] = []
+    for (const c of list) {
+      const keyRaw = (c as any)?.creatorId ?? (c as any)?.id
+      const key = keyRaw == null ? "" : String(keyRaw)
+      if (!key) continue
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(c)
+    }
+    return out
+  }, [])
+
   const searchPool = useMemo(() => {
     if (!shouldIncludeDemoFillLocal) return baseList
     const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
@@ -1662,10 +1665,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [pinnedCreator])
 
   const searchPoolWithPinned = useMemo(() => {
-    const pool = searchPool
-    if (!pinnedCreator) return pool
-    return dedupeByKey([...pool, pinnedCreator], creatorKey)
-  }, [searchPool, pinnedCreator])
+    return searchPool
+  }, [searchPool])
 
   const searchedList = useMemo(() => {
     return searchPoolWithPinned.filter((c) => matchesCreatorQuery(c, searchInput ?? ""))
@@ -1714,13 +1715,24 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       cleanedSelectedTags.length > 0 ||
       (budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0))
 
-    return applyPinnedOwnerCard({
+    const pinnedApplied = applyPinnedOwnerCard({
       list: filtered,
       pinned: pinnedCreator,
       hasSearchActive,
       isFilteringActive,
     })
+    return dedupeById(pinnedApplied)
   }, [filtered, pinnedCreator, matchesDropdownFilters, hasSearchActive, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+
+  useEffect(() => {
+    if (!MM_DEBUG) return
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("[Matchmaking] q + final unique", { debouncedQ, finalUnique: finalCards.length })
+    } catch {
+      // ignore
+    }
+  }, [MM_DEBUG, debouncedQ, finalCards.length])
 
   const totalPages = useMemo(() => {
     const n = finalCards.length
