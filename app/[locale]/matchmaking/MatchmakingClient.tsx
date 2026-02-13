@@ -87,7 +87,7 @@ function tokenizeQuery(raw: string): string[] {
   return out
 }
 
-function buildCreatorSearchHay(c: any): string {
+function buildCreatorIdentityHay(c: any): string {
   const parts: string[] = []
   pushFlattenedStrings(parts, c?.name)
   pushFlattenedStrings(parts, c?.displayName)
@@ -96,6 +96,24 @@ function buildCreatorSearchHay(c: any): string {
   pushFlattenedStrings(parts, c?.username)
   pushFlattenedStrings(parts, c?.igUsername)
   pushFlattenedStrings(parts, c?.ig_username)
+
+  const raw = c?.__rawCard
+  if (raw && typeof raw === "object") {
+    pushFlattenedStrings(parts, (raw as any)?.name)
+    pushFlattenedStrings(parts, (raw as any)?.displayName)
+    pushFlattenedStrings(parts, (raw as any)?.display_name)
+    pushFlattenedStrings(parts, (raw as any)?.handle)
+    pushFlattenedStrings(parts, (raw as any)?.username)
+    pushFlattenedStrings(parts, (raw as any)?.igUsername)
+    pushFlattenedStrings(parts, (raw as any)?.ig_username)
+  }
+
+  return normalizeSearchText(parts.join("\n"))
+}
+
+function buildCreatorSearchHay(c: any): string {
+  const parts: string[] = []
+  pushFlattenedStrings(parts, buildCreatorIdentityHay(c))
 
   pushFlattenedStrings(parts, c?.platforms)
   pushFlattenedStrings(parts, c?.deliverables)
@@ -113,13 +131,6 @@ function buildCreatorSearchHay(c: any): string {
 
   const raw = c?.__rawCard
   if (raw && typeof raw === "object") {
-    pushFlattenedStrings(parts, (raw as any)?.name)
-    pushFlattenedStrings(parts, (raw as any)?.displayName)
-    pushFlattenedStrings(parts, (raw as any)?.display_name)
-    pushFlattenedStrings(parts, (raw as any)?.handle)
-    pushFlattenedStrings(parts, (raw as any)?.username)
-    pushFlattenedStrings(parts, (raw as any)?.igUsername)
-    pushFlattenedStrings(parts, (raw as any)?.ig_username)
     pushFlattenedStrings(parts, (raw as any)?.platforms)
     pushFlattenedStrings(parts, (raw as any)?.deliverables)
     pushFlattenedStrings(parts, (raw as any)?.topics)
@@ -1211,6 +1222,17 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return m
   }, [allCards])
 
+  const localIdentityHayByKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of allCards as any[]) {
+      const k = searchKeyForCardLike(c)
+      if (!k) continue
+      if (m.has(k)) continue
+      m.set(k, buildCreatorIdentityHay(c))
+    }
+    return m
+  }, [allCards])
+
   const remoteCreators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
     return remoteRawCards.map((c) => {
       const displayNameResolved =
@@ -1328,6 +1350,17 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       if (!k) continue
       if (m.has(k)) continue
       m.set(k, buildCreatorSearchHay(c))
+    }
+    return m
+  }, [remoteRawCards])
+
+  const remoteIdentityHayByKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of remoteRawCards as any[]) {
+      const k = searchKeyForCardLike(c)
+      if (!k) continue
+      if (m.has(k)) continue
+      m.set(k, buildCreatorIdentityHay(c))
     }
     return m
   }, [remoteRawCards])
@@ -1867,14 +1900,29 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const searchedList = useMemo(() => {
     if (!localTokens.length) return searchPool
 
-    const hayMap = hasUsableRemoteResults ? remoteSearchHayByKey : localSearchHayByKey
+    const useIdentityOnly = localTokens.some((t) => t.length <= 1)
+    const hayMap = hasUsableRemoteResults
+      ? useIdentityOnly
+        ? remoteIdentityHayByKey
+        : remoteSearchHayByKey
+      : useIdentityOnly
+        ? localIdentityHayByKey
+        : localSearchHayByKey
 
     return searchPool.filter((c) => {
       const k = searchKeyForCardLike(c)
-      const hay = (k && hayMap.get(k)) || buildCreatorSearchHay(c)
+      const hay = (k && hayMap.get(k)) || (useIdentityOnly ? buildCreatorIdentityHay(c) : buildCreatorSearchHay(c))
       return localTokens.every((t) => hay.includes(t))
     })
-  }, [searchPool, localTokens, hasUsableRemoteResults, remoteSearchHayByKey, localSearchHayByKey])
+  }, [
+    searchPool,
+    localTokens,
+    hasUsableRemoteResults,
+    remoteIdentityHayByKey,
+    remoteSearchHayByKey,
+    localIdentityHayByKey,
+    localSearchHayByKey,
+  ])
 
   const filtered = useMemo(() => {
     let out = searchedList
