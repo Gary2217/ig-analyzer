@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { BudgetRange, CollabType, Platform } from "./types"
 import { getCopy, type Locale } from "@/app/i18n"
 
@@ -8,6 +8,13 @@ type Props = {
   locale: Locale
   search: string
   onSearch: (v: string) => void
+
+  onSearchCompositionStart?: () => void
+  onSearchCompositionEnd?: (v: string) => void
+
+  remoteActive?: boolean
+  remoteLoading?: boolean
+  remoteError?: string | null
 
   selectedPlatforms: Platform[]
   onTogglePlatform: (p: Platform) => void
@@ -78,6 +85,26 @@ export function FiltersBar(props: Props) {
 
   const clearLabel = props.locale === "zh-TW" ? "清除" : "Clear"
   const addLabel = props.locale === "zh-TW" ? "新增" : "Add"
+
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
+  const clearSearch = useCallback(() => {
+    props.onSearch("")
+    try {
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus()
+      })
+    } catch {
+      // ignore
+    }
+  }, [props])
+
+  const remoteErrorHint = useMemo(() => {
+    if (!props.remoteActive || !props.remoteError) return ""
+    return props.locale === "zh-TW"
+      ? "遠端搜尋暫時不可用，已顯示本地結果。"
+      : "Remote search is temporarily unavailable. Showing local results."
+  }, [props.locale, props.remoteActive, props.remoteError])
 
   const budgetLabelFor = (range: Exclude<BudgetRange, "any" | "custom">) => {
     const isZh = props.locale === "zh-TW"
@@ -155,16 +182,48 @@ export function FiltersBar(props: Props) {
                 <div className="col-span-12 lg:col-span-4 min-w-0 w-full">
                   <div className="relative min-w-0 w-full lg:max-w-[360px]">
                     <input
+                      ref={searchInputRef}
                       value={props.search}
                       onChange={(e) => props.onSearch(e.currentTarget.value)}
+                      onCompositionStart={() => props.onSearchCompositionStart?.()}
+                      onCompositionEnd={(e) => props.onSearchCompositionEnd?.(e.currentTarget.value)}
                       onFocus={closeAll}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          try {
+                            requestAnimationFrame(() => searchInputRef.current?.focus())
+                          } catch {
+                            // ignore
+                          }
+                          return
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          clearSearch()
+                        }
+                      }}
+                      inputMode="search"
+                      enterKeyHint="search"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder={copy.common.searchPlaceholder}
-                      className="h-10 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 pl-3 pr-12 text-sm text-white/90 placeholder:text-white/30"
+                      className="h-10 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 pl-3 pr-20 text-sm text-white/90 placeholder:text-white/30"
                     />
+
+                    {props.remoteActive && props.remoteLoading ? (
+                      <div className="absolute right-11 top-1 h-10 w-10 grid place-items-center text-white/55 pointer-events-none">
+                        <div className="h-4 w-4 rounded-full border border-white/25 border-t-white/70 animate-spin" />
+                      </div>
+                    ) : null}
+
                     {props.search.trim() ? (
                       <button
                         type="button"
-                        onClick={() => props.onSearch("")}
+                        onClick={clearSearch}
                         className="absolute right-1 top-1 h-10 w-10 grid place-items-center rounded-md text-white/60 hover:text-white/85 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
                         aria-label={props.locale === "zh-TW" ? "清除搜尋" : "Clear search"}
                         title={props.locale === "zh-TW" ? "清除搜尋" : "Clear search"}
@@ -172,6 +231,12 @@ export function FiltersBar(props: Props) {
                       >
                         <span className="text-lg leading-none">×</span>
                       </button>
+                    ) : null}
+
+                    {remoteErrorHint ? (
+                      <div className="mt-1 text-[11px] leading-relaxed text-amber-200/80 break-words">
+                        {remoteErrorHint}
+                      </div>
                     ) : null}
                   </div>
                 </div>

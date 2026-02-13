@@ -656,6 +656,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const [remoteLoading, setRemoteLoading] = useState(false)
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const remoteDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isComposingRef = useRef(false)
   const lastFetchedQRef = useRef<string>("")
   const remoteReqIdRef = useRef(0)
   const lastUrlQRef = useRef<string>("")
@@ -835,6 +836,9 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
   useEffect(() => {
     if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
+
+    if (isComposingRef.current) return
+
     remoteDebounceTimerRef.current = setTimeout(() => {
       setDebouncedQ(String(searchInput ?? ""))
     }, 350)
@@ -1497,6 +1501,16 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     []
   )
 
+  const onSearchCompositionStart = useCallback(() => {
+    isComposingRef.current = true
+  }, [])
+
+  const onSearchCompositionEnd = useCallback((finalValue: string) => {
+    isComposingRef.current = false
+    if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
+    setDebouncedQ(String(finalValue ?? ""))
+  }, [])
+
   function budgetMaxForRange(range: BudgetRange): number | null {
     if (range === "1000") return 1000
     if (range === "3000") return 3000
@@ -2154,6 +2168,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           locale={locale}
           search={searchInput}
           onSearch={onSearchInput}
+          onSearchCompositionStart={onSearchCompositionStart}
+          onSearchCompositionEnd={onSearchCompositionEnd}
+          remoteActive={hasRemoteSearchActive}
+          remoteLoading={remoteLoading}
+          remoteError={remoteError}
           selectedPlatforms={selectedPlatforms}
           onTogglePlatform={(p: Platform) =>
             setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
