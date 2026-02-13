@@ -23,6 +23,40 @@ const toTagLabel = (tag: any) => {
   return String((found as any)?.zh ?? raw).trim()
 }
 
+const buildTagTypeHaystack = (c: any) => {
+  const creatorTypes = [
+    ...toArray(c?.creatorTypes),
+    ...toArray(c?.creatorType),
+    ...toArray(c?.creator_types),
+    ...toArray(c?.tagCategories),
+    ...toArray(c?.tag_categories),
+    ...toArray(c?.tags),
+    ...toArray(c?.categories),
+    ...toArray(c?.niches),
+    ...toArray(c?.verticals),
+    ...toArray(c?.topics),
+  ]
+
+  const rawSources = [c?.__rawCard, c?.raw, c?.card].filter((x) => x && typeof x === "object") as AnyRecord[]
+  for (const r of rawSources) {
+    creatorTypes.push(
+      ...toArray((r as any)?.creatorTypes),
+      ...toArray((r as any)?.creatorType),
+      ...toArray((r as any)?.creator_types),
+      ...toArray((r as any)?.tagCategories),
+      ...toArray((r as any)?.tag_categories),
+      ...toArray((r as any)?.tags),
+      ...toArray((r as any)?.categories),
+      ...toArray((r as any)?.niches),
+      ...toArray((r as any)?.verticals),
+      ...toArray((r as any)?.topics)
+    )
+  }
+  const tagLabels = creatorTypes.map(toTagLabel)
+
+  return [...creatorTypes, ...tagLabels].filter(Boolean).join(" ")
+}
+
 export const buildSearchHaystack = (c: any) => {
   const name = getCardDisplayName(c)
 
@@ -73,14 +107,19 @@ export const matchesCreatorQuery = (c: any, rawQuery: string) => {
     return sNoAt.startsWith(q)
   }
 
-  return (
+  const prefixOk =
     startsWithAny((c as any)?.handle) ||
     startsWithAny((c as any)?.username) ||
     startsWithAny((c as any)?.igUsername) ||
     startsWithAny((c as any)?.displayName) ||
     startsWithAny((c as any)?.name) ||
     startsWithAny((c as any)?.creatorName)
-  )
+
+  if (prefixOk) return true
+
+  const haystack = buildTagTypeHaystack(c).toLowerCase()
+  if (!haystack) return false
+  return haystack.includes(q)
 }
 
 export function applyPinnedOwnerCard<T extends { id?: string | null }>(input: {
