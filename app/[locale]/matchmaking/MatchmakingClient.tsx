@@ -8,6 +8,7 @@ import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmak
 import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
 import { useFavorites } from "@/app/components/matchmaking/useFavorites"
 import { loadDemoAvatars } from "@/app/components/matchmaking/demoAvatarStorage"
+import LocaleSwitcher from "@/app/components/locale-switcher"
 import { getCopy, type Locale } from "@/app/i18n"
 import { CREATOR_TYPE_MASTER, normalizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
 import {
@@ -2113,9 +2114,14 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       <div className="pt-6 sm:pt-8 pb-1 sm:pb-2">
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
           <div className="min-w-0">
-            <h1 className="text-[clamp(18px,3.6vw,26px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
-              {uiCopy.matchmaking.pageTitle}
-            </h1>
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <h1 className="text-[clamp(18px,3.6vw,26px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
+                {uiCopy.matchmaking.pageTitle}
+              </h1>
+              <div className="shrink-0">
+                <LocaleSwitcher />
+              </div>
+            </div>
             <div className="mt-2 max-w-2xl min-w-0">
               <p className="text-xs sm:text-sm leading-relaxed text-white/60 min-w-0 break-words">
                 {uiCopy.matchmaking.pageSubtitleLine1}
