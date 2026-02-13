@@ -55,7 +55,6 @@ type Props = {
 export function FiltersBar(props: Props) {
   const copy = getCopy(props.locale)
   const mm = copy.matchmaking
-  const [chipsExpanded, setChipsExpanded] = useState(false)
   const [platformOpen, setPlatformOpen] = useState(false)
   const [tagsOpen, setTagsOpen] = useState(false)
   const [tagSearch, setTagSearch] = useState("")
@@ -185,12 +184,6 @@ export function FiltersBar(props: Props) {
     if (!q) return props.tagCategoryOptions
     return props.tagCategoryOptions.filter((x) => String(x || "").toLowerCase().includes(q))
   }, [props.tagCategoryOptions, tagSearch])
-
-  const dealChips = useMemo(() => props.dealTypeOptions, [props.dealTypeOptions])
-
-  const chipsCollapsedCount = 6
-  const visibleDealChips = chipsExpanded ? dealChips : dealChips.slice(0, chipsCollapsedCount)
-  const hiddenCount = Math.max(0, dealChips.length - visibleDealChips.length)
 
   return (
     <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6" data-mm-filters="root">
@@ -485,49 +478,6 @@ export function FiltersBar(props: Props) {
                     className="h-10 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 whitespace-nowrap"
                   >
                     {copy.common.all}
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="mt-2 flex flex-wrap gap-2 min-w-0">
-                {visibleDealChips.map((o) => {
-                  const active = props.selectedDealTypes.includes(o.value)
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => {
-                        closeAll()
-                        props.onToggleDealType(o.value)
-                      }}
-                      className={`h-10 px-3 rounded-full border text-sm whitespace-nowrap max-w-full truncate min-w-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 ${
-                        active
-                          ? "bg-gradient-to-r from-emerald-500/15 to-cyan-400/10 border-emerald-400/30 text-white/90 ring-1 ring-emerald-400/25"
-                          : "bg-white/5 border-white/10 text-white/70 hover:bg-white/[0.08] hover:text-white/85"
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  )
-                })}
-
-                {!chipsExpanded && hiddenCount ? (
-                  <button
-                    type="button"
-                    onClick={() => setChipsExpanded(true)}
-                    className="h-11 px-3 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/[0.08] hover:text-white/85 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
-                  >
-                    {mm.showMoreChips(hiddenCount)}
-                  </button>
-                ) : null}
-
-                {chipsExpanded && dealChips.length > chipsCollapsedCount ? (
-                  <button
-                    type="button"
-                    onClick={() => setChipsExpanded(false)}
-                    className="h-11 px-3 rounded-full border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/[0.08] hover:text-white/85 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40"
-                  >
-                    {mm.showLessChips}
                   </button>
                 ) : null}
               </div>
