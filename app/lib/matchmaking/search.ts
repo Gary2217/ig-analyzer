@@ -73,14 +73,49 @@ export const matchesCreatorQuery = (c: any, rawQuery: string) => {
     return sNoAt.startsWith(q)
   }
 
-  return (
+  const baseOk =
     startsWithAny((c as any)?.handle) ||
     startsWithAny((c as any)?.username) ||
     startsWithAny((c as any)?.igUsername) ||
     startsWithAny((c as any)?.displayName) ||
     startsWithAny((c as any)?.name) ||
     startsWithAny((c as any)?.creatorName)
-  )
+
+  if (baseOk) return true
+
+  const nestedOk =
+    startsWithAny((c as any)?.profile?.username) ||
+    startsWithAny((c as any)?.profile?.handle) ||
+    startsWithAny((c as any)?.social?.instagram?.username) ||
+    startsWithAny((c as any)?.instagramUsername) ||
+    startsWithAny((c as any)?.igHandle) ||
+    startsWithAny((c as any)?.ig_handle) ||
+    startsWithAny((c as any)?.owner?.handle)
+
+  if (nestedOk) return true
+
+  const rawSources = [c?.__rawCard, c?.raw, c?.card].filter((x) => x && typeof x === "object") as AnyRecord[]
+  for (const r of rawSources) {
+    if (
+      startsWithAny((r as any)?.handle) ||
+      startsWithAny((r as any)?.username) ||
+      startsWithAny((r as any)?.igUsername) ||
+      startsWithAny((r as any)?.displayName) ||
+      startsWithAny((r as any)?.name) ||
+      startsWithAny((r as any)?.creatorName) ||
+      startsWithAny((r as any)?.instagramUsername) ||
+      startsWithAny((r as any)?.igHandle) ||
+      startsWithAny((r as any)?.ig_handle) ||
+      startsWithAny((r as any)?.profile?.username) ||
+      startsWithAny((r as any)?.profile?.handle) ||
+      startsWithAny((r as any)?.social?.instagram?.username) ||
+      startsWithAny((r as any)?.owner?.handle)
+    ) {
+      return true
+    }
+  }
+
+  return false
 }
 
 export function applyPinnedOwnerCard<T extends { id?: string | null }>(input: {
