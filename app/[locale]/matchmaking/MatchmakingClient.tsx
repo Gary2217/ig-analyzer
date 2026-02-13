@@ -660,6 +660,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const remoteReqIdRef = useRef(0)
   const lastUrlQRef = useRef<string>("")
 
+  const MIN_REMOTE_Q_LEN = 2
+
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedDealTypes, setSelectedDealTypes] = useState<CollabType[]>([])
@@ -804,7 +806,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
     remoteDebounceTimerRef.current = setTimeout(() => {
       setDebouncedQ(String(searchInput ?? ""))
-    }, 200)
+    }, 350)
     return () => {
       if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
     }
@@ -1306,12 +1308,21 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
   useEffect(() => {
     const q = String(debouncedQ ?? "").trim()
-    if (!q) {
+
+    if (q.length < MIN_REMOTE_Q_LEN) {
       lastFetchedQRef.current = ""
       remoteReqIdRef.current += 1
       setRemoteLoading(false)
       setRemoteError(null)
       setRemoteRawCards([])
+      if (process.env.NODE_ENV !== "production") {
+        try {
+          // eslint-disable-next-line no-console
+          console.log("[mm] remote skip (too short)", { q, len: q.length })
+        } catch {
+          // ignore
+        }
+      }
       return
     }
 
@@ -1369,7 +1380,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         }
       }
     })()
-  }, [debouncedQ])
+  }, [MIN_REMOTE_Q_LEN, debouncedQ])
 
   const hasPlatformFilterActive = useMemo(() => {
     const canonPlatformLocal = (v: any): "instagram" | "youtube" | "tiktok" | "facebook" | null => {
