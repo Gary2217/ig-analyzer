@@ -16,6 +16,11 @@ type Props = {
   remoteLoading?: boolean
   remoteError?: string | null
 
+  resultCount?: number
+  hasSearchActive?: boolean
+  isSearching?: boolean
+  focusNonce?: number
+
   selectedPlatforms: Platform[]
   onTogglePlatform: (p: Platform) => void
   onClearPlatforms: () => void
@@ -88,6 +93,17 @@ export function FiltersBar(props: Props) {
 
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
+  useEffect(() => {
+    if (!props.focusNonce) return
+    try {
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus()
+      })
+    } catch {
+      // ignore
+    }
+  }, [props.focusNonce])
+
   const clearSearch = useCallback(() => {
     props.onSearch("")
     try {
@@ -101,10 +117,14 @@ export function FiltersBar(props: Props) {
 
   const remoteErrorHint = useMemo(() => {
     if (!props.remoteActive || !props.remoteError) return ""
-    return props.locale === "zh-TW"
-      ? "遠端搜尋暫時不可用，已顯示本地結果。"
-      : "Remote search is temporarily unavailable. Showing local results."
-  }, [props.locale, props.remoteActive, props.remoteError])
+    return mm.remoteErrorHint
+  }, [mm.remoteErrorHint, props.remoteActive, props.remoteError])
+
+  const searchStatusHelper = useMemo(() => {
+    if (!props.hasSearchActive) return ""
+    if (props.isSearching) return mm.searchingHelper
+    return mm.resultsCountLabel(typeof props.resultCount === "number" ? props.resultCount : 0)
+  }, [mm.resultsCountLabel, mm.searchingHelper, props.hasSearchActive, props.isSearching, props.resultCount])
 
   const budgetLabelFor = (range: Exclude<BudgetRange, "any" | "custom">) => {
     const isZh = props.locale === "zh-TW"
@@ -236,6 +256,12 @@ export function FiltersBar(props: Props) {
                     {remoteErrorHint ? (
                       <div className="mt-1 text-[11px] leading-relaxed text-amber-200/80 break-words">
                         {remoteErrorHint}
+                      </div>
+                    ) : null}
+
+                    {searchStatusHelper ? (
+                      <div className="mt-1 text-[11px] leading-relaxed text-white/55 break-words">
+                        {searchStatusHelper}
                       </div>
                     ) : null}
                   </div>

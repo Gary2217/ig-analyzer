@@ -106,6 +106,11 @@ export const en: CopyDictionary = {
     popularBadge: "Popular",
     highEngagementLabel: "High Engagement",
 
+    searchingHelper: "Searching…",
+    resultsCountLabel: (n: number) => `${n} creators found`,
+    clearSearchCta: "Clear search",
+    remoteErrorHint: "Remote search is temporarily unavailable. Showing local results.",
+
     updatingStats: "Updating stats…",
     retryStatsAria: "Retry stats",
 

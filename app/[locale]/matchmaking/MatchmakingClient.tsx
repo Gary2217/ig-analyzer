@@ -701,6 +701,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
   const [page, setPage] = useState(1)
+  const [focusNonce, setFocusNonce] = useState(0)
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
   const cardsRef = useRef(allCards)
@@ -1855,6 +1856,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return finalCards.slice(start, start + pageSize)
   }, [clampedPage, finalCards])
 
+  const resultCount = useMemo(() => finalCards.length, [finalCards.length])
+  const hasAnySearchActive = useMemo(() => hasSearchActive || hasRemoteSearchActive, [hasSearchActive, hasRemoteSearchActive])
+  const isSearching = useMemo(() => hasRemoteSearchActive && remoteLoading, [hasRemoteSearchActive, remoteLoading])
+
   const popularCreatorId = useMemo(() => {
     function calcPopularScore(c: any): number {
       const er = typeof c?.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
@@ -2094,9 +2099,21 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
 
   const isEmptyResults = useMemo(
-    () => pagedRealCards.length === 0 && (hasSearchActive || hasRemoteSearchActive),
-    [pagedRealCards.length, hasSearchActive, hasRemoteSearchActive]
+    () => resultCount === 0 && hasAnySearchActive && !isSearching,
+    [resultCount, hasAnySearchActive, isSearching]
   )
+
+  const showSkeleton = useMemo(
+    () => hasRemoteSearchActive && remoteLoading && pagedRealCards.length === 0,
+    [hasRemoteSearchActive, remoteLoading, pagedRealCards.length]
+  )
+
+  const clearSearchFromEmptyCta = useCallback(() => {
+    setSearchInput("")
+    setDebouncedQ("")
+    setPage(1)
+    setFocusNonce((n) => n + 1)
+  }, [])
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
@@ -2173,6 +2190,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           remoteActive={hasRemoteSearchActive}
           remoteLoading={remoteLoading}
           remoteError={remoteError}
+          resultCount={resultCount}
+          hasSearchActive={hasAnySearchActive}
+          isSearching={isSearching}
+          focusNonce={focusNonce}
           selectedPlatforms={selectedPlatforms}
           onTogglePlatform={(p: Platform) =>
             setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
@@ -2257,8 +2278,32 @@ function MatchmakingClient(props: MatchmakingClientProps) {
               <div className="mt-2 text-xs sm:text-sm text-white/55 leading-relaxed break-words max-w-2xl min-w-0">
                 {uiCopy.matchmaking.emptyResultsHint}
               </div>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={clearSearchFromEmptyCta}
+                  className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
+                >
+                  {uiCopy.matchmaking.clearSearchCta}
+                </button>
+              </div>
             </div>
           </div>
+        ) : showSkeleton ? (
+          <CreatorGrid>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="group relative rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                <div className="w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
+                  <div className="w-full h-full bg-white/5 animate-pulse" />
+                </div>
+                <div className="p-3 min-w-0">
+                  <div className="h-4 w-2/3 rounded-md bg-white/10 animate-pulse" />
+                  <div className="mt-2 h-3 w-1/2 rounded-md bg-white/10 animate-pulse" />
+                  <div className="mt-3 h-10 w-full rounded-xl bg-white/[0.06] animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </CreatorGrid>
         ) : (
           <CreatorGrid>
             {pagedRealCards.map((c) => {
@@ -2276,6 +2321,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
                   key={c.id}
                   creator={c}
                   locale={locale}
+                  highlightQuery={localQ}
                   isOwner={isOwnerCard}
                   isFav={fav.isFav(c.id)}
                   onToggleFav={() => fav.toggleFav(c.id)}

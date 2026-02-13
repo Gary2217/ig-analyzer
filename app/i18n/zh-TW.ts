@@ -106,6 +106,11 @@ export const zhTW: CopyDictionary = {
     popularBadge: "人氣",
     highEngagementLabel: "互動亮眼",
 
+    searchingHelper: "搜尋中…",
+    resultsCountLabel: (n: number) => `找到 ${n} 位創作者`,
+    clearSearchCta: "清除搜尋",
+    remoteErrorHint: "遠端搜尋暫時不可用，已顯示本地結果。",
+
     updatingStats: "更新數據中…",
     retryStatsAria: "重新取得數據",
 

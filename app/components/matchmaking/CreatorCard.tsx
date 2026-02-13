@@ -61,6 +61,7 @@ export function CreatorCard({
   statsError,
   onRetryStats,
   selectedBudgetMax,
+  highlightQuery,
 }: {
   creator: CreatorCardData
   locale: Locale
@@ -74,6 +75,7 @@ export function CreatorCard({
   statsError?: boolean
   onRetryStats?: () => void
   selectedBudgetMax?: number | null
+  highlightQuery?: string
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -131,6 +133,27 @@ export function CreatorCard({
     const normalizedHandle = handle.replace(/^@/, "").toLowerCase()
     return normalizedName !== normalizedHandle
   })()
+
+  const renderHighlighted = (text: string, q?: string) => {
+    const rawText = String(text ?? "")
+    const rawQ = String(q ?? "").trim()
+    if (!rawText || !rawQ) return rawText
+
+    const idx = rawText.toLowerCase().indexOf(rawQ.toLowerCase())
+    if (idx < 0) return rawText
+
+    const before = rawText.slice(0, idx)
+    const match = rawText.slice(idx, idx + rawQ.length)
+    const after = rawText.slice(idx + rawQ.length)
+
+    return (
+      <>
+        {before}
+        <mark className="rounded bg-amber-300/20 text-amber-100 px-0.5">{match}</mark>
+        {after}
+      </>
+    )
+  }
 
   const href = (() => {
     const raw = typeof creator.href === "string" ? creator.href : ""
@@ -285,8 +308,14 @@ export function CreatorCard({
       <div className="p-3 sm:p-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-white/90 truncate min-w-0">{creator.name}</div>
-            {shouldShowHandle ? <div className="text-xs text-white/50 truncate min-w-0">@{creator.handle}</div> : null}
+            <div className="text-sm font-semibold text-white/90 truncate min-w-0">
+              {renderHighlighted(String(creator.name ?? ""), highlightQuery)}
+            </div>
+            {shouldShowHandle ? (
+              <div className="text-xs text-white/50 truncate min-w-0">
+                @{renderHighlighted(String(creator.handle ?? ""), highlightQuery)}
+              </div>
+            ) : null}
 
             <div className="mt-2 flex flex-wrap gap-1.5 min-w-0">
               {displayBadges.length ? (

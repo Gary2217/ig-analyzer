@@ -104,6 +104,11 @@ export type CopyDictionary = {
     popularBadge: string
     highEngagementLabel: string
 
+    searchingHelper: string
+    resultsCountLabel: (n: number) => string
+    clearSearchCta: string
+    remoteErrorHint: string
+
     updatingStats: string
     retryStatsAria: string
 
