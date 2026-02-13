@@ -451,12 +451,6 @@ export function FiltersBar(props: Props) {
                 </button>
               </div>
 
-              {props.sort === "best_match" ? (
-                <div className="mt-2 text-xs sm:text-sm text-white/50 max-w-full break-words min-w-0">
-                  {mm.bestMatchHelper}
-                </div>
-              ) : null}
-
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
                   {props.statsUpdating ? (
