@@ -651,11 +651,14 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const [allCards, setAllCards] = useState<CreatorCard[]>(initialCards)
 
   const [searchInput, setSearchInput] = useState("")
+  const [debouncedQ, setDebouncedQ] = useState("")
   const [remoteRawCards, setRemoteRawCards] = useState<CreatorCard[]>([])
   const [remoteLoading, setRemoteLoading] = useState(false)
   const [remoteError, setRemoteError] = useState<string | null>(null)
   const remoteAbortRef = useRef<AbortController | null>(null)
-  const remoteDebounceRef = useRef<any>(null)
+  const remoteDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastFetchedQRef = useRef<string>("")
+  const lastUrlQRef = useRef<string>("")
 
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
@@ -752,6 +755,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     })()
 
     setSearchInput(nextQ)
+    setDebouncedQ(nextQ)
     setBudget(nextBudget)
     setCustomBudget(nextBudget === "custom" ? (qp.get("customBudget") ?? "") : "")
     setSelectedPlatforms(nextPlatforms)
@@ -795,6 +799,16 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     setPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput, sort, budget, customBudget, selectedPlatforms.join("|"), selectedDealTypes.join("|"), selectedTagCategories.join("|")])
+
+  useEffect(() => {
+    if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
+    remoteDebounceTimerRef.current = setTimeout(() => {
+      setDebouncedQ(String(searchInput ?? ""))
+    }, 200)
+    return () => {
+      if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
+    }
+  }, [searchInput])
 
   useEffect(() => {
     let cancelled = false
@@ -1265,67 +1279,108 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     }
   }, [searchParams])
 
-  const hasSearchActive = useMemo(() => (searchInput ?? "").toString().trim().length > 0, [searchInput])
+  const hasSearchActive = useMemo(() => (debouncedQ ?? "").toString().trim().length > 0, [debouncedQ])
 
   useEffect(() => {
-    if (remoteDebounceRef.current) clearTimeout(remoteDebounceRef.current)
+    // Sync URL query param q from debouncedQ without causing ping-pong.
+    try {
+      const next = String(debouncedQ ?? "").slice(0, 120)
+      const current = String(searchParams?.get("q") ?? "")
+      if (current === next) {
+        lastUrlQRef.current = current
+        return
+      }
+      if (lastUrlQRef.current === next) return
+
+      const sp = new URLSearchParams(searchParams?.toString() || "")
+      if (next.trim()) sp.set("q", next)
+      else sp.delete("q")
+      sp.delete("page")
+      const qs = sp.toString()
+      lastUrlQRef.current = next
+      router.replace(qs ? `?${qs}` : "?", { scroll: false })
+    } catch {
+      // swallow
+    }
+  }, [debouncedQ, router, searchParams])
+
+  useEffect(() => {
     if (remoteAbortRef.current) {
       remoteAbortRef.current.abort()
       remoteAbortRef.current = null
     }
 
-    const q = String(searchInput ?? "").trim()
+    const q = String(debouncedQ ?? "").trim()
     if (!q) {
+      lastFetchedQRef.current = ""
       setRemoteLoading(false)
       setRemoteError(null)
       setRemoteRawCards([])
       return
     }
 
-    remoteDebounceRef.current = setTimeout(() => {
-      const ac = new AbortController()
-      remoteAbortRef.current = ac
-      setRemoteLoading(true)
-      setRemoteError(null)
+    if (lastFetchedQRef.current === q) return
+    lastFetchedQRef.current = q
 
-      ;(async () => {
-        try {
-          const url = `/api/matchmaking/search?q=${encodeURIComponent(q)}&limit=50&offset=0`
-          const res = await fetch(url, { method: "GET", cache: "no-store", signal: ac.signal })
-          const json = (await res.json().catch(() => null)) as any
+    const ac = new AbortController()
+    remoteAbortRef.current = ac
+    setRemoteLoading(true)
+    setRemoteError(null)
 
-          if (ac.signal.aborted) return
-          if (!res.ok) {
-            const msg = typeof json?.error === "string" ? json.error : "remote_search_failed"
-            setRemoteRawCards([])
-            setRemoteError(msg)
-            return
-          }
-
-          const items = Array.isArray(json?.items) ? (json.items as CreatorCard[]) : []
-          const publicOnly = items.filter((r: any) => r && ((r as any).is_public === true || (r as any).isPublic === true))
-          setRemoteRawCards(publicOnly)
-          setRemoteError(null)
-        } catch (e: unknown) {
-          if (ac.signal.aborted) return
-          const errObj = asRecord(e)
-          const msg = typeof errObj?.message === "string" ? errObj.message : "remote_search_failed"
-          setRemoteRawCards([])
-          setRemoteError(msg)
-        } finally {
-          if (!ac.signal.aborted) setRemoteLoading(false)
-        }
-      })()
-    }, 200)
-
-    return () => {
-      if (remoteDebounceRef.current) clearTimeout(remoteDebounceRef.current)
-      if (remoteAbortRef.current) {
-        remoteAbortRef.current.abort()
-        remoteAbortRef.current = null
+    if (MM_DEBUG) {
+      try {
+        // eslint-disable-next-line no-console
+        console.debug("[Matchmaking] remote search start", { q })
+      } catch {
+        // ignore
       }
     }
-  }, [searchInput])
+
+    ;(async () => {
+      try {
+        const url = `/api/matchmaking/search?q=${encodeURIComponent(q)}&limit=50&offset=0`
+        const res = await fetch(url, { method: "GET", cache: "no-store", signal: ac.signal })
+        const json = (await res.json().catch(() => null)) as any
+
+        if (ac.signal.aborted) return
+
+        if (!res.ok) {
+          const msg = typeof json?.error === "string" ? json.error : "remote_search_failed"
+          setRemoteRawCards([])
+          setRemoteError(msg)
+          return
+        }
+
+        const items = Array.isArray(json?.items) ? (json.items as CreatorCard[]) : []
+        const publicOnly = items.filter((r: any) => r && ((r as any).is_public === true || (r as any).isPublic === true))
+        setRemoteRawCards(publicOnly)
+        setRemoteError(null)
+      } catch (e: any) {
+        if (ac.signal.aborted) return
+        const name = typeof e?.name === "string" ? e.name : ""
+        if (name === "AbortError") return
+        const errObj = asRecord(e)
+        const msg = typeof errObj?.message === "string" ? errObj.message : "remote_search_failed"
+        setRemoteRawCards([])
+        setRemoteError(msg)
+      } finally {
+        if (!ac.signal.aborted) setRemoteLoading(false)
+        if (MM_DEBUG) {
+          try {
+            // eslint-disable-next-line no-console
+            console.debug("[Matchmaking] remote search end", { q, aborted: ac.signal.aborted })
+          } catch {
+            // ignore
+          }
+        }
+      }
+    })()
+
+    return () => {
+      ac.abort()
+      if (remoteAbortRef.current === ac) remoteAbortRef.current = null
+    }
+  }, [debouncedQ])
 
   const hasPlatformFilterActive = useMemo(() => {
     const canonPlatformLocal = (v: any): "instagram" | "youtube" | "tiktok" | "facebook" | null => {
@@ -1372,14 +1427,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     (v: unknown) => {
       const next = typeof v === "string" ? v : String((v as any)?.currentTarget?.value ?? (v as any)?.target?.value ?? v ?? "")
       setSearchInput(next)
-
-      const sp = new URLSearchParams(searchParams.toString())
-      if (next.trim()) sp.set("q", next)
-      else sp.delete("q")
-      const qs = sp.toString()
-      router.replace(qs ? `?${qs}` : "?", { scroll: false })
     },
-    [router, searchParams]
+    []
   )
 
   function budgetMaxForRange(range: BudgetRange): number | null {
