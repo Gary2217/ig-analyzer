@@ -41,6 +41,11 @@ type OwnerLookupCacheV2 = {
   ownerCardId: string | null
 }
 
+function clampNumber(v: number, min: number, max: number): number {
+  if (!Number.isFinite(v)) return min
+  return Math.min(max, Math.max(min, v))
+}
+
 function readOwnerLookupCacheV2(): OwnerLookupCacheV2 | null {
   try {
     if (typeof window === "undefined") return null
@@ -319,15 +324,9 @@ function buildCardHaystack(input: {
   return normalizeSearchText(parts.join(" "))
 }
 
- 
-
-function clampNumber(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n))
-}
-
 function hashStringToInt(seed: string) {
   let h = 2166136261
-  for (let i = 0; i < seed.length; i++) {
+  for (let i = 0; i <seed.length; i++) {
     h ^= seed.charCodeAt(i)
     h = Math.imul(h, 16777619)
   }
