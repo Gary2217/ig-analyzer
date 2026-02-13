@@ -1640,12 +1640,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [])
 
   const searchPool = useMemo(() => {
-    // ALWAYS use baseList as search source.
-    // baseList already handles remote fallback safely:
-    // hasUsableRemoteResults ? remoteCreators : creators
-
-    return baseList
-  }, [baseList])
+    if (!shouldIncludeDemoFillLocal) return baseList
+    const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
+    return [...baseList, ...filler]
+  }, [baseList, demoFillCards, shouldIncludeDemoFillLocal])
 
   const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }) | null => {
     if (!meCard) return null
