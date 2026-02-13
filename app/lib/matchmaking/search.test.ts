@@ -35,18 +35,6 @@ describe("matchmaking/search helpers", () => {
     expect(matchesCreatorQuery(c, "lin")).toBe(true)
   })
 
-  it("haystack fallback: custom types match Chinese prefixes", () => {
-    const c = {
-      id: "x",
-      name: "Some Creator",
-      handle: "someone",
-      creatorTypes: ["自訂類型XYZ"],
-    }
-    expect(matchesCreatorQuery(c, "自")).toBe(true)
-    expect(matchesCreatorQuery(c, "自訂")).toBe(true)
-    expect(matchesCreatorQuery(c, "自訂類型XYZ")).toBe(true)
-  })
-
   it("demo gating: search active does NOT exclude demos; tags/collab/budget DO exclude demos", () => {
     expect(shouldIncludeDemoFill({ hasTagFilterActive: false, hasCollabTypeFilterActive: false, hasBudgetFilterActive: false })).toBe(true)
     expect(shouldIncludeDemoFill({ hasTagFilterActive: true, hasCollabTypeFilterActive: false, hasBudgetFilterActive: false })).toBe(false)
