@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   buildSearchHaystack,
+  applyPinnedOwnerCard,
   getCreatorCollabTypes,
   matchesCreatorQuery,
   normalizeSelectedCollabTypes,
@@ -120,6 +121,30 @@ describe("matchmaking/search helpers", () => {
     ]
 
     for (const t of mustInclude) expect(hay).toContain(String(t).toLowerCase())
+  })
+
+  it("pinned owner: default browsing pins owner first; search/filter states do not inject", () => {
+    const a = { id: "a" }
+    const b = { id: "b" }
+    const pinned = { id: "me" }
+
+    // A) default browsing => pinned first
+    expect(
+      applyPinnedOwnerCard({ list: [a, b], pinned, hasSearchActive: false, isFilteringActive: false }).map((x) => x.id),
+    ).toEqual(["me", "a", "b"])
+
+    // de-dupe if list already contains owner
+    expect(
+      applyPinnedOwnerCard({ list: [a, pinned, b], pinned, hasSearchActive: false, isFilteringActive: false }).map((x) => x.id),
+    ).toEqual(["me", "a", "b"])
+
+    // B/C/D) any search/filter state => no injection
+    expect(
+      applyPinnedOwnerCard({ list: [a, b], pinned, hasSearchActive: true, isFilteringActive: false }).map((x) => x.id),
+    ).toEqual(["a", "b"])
+    expect(
+      applyPinnedOwnerCard({ list: [a, b], pinned, hasSearchActive: false, isFilteringActive: true }).map((x) => x.id),
+    ).toEqual(["a", "b"])
   })
 })
 

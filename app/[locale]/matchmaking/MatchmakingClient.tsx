@@ -11,6 +11,7 @@ import { loadDemoAvatars } from "@/app/components/matchmaking/demoAvatarStorage"
 import { getCopy, type Locale } from "@/app/i18n"
 import { CREATOR_TYPE_MASTER, normalizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
 import {
+  applyPinnedOwnerCard,
   getCreatorCollabTypes,
   getCreatorPlatforms,
   matchesCreatorQuery,
@@ -1568,12 +1569,6 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [searchedList, sort])
 
   const finalCards = useMemo(() => {
-    const pinnedMatches = (() => {
-      if (!pinnedCreator) return false
-      if (!matchesDropdownFilters(pinnedCreator as any)) return false
-      return matchesCreatorQuery(pinnedCreator as any, searchInput ?? "")
-    })()
-
     const selectedPlatformsArr = normalizeSelectedPlatforms(selectedPlatforms)
 
     const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
@@ -1584,23 +1579,12 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       cleanedSelectedTags.length > 0 ||
       (budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0))
 
-    const rest = pinnedCreator ? (hasSearchActive ? filtered : filtered.filter((c) => c.id !== pinnedCreator.id)) : filtered
-    const combined = (() => {
-      if (!pinnedCreator) return rest
-      if (hasSearchActive) return rest
-      if (!isFilteringActive) return [pinnedCreator, ...rest]
-      return pinnedMatches ? [pinnedCreator, ...rest] : rest
-    })()
-
-    const seen = new Set<string>()
-    const out: typeof combined = []
-    for (const c of combined) {
-      if (!c?.id) continue
-      if (seen.has(c.id)) continue
-      seen.add(c.id)
-      out.push(c)
-    }
-    return out
+    return applyPinnedOwnerCard({
+      list: filtered,
+      pinned: pinnedCreator,
+      hasSearchActive,
+      isFilteringActive,
+    })
   }, [filtered, pinnedCreator, matchesDropdownFilters, hasSearchActive, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
 
   const totalPages = useMemo(() => {

@@ -83,6 +83,32 @@ export const matchesCreatorQuery = (c: any, rawQuery: string) => {
   )
 }
 
+export function applyPinnedOwnerCard<T extends { id?: string | null }>(input: {
+  list: T[]
+  pinned: T | null
+  hasSearchActive: boolean
+  isFilteringActive: boolean
+}): T[] {
+  const { list, pinned, hasSearchActive, isFilteringActive } = input
+  if (!pinned) return list
+  if (hasSearchActive || isFilteringActive) return list
+
+  const out: T[] = []
+  const seen = new Set<string>()
+
+  const add = (c: T) => {
+    const id = typeof c?.id === "string" ? c.id : ""
+    if (!id) return
+    if (seen.has(id)) return
+    seen.add(id)
+    out.push(c)
+  }
+
+  add(pinned)
+  for (const c of list) add(c)
+  return out
+}
+
 export const normalizeSelectedPlatforms = (v: any): any[] => {
   const arr = Array.isArray(v) ? v : v ? [v] : []
   return arr
