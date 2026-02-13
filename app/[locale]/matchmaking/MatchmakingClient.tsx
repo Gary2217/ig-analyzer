@@ -30,6 +30,51 @@ import type {
 import type { CreatorCard } from "./types"
 const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
 
+const CACHE_TTL_MS = 10 * 60 * 1000
+const MM_DEBUG = process.env.NODE_ENV !== "production"
+
+type OwnerLookupStatus = "success" | "no_creator_card" | "not_logged_in" | "error" | "pending"
+type OwnerLookupCacheV2 = {
+  v: 2
+  ts: number
+  status: OwnerLookupStatus
+  ownerCardId: string | null
+}
+
+function readOwnerLookupCacheV2(): OwnerLookupCacheV2 | null {
+  try {
+    if (typeof window === "undefined") return null
+    const raw = window.sessionStorage.getItem(OWNER_LOOKUP_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as any
+    if (!parsed || typeof parsed !== "object" || parsed.v !== 2) return null
+
+    const ts = typeof parsed.ts === "number" ? parsed.ts : 0
+    const ownerCardId = typeof parsed.ownerCardId === "string" ? parsed.ownerCardId : parsed.ownerCardId === null ? null : null
+    const status: OwnerLookupStatus =
+      parsed.status === "success" ||
+      parsed.status === "no_creator_card" ||
+      parsed.status === "not_logged_in" ||
+      parsed.status === "error" ||
+      parsed.status === "pending"
+        ? parsed.status
+        : "error"
+
+    return { v: 2, ts, status, ownerCardId }
+  } catch {
+    return null
+  }
+}
+
+function writeOwnerLookupCacheV2(next: OwnerLookupCacheV2): void {
+  try {
+    if (typeof window === "undefined") return
+    window.sessionStorage.setItem(OWNER_LOOKUP_CACHE_KEY, JSON.stringify(next))
+  } catch {
+    // swallow
+  }
+}
+
 const sanitizeSelectedTagCategories = (input: unknown): string[] => {
   const arr = Array.isArray(input) ? input : []
   return arr
@@ -767,22 +812,23 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         if (ownerLookupStartedRef.current) return
         ownerLookupStartedRef.current = true
 
-        try {
-          const raw = window.sessionStorage.getItem(OWNER_LOOKUP_CACHE_KEY)
-          if (raw) {
-            const cached = JSON.parse(raw) as any
-            if (cached?.done) {
-              shouldPersistOwnerLookup = false
-              return
-            }
-          }
-          window.sessionStorage.setItem(
-            OWNER_LOOKUP_CACHE_KEY,
-            JSON.stringify({ startedAt: Date.now(), done: false, ownerCardId: null }),
-          )
-        } catch {
-          // swallow
+        const cached = readOwnerLookupCacheV2()
+        const cacheFresh = Boolean(cached && cached.ts && Date.now() - cached.ts < CACHE_TTL_MS)
+        const cachedSuccessWithId = Boolean(
+          cacheFresh &&
+            cached?.status === "success" &&
+            typeof cached?.ownerCardId === "string" &&
+            cached.ownerCardId.trim().length > 0,
+        )
+
+        // Only suppress further lookups when we already have a loaded meCard.
+        // If meCard is null, we must fetch to hydrate it even if a previous session cache says success.
+        if (cachedSuccessWithId && meCard) {
+          shouldPersistOwnerLookup = false
+          return
         }
+
+        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "pending", ownerCardId: cached?.ownerCardId ?? null })
 
         const meRes = await fetch("/api/creator-card/me", {
           method: "GET",
@@ -791,12 +837,43 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         })
         const meJson = (await meRes.json().catch(() => null)) as any
 
+        if (MM_DEBUG) {
+          try {
+            // eslint-disable-next-line no-console
+            console.log("[Matchmaking] meCard fetch result:", {
+              httpOk: Boolean(meRes.ok),
+              ok: Boolean(meJson?.ok),
+              error: typeof meJson?.error === "string" ? meJson.error : null,
+              cardId: typeof meJson?.card?.id === "string" ? meJson.card.id : null,
+            })
+          } catch {
+            // ignore
+          }
+        }
+
         if (meRes.ok && meJson?.ok === true && meJson?.card) {
           const safe = sanitizeMeCard(meJson.card, localePrefix)
           if (safe) setMeCard(safe)
         }
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
-        if (!meCardId) return
+
+        if (!meRes.ok) {
+          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
+          return
+        }
+
+        if (meJson?.ok !== true) {
+          const err = typeof meJson?.error === "string" ? meJson.error : "error"
+          const status: OwnerLookupStatus =
+            err === "not_logged_in" ? "not_logged_in" : err === "no_creator_card" ? "no_creator_card" : "error"
+          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status, ownerCardId: null })
+          return
+        }
+
+        if (!meCardId) {
+          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
+          return
+        }
 
         const ownerIgUserId =
           typeof meJson?.card?.ig_user_id === "string"
@@ -811,6 +888,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         }
 
         nextOwnerCardId = meCardId
+
+        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "success", ownerCardId: meCardId })
 
         if (!ownerIgUserId) return
 
@@ -876,14 +955,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           })
         )
       } catch {
-        // swallow
+        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
       } finally {
         if (shouldPersistOwnerLookup) {
           try {
-            window.sessionStorage.setItem(
-              OWNER_LOOKUP_CACHE_KEY,
-              JSON.stringify({ done: true, ownerCardId: typeof nextOwnerCardId === "string" ? nextOwnerCardId : null }),
-            )
+            // legacy v1 cache write removed in favor of v2 cache
           } catch {
             // swallow
           }
@@ -1525,6 +1601,16 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       __rawCard: meCard as any,
     }
   }, [meCard, statsVersion])
+
+  useEffect(() => {
+    if (!MM_DEBUG) return
+    try {
+      // eslint-disable-next-line no-console
+      console.log("[Matchmaking] pinnedCreator:", pinnedCreator ? { id: pinnedCreator.id } : null)
+    } catch {
+      // ignore
+    }
+  }, [pinnedCreator])
 
   const searchPoolWithPinned = useMemo(() => {
     const pool = searchPool
