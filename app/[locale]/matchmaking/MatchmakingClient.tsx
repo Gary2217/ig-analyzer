@@ -15,7 +15,6 @@ import {
   applyPinnedOwnerCard,
   getCreatorCollabTypes,
   getCreatorPlatforms,
-  matchesCreatorQuery,
   normalizeSelectedCollabTypes,
   normalizeSelectedPlatforms,
   shouldIncludeDemoFill,
@@ -70,6 +69,73 @@ function readOwnerLookupCacheV2(): OwnerLookupCacheV2 | null {
   } catch {
     return null
   }
+}
+
+function tokenizeQuery(raw: string): string[] {
+  const s = String(raw ?? "")
+  if (!s.trim()) return []
+
+  // Split by whitespace and common separators. Keep symbols like '_' '.' '#' as part of tokens.
+  const parts = s.split(/[\s,，;；|/]+/g)
+  const out: string[] = []
+  for (const p of parts) {
+    const t = normalizeSearchText(p)
+    if (!t) continue
+    out.push(t)
+    if (out.length >= 6) break
+  }
+  return out
+}
+
+function buildCreatorSearchHay(c: any): string {
+  const parts: string[] = []
+  pushFlattenedStrings(parts, c?.name)
+  pushFlattenedStrings(parts, c?.displayName)
+  pushFlattenedStrings(parts, c?.display_name)
+  pushFlattenedStrings(parts, c?.handle)
+  pushFlattenedStrings(parts, c?.username)
+  pushFlattenedStrings(parts, c?.igUsername)
+  pushFlattenedStrings(parts, c?.ig_username)
+
+  pushFlattenedStrings(parts, c?.platforms)
+  pushFlattenedStrings(parts, c?.deliverables)
+  pushFlattenedStrings(parts, c?.topics)
+  pushFlattenedStrings(parts, c?.tagCategories)
+  pushFlattenedStrings(parts, c?.tag_categories)
+  pushFlattenedStrings(parts, c?.tags)
+
+  try {
+    const collabTypes = getCreatorCollabTypes(c)
+    pushFlattenedStrings(parts, collabTypes)
+  } catch {
+    // ignore
+  }
+
+  const raw = c?.__rawCard
+  if (raw && typeof raw === "object") {
+    pushFlattenedStrings(parts, (raw as any)?.name)
+    pushFlattenedStrings(parts, (raw as any)?.displayName)
+    pushFlattenedStrings(parts, (raw as any)?.display_name)
+    pushFlattenedStrings(parts, (raw as any)?.handle)
+    pushFlattenedStrings(parts, (raw as any)?.username)
+    pushFlattenedStrings(parts, (raw as any)?.igUsername)
+    pushFlattenedStrings(parts, (raw as any)?.ig_username)
+    pushFlattenedStrings(parts, (raw as any)?.platforms)
+    pushFlattenedStrings(parts, (raw as any)?.deliverables)
+    pushFlattenedStrings(parts, (raw as any)?.topics)
+    pushFlattenedStrings(parts, (raw as any)?.tagCategories)
+    pushFlattenedStrings(parts, (raw as any)?.tag_categories)
+    pushFlattenedStrings(parts, (raw as any)?.tags)
+    pushFlattenedStrings(parts, (raw as any)?.collabTypes)
+    pushFlattenedStrings(parts, (raw as any)?.collab_types)
+  }
+
+  return normalizeSearchText(parts.join("\n"))
+}
+
+const searchKeyForCardLike = (c: any): string => {
+  const creatorIdStr = typeof c?.igUserId === "string" && /^\d+$/.test(c.igUserId) ? c.igUserId : null
+  return String(creatorIdStr ?? c?.creatorId ?? c?.id ?? c?.username ?? c?.handle ?? getCardDisplayName(c) ?? "")
 }
 
 function writeOwnerLookupCacheV2(next: OwnerLookupCacheV2): void {
@@ -1134,6 +1200,17 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     })
   }, [allCards, statsVersion])
 
+  const localSearchHayByKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of allCards as any[]) {
+      const k = searchKeyForCardLike(c)
+      if (!k) continue
+      if (m.has(k)) continue
+      m.set(k, buildCreatorSearchHay(c))
+    }
+    return m
+  }, [allCards])
+
   const remoteCreators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
     return remoteRawCards.map((c) => {
       const displayNameResolved =
@@ -1244,6 +1321,17 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     })
   }, [remoteRawCards, statsVersion])
 
+  const remoteSearchHayByKey = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of remoteRawCards as any[]) {
+      const k = searchKeyForCardLike(c)
+      if (!k) continue
+      if (m.has(k)) continue
+      m.set(k, buildCreatorSearchHay(c))
+    }
+    return m
+  }, [remoteRawCards])
+
   const tagCategoryOptions = useMemo(() => {
     const set = new Set<string>()
     CREATOR_TYPE_MASTER.forEach((x: { zh: string }) => {
@@ -1321,6 +1409,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
   const localQ = qTrim
   const remoteQ = qTrim.length >= MIN_REMOTE_Q_LEN ? qTrim : ""
+
+  const localRawQuery = useMemo(() => String(debouncedQ ?? ""), [debouncedQ])
+  const localTokens = useMemo(() => tokenizeQuery(localRawQuery), [localRawQuery])
+  const primaryToken = useMemo(() => localTokens[0] ?? "", [localTokens])
 
   const hasSearchActive = useMemo(() => localQ.length > 0, [localQ])
   const hasRemoteSearchActive = useMemo(() => remoteQ.length >= MIN_REMOTE_Q_LEN, [remoteQ, MIN_REMOTE_Q_LEN])
@@ -1773,10 +1865,16 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [pinnedCreator])
 
   const searchedList = useMemo(() => {
-    return searchPool.filter((c) =>
-      matchesCreatorQuery(c, localQ)
-    )
-  }, [searchPool, localQ])
+    if (!localTokens.length) return searchPool
+
+    const hayMap = hasUsableRemoteResults ? remoteSearchHayByKey : localSearchHayByKey
+
+    return searchPool.filter((c) => {
+      const k = searchKeyForCardLike(c)
+      const hay = (k && hayMap.get(k)) || buildCreatorSearchHay(c)
+      return localTokens.every((t) => hay.includes(t))
+    })
+  }, [searchPool, localTokens, hasUsableRemoteResults, remoteSearchHayByKey, localSearchHayByKey])
 
   const filtered = useMemo(() => {
     let out = searchedList
@@ -2321,7 +2419,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
                   key={c.id}
                   creator={c}
                   locale={locale}
-                  highlightQuery={localQ}
+                  highlightQuery={primaryToken}
                   isOwner={isOwnerCard}
                   isFav={fav.isFav(c.id)}
                   onToggleFav={() => fav.toggleFav(c.id)}
