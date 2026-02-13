@@ -1319,7 +1319,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   useEffect(() => {
     // Sync URL query param q from debouncedQ without causing ping-pong.
     try {
-      const next = String(debouncedQ ?? "").slice(0, 120)
+      const nextCandidate = String(qTrim ?? "").slice(0, 120)
+      const next = nextCandidate.length < MIN_REMOTE_Q_LEN ? "" : nextCandidate
       const current = String(searchParams?.get("q") ?? "")
       if (current === next) {
         lastUrlQRef.current = current
@@ -1328,7 +1329,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       if (lastUrlQRef.current === next) return
 
       const sp = new URLSearchParams(searchParams?.toString() || "")
-      if (next.trim()) sp.set("q", next)
+      if (next) sp.set("q", next)
       else sp.delete("q")
       sp.delete("page")
       const qs = sp.toString()
@@ -1337,7 +1338,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     } catch {
       // swallow
     }
-  }, [debouncedQ, router, searchParams])
+  }, [MIN_REMOTE_Q_LEN, qTrim, router, searchParams])
 
   useEffect(() => {
     const q = String(debouncedQ ?? "").trim()
