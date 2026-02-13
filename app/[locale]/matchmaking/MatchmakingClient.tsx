@@ -1608,7 +1608,12 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     hasRemoteSearchActive && remoteCreators.length > 0
 
   const baseList = useMemo(() => {
-    const source = hasUsableRemoteResults
+    const useRemote =
+      hasUsableRemoteResults &&
+      Array.isArray(remoteCreators) &&
+      remoteCreators.length > 0
+
+    const source = useRemote
       ? remoteCreators
       : creators
 
