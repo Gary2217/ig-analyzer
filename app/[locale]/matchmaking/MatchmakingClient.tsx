@@ -1407,7 +1407,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
               const msg = typeof json?.error === "string" ? json.error : `remote_search_failed_${res.status}`
               throw new Error(msg)
             }
-            const items = Array.isArray(json?.items) ? (json.items as CreatorCard[]) : []
+            const rawItems = (json?.items ?? json?.cards ?? json?.results) as unknown
+            const items = Array.isArray(rawItems) ? (rawItems as CreatorCard[]) : []
             return items.filter((r: any) => r && ((r as any).is_public === true || (r as any).isPublic === true))
           })()
 
