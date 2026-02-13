@@ -1311,16 +1311,18 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     }
   }, [searchParams])
 
-  const hasSearchActive = useMemo(() => (debouncedQ ?? "").toString().trim().length > 0, [debouncedQ])
-
   const qTrim = useMemo(() => String(debouncedQ ?? "").trim(), [debouncedQ])
-  const hasRemoteSearchActive = useMemo(() => qTrim.length >= MIN_REMOTE_Q_LEN, [qTrim, MIN_REMOTE_Q_LEN])
+
+  const localQ = qTrim
+  const remoteQ = qTrim.length >= MIN_REMOTE_Q_LEN ? qTrim : ""
+
+  const hasSearchActive = useMemo(() => localQ.length > 0, [localQ])
+  const hasRemoteSearchActive = useMemo(() => remoteQ.length >= MIN_REMOTE_Q_LEN, [remoteQ, MIN_REMOTE_Q_LEN])
 
   useEffect(() => {
     // Sync URL query param q from debouncedQ without causing ping-pong.
     try {
-      const nextCandidate = String(qTrim ?? "").slice(0, 120)
-      const next = nextCandidate.length < MIN_REMOTE_Q_LEN ? "" : nextCandidate
+      const next = String(remoteQ ?? "").slice(0, 120)
       const current = String(searchParams?.get("q") ?? "")
       if (current === next) {
         lastUrlQRef.current = current
@@ -1338,10 +1340,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     } catch {
       // swallow
     }
-  }, [MIN_REMOTE_Q_LEN, qTrim, router, searchParams])
+  }, [remoteQ, router, searchParams])
 
   useEffect(() => {
-    const q = String(debouncedQ ?? "").trim()
+    const q = String(remoteQ ?? "").trim()
 
     if (q.length < MIN_REMOTE_Q_LEN) {
       lastFetchedQRef.current = ""
@@ -1443,7 +1445,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         }
       }
     })()
-  }, [MIN_REMOTE_Q_LEN, debouncedQ, getRemoteCache, setRemoteCache])
+  }, [MIN_REMOTE_Q_LEN, remoteQ, getRemoteCache, setRemoteCache])
 
   const hasPlatformFilterActive = useMemo(() => {
     const canonPlatformLocal = (v: any): "instagram" | "youtube" | "tiktok" | "facebook" | null => {
@@ -1754,8 +1756,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [searchPool])
 
   const searchedList = useMemo(() => {
-    return searchPoolWithPinned.filter((c) => matchesCreatorQuery(c, searchInput ?? ""))
-  }, [searchPoolWithPinned, searchInput])
+    return searchPoolWithPinned.filter((c) => matchesCreatorQuery(c, localQ ?? ""))
+  }, [searchPoolWithPinned, localQ])
 
   const filtered = useMemo(() => {
     let out = searchedList
@@ -2074,8 +2076,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
 
   const isEmptyResults = useMemo(
-    () => searchedList.length === 0 && (hasSearchActive || hasOtherExplicitFilters),
-    [searchedList.length, hasSearchActive, hasOtherExplicitFilters]
+    () => pagedRealCards.length === 0 && (hasSearchActive || hasRemoteSearchActive),
+    [pagedRealCards.length, hasSearchActive, hasRemoteSearchActive]
   )
 
   return (
