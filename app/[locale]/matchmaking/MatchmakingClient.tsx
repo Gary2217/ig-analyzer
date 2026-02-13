@@ -1313,6 +1313,9 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
   const hasSearchActive = useMemo(() => (debouncedQ ?? "").toString().trim().length > 0, [debouncedQ])
 
+  const qTrim = useMemo(() => String(debouncedQ ?? "").trim(), [debouncedQ])
+  const hasRemoteSearchActive = useMemo(() => qTrim.length >= MIN_REMOTE_Q_LEN, [qTrim, MIN_REMOTE_Q_LEN])
+
   useEffect(() => {
     // Sync URL query param q from debouncedQ without causing ping-pong.
     try {
@@ -1597,9 +1600,9 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   )
 
   const baseList = useMemo(() => {
-    const source = hasSearchActive ? remoteCreators : creators
+    const source = hasRemoteSearchActive ? remoteCreators : creators
     return source.filter(matchesDropdownFilters)
-  }, [creators, remoteCreators, matchesDropdownFilters, hasSearchActive])
+  }, [creators, remoteCreators, matchesDropdownFilters, hasRemoteSearchActive])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
     if (!shouldIncludeDemoFillLocal) return []
