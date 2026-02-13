@@ -1601,18 +1601,20 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget]
   )
 
+  const hasUsableRemoteResults =
+    hasRemoteSearchActive && remoteCreators.length > 0
+
   const baseList = useMemo(() => {
-    const source =
-      hasRemoteSearchActive && remoteCreators.length > 0
-        ? remoteCreators
-        : creators
+    const source = hasUsableRemoteResults
+      ? remoteCreators
+      : creators
 
     return source.filter(matchesDropdownFilters)
   }, [
     creators,
     remoteCreators,
     matchesDropdownFilters,
-    hasRemoteSearchActive,
+    hasUsableRemoteResults,
   ])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
