@@ -660,6 +660,37 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const lastUrlQRef = useRef<string>("")
 
   const MIN_REMOTE_Q_LEN = 2
+  const REMOTE_CACHE_TTL_MS = 5 * 60 * 1000
+  const REMOTE_CACHE_MAX = 50
+
+  type RemoteCacheEntry<T> = {
+    at: number
+    data: T
+  }
+
+  const remoteCacheRef = useRef<Map<string, RemoteCacheEntry<CreatorCard[]>>>(new Map())
+  const remoteInFlightRef = useRef<Map<string, Promise<CreatorCard[]>>>(new Map())
+
+  const getRemoteCache = useCallback(<T,>(q: string): T | null => {
+    const hit = remoteCacheRef.current.get(q)
+    if (!hit) return null
+    if (Date.now() - hit.at > REMOTE_CACHE_TTL_MS) {
+      remoteCacheRef.current.delete(q)
+      return null
+    }
+    return hit.data as unknown as T
+  }, [])
+
+  const setRemoteCache = useCallback(<T,>(q: string, data: T) => {
+    const m = remoteCacheRef.current
+    if (m.has(q)) m.delete(q)
+    m.set(q, { at: Date.now(), data: data as unknown as CreatorCard[] })
+    while (m.size > REMOTE_CACHE_MAX) {
+      const oldestKey = m.keys().next().value as string | undefined
+      if (!oldestKey) break
+      m.delete(oldestKey)
+    }
+  }, [])
 
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
@@ -1333,6 +1364,24 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     setRemoteLoading(true)
     setRemoteError(null)
 
+    const cached = getRemoteCache<CreatorCard[]>(q)
+    if (cached) {
+      if (process.env.NODE_ENV !== "production") {
+        try {
+          // eslint-disable-next-line no-console
+          console.debug("[mm] remote cache hit", { q, reqId, count: cached.length })
+        } catch {
+          // ignore
+        }
+      }
+
+      if (reqId === remoteReqIdRef.current) {
+        setRemoteRawCards(cached)
+        setRemoteLoading(false)
+      }
+      return
+    }
+
     if (MM_DEBUG) {
       try {
         // eslint-disable-next-line no-console
@@ -1344,24 +1393,34 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
     ;(async () => {
       try {
-        const url = `/api/matchmaking/search?q=${encodeURIComponent(q)}&limit=50&offset=0`
-        const res = await fetch(url, { method: "GET", cache: "no-store" })
-        const json = (await res.json().catch(() => null)) as any
+        const existing = remoteInFlightRef.current.get(q)
+        const doFetch: Promise<CreatorCard[]> =
+          existing ??
+          (async () => {
+            const url = `/api/matchmaking/search?q=${encodeURIComponent(q)}&limit=50&offset=0`
+            const res = await fetch(url, { method: "GET", cache: "no-store" })
+            const json = (await res.json().catch(() => null)) as any
+            if (!res.ok) {
+              const msg = typeof json?.error === "string" ? json.error : `remote_search_failed_${res.status}`
+              throw new Error(msg)
+            }
+            const items = Array.isArray(json?.items) ? (json.items as CreatorCard[]) : []
+            return items.filter((r: any) => r && ((r as any).is_public === true || (r as any).isPublic === true))
+          })()
 
-        if (reqId !== remoteReqIdRef.current) return
+        if (!existing) remoteInFlightRef.current.set(q, doFetch)
 
-        if (!res.ok) {
-          const msg = typeof json?.error === "string" ? json.error : "remote_search_failed"
-          setRemoteRawCards([])
-          setRemoteError(msg)
-          return
+        const publicOnly = await doFetch
+        if (!existing) {
+          remoteInFlightRef.current.delete(q)
+          setRemoteCache(q, publicOnly)
         }
 
-        const items = Array.isArray(json?.items) ? (json.items as CreatorCard[]) : []
-        const publicOnly = items.filter((r: any) => r && ((r as any).is_public === true || (r as any).isPublic === true))
+        if (reqId !== remoteReqIdRef.current) return
         setRemoteRawCards(publicOnly)
         setRemoteError(null)
       } catch (e: any) {
+        remoteInFlightRef.current.delete(q)
         if (reqId !== remoteReqIdRef.current) return
         const errObj = asRecord(e)
         const msg = typeof errObj?.message === "string" ? errObj.message : "remote_search_failed"
@@ -1379,7 +1438,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         }
       }
     })()
-  }, [MIN_REMOTE_Q_LEN, debouncedQ])
+  }, [MIN_REMOTE_Q_LEN, debouncedQ, getRemoteCache, setRemoteCache])
 
   const hasPlatformFilterActive = useMemo(() => {
     const canonPlatformLocal = (v: any): "instagram" | "youtube" | "tiktok" | "facebook" | null => {
