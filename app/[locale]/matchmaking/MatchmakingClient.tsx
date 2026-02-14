@@ -184,7 +184,20 @@ function getStatsCacheKey(card: any): string | null {
 }
 
 function getStatsFetchId(card: any): string | null {
-  const n = getNumericCreatorId(card) ?? getNumericCreatorId(card?.__rawCard)
+  const direct =
+    card?.statsFetchId ??
+    card?.numericId ??
+    card?.creatorNumericId ??
+    card?.__rawCard?.statsFetchId ??
+    card?.__rawCard?.numericId ??
+    card?.__rawCard?.creatorNumericId
+
+  const n =
+    getNumericCreatorId(card) ??
+    (typeof direct === "string" && /^\d+$/.test(direct) ? Number(direct) : null) ??
+    (typeof direct === "number" && Number.isFinite(direct) ? direct : null) ??
+    getNumericCreatorId(card?.__rawCard)
+
   const fetchId = n != null ? String(n) : null
 
   if (!fetchId) {
