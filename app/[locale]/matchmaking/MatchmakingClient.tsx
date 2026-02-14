@@ -1348,7 +1348,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         (typeof (c as any)?.__rawCard?.handle === "string" ? (c as any).__rawCard.handle : null) ??
         (typeof (c as any)?.__rawCard?.username === "string" ? (c as any).__rawCard.username : null) ??
         null
-      const remoteHandleLower = remoteHandle ? String(remoteHandle).trim().toLowerCase() : null
+      const remoteHandleLower = remoteHandle ? String(remoteHandle).trim().replace(/^@+/, "").toLowerCase() : null
       const localHitByHandle = remoteHandleLower ? localByHandle.get(remoteHandleLower) : null
 
       const localNumericId = localHitByHandle ? getNumericCreatorId(localHitByHandle) : null
@@ -1415,6 +1415,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       return {
         id: c.id,
         creatorId: cacheKey ?? undefined,
+        numericId: effectiveNumericId ?? undefined,
+        statsFetchId: effectiveNumericId != null ? String(effectiveNumericId) : undefined,
         name: displayNameResolved,
         displayName: displayNameResolved,
         username:
@@ -1445,7 +1447,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         primaryContactMethod,
         href: c.isDemo ? "" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
-        __rawCard: (c as any)?.__rawCard ?? (c as any),
+        __rawCard: {
+          ...((c as any)?.__rawCard ?? (c as any)),
+          numericId: effectiveNumericId ?? ((c as any)?.numericId ?? undefined),
+          creatorNumericId: effectiveNumericId ?? ((c as any)?.creatorNumericId ?? undefined),
+        },
       }
     })
   }, [remoteRawCards, statsVersion, localByNumericId, localByHandle])
