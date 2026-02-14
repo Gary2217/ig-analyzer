@@ -1142,7 +1142,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const dealTypes = derivedCollabTypes as unknown as string[]
 
       const numericCreatorId = getNumericCreatorId(c)
-      const cachedStats = numericCreatorId ? statsCacheRef.current.get(numericCreatorId) : undefined
+      const cachedStats = numericCreatorId != null ? statsCacheRef.current.get(String(numericCreatorId)) : undefined
 
       const rawHandle =
         typeof (c as any).handle === "string"
@@ -1164,21 +1164,21 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
           ? Math.floor(cachedStats.followers)
           : typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
-          ? Math.floor((c as any).stats.followers)
-          : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) && (c as any).followerCount > 0
-            ? Math.floor((c as any).followerCount)
-            : undefined
+            ? Math.floor((c as any).stats.followers)
+            : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) && (c as any).followerCount > 0
+              ? Math.floor((c as any).followerCount)
+              : undefined
 
       const rawER =
         typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
           ? cachedStats.engagementRatePct / 100
           : typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
-          ? (c as any).stats.engagementRatePct / 100
+            ? (c as any).stats.engagementRatePct / 100
           : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
             ? (c as any).stats.engagementRate
-            : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
-              ? (c as any).engagementRate
-              : undefined
+          : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
+            ? (c as any).engagementRate
+            : undefined
 
       const rawMinPriceCandidate =
         typeof (c as any)?.minPrice === "number" && Number.isFinite((c as any).minPrice)
@@ -1285,7 +1285,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
       const numericId = getNumericCreatorId(c) ?? getNumericCreatorId((c as any)?.__rawCard)
       const localHit = numericId ? localByNumericId.get(numericId) : null
-      const cachedStats = numericId ? statsCacheRef.current.get(numericId) : undefined
+      const cachedStats = numericId != null ? statsCacheRef.current.get(String(numericId)) : undefined
 
       const statsFromLocal = localHit && typeof localHit === "object" ? (localHit as any)?.stats : undefined
       const resolvedStats = cachedStats ?? statsFromLocal
