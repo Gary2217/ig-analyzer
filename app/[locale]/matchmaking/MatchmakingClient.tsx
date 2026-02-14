@@ -162,7 +162,7 @@ const getNumericCreatorId = (c: any): string | null => {
   const raw = c?.__rawCard
   if (raw && typeof raw === "object") {
     const r: any = raw as any
-    const rawCandidates: unknown[] = [r?.creatorId, r?.igUserId, r?.id]
+    const rawCandidates: unknown[] = [r?.numericId, r?.statsFetchId, r?.creatorNumericId, r?.creatorId, r?.igUserId, r?.id]
     for (const v of rawCandidates) {
       if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
       if (typeof v === "string") {
@@ -192,13 +192,12 @@ function getStatsFetchId(card: any): string | null {
     card?.__rawCard?.numericId ??
     card?.__rawCard?.creatorNumericId
 
-  const n =
+  const directStr = typeof direct === "string" ? direct.trim() : ""
+  const fetchId =
+    (directStr && /^\d+$/.test(directStr) ? directStr : null) ??
+    (typeof direct === "number" && Number.isFinite(direct) ? String(Math.trunc(direct)) : null) ??
     getNumericCreatorId(card) ??
-    (typeof direct === "string" && /^\d+$/.test(direct) ? Number(direct) : null) ??
-    (typeof direct === "number" && Number.isFinite(direct) ? direct : null) ??
     getNumericCreatorId(card?.__rawCard)
-
-  const fetchId = n != null ? String(n) : null
 
   if (!fetchId) {
     try {
@@ -218,7 +217,7 @@ function getStatsFetchId(card: any): string | null {
     // eslint-disable-next-line no-console
     console.log("[stats][debug] fetchId inputs", {
       direct: direct ?? null,
-      n: n ?? null,
+      directStr: directStr ?? null,
       fetchId: fetchId ?? null,
       card_numericId: card?.numericId ?? null,
       card_statsFetchId: card?.statsFetchId ?? null,
@@ -1386,6 +1385,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         typeof effectiveNumericIdStr === "string" && /^\d+$/.test(effectiveNumericIdStr)
           ? Number(effectiveNumericIdStr)
           : null
+      const effectiveNumericIdSafeNum: number | null =
+        effectiveNumericIdNum != null && Number.isSafeInteger(effectiveNumericIdNum) ? effectiveNumericIdNum : null
       const localHit = effectiveNumericIdStr ? localByNumericId.get(effectiveNumericIdStr) : null
 
       const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
@@ -1449,10 +1450,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         id: c.id,
         creatorId: cacheKey ?? undefined,
         // 🔥 CRITICAL: expose numericId for stats fetching
-        numericId: effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum) ? effectiveNumericIdNum : undefined,
+        numericId: effectiveNumericIdSafeNum != null ? effectiveNumericIdSafeNum : undefined,
 
         // 🔥 CRITICAL: expose statsFetchId for stats fetching
-        statsFetchId: effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum) ? String(effectiveNumericIdNum) : undefined,
+        statsFetchId: effectiveNumericIdStr != null ? effectiveNumericIdStr : undefined,
         name: displayNameResolved,
         displayName: displayNameResolved,
         username:
@@ -1487,18 +1488,15 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         __rawCard: {
           ...((c as any)?.__rawCard ?? (c as any)),
 
+          // keep the digit-string source of truth
+          creatorNumericId: effectiveNumericIdStr != null ? effectiveNumericIdStr : ((c as any)?.creatorNumericId ?? undefined),
+          statsFetchId: effectiveNumericIdStr != null ? effectiveNumericIdStr : ((c as any)?.statsFetchId ?? undefined),
+
+          // only set numericId when safe to represent as a JS number
           numericId:
-            effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum)
-              ? effectiveNumericIdNum
-              : ((c as any)?.numericId ?? (c as any)?.creatorNumericId ?? undefined),
-
-          creatorNumericId:
-            effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum)
-              ? effectiveNumericIdNum
-              : ((c as any)?.creatorNumericId ?? (c as any)?.numericId ?? undefined),
-
-          statsFetchId:
-            effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum) ? String(effectiveNumericIdNum) : undefined,
+            effectiveNumericIdSafeNum != null
+              ? effectiveNumericIdSafeNum
+              : ((c as any)?.numericId ?? undefined),
         },
       }
     })

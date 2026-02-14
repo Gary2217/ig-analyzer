@@ -10,6 +10,18 @@ function clampInt(v: unknown, fallback: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.floor(n)))
 }
 
+function pickDigitString(obj: any, ...keys: string[]): string | null {
+  for (const k of keys) {
+    const v = obj?.[k]
+    if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
+    if (typeof v === "string") {
+      const s = v.trim()
+      if (s && /^\d+$/.test(s)) return s
+    }
+  }
+  return null
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -77,6 +89,28 @@ export async function GET(req: Request) {
     const rows = Array.isArray(data) ? data : []
     const items = rows.map((r: any) => {
       const id = typeof r?.id === "string" ? r.id : ""
+
+      const creatorNumericId =
+        pickDigitString(
+          r,
+          "creator_numeric_id",
+          "creatorNumericId",
+          "creator_numericId",
+          "creator_id_numeric",
+          "creatorIdNumeric",
+          "numeric_creator_id",
+          "ig_user_id",
+          "igUserId",
+          "instagram_user_id",
+          "instagramUserId",
+          "numeric_id",
+          "numericId",
+          "id_numeric",
+          "idNumeric"
+        ) ?? null
+
+      const numericId = creatorNumericId != null ? Number(creatorNumericId) : null
+      const numericIdSafe = numericId != null && Number.isSafeInteger(numericId) ? numericId : null
       const igUsername = typeof r?.ig_username === "string" ? r.ig_username : null
       const handle = typeof r?.handle === "string" ? r.handle : typeof r?.ig_username === "string" ? r.ig_username : null
       const avatarUrl = typeof r?.avatar_url === "string" ? r.avatar_url : null
@@ -89,6 +123,9 @@ export async function GET(req: Request) {
         id,
         handle,
         igUsername,
+        creatorNumericId: creatorNumericId ?? undefined,
+        statsFetchId: creatorNumericId ?? undefined,
+        numericId: numericIdSafe != null ? numericIdSafe : undefined,
         avatarUrl,
         minPrice,
         is_public: isPublic,
