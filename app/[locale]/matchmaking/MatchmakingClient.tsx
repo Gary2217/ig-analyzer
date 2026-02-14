@@ -2138,11 +2138,18 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
       if (!localMatch) return c
 
-      // CRITICAL FIX: return canonical local object so statsFetchId works
-      return {
+      const merged = {
+        ...(c as any),
         ...(localMatch as any),
-        // Preserve the search/remote card for fetchId derivation and debugging
-        __rawCard: (c as any)?.__rawCard ?? c,
+      }
+
+      // Ensure __rawCard also contains canonical IDs (so getStatsFetchId works even if it reads __rawCard)
+      return {
+        ...merged,
+        __rawCard: {
+          ...((c as any)?.__rawCard ?? c),
+          ...(localMatch as any),
+        },
       }
     })
   }, [pagedRealCards, localByHandle])
