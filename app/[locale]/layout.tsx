@@ -14,7 +14,7 @@ export default async function LocaleLayout({
 }) {
   const resolvedParams = await params
   const rawLocale = resolvedParams?.locale
-  const locale: Locale = rawLocale === "zh-TW" ? "zh-TW" : "en"
+  const locale: Locale = rawLocale === "en" ? "en" : "zh-TW"
 
   const messages = await loadMessages(locale)
 
