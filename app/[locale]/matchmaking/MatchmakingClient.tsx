@@ -2139,7 +2139,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       if (!localMatch) return c
 
       // CRITICAL FIX: return canonical local object so statsFetchId works
-      return localMatch
+      return {
+        ...(localMatch as any),
+        // Preserve the search/remote card for fetchId derivation and debugging
+        __rawCard: (c as any)?.__rawCard ?? c,
+      }
     })
   }, [pagedRealCards, localByHandle])
 
