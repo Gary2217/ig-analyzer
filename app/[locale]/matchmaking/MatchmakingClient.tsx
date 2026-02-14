@@ -2119,8 +2119,15 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return uniqueOrdered
   }, [pagedRealCards])
 
+  const statsSourceCards = useMemo(() => {
+    if (hasRemoteSearchActive && Array.isArray(remoteCreators) && remoteCreators.length > 0) {
+      return remoteCreators
+    }
+    return pagedRealCards
+  }, [hasRemoteSearchActive, remoteCreators, pagedRealCards])
+
   const statsFetchIds = useMemo(() => {
-    const ids = pagedRealCards
+    const ids = statsSourceCards
       .map((c) => getStatsFetchId(c))
       .filter((x): x is string => typeof x === "string" && /^\d+$/.test(x))
 
@@ -2132,13 +2139,13 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       uniqueOrdered.push(id)
     }
     return uniqueOrdered
-  }, [pagedRealCards])
+  }, [statsSourceCards])
 
   const statsFetchIdsKey = useMemo(() => statsFetchIds.join("|"), [statsFetchIds])
 
   const statsCacheKeysByFetchId = useMemo(() => {
     const m = new Map<string, string[]>()
-    for (const c of pagedRealCards) {
+    for (const c of statsSourceCards) {
       const fetchId = getStatsFetchId(c)
       if (!fetchId || !/^\d+$/.test(fetchId)) continue
       const cacheKey = getStatsCacheKey(c)
@@ -2148,7 +2155,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       else if (!arr.includes(cacheKey)) arr.push(cacheKey)
     }
     return m
-  }, [pagedRealCards])
+  }, [statsSourceCards])
 
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
