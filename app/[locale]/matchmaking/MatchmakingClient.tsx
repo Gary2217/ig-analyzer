@@ -1365,8 +1365,12 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const localHitByHandle = remoteHandleLower ? localByHandle.get(remoteHandleLower) : null
 
       const localNumericId = localHitByHandle ? getNumericCreatorId(localHitByHandle) : null
-      const effectiveNumericId = remoteNumericId ?? localNumericId
-      const localHit = effectiveNumericId ? localByNumericId.get(effectiveNumericId) : null
+      const effectiveNumericIdStr: string | null = remoteNumericId ?? localNumericId ?? null
+      const effectiveNumericIdNum: number | null =
+        typeof effectiveNumericIdStr === "string" && /^\d+$/.test(effectiveNumericIdStr)
+          ? Number(effectiveNumericIdStr)
+          : null
+      const localHit = effectiveNumericIdStr ? localByNumericId.get(effectiveNumericIdStr) : null
 
       const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
 
@@ -1428,8 +1432,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       return {
         id: c.id,
         creatorId: cacheKey ?? undefined,
-        numericId: effectiveNumericId ?? undefined,
-        statsFetchId: effectiveNumericId != null ? String(effectiveNumericId) : undefined,
+        // 🔥 CRITICAL: expose numericId for stats fetching
+        numericId: effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum) ? effectiveNumericIdNum : undefined,
+
+        // 🔥 CRITICAL: expose statsFetchId for stats fetching
+        statsFetchId: effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum) ? String(effectiveNumericIdNum) : undefined,
         name: displayNameResolved,
         displayName: displayNameResolved,
         username:
@@ -1460,10 +1467,22 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         primaryContactMethod,
         href: c.isDemo ? "" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
+        // 🔥 CRITICAL: enrich __rawCard so fallback resolution always works
         __rawCard: {
           ...((c as any)?.__rawCard ?? (c as any)),
-          numericId: effectiveNumericId ?? ((c as any)?.numericId ?? undefined),
-          creatorNumericId: effectiveNumericId ?? ((c as any)?.creatorNumericId ?? undefined),
+
+          numericId:
+            effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum)
+              ? effectiveNumericIdNum
+              : ((c as any)?.numericId ?? (c as any)?.creatorNumericId ?? undefined),
+
+          creatorNumericId:
+            effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum)
+              ? effectiveNumericIdNum
+              : ((c as any)?.creatorNumericId ?? (c as any)?.numericId ?? undefined),
+
+          statsFetchId:
+            effectiveNumericIdNum != null && Number.isFinite(effectiveNumericIdNum) ? String(effectiveNumericIdNum) : undefined,
         },
       }
     })
@@ -2162,12 +2181,44 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         ...(localMatch as any),
       }
 
-      // Ensure __rawCard also contains canonical IDs (so getStatsFetchId works even if it reads __rawCard)
+      const directFromC =
+        (c as any)?.statsFetchId ??
+        (c as any)?.numericId ??
+        (c as any)?.creatorNumericId ??
+        (c as any)?.__rawCard?.statsFetchId ??
+        (c as any)?.__rawCard?.numericId ??
+        (c as any)?.__rawCard?.creatorNumericId
+
+      const directFromLocal =
+        (localMatch as any)?.statsFetchId ??
+        (localMatch as any)?.numericId ??
+        (localMatch as any)?.creatorNumericId ??
+        (localMatch as any)?.__rawCard?.statsFetchId ??
+        (localMatch as any)?.__rawCard?.numericId ??
+        (localMatch as any)?.__rawCard?.creatorNumericId
+
+      const stableFetchId =
+        directFromC ??
+        directFromLocal ??
+        (merged as any)?.statsFetchId ??
+        (merged as any)?.numericId ??
+        (merged as any)?.creatorNumericId
+
       return {
         ...merged,
+
+        // preserve numeric ids for stats fetching (do NOT let undefined from local overwrite remote)
+        numericId: (merged as any)?.numericId ?? stableFetchId ?? undefined,
+        statsFetchId: (merged as any)?.statsFetchId ?? (stableFetchId != null ? String(stableFetchId) : undefined),
+
         __rawCard: {
           ...((c as any)?.__rawCard ?? c),
           ...(localMatch as any),
+
+          // same preservation inside __rawCard
+          numericId: (((c as any)?.__rawCard ?? c) as any)?.numericId ?? stableFetchId ?? undefined,
+          creatorNumericId: (((c as any)?.__rawCard ?? c) as any)?.creatorNumericId ?? stableFetchId ?? undefined,
+          statsFetchId: (((c as any)?.__rawCard ?? c) as any)?.statsFetchId ?? (stableFetchId != null ? String(stableFetchId) : undefined),
         },
       }
     })
