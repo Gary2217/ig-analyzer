@@ -2152,7 +2152,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         },
       }
     })
-  }, [pagedRealCards, localByHandle])
+  }, [pagedRealCards, localByHandle, localByNumericId])
 
   const resultCount = useMemo(() => finalCards.length, [finalCards.length])
   const hasAnySearchActive = useMemo(() => hasSearchActive || hasRemoteSearchActive, [hasSearchActive, hasRemoteSearchActive])
