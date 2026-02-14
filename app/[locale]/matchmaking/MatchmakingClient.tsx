@@ -2110,6 +2110,32 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return finalCards.slice(start, start + pageSize)
   }, [clampedPage, finalCards])
 
+  const pagedRealCardsResolved = useMemo(() => {
+    if (!Array.isArray(pagedRealCards)) return pagedRealCards
+
+    return pagedRealCards.map((c: any) => {
+      const handle =
+        c?.handle ??
+        c?.username ??
+        c?.igUsername ??
+        c?.__rawCard?.handle ??
+        c?.__rawCard?.username ??
+        c?.__rawCard?.igUsername
+
+      if (!handle) return c
+
+      const localMatch = localByHandle?.get?.(String(handle).toLowerCase?.()) ?? null
+
+      if (!localMatch) return c
+
+      return {
+        ...c,
+        ...localMatch,
+        __rawCard: c?.__rawCard ?? localMatch?.__rawCard ?? c,
+      }
+    })
+  }, [pagedRealCards, localByHandle])
+
   const resultCount = useMemo(() => finalCards.length, [finalCards.length])
   const hasAnySearchActive = useMemo(() => hasSearchActive || hasRemoteSearchActive, [hasSearchActive, hasRemoteSearchActive])
   const isSearching = useMemo(() => hasRemoteSearchActive && remoteLoading, [hasRemoteSearchActive, remoteLoading])
@@ -2169,7 +2195,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return uniqueOrdered
   }, [pagedRealCards])
 
-  const statsSourceCards = pagedRealCards
+  const statsSourceCards = pagedRealCardsResolved
 
   const statsFetchIds = useMemo(() => {
     const ids = statsSourceCards
@@ -2632,7 +2658,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           </CreatorGrid>
         ) : (
           <CreatorGrid>
-            {pagedRealCards.map((c) => {
+            {pagedRealCardsResolved.map((c) => {
               const isOwnerCard = Boolean(pinnedCreator && c.id === pinnedCreator.id)
               const creatorId = getNumericCreatorId(c) ?? c.creatorId
               const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
