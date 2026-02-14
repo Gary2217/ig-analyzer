@@ -185,7 +185,23 @@ function getStatsCacheKey(card: any): string | null {
 
 function getStatsFetchId(card: any): string | null {
   const n = getNumericCreatorId(card) ?? getNumericCreatorId(card?.__rawCard)
-  return n != null ? String(n) : null
+  const fetchId = n != null ? String(n) : null
+
+  if (!fetchId) {
+    try {
+      console.warn("[stats][debug] missing fetchId for card:", {
+        id: (card as any)?.id ?? null,
+        creatorId: (card as any)?.creatorId ?? null,
+        username: (card as any)?.username ?? null,
+        handle: (card as any)?.handle ?? null,
+        igUsername: (card as any)?.igUsername ?? null,
+        platform: (card as any)?.platform ?? null,
+        platforms: (card as any)?.platforms ?? null,
+      })
+    } catch {}
+  }
+
+  return fetchId
 }
 
 function writeOwnerLookupCacheV2(next: OwnerLookupCacheV2): void {
@@ -2185,6 +2201,34 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     }
     return m
   }, [statsSourceCards])
+
+  useEffect(() => {
+    try {
+      console.log("[stats][debug] statsSourceCards.length =", statsSourceCards?.length ?? 0);
+
+      console.log(
+        "[stats][debug] firstCards =",
+        (statsSourceCards ?? []).slice(0, 5).map((c: any) => ({
+          id: c?.id ?? null,
+          creatorId: c?.creatorId ?? null,
+          username: c?.username ?? null,
+          handle: c?.handle ?? null,
+          igUsername: c?.igUsername ?? null,
+          platform: c?.platform ?? null,
+          platforms: c?.platforms ?? null,
+        }))
+      );
+
+      console.log("[stats][debug] statsFetchIds.length =", statsFetchIds?.length ?? 0);
+      console.log("[stats][debug] statsFetchIds =", statsFetchIds ?? []);
+      console.log(
+        "[stats][debug] statsCacheKeysByFetchId keys =",
+        statsCacheKeysByFetchId ? Object.keys(statsCacheKeysByFetchId) : []
+      );
+    } catch (err) {
+      console.error("[stats][debug] error during debug logging", err);
+    }
+  }, [statsSourceCards, statsFetchIds, statsCacheKeysByFetchId]);
 
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
