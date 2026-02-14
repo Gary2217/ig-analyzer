@@ -2153,12 +2153,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return uniqueOrdered
   }, [pagedRealCards])
 
-  const statsSourceCards = useMemo(() => {
-    if (hasRemoteSearchActive && Array.isArray(remoteCreators) && remoteCreators.length > 0) {
-      return remoteCreators
-    }
-    return pagedRealCards
-  }, [hasRemoteSearchActive, remoteCreators, pagedRealCards])
+  const statsSourceCards = pagedRealCards
 
   const statsFetchIds = useMemo(() => {
     const ids = statsSourceCards
