@@ -1600,7 +1600,13 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const qTrim = useMemo(() => String(debouncedQ ?? "").trim(), [debouncedQ])
 
   const localQ = qTrim
-  const remoteQ = qTrim.length >= MIN_REMOTE_Q_LEN ? qTrim : ""
+
+  const normalizedQ = typeof searchInput === "string" ? searchInput.trim() : ""
+  const normalizedDebouncedQ = typeof debouncedQ === "string" ? debouncedQ.trim() : ""
+
+  // Use debouncedQ if available, otherwise fallback to live search input.
+  // This guarantees remote search works even if debounce fails.
+  const remoteQ = normalizedDebouncedQ.length > 0 ? normalizedDebouncedQ : normalizedQ
 
   const localRawQuery = useMemo(() => String(debouncedQ ?? ""), [debouncedQ])
   const localTokens = useMemo(() => tokenizeQuery(localRawQuery), [localRawQuery])
@@ -1612,34 +1618,33 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   useEffect(() => {
     try {
       // eslint-disable-next-line no-console
-      console.log("[mm][debug] q state", {
-        searchInput,
-        debouncedQ,
-        qTrim: String(debouncedQ ?? "").trim(),
-        MIN_REMOTE_Q_LEN,
+      console.log("[mm][debug] search state", {
+        q: normalizedQ,
+        debouncedQ: normalizedDebouncedQ,
         remoteQ,
         hasRemoteSearchActive,
-        hasSearchActive,
-        remoteRawCardsLen: Array.isArray(remoteRawCards) ? remoteRawCards.length : -1,
-        remoteCreatorsLen: Array.isArray(remoteCreators) ? remoteCreators.length : -1,
-        remoteLoading,
-        remoteError,
-        lastFetchedQ: lastFetchedQRef.current,
-        remoteReqId: remoteReqIdRef.current,
       })
     } catch {}
   }, [
-    searchInput,
-    debouncedQ,
+    normalizedQ,
+    normalizedDebouncedQ,
     remoteQ,
     hasRemoteSearchActive,
-    hasSearchActive,
-    remoteRawCards,
-    remoteCreators,
-    remoteLoading,
-    remoteError,
-    MIN_REMOTE_Q_LEN,
   ])
+
+  const shouldFetchRemote = typeof remoteQ === "string" && remoteQ.length >= MIN_REMOTE_Q_LEN
+
+  useEffect(() => {
+    if (!shouldFetchRemote) return
+
+    try {
+      // eslint-disable-next-line no-console
+      console.log("[mm][debug] remote search triggered", {
+        remoteQ,
+        length: remoteQ.length,
+      })
+    } catch {}
+  }, [shouldFetchRemote, remoteQ])
 
   useEffect(() => {
     // Sync URL query param q from debouncedQ without causing ping-pong.
