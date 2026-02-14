@@ -150,7 +150,7 @@ const searchKeyForCardLike = (c: any): string => {
 }
 
 const getNumericCreatorId = (c: any): string | null => {
-  const candidates: unknown[] = [c?.creatorId, c?.igUserId, c?.id]
+  const candidates: unknown[] = [c?.numericId, c?.statsFetchId, c?.creatorNumericId, c?.creatorId, c?.igUserId, c?.id]
   for (const v of candidates) {
     if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
     if (typeof v === "string") {
@@ -1395,7 +1395,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         primaryContactMethod,
         href: c.isDemo ? "" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
-        __rawCard: c as any,
+        __rawCard: (c as any)?.__rawCard ?? (c as any),
       }
     })
   }, [remoteRawCards, statsVersion, localByNumericId])
