@@ -169,6 +169,14 @@ const getNumericCreatorId = (c: any): string | null => {
   return null
 }
 
+function getStatsCacheKey(card: any): string | null {
+  const numericId = getNumericCreatorId(card) ?? getNumericCreatorId(card?.__rawCard)
+  if (numericId != null) return String(numericId)
+
+  const fallback = card?.creatorId ?? card?.__rawCard?.creatorId ?? card?.igUserId ?? card?.id
+  return typeof fallback === "string" && fallback.length > 0 ? fallback : null
+}
+
 function writeOwnerLookupCacheV2(next: OwnerLookupCacheV2): void {
   try {
     if (typeof window === "undefined") return
@@ -1141,8 +1149,9 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
       const dealTypes = derivedCollabTypes as unknown as string[]
 
+      const cacheKey = getStatsCacheKey(c)
       const numericCreatorId = getNumericCreatorId(c)
-      const cachedStats = numericCreatorId != null ? statsCacheRef.current.get(String(numericCreatorId)) : undefined
+      const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
 
       const rawHandle =
         typeof (c as any).handle === "string"
@@ -1195,7 +1204,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
       return {
         id: c.id,
-        creatorId: numericCreatorId ?? undefined,
+        creatorId: cacheKey ?? undefined,
         name: displayNameResolved,
         displayName: displayNameResolved,
         username:
@@ -1283,9 +1292,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
       const dealTypes = derivedCollabTypes as unknown as string[]
 
+      const cacheKey = getStatsCacheKey(c)
       const numericId = getNumericCreatorId(c) ?? getNumericCreatorId((c as any)?.__rawCard)
       const localHit = numericId ? localByNumericId.get(numericId) : null
-      const cachedStats = numericId != null ? statsCacheRef.current.get(String(numericId)) : undefined
+      const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
 
       const statsFromLocal = localHit && typeof localHit === "object" ? (localHit as any)?.stats : undefined
       const resolvedStats = cachedStats ?? statsFromLocal
@@ -1343,7 +1353,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
       return {
         id: c.id,
-        creatorId: numericId ?? undefined,
+        creatorId: cacheKey ?? undefined,
         name: displayNameResolved,
         displayName: displayNameResolved,
         username:
@@ -1836,11 +1846,12 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
     const dealTypes = derivedCollabTypes as unknown as string[]
 
+    const cacheKey = getStatsCacheKey(meCard)
     const creatorIdStr =
       typeof (meCard as any)?.igUserId === "string" && /^\d+$/.test(String((meCard as any).igUserId))
         ? String((meCard as any).igUserId)
         : null
-    const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
+    const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
 
     const rawFollowers =
       typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
@@ -1896,7 +1907,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
     return {
       id: meCard.id,
-      creatorId: creatorIdStr ?? undefined,
+      creatorId: cacheKey ?? undefined,
       name: meCard.displayName,
       handle,
       avatarUrl: meCard.avatarUrl,
@@ -2042,6 +2053,15 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const hasAnySearchActive = useMemo(() => hasSearchActive || hasRemoteSearchActive, [hasSearchActive, hasRemoteSearchActive])
   const isSearching = useMemo(() => hasRemoteSearchActive && remoteLoading, [hasRemoteSearchActive, remoteLoading])
 
+  const selectedBudgetMax = useMemo(() => {
+    if (budget === "any") return null
+    if (budget === "custom") {
+      const amt = Number(customBudget.trim())
+      return Number.isFinite(amt) && amt > 0 ? amt : null
+    }
+    return budgetMaxForRange(budget)
+  }, [budget, customBudget])
+
   const popularCreatorId = useMemo(() => {
     function calcPopularScore(c: any): number {
       const er = typeof c?.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
@@ -2072,21 +2092,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return (best as any)?.creatorId || (best as any)?.id || null
   }, [creators])
 
-  
-
-  const selectedBudgetMax = useMemo(() => {
-    if (budget === "any") return null
-    if (budget === "custom") {
-      const amt = Number(customBudget.trim())
-      return Number.isFinite(amt) && amt > 0 ? amt : null
-    }
-    return budgetMaxForRange(budget)
-  }, [budget, customBudget])
-
   const visibleCreatorIds = useMemo(() => {
     const ids = pagedRealCards
-      .map((c) => getNumericCreatorId(c) ?? c.creatorId ?? null)
-      .filter((x): x is string => typeof x === "string" && /^\d+$/.test(x))
+      .map((c) => getStatsCacheKey(c))
+      .filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
     const uniqueOrdered: string[] = []
