@@ -214,6 +214,22 @@ function getStatsFetchId(card: any): string | null {
     } catch {}
   }
 
+  try {
+    // eslint-disable-next-line no-console
+    console.log("[stats][debug] fetchId inputs", {
+      direct: direct ?? null,
+      n: n ?? null,
+      fetchId: fetchId ?? null,
+      card_numericId: card?.numericId ?? null,
+      card_statsFetchId: card?.statsFetchId ?? null,
+      raw_numericId: card?.__rawCard?.numericId ?? null,
+      raw_statsFetchId: card?.__rawCard?.statsFetchId ?? null,
+      raw_creatorNumericId: card?.__rawCard?.creatorNumericId ?? null,
+      getNumeric_card: getNumericCreatorId(card) ?? null,
+      getNumeric_raw: getNumericCreatorId(card?.__rawCard) ?? null,
+    })
+  } catch {}
+
   return fetchId
 }
 
@@ -1596,6 +1612,38 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   const hasRemoteSearchActive = useMemo(() => remoteQ.length >= MIN_REMOTE_Q_LEN, [remoteQ, MIN_REMOTE_Q_LEN])
 
   useEffect(() => {
+    try {
+      // eslint-disable-next-line no-console
+      console.log("[mm][debug] q state", {
+        searchInput,
+        debouncedQ,
+        qTrim: String(debouncedQ ?? "").trim(),
+        MIN_REMOTE_Q_LEN,
+        remoteQ,
+        hasRemoteSearchActive,
+        hasSearchActive,
+        remoteRawCardsLen: Array.isArray(remoteRawCards) ? remoteRawCards.length : -1,
+        remoteCreatorsLen: Array.isArray(remoteCreators) ? remoteCreators.length : -1,
+        remoteLoading,
+        remoteError,
+        lastFetchedQ: lastFetchedQRef.current,
+        remoteReqId: remoteReqIdRef.current,
+      })
+    } catch {}
+  }, [
+    searchInput,
+    debouncedQ,
+    remoteQ,
+    hasRemoteSearchActive,
+    hasSearchActive,
+    remoteRawCards,
+    remoteCreators,
+    remoteLoading,
+    remoteError,
+    MIN_REMOTE_Q_LEN,
+  ])
+
+  useEffect(() => {
     // Sync URL query param q from debouncedQ without causing ping-pong.
     try {
       const next = String(remoteQ ?? "").slice(0, 120)
@@ -1908,6 +1956,46 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     remoteCreators,
     matchesDropdownFilters,
     hasUsableRemoteResults,
+  ])
+
+  useEffect(() => {
+    try {
+      const useRemote =
+        hasUsableRemoteResults &&
+        Array.isArray(remoteCreators) &&
+        remoteCreators.length > 0
+
+      // eslint-disable-next-line no-console
+      console.log("[mm][debug] baseList source", {
+        useRemote,
+        hasUsableRemoteResults,
+        hasRemoteSearchActive,
+        remoteCreatorsLen: Array.isArray(remoteCreators) ? remoteCreators.length : -1,
+        creatorsLen: Array.isArray(creators) ? creators.length : -1,
+        baseListLen: Array.isArray(baseList) ? baseList.length : -1,
+        // show the first item keys to see if numericId/statsFetchId exist
+        firstBase: (baseList ?? [])[0]
+          ? {
+              id: (baseList as any)[0]?.id,
+              creatorId: (baseList as any)[0]?.creatorId,
+              numericId: (baseList as any)[0]?.numericId,
+              statsFetchId: (baseList as any)[0]?.statsFetchId,
+              handle: (baseList as any)[0]?.handle,
+              username: (baseList as any)[0]?.username,
+              igUsername: (baseList as any)[0]?.igUsername,
+              raw_numericId: (baseList as any)[0]?.__rawCard?.numericId,
+              raw_statsFetchId: (baseList as any)[0]?.__rawCard?.statsFetchId,
+              raw_creatorNumericId: (baseList as any)[0]?.__rawCard?.creatorNumericId,
+            }
+          : null,
+      })
+    } catch {}
+  }, [
+    baseList,
+    creators,
+    remoteCreators,
+    hasUsableRemoteResults,
+    hasRemoteSearchActive,
   ])
 
   const demoFillCards = useMemo((): CreatorCardData[] => {
