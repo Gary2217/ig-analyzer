@@ -1216,6 +1216,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       return {
         id: c.id,
         creatorId: cacheKey ?? undefined,
+        numericId: numericCreatorId ?? undefined,
+        statsFetchId: numericCreatorId ?? undefined,
         name: displayNameResolved,
         displayName: displayNameResolved,
         username:
@@ -1257,6 +1259,23 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const id = getNumericCreatorId(c)
       if (!id) continue
       if (!m.has(id)) m.set(id, c)
+    }
+    return m
+  }, [allCards])
+
+  const localByHandle = useMemo(() => {
+    const m = new Map<string, any>()
+    for (const c of allCards as any[]) {
+      const h =
+        (typeof (c as any)?.handle === "string" && (c as any).handle.trim()) ||
+        (typeof (c as any)?.username === "string" && (c as any).username.trim()) ||
+        (typeof (c as any)?.igUsername === "string" && (c as any).igUsername.trim()) ||
+        (typeof (c as any)?.__rawCard?.handle === "string" && (c as any).__rawCard.handle.trim()) ||
+        (typeof (c as any)?.__rawCard?.username === "string" && (c as any).__rawCard.username.trim()) ||
+        null
+      if (!h) continue
+      const key = h.toLowerCase()
+      if (!m.has(key)) m.set(key, c)
     }
     return m
   }, [allCards])
@@ -1304,11 +1323,26 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const dealTypes = derivedCollabTypes as unknown as string[]
 
       const cacheKey = getStatsCacheKey(c)
-      const numericId = getNumericCreatorId(c) ?? getNumericCreatorId((c as any)?.__rawCard)
-      const localHit = numericId ? localByNumericId.get(numericId) : null
+      const remoteNumericId = getNumericCreatorId(c) ?? getNumericCreatorId((c as any)?.__rawCard)
+
+      const remoteHandle =
+        (typeof (c as any)?.handle === "string" ? (c as any).handle : null) ??
+        (typeof (c as any)?.username === "string" ? (c as any).username : null) ??
+        (typeof (c as any)?.igUsername === "string" ? (c as any).igUsername : null) ??
+        (typeof (c as any)?.__rawCard?.handle === "string" ? (c as any).__rawCard.handle : null) ??
+        (typeof (c as any)?.__rawCard?.username === "string" ? (c as any).__rawCard.username : null) ??
+        null
+      const remoteHandleLower = remoteHandle ? String(remoteHandle).trim().toLowerCase() : null
+      const localHitByHandle = remoteHandleLower ? localByHandle.get(remoteHandleLower) : null
+
+      const localNumericId = localHitByHandle ? getNumericCreatorId(localHitByHandle) : null
+      const effectiveNumericId = remoteNumericId ?? localNumericId
+      const localHit = effectiveNumericId ? localByNumericId.get(effectiveNumericId) : null
+
       const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
 
-      const statsFromLocal = localHit && typeof localHit === "object" ? (localHit as any)?.stats : undefined
+      const localBase = (localHit && typeof localHit === "object" ? localHit : null) ?? (localHitByHandle && typeof localHitByHandle === "object" ? localHitByHandle : null)
+      const statsFromLocal = localBase ? (localBase as any)?.stats : undefined
       const resolvedStats = cachedStats ?? statsFromLocal
 
       const rawHandle =
@@ -1398,7 +1432,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         __rawCard: (c as any)?.__rawCard ?? (c as any),
       }
     })
-  }, [remoteRawCards, statsVersion, localByNumericId])
+  }, [remoteRawCards, statsVersion, localByNumericId, localByHandle])
 
   const remoteSearchHayByKey = useMemo(() => {
     const m = new Map<string, string>()
