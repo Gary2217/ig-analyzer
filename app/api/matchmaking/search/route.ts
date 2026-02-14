@@ -87,6 +87,10 @@ export async function GET(req: Request) {
     }
 
     const rows = Array.isArray(data) ? data : []
+
+    // eslint-disable-next-line no-console
+    console.log("[API DEBUG] matchmaking search row sample:", rows?.[0])
+
     const items = rows.map((r: any) => {
       const id = typeof r?.id === "string" ? r.id : ""
 
@@ -108,6 +112,9 @@ export async function GET(req: Request) {
           "id_numeric",
           "idNumeric"
         ) ?? null
+
+      // eslint-disable-next-line no-console
+      console.log("[API DEBUG] extracted creatorNumericId:", creatorNumericId)
 
       const numericId = creatorNumericId != null ? Number(creatorNumericId) : null
       const numericIdSafe = numericId != null && Number.isSafeInteger(numericId) ? numericId : null
