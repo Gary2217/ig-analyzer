@@ -150,7 +150,7 @@ const searchKeyForCardLike = (c: any): string => {
 }
 
 const getNumericCreatorId = (c: any): string | null => {
-  const candidates: unknown[] = [c?.numericId, c?.statsFetchId, c?.creatorNumericId, c?.creatorId, c?.igUserId, c?.id]
+  const candidates: unknown[] = [c?.numericId, c?.statsFetchId, c?.creatorNumericId, c?.creatorId, c?.igUserId, c?.ig_user_id, c?.id]
   for (const v of candidates) {
     if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
     if (typeof v === "string") {
@@ -162,7 +162,7 @@ const getNumericCreatorId = (c: any): string | null => {
   const raw = c?.__rawCard
   if (raw && typeof raw === "object") {
     const r: any = raw as any
-    const rawCandidates: unknown[] = [r?.numericId, r?.statsFetchId, r?.creatorNumericId, r?.creatorId, r?.igUserId, r?.id]
+    const rawCandidates: unknown[] = [r?.numericId, r?.statsFetchId, r?.creatorNumericId, r?.creatorId, r?.igUserId, r?.ig_user_id, r?.id]
     for (const v of rawCandidates) {
       if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
       if (typeof v === "string") {
@@ -188,9 +188,11 @@ function getStatsFetchId(card: any): string | null {
     card?.statsFetchId ??
     card?.numericId ??
     card?.creatorNumericId ??
+    card?.ig_user_id ??
     card?.__rawCard?.statsFetchId ??
     card?.__rawCard?.numericId ??
-    card?.__rawCard?.creatorNumericId
+    card?.__rawCard?.creatorNumericId ??
+    card?.__rawCard?.ig_user_id
 
   const directStr = typeof direct === "string" ? direct.trim() : ""
   const fetchId =
