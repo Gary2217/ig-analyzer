@@ -2114,24 +2114,34 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     if (!Array.isArray(pagedRealCards)) return pagedRealCards
 
     return pagedRealCards.map((c: any) => {
-      const handle =
+      const rawHandle =
         c?.handle ??
         c?.username ??
         c?.igUsername ??
         c?.__rawCard?.handle ??
         c?.__rawCard?.username ??
-        c?.__rawCard?.igUsername
+        c?.__rawCard?.igUsername ??
+        c?.profile?.handle ??
+        c?.profile?.username ??
+        c?.profile?.igUsername
 
-      if (!handle) return c
+      const normalizedHandle = rawHandle ? String(rawHandle).trim().replace(/^@+/, "").toLowerCase() : null
 
-      const localMatch = localByHandle?.get?.(String(handle).toLowerCase?.()) ?? null
+      const localHitByHandle = normalizedHandle && localByHandle?.get?.(normalizedHandle) ? localByHandle.get(normalizedHandle) : null
+
+      // numericId fallback (if your file already has localByNumericId in scope)
+      const remoteNumericId = c?.numericId ?? c?.creatorNumericId ?? c?.creatorIdNumeric ?? c?.__rawCard?.numericId ?? c?.__rawCard?.creatorNumericId ?? null
+
+      const localHitByNumericId = remoteNumericId != null && typeof localByNumericId?.get === "function" ? localByNumericId.get(remoteNumericId) : null
+
+      const localMatch = localHitByHandle ?? localHitByNumericId
 
       if (!localMatch) return c
 
       return {
         ...c,
-        ...localMatch,
-        __rawCard: c?.__rawCard ?? localMatch?.__rawCard ?? c,
+        ...localMatch, // local overwrites remote for IDs
+        __rawCard: (c as any)?.__rawCard ?? (localMatch as any)?.__rawCard ?? c,
       }
     })
   }, [pagedRealCards, localByHandle])
