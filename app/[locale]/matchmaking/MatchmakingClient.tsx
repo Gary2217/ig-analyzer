@@ -152,8 +152,11 @@ const searchKeyForCardLike = (c: any): string => {
 const getNumericCreatorId = (c: any): string | null => {
   const candidates: unknown[] = [c?.creatorId, c?.igUserId, c?.id]
   for (const v of candidates) {
-    const s = typeof v === "string" ? v : typeof v === "number" && Number.isFinite(v) ? String(Math.floor(v)) : null
-    if (s && /^\d+$/.test(s)) return s
+    if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
+    if (typeof v === "string") {
+      const s = v.trim()
+      if (s && /^\d+$/.test(s)) return s
+    }
   }
 
   const raw = c?.__rawCard
@@ -161,8 +164,11 @@ const getNumericCreatorId = (c: any): string | null => {
     const r: any = raw as any
     const rawCandidates: unknown[] = [r?.creatorId, r?.igUserId, r?.id]
     for (const v of rawCandidates) {
-      const s = typeof v === "string" ? v : typeof v === "number" && Number.isFinite(v) ? String(Math.floor(v)) : null
-      if (s && /^\d+$/.test(s)) return s
+      if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
+      if (typeof v === "string") {
+        const s = v.trim()
+        if (s && /^\d+$/.test(s)) return s
+      }
     }
   }
 
@@ -175,6 +181,11 @@ function getStatsCacheKey(card: any): string | null {
 
   const fallback = card?.creatorId ?? card?.__rawCard?.creatorId ?? card?.igUserId ?? card?.id
   return typeof fallback === "string" && fallback.length > 0 ? fallback : null
+}
+
+function getStatsFetchId(card: any): string | null {
+  const n = getNumericCreatorId(card) ?? getNumericCreatorId(card?.__rawCard)
+  return n != null ? String(n) : null
 }
 
 function writeOwnerLookupCacheV2(next: OwnerLookupCacheV2): void {
@@ -2108,31 +2119,66 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return uniqueOrdered
   }, [pagedRealCards])
 
+  const statsFetchIds = useMemo(() => {
+    const ids = pagedRealCards
+      .map((c) => getStatsFetchId(c))
+      .filter((x): x is string => typeof x === "string" && /^\d+$/.test(x))
+
+    const seen = new Set<string>()
+    const uniqueOrdered: string[] = []
+    for (const id of ids) {
+      if (seen.has(id)) continue
+      seen.add(id)
+      uniqueOrdered.push(id)
+    }
+    return uniqueOrdered
+  }, [pagedRealCards])
+
+  const statsFetchIdsKey = useMemo(() => statsFetchIds.join("|"), [statsFetchIds])
+
+  const statsCacheKeysByFetchId = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const c of pagedRealCards) {
+      const fetchId = getStatsFetchId(c)
+      if (!fetchId || !/^\d+$/.test(fetchId)) continue
+      const cacheKey = getStatsCacheKey(c)
+      if (!cacheKey) continue
+      const arr = m.get(fetchId)
+      if (!arr) m.set(fetchId, [cacheKey])
+      else if (!arr.includes(cacheKey)) arr.push(cacheKey)
+    }
+    return m
+  }, [pagedRealCards])
+
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
   useEffect(() => {
-    const ac = new AbortController()
-
-    const unique = visibleCreatorIds
+    let alive = true
+    const unique = statsFetchIds
     const missing = unique.filter((id) => !statsCacheRef.current.has(id) && !statsInFlightRef.current.has(id))
-    if (!missing.length) return () => ac.abort()
-
     let didCancel = false
+    if (!missing.length) {
+      return () => {
+        alive = false
+        didCancel = true
+      }
+    }
+
     const concurrency = 3
     let cursor = 0
 
-    setStatsPrefetchRunning(true)
+    if (alive) setStatsPrefetchRunning(true)
 
     const fetchOne = async (creatorId: string) => {
+      if (!creatorId || !/^\d+$/.test(creatorId)) return
       if (statsInFlightRef.current.has(creatorId)) return
       statsInFlightRef.current.add(creatorId)
-      setStatsUiVersion((v) => v + 1)
+      if (alive) setStatsUiVersion((v) => v + 1)
 
       const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
         method: "GET",
         cache: "no-store",
         credentials: "include",
-        signal: ac.signal,
       })
       const json = (await res.json().catch(() => null)) as any
       const stats = json?.ok === true ? json?.stats : null
@@ -2151,8 +2197,15 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
       const changed =
         prevCached?.followers !== nextCached.followers || prevCached?.engagementRatePct !== nextCached.engagementRatePct
+
       statsCacheRef.current.set(creatorId, nextCached)
-      if (changed) setStatsVersion((v) => v + 1)
+      const extraKeys = statsCacheKeysByFetchId.get(creatorId)
+      if (extraKeys && extraKeys.length) {
+        for (const k of extraKeys) {
+          if (k && k !== creatorId) statsCacheRef.current.set(k, nextCached)
+        }
+      }
+      if (changed && alive) setStatsVersion((v) => v + 1)
 
       if (!res.ok || json?.ok !== true) {
         statsErrorRef.current.set(creatorId, true)
@@ -2161,7 +2214,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       }
 
       statsInFlightRef.current.delete(creatorId)
-      setStatsUiVersion((v) => v + 1)
+      if (alive) setStatsUiVersion((v) => v + 1)
     }
 
     const runWorker = async () => {
@@ -2171,7 +2224,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         if (idx >= missing.length) return
 
         const creatorId = missing[idx]
-        if (!creatorId || statsCacheRef.current.has(creatorId)) continue
+        if (!creatorId || !/^\d+$/.test(creatorId) || statsCacheRef.current.has(creatorId)) continue
 
         try {
           await fetchOne(creatorId)
@@ -2187,7 +2240,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         Promise.all(workers)
           .catch(() => null)
           .finally(() => {
-            if (!didCancel) setStatsPrefetchRunning(false)
+            if (!didCancel && alive) setStatsPrefetchRunning(false)
           })
       }
 
@@ -2200,11 +2253,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     })()
 
     return () => {
+      alive = false
       didCancel = true
-      ac.abort()
       setStatsPrefetchRunning(false)
     }
-  }, [visibleCreatorIdsKey])
+  }, [statsFetchIdsKey, statsCacheKeysByFetchId])
 
   useEffect(() => {
     if (typeof window === "undefined") return
