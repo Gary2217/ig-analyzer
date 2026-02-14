@@ -2138,11 +2138,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
       if (!localMatch) return c
 
-      return {
-        ...c,
-        ...localMatch, // local overwrites remote for IDs
-        __rawCard: (c as any)?.__rawCard ?? (localMatch as any)?.__rawCard ?? c,
-      }
+      // CRITICAL FIX: return canonical local object so statsFetchId works
+      return localMatch
     })
   }, [pagedRealCards, localByHandle])
 
