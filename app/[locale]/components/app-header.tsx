@@ -19,10 +19,12 @@ export default function AppHeader({ locale }: { locale: string }) {
     ? {
         back: "返回",
         opportunities: "名片展示區",
+        homeAria: "回到首頁",
       }
     : {
         back: "Back",
         opportunities: "Card showcase",
+        homeAria: "Go to homepage",
       }
 
   const handleBackToResults = () => {
@@ -75,7 +77,7 @@ export default function AppHeader({ locale }: { locale: string }) {
           <div className="flex items-center justify-between py-1 sm:py-3 gap-3">
             <Link
               href={`/${locale}`}
-              aria-label="回到首頁 / Go to homepage"
+              aria-label={copy.homeAria}
               className="inline-flex items-center gap-2 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-md shrink-0"
             >
               <Logo size={28} className="text-white" />

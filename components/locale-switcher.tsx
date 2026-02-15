@@ -8,11 +8,22 @@ import { useI18n } from "./locale-provider"
 
 const LOCALES: Locale[] = ["zh-TW", "en"]
 
+const LOCALE_STORAGE_KEY = "preferred_locale"
+
 function setLocaleCookie(locale: Locale) {
   const maxAge = 60 * 60 * 24 * 365
   const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; secure" : ""
   document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=${maxAge}; samesite=lax${secure}`
   document.cookie = `locale=${locale}; path=/; max-age=${maxAge}; samesite=lax${secure}`
+}
+
+function setLocaleStorage(locale: Locale) {
+  try {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
+  } catch {
+    // ignore
+  }
 }
 
 export default function LocaleSwitcher() {
@@ -38,6 +49,7 @@ export default function LocaleSwitcher() {
   const switchTo = (next: Locale) => {
     if (next === current) return
     setLocaleCookie(next)
+    setLocaleStorage(next)
     setOpen(false)
 
     const params = new URLSearchParams(searchParams?.toString() || "")
@@ -72,6 +84,7 @@ export default function LocaleSwitcher() {
     <div ref={rootRef} className="relative overflow-visible">
       <button
         type="button"
+        aria-label={t("language.switch")}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}

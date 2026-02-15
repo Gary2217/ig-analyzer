@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -2014,7 +2014,13 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     for (const c of list) {
       const keyRaw = (c as any)?.creatorId ?? (c as any)?.id
       const key = keyRaw == null ? "" : String(keyRaw)
-      if (!key) continue
+
+      // If key is missing, DO NOT drop the card. Keep it and avoid deduping it.
+      if (!key) {
+        out.push(c)
+        continue
+      }
+
       if (seen.has(key)) continue
       seen.add(key)
       out.push(c)
@@ -2714,74 +2720,76 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         </div>
 
         <div className="mt-4">
-        <FiltersBar
-          locale={locale}
-          search={searchInput}
-          onSearch={onSearchInput}
-          onSearchCompositionStart={onSearchCompositionStart}
-          onSearchCompositionEnd={onSearchCompositionEnd}
-          remoteActive={hasRemoteSearchActive}
-          remoteLoading={remoteLoading}
-          remoteError={remoteError}
-          resultCount={resultCount}
-          hasSearchActive={hasAnySearchActive}
-          isSearching={isSearching}
-          focusNonce={focusNonce}
-          selectedPlatforms={selectedPlatforms}
-          onTogglePlatform={(p: Platform) =>
-            setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
-          }
-          onClearPlatforms={() => setSelectedPlatforms([])}
-          selectedTagCategories={selectedTagCategories}
-          tagCategoryOptions={tagCategoryOptions}
-          onToggleTagCategory={(tag: string) =>
-            setSelectedTagCategories((prev) => {
-              const t = String(tag || "").trim()
-              if (!t) return prev
-              return prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-            })
-          }
-          onAddCustomTagCategory={(tag: string) =>
-            setSelectedTagCategories((prev) => {
-              const t = String(tag || "").trim()
-              if (!t) return prev
-              return prev.includes(t) ? prev : [...prev, t]
-            })
-          }
-          onClearTagCategories={() => setSelectedTagCategories([])}
-          selectedDealTypes={selectedDealTypes}
-          onToggleDealType={(t: CollabType) =>
-            setSelectedDealTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
-          }
-          onClearDealTypes={() => setSelectedDealTypes([])}
-          dealTypeOptions={dealTypeOptions}
-          budget={budget}
-          onBudget={(v) => {
-            setBudget(v)
-            if (v !== "custom") setCustomBudget("")
-          }}
-          customBudget={customBudget}
-          onCustomBudget={setCustomBudget}
-          onClearCustomBudget={() => {
-            setBudget("any")
-            setCustomBudget("")
-          }}
-          sort={sort}
-          onSort={(v) => {
-            try {
-              if (typeof window !== "undefined") window.localStorage.setItem(LS_SORT_KEY, v)
-            } catch {
-              // swallow
-            }
+          <div className="sticky top-[52px] z-40 sm:static sm:top-auto">
+            <FiltersBar
+              locale={locale}
+              search={searchInput}
+              onSearch={onSearchInput}
+              onSearchCompositionStart={onSearchCompositionStart}
+              onSearchCompositionEnd={onSearchCompositionEnd}
+              remoteActive={hasRemoteSearchActive}
+              remoteLoading={remoteLoading}
+              remoteError={remoteError}
+              resultCount={resultCount}
+              hasSearchActive={hasAnySearchActive}
+              isSearching={isSearching}
+              focusNonce={focusNonce}
+              selectedPlatforms={selectedPlatforms}
+              onTogglePlatform={(p: Platform) =>
+                setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
+              }
+              onClearPlatforms={() => setSelectedPlatforms([])}
+              selectedTagCategories={selectedTagCategories}
+              tagCategoryOptions={tagCategoryOptions}
+              onToggleTagCategory={(tag: string) =>
+                setSelectedTagCategories((prev) => {
+                  const t = String(tag || "").trim()
+                  if (!t) return prev
+                  return prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+                })
+              }
+              onAddCustomTagCategory={(tag: string) =>
+                setSelectedTagCategories((prev) => {
+                  const t = String(tag || "").trim()
+                  if (!t) return prev
+                  return prev.includes(t) ? prev : [...prev, t]
+                })
+              }
+              onClearTagCategories={() => setSelectedTagCategories([])}
+              selectedDealTypes={selectedDealTypes}
+              onToggleDealType={(t: CollabType) =>
+                setSelectedDealTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+              }
+              onClearDealTypes={() => setSelectedDealTypes([])}
+              dealTypeOptions={dealTypeOptions}
+              budget={budget}
+              onBudget={(v) => {
+                setBudget(v)
+                if (v !== "custom") setCustomBudget("")
+              }}
+              customBudget={customBudget}
+              onCustomBudget={setCustomBudget}
+              onClearCustomBudget={() => {
+                setBudget("any")
+                setCustomBudget("")
+              }}
+              sort={sort}
+              onSort={(v) => {
+                try {
+                  if (typeof window !== "undefined") window.localStorage.setItem(LS_SORT_KEY, v)
+                } catch {
+                  // swallow
+                }
 
-            if (v === "followers_desc") setSort("followers_desc")
-            else if (v === "er_desc") setSort("er_desc")
-            else setSort("best_match")
-          }}
-          favoritesCount={fav.count}
-          onOpenFavorites={() => setFavOpen(true)}
-          statsUpdating={statsPrefetchRunning}
-        />
+                if (v === "followers_desc") setSort("followers_desc")
+                else if (v === "er_desc") setSort("er_desc")
+                else setSort("best_match")
+              }}
+              favoritesCount={fav.count}
+              onOpenFavorites={() => setFavOpen(true)}
+              statsUpdating={statsPrefetchRunning}
+            />
+          </div>
         </div>
 
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-5 sm:mt-6 min-w-0">
@@ -2839,7 +2847,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           </CreatorGrid>
         ) : (
           <CreatorGrid>
-            {pagedRealCardsResolved.map((c) => {
+            {pagedRealCardsResolved.map((c, idx) => {
               const isOwnerCard = Boolean(pinnedCreator && c.id === pinnedCreator.id)
               const creatorId = getNumericCreatorId(c) ?? c.creatorId
               const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
@@ -2851,7 +2859,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
               return (
                 <MatchmakingCreatorCard
-                  key={c.id}
+                  key={`${String((c as any)?.id ?? "")}:${String((c as any)?.creatorId ?? "")}:${String((c as any)?.statsFetchId ?? "")}:${String((c as any)?.numericId ?? "")}:${String((c as any)?.handle ?? "")}:${idx}`}
                   creator={c}
                   locale={locale}
                   highlightQuery={primaryToken}

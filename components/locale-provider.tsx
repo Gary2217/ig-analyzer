@@ -53,7 +53,7 @@ export function useI18n(): LocaleContextValue {
   const ctx = useContext(LocaleContext)
   if (!ctx) {
     return {
-      locale: "en",
+      locale: "zh-TW",
       messages: {},
       t: (key: string) => key,
     }
