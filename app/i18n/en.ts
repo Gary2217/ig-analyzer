@@ -17,6 +17,11 @@ export const en: CopyDictionary = {
   settingsIgAccountsConnected: "Connected",
   settingsIgAccountsExpired: "Token expired",
   settingsIgAccountsNoToken: "No token",
+  igHeaderNotLinked: "Not linked",
+  igHeaderLinkedPrefix: "IG:",
+  igHeaderMultipleSuffix: "+{n}",
+  igHeaderPendingBadge: "Pending",
+  igHeaderLoading: "Loading",
   matchmaking: {
     title: "Matchmaking",
     description: "Filter creators by platform, budget, and collaboration type.",

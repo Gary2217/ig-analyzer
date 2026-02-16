@@ -17,6 +17,11 @@ export const zhTW: CopyDictionary = {
   settingsIgAccountsConnected: "已連結",
   settingsIgAccountsExpired: "Token 已過期",
   settingsIgAccountsNoToken: "無 Token",
+  igHeaderNotLinked: "未連結",
+  igHeaderLinkedPrefix: "IG:",
+  igHeaderMultipleSuffix: "+{n}",
+  igHeaderPendingBadge: "待完成",
+  igHeaderLoading: "載入中",
   matchmaking: {
     title: "媒合配對",
     description: "依平台、預算、合作形式篩選創作者",

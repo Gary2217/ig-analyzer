@@ -15,6 +15,11 @@ export type CopyDictionary = {
   settingsIgAccountsConnected: string
   settingsIgAccountsExpired: string
   settingsIgAccountsNoToken: string
+  igHeaderNotLinked: string
+  igHeaderLinkedPrefix: string
+  igHeaderMultipleSuffix: string
+  igHeaderPendingBadge: string
+  igHeaderLoading: string
   matchmaking: {
     title: string
     description: string
