@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { cookies } from "next/headers"
 import { headers } from "next/headers"
+import { createAuthedClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -40,6 +41,27 @@ async function safeJson(res: Response) {
     return await res.json()
   } catch {
     return null
+  }
+}
+
+async function tryFetchIgUserId(accessToken: string): Promise<string> {
+  const token = String(accessToken || "").trim()
+  if (!token) return ""
+
+  try {
+    const graphUrl = new URL("https://graph.facebook.com/v21.0/me/accounts")
+    graphUrl.searchParams.set("fields", "name,instagram_business_account")
+    graphUrl.searchParams.set("access_token", token)
+
+    const r = await fetch(graphUrl.toString(), { method: "GET", cache: "no-store" })
+    if (!r.ok) return ""
+    const body: any = await safeJson(r)
+    const list: any[] = Array.isArray(body?.data) ? body.data : []
+    const picked = list.find((p) => p?.instagram_business_account?.id)
+    const igId = typeof picked?.instagram_business_account?.id === "string" ? picked.instagram_business_account.id.trim() : ""
+    return igId
+  } catch {
+    return ""
   }
 }
 
@@ -149,6 +171,13 @@ export async function GET(req: NextRequest) {
     const tokenJson: any = await safeJson(tokenRes)
 
     const accessToken = typeof tokenJson?.access_token === "string" ? tokenJson.access_token.trim() : ""
+    const expiresInSec =
+      typeof tokenJson?.expires_in === "number"
+        ? tokenJson.expires_in
+        : typeof tokenJson?.expires_in === "string"
+          ? Number(tokenJson.expires_in)
+          : NaN
+    const expiresAt = Number.isFinite(expiresInSec) && expiresInSec > 0 ? new Date(Date.now() + expiresInSec * 1000).toISOString() : null
 
     if (!tokenRes.ok || !accessToken) {
       if (process.env.NODE_ENV !== "production") {
@@ -174,6 +203,61 @@ export async function GET(req: NextRequest) {
     // UI-facing flag (used as a hint; /me does the authoritative check)
     try {
       res.cookies.set("ig_connected", "1", { ...baseCookieOptions, httpOnly: false, maxAge: 60 * 60 * 24 * 60 })
+    } catch {
+      // swallow
+    }
+
+    // SaaS prep (save-only): persist IG identity + token per authed app user.
+    // IMPORTANT: must never block login; must not change redirects/cookies/response body.
+    try {
+      const authed = await createAuthedClient()
+      const userRes = await authed.auth.getUser()
+      const user = userRes?.data?.user ?? null
+
+      if (!user) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[ig-oauth] skip db persist (no supabase user)")
+        }
+      } else {
+        const igUserId = await tryFetchIgUserId(accessToken)
+        if (!igUserId) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[ig-oauth] skip db persist (missing ig_user_id)")
+          }
+        } else {
+          try {
+            await authed
+              .from("user_ig_account_identities")
+              .upsert(
+                {
+                  user_id: user.id,
+                  provider: "instagram",
+                  ig_user_id: igUserId,
+                },
+                { onConflict: "user_id,provider,ig_user_id" },
+              )
+          } catch {
+            // swallow
+          }
+
+          try {
+            await authed
+              .from("user_ig_account_tokens")
+              .upsert(
+                {
+                  user_id: user.id,
+                  provider: "instagram",
+                  ig_user_id: igUserId,
+                  access_token: accessToken,
+                  expires_at: expiresAt,
+                },
+                { onConflict: "user_id,provider,ig_user_id" },
+              )
+          } catch {
+            // swallow
+          }
+        }
+      }
     } catch {
       // swallow
     }
