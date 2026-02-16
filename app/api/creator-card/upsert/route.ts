@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
+import { getActiveIgUserId } from "@/app/lib/ig/active-account"
 import { getMeState } from "@/app/lib/server/instagramMeResolver"
 
 const upsertRateBuckets = new Map<string, { resetAt: number; count: number }>()
@@ -236,7 +237,7 @@ export async function POST(req: Request) {
     const cookieIgUserId = (
       (c.get("ig_user_id")?.value ?? "").trim() ||
       (c.get("igUserId")?.value ?? "").trim() ||
-      (c.get("ig_ig_id")?.value ?? "").trim()
+      await getActiveIgUserId(authed, user.id)
     )
 
     const tMeStart = Date.now()
