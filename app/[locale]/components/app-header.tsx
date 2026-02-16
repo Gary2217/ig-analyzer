@@ -59,6 +59,8 @@ export default function AppHeader({ locale }: { locale: string }) {
     { ig_user_id: string; username: string | null; profile_picture_url: string | null; is_active: boolean; updated_at: string | null }[]
   >([])
   const [igAccountsError, setIgAccountsError] = useState(false)
+  const [igSwitchingId, setIgSwitchingId] = useState<string>("")
+  const [igSwitchError, setIgSwitchError] = useState(false)
   const igSelectorRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -109,12 +111,63 @@ export default function AppHeader({ locale }: { locale: string }) {
     }
   }, [igSelectorOpen])
 
+  const refreshIgSummary = async () => {
+    try {
+      const r = await fetch("/api/user/ig-accounts/summary", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      })
+      const j = (await r.json()) as any
+      setIgSummary(j)
+    } catch {
+      setIgSummary({ ok: false })
+    }
+  }
+
+  const refreshIgList = async () => {
+    try {
+      const r = await fetch("/api/user/ig-accounts/list", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      })
+      const j = (await r.json()) as any
+      const rows: any[] = (j as any)?.ok === true && Array.isArray((j as any)?.accounts) ? (j as any).accounts : []
+      const normalized = rows
+        .map((row) => {
+          const ig_user_id = typeof row?.ig_user_id === "string" ? row.ig_user_id.trim() : ""
+          if (!ig_user_id) return null
+          return {
+            ig_user_id,
+            username: typeof row?.username === "string" ? row.username : null,
+            profile_picture_url: typeof row?.profile_picture_url === "string" ? row.profile_picture_url : null,
+            is_active: typeof row?.is_active === "boolean" ? row.is_active : false,
+            updated_at: typeof row?.updated_at === "string" ? row.updated_at : null,
+          }
+        })
+        .filter(Boolean) as {
+        ig_user_id: string
+        username: string | null
+        profile_picture_url: string | null
+        is_active: boolean
+        updated_at: string | null
+      }[]
+      setIgAccounts(normalized)
+      setIgAccountsError(false)
+    } catch {
+      setIgAccounts([])
+      setIgAccountsError(true)
+    }
+  }
+
   useEffect(() => {
     if (!igSelectorOpen) return
     let cancelled = false
     async function loadList() {
       setIgAccountsLoading(true)
       setIgAccountsError(false)
+      setIgSwitchError(false)
       try {
         const r = await fetch("/api/user/ig-accounts/list", {
           method: "GET",
@@ -181,6 +234,7 @@ export default function AppHeader({ locale }: { locale: string }) {
       loading: dict.igSelectorLoading,
       close: dict.igSelectorClose,
       active: dict.igSelectorActive,
+      switchFailed: dict.igSelectorSwitchFailed,
     }),
     [dict],
   )
@@ -196,6 +250,35 @@ export default function AppHeader({ locale }: { locale: string }) {
 
   const oauthNext = encodeURIComponent(pathname || `/${locale}`)
   const oauthUrl = `/api/auth/instagram?locale=${encodeURIComponent(locale)}&next=${oauthNext}`
+
+  const switchActive = async (ig_user_id: string) => {
+    const id = String(ig_user_id || "").trim()
+    if (!id) return
+    const current = igAccounts.find((a) => a.ig_user_id === id)
+    if (current?.is_active) return
+    if (igSwitchingId) return
+
+    setIgSwitchingId(id)
+    setIgSwitchError(false)
+    try {
+      const r = await fetch("/api/user/ig-accounts/set-active", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ig_user_id: id }),
+      })
+      const j = (await r.json()) as any
+      if (!r.ok || (j as any)?.ok !== true) {
+        setIgSwitchError(true)
+        return
+      }
+      await Promise.all([refreshIgList(), refreshIgSummary()])
+    } catch {
+      setIgSwitchError(true)
+    } finally {
+      setIgSwitchingId("")
+    }
+  }
 
   const handleBackToResults = () => {
     if (typeof window === "undefined") return
@@ -333,15 +416,23 @@ export default function AppHeader({ locale }: { locale: string }) {
                                 {reconnectLabel}
                               </Link>
                             </div>
+                            {igSwitchError ? (
+                              <div className="px-3 pb-2 text-xs text-rose-200/80">{igSelectorCopy.switchFailed}</div>
+                            ) : null}
                             {igAccounts.map((a) => {
                               const label = a.username ? `@${a.username.replace(/^@+/, "")}` : `${dict.igHeaderLinkedPrefix} ${shortId(a.ig_user_id)}`
                               const active = Boolean(a.is_active)
+                              const switching = igSwitchingId === a.ig_user_id
                               return (
-                                <div
+                                <button
                                   key={a.ig_user_id}
+                                  type="button"
+                                  onClick={() => switchActive(a.ig_user_id)}
+                                  disabled={switching || Boolean(igSwitchingId) || active}
                                   className={
                                     (active ? "bg-white/5" : "") +
-                                    " w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left"
+                                    " w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left" +
+                                    (switching ? " opacity-70" : "")
                                   }
                                 >
                                   <span className="h-9 w-9 rounded-full bg-white/5 border border-white/10 shrink-0 overflow-hidden">
@@ -359,9 +450,15 @@ export default function AppHeader({ locale }: { locale: string }) {
                                     ) : null}
                                   </span>
                                   <span className="shrink-0">
-                                    {active ? <Check className="h-4 w-4 text-emerald-200" /> : <span className="h-4 w-4" />}
+                                    {switching ? (
+                                      <span className="h-4 w-4 inline-flex items-center justify-center text-[10px] text-white/60">…</span>
+                                    ) : active ? (
+                                      <Check className="h-4 w-4 text-emerald-200" />
+                                    ) : (
+                                      <span className="h-4 w-4" />
+                                    )}
                                   </span>
-                                </div>
+                                </button>
                               )
                             })}
                           </div>
@@ -404,15 +501,23 @@ export default function AppHeader({ locale }: { locale: string }) {
                                   {reconnectLabel}
                                 </Link>
                               </div>
+                              {igSwitchError ? (
+                                <div className="px-3 pb-1 text-xs text-rose-200/80">{igSelectorCopy.switchFailed}</div>
+                              ) : null}
                               {igAccounts.map((a) => {
                                 const label = a.username ? `@${a.username.replace(/^@+/, "")}` : `${dict.igHeaderLinkedPrefix} ${shortId(a.ig_user_id)}`
                                 const active = Boolean(a.is_active)
+                                const switching = igSwitchingId === a.ig_user_id
                                 return (
-                                  <div
+                                  <button
                                     key={a.ig_user_id}
+                                    type="button"
+                                    onClick={() => switchActive(a.ig_user_id)}
+                                    disabled={switching || Boolean(igSwitchingId) || active}
                                     className={
                                       (active ? "bg-white/5" : "") +
-                                      " w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left min-h-[52px]"
+                                      " w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left min-h-[52px]" +
+                                      (switching ? " opacity-70" : "")
                                     }
                                   >
                                     <span className="h-10 w-10 rounded-full bg-white/5 border border-white/10 shrink-0 overflow-hidden">
@@ -430,9 +535,15 @@ export default function AppHeader({ locale }: { locale: string }) {
                                       ) : null}
                                     </span>
                                     <span className="shrink-0">
-                                      {active ? <Check className="h-5 w-5 text-emerald-200" /> : <span className="h-5 w-5" />}
+                                      {switching ? (
+                                        <span className="h-5 w-5 inline-flex items-center justify-center text-xs text-white/60">…</span>
+                                      ) : active ? (
+                                        <Check className="h-5 w-5 text-emerald-200" />
+                                      ) : (
+                                        <span className="h-5 w-5" />
+                                      )}
                                     </span>
-                                  </div>
+                                  </button>
                                 )
                               })}
                             </div>

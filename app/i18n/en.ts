@@ -27,6 +27,7 @@ export const en: CopyDictionary = {
   igSelectorLoading: "Loading…",
   igSelectorActive: "Active",
   igSelectorClose: "Close",
+  igSelectorSwitchFailed: "Switch failed, please try again",
   matchmaking: {
     title: "Matchmaking",
     description: "Filter creators by platform, budget, and collaboration type.",

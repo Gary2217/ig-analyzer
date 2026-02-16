@@ -21,6 +21,25 @@ async function safeJson(req: NextRequest) {
   }
 }
 
+function isUniqueViolation(err: any) {
+  const code = typeof err?.code === "string" ? err.code : ""
+  if (code === "23505") return true
+
+  const msgRaw =
+    typeof err?.message === "string"
+      ? err.message
+      : typeof err?.details === "string"
+        ? err.details
+        : ""
+  const msg = String(msgRaw || "")
+  if (msg.includes("23505")) return true
+
+  const lower = msg.toLowerCase()
+  if (lower.includes("duplicate")) return true
+  if (lower.includes("unique")) return true
+  return false
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!isSaasIgAccountsEnabled()) {
@@ -52,27 +71,39 @@ export async function POST(req: NextRequest) {
     }
 
     if (!existingRow) {
-      return NextResponse.json({ ok: false, error: "not_found" }, { status: 400, headers: JSON_HEADERS })
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403, headers: JSON_HEADERS })
     }
 
-    const { error: clearErr } = await authed
-      .from("user_instagram_accounts")
-      .update({ is_active: false })
-      .eq("user_id", user.id)
-      .eq("is_active", true)
+    const runSwitch = async () => {
+      const { error: clearErr } = await authed
+        .from("user_instagram_accounts")
+        .update({ is_active: false })
+        .eq("user_id", user.id)
+        .eq("is_active", true)
 
-    if (clearErr) {
-      return NextResponse.json({ ok: false, error: "failed_to_update" }, { status: 500, headers: JSON_HEADERS })
+      if (clearErr) return { ok: false as const, error: clearErr }
+
+      const { error: setErr } = await authed
+        .from("user_instagram_accounts")
+        .update({ is_active: true })
+        .eq("user_id", user.id)
+        .eq("ig_user_id", ig_user_id)
+
+      if (setErr) return { ok: false as const, error: setErr }
+
+      return { ok: true as const }
     }
 
-    const { error: setErr } = await authed
-      .from("user_instagram_accounts")
-      .update({ is_active: true })
-      .eq("user_id", user.id)
-      .eq("ig_user_id", ig_user_id)
-
-    if (setErr) {
-      return NextResponse.json({ ok: false, error: "failed_to_update" }, { status: 500, headers: JSON_HEADERS })
+    const first = await runSwitch()
+    if (!first.ok) {
+      if (isUniqueViolation((first as any).error)) {
+        const second = await runSwitch()
+        if (!second.ok) {
+          return NextResponse.json({ ok: false, error: "failed_to_update" }, { status: 500, headers: JSON_HEADERS })
+        }
+      } else {
+        return NextResponse.json({ ok: false, error: "failed_to_update" }, { status: 500, headers: JSON_HEADERS })
+      }
     }
 
     return NextResponse.json({ ok: true }, { status: 200, headers: JSON_HEADERS })

@@ -27,6 +27,7 @@ export const zhTW: CopyDictionary = {
   igSelectorLoading: "載入中…",
   igSelectorActive: "使用中",
   igSelectorClose: "關閉",
+  igSelectorSwitchFailed: "切換失敗，請稍後再試",
   matchmaking: {
     title: "媒合配對",
     description: "依平台、預算、合作形式篩選創作者",
