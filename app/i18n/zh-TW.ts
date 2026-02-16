@@ -22,6 +22,11 @@ export const zhTW: CopyDictionary = {
   igHeaderMultipleSuffix: "+{n}",
   igHeaderPendingBadge: "待完成",
   igHeaderLoading: "載入中",
+  igSelectorTitle: "切換 Instagram 帳號",
+  igSelectorEmpty: "沒有已連結的 Instagram 帳號",
+  igSelectorLoading: "載入中…",
+  igSelectorActive: "使用中",
+  igSelectorClose: "關閉",
   matchmaking: {
     title: "媒合配對",
     description: "依平台、預算、合作形式篩選創作者",

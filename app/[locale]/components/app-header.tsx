@@ -1,9 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Eye, Instagram } from "lucide-react"
+import { ArrowLeft, Check, Eye, Instagram, X } from "lucide-react"
 import Logo from "../../../components/Logo"
 import LocaleSwitcher from "../../components/locale-switcher"
 import { BUTTON_BASE_CLASSES } from "@/app/components/TopRightActions"
@@ -36,13 +36,31 @@ export default function AppHeader({ locale }: { locale: string }) {
     | {
         ok: true
         linked_count: number
-        display: { ig_user_id_short: string; updated_at: string | null } | null
+        display:
+          | {
+              ig_user_id: string
+              ig_user_id_short: string
+              updated_at: string | null
+              username?: string | null
+              profile_picture_url?: string | null
+              is_active?: boolean | null
+            }
+          | null
         pending: boolean
       }
     | { ok: false; disabled?: boolean; pending?: boolean }
     | null
   >(null)
   const lastFetchAtRef = useRef(0)
+
+  const [igSelectorOpen, setIgSelectorOpen] = useState(false)
+  const [igAccountsLoading, setIgAccountsLoading] = useState(false)
+  const [igAccounts, setIgAccounts] = useState<
+    { ig_user_id: string; username: string | null; profile_picture_url: string | null; is_active: boolean; updated_at: string | null }[]
+  >([])
+  const [igAccountsError, setIgAccountsError] = useState(false)
+  const [igSwitchingId, setIgSwitchingId] = useState<string>("")
+  const igSelectorRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -73,17 +91,203 @@ export default function AppHeader({ locale }: { locale: string }) {
     }
   }, [])
 
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (!igSelectorOpen) return
+      const el = igSelectorRef.current
+      if (!el) return
+      if (e.target instanceof Node && !el.contains(e.target)) setIgSelectorOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!igSelectorOpen) return
+      if (e.key === "Escape") setIgSelectorOpen(false)
+    }
+    window.addEventListener("pointerdown", onPointerDown)
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown)
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [igSelectorOpen])
+
+  useEffect(() => {
+    if (!igSelectorOpen) return
+    let cancelled = false
+    async function loadList() {
+      setIgAccountsLoading(true)
+      setIgAccountsError(false)
+      try {
+        const r = await fetch("/api/user/ig-accounts/list", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        })
+        const j = (await r.json()) as any
+        const rows: any[] = (j as any)?.ok === true && Array.isArray((j as any)?.accounts) ? (j as any).accounts : []
+        const normalized = rows
+          .map((row) => {
+            const ig_user_id = typeof row?.ig_user_id === "string" ? row.ig_user_id.trim() : ""
+            if (!ig_user_id) return null
+            return {
+              ig_user_id,
+              username: typeof row?.username === "string" ? row.username : null,
+              profile_picture_url: typeof row?.profile_picture_url === "string" ? row.profile_picture_url : null,
+              is_active: typeof row?.is_active === "boolean" ? row.is_active : false,
+              updated_at: typeof row?.updated_at === "string" ? row.updated_at : null,
+            }
+          })
+          .filter(Boolean) as {
+          ig_user_id: string
+          username: string | null
+          profile_picture_url: string | null
+          is_active: boolean
+          updated_at: string | null
+        }[]
+
+        if (!cancelled) setIgAccounts(normalized)
+      } catch {
+        if (!cancelled) {
+          setIgAccounts([])
+          setIgAccountsError(true)
+        }
+      } finally {
+        if (!cancelled) setIgAccountsLoading(false)
+      }
+    }
+    loadList()
+    return () => {
+      cancelled = true
+    }
+  }, [igSelectorOpen])
+
   const pending = Boolean((igSummary as any)?.pending)
   const linkedCount = typeof (igSummary as any)?.linked_count === "number" ? Number((igSummary as any).linked_count) : 0
   const displayShort =
     typeof (igSummary as any)?.display?.ig_user_id_short === "string" ? String((igSummary as any).display.ig_user_id_short) : ""
+  const displayUsername = typeof (igSummary as any)?.display?.username === "string" ? String((igSummary as any).display.username) : ""
+
+  const igPillLabel = displayUsername ? `@${displayUsername.replace(/^@+/, "")}` : displayShort
 
   const pillText =
     igSummary === null
       ? `${dict.igHeaderLinkedPrefix} ${dict.igHeaderLoading}`
       : (igSummary as any)?.ok === true && linkedCount > 0
-        ? `${dict.igHeaderLinkedPrefix} ${displayShort}${linkedCount > 1 ? " " + dict.igHeaderMultipleSuffix.replace("{n}", String(linkedCount - 1)) : ""}`
+        ? `${dict.igHeaderLinkedPrefix} ${igPillLabel}${linkedCount > 1 ? " " + dict.igHeaderMultipleSuffix.replace("{n}", String(linkedCount - 1)) : ""}`
         : `${dict.igHeaderLinkedPrefix} ${dict.igHeaderNotLinked}`
+
+  const igSelectorCopy = useMemo(
+    () => ({
+      title: dict.igSelectorTitle,
+      empty: dict.igSelectorEmpty,
+      loading: dict.igSelectorLoading,
+      close: dict.igSelectorClose,
+      active: dict.igSelectorActive,
+    }),
+    [dict],
+  )
+
+  const shortId = (raw: string) => {
+    const s = String(raw || "").trim()
+    if (!s) return ""
+    if (s.length <= 10) return s
+    return `${s.slice(0, 4)}…${s.slice(-3)}`
+  }
+
+  const refreshIgSummary = async () => {
+    try {
+      const r = await fetch("/api/user/ig-accounts/summary", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      })
+      const j = (await r.json()) as any
+      setIgSummary(j)
+      lastFetchAtRef.current = Date.now()
+    } catch {
+      // ignore
+    }
+  }
+
+  const refreshIgList = async () => {
+    try {
+      const r = await fetch("/api/user/ig-accounts/list", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      })
+      const j = (await r.json()) as any
+      const rows: any[] = (j as any)?.ok === true && Array.isArray((j as any)?.accounts) ? (j as any).accounts : []
+      const normalized = rows
+        .map((row) => {
+          const ig_user_id = typeof row?.ig_user_id === "string" ? row.ig_user_id.trim() : ""
+          if (!ig_user_id) return null
+          return {
+            ig_user_id,
+            username: typeof row?.username === "string" ? row.username : null,
+            profile_picture_url: typeof row?.profile_picture_url === "string" ? row.profile_picture_url : null,
+            is_active: typeof row?.is_active === "boolean" ? row.is_active : false,
+            updated_at: typeof row?.updated_at === "string" ? row.updated_at : null,
+          }
+        })
+        .filter(Boolean) as {
+        ig_user_id: string
+        username: string | null
+        profile_picture_url: string | null
+        is_active: boolean
+        updated_at: string | null
+      }[]
+
+      setIgAccounts(normalized)
+    } catch {
+      // ignore
+    }
+  }
+
+  const setActiveIgAccount = async (ig_user_id: string) => {
+    const target = igAccounts.find((a) => a.ig_user_id === ig_user_id) || null
+    const prevSummary = igSummary
+
+    if (target && prevSummary && (prevSummary as any)?.ok === true) {
+      try {
+        setIgSummary({
+          ...(prevSummary as any),
+          display: {
+            ...(prevSummary as any).display,
+            ig_user_id: target.ig_user_id,
+            ig_user_id_short: shortId(target.ig_user_id),
+            username: target.username,
+            profile_picture_url: target.profile_picture_url,
+            is_active: true,
+          },
+        })
+      } catch {
+        // ignore
+      }
+    }
+
+    setIgSwitchingId(ig_user_id)
+    try {
+      const r = await fetch("/api/user/ig-accounts/set-active", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ig_user_id }),
+      })
+      const j = (await r.json()) as any
+      if (!(j as any)?.ok) {
+        if (prevSummary) setIgSummary(prevSummary as any)
+        return
+      }
+
+      await Promise.all([refreshIgList(), refreshIgSummary()])
+      setIgSelectorOpen(false)
+    } catch {
+      if (prevSummary) setIgSummary(prevSummary as any)
+    } finally {
+      setIgSwitchingId("")
+    }
+  }
 
   const handleBackToResults = () => {
     if (typeof window === "undefined") return
@@ -163,28 +367,174 @@ export default function AppHeader({ locale }: { locale: string }) {
                   </Link>
                 </>
               )}
-              <Link
-                href={`/${locale}/settings/ig-accounts`}
-                className={BUTTON_BASE_CLASSES + " min-h-[44px] max-w-[220px] sm:max-w-[320px]"}
-                aria-label={pillText}
-              >
-                <span className="inline-flex items-center gap-2 min-w-0">
-                  <Instagram className="w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline min-w-0 truncate">{pillText}</span>
-                </span>
-                <span className="sm:hidden relative shrink-0">
-                  {linkedCount > 0 ? (
-                    <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-[10px] leading-none border border-white/10 bg-white/10 text-white/80">
-                      {linkedCount}
+              <div ref={igSelectorRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIgSelectorOpen((v) => !v)}
+                  className={
+                    BUTTON_BASE_CLASSES +
+                    " min-h-[44px] max-w-[70vw] sm:max-w-[360px]" +
+                    (igSelectorOpen ? " ring-2 ring-white/20" : "")
+                  }
+                  aria-label={pillText}
+                  title={displayUsername ? `@${displayUsername.replace(/^@+/, "")}` : displayShort}
+                  aria-haspopup="dialog"
+                  aria-expanded={igSelectorOpen}
+                >
+                  <span className="inline-flex items-center gap-2 min-w-0">
+                    <Instagram className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline min-w-0 truncate">{pillText}</span>
+                  </span>
+                  <span className="sm:hidden relative shrink-0">
+                    {linkedCount > 0 ? (
+                      <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-[10px] leading-none border border-white/10 bg-white/10 text-white/80">
+                        {linkedCount}
+                      </span>
+                    ) : null}
+                  </span>
+                  {pending ? (
+                    <span className="hidden sm:inline ml-2 text-[10px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-100/80 whitespace-nowrap">
+                      {dict.igHeaderPendingBadge}
                     </span>
                   ) : null}
-                </span>
-                {pending ? (
-                  <span className="hidden sm:inline ml-2 text-[10px] px-2 py-0.5 rounded-full border border-amber-400/20 bg-amber-500/10 text-amber-100/80 whitespace-nowrap">
-                    {dict.igHeaderPendingBadge}
-                  </span>
-                ) : null}
-              </Link>
+                </button>
+
+                {igSelectorOpen && (
+                  <>
+                    <div className="hidden sm:block absolute right-0 mt-2 w-[360px] max-w-[92vw] rounded-xl border border-white/10 bg-[#0b1220]/90 backdrop-blur-md shadow-xl overflow-hidden z-[100]">
+                      <div className="h-12 px-3 flex items-center justify-between border-b border-white/10">
+                        <div className="text-sm font-semibold text-white/90 min-w-0 truncate">{igSelectorCopy.title}</div>
+                        <button
+                          type="button"
+                          onClick={() => setIgSelectorOpen(false)}
+                          className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10"
+                          aria-label={igSelectorCopy.close}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="max-h-[60vh] overflow-auto">
+                        {igAccountsLoading ? (
+                          <div className="p-3 text-sm text-white/60">{igSelectorCopy.loading}</div>
+                        ) : igAccountsError ? (
+                          <div className="p-3 text-sm text-white/60">{igSelectorCopy.empty}</div>
+                        ) : igAccounts.length ? (
+                          <div className="p-1">
+                            {igAccounts.map((a) => {
+                              const label = a.username ? `@${a.username.replace(/^@+/, "")}` : `${dict.igHeaderLinkedPrefix} ${shortId(a.ig_user_id)}`
+                              const active = Boolean(a.is_active)
+                              const switching = igSwitchingId === a.ig_user_id
+                              return (
+                                <button
+                                  key={a.ig_user_id}
+                                  type="button"
+                                  onClick={() => setActiveIgAccount(a.ig_user_id)}
+                                  disabled={switching}
+                                  className={
+                                    (active ? "bg-white/5" : "") +
+                                    " w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-white/5 disabled:opacity-50"
+                                  }
+                                >
+                                  <span className="h-9 w-9 rounded-full bg-white/5 border border-white/10 shrink-0 overflow-hidden">
+                                    {a.profile_picture_url ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={a.profile_picture_url} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                      <span className="h-full w-full inline-flex items-center justify-center text-xs text-white/40">IG</span>
+                                    )}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-sm text-white/90 min-w-0 truncate">{label}</span>
+                                    {active ? (
+                                      <span className="block text-[11px] text-white/50">{igSelectorCopy.active}</span>
+                                    ) : null}
+                                  </span>
+                                  <span className="shrink-0">
+                                    {active ? <Check className="h-4 w-4 text-emerald-200" /> : <span className="h-4 w-4" />}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-3 text-sm text-white/60">{igSelectorCopy.empty}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={`sm:hidden fixed inset-0 z-[120] ${igSelectorOpen ? "" : "pointer-events-none"}`}>
+                      <div
+                        className={`absolute inset-0 bg-black/60 transition-opacity ${igSelectorOpen ? "opacity-100" : "opacity-0"}`}
+                        onClick={() => setIgSelectorOpen(false)}
+                      />
+                      <div
+                        className={`absolute inset-x-0 bottom-0 max-h-[82vh] rounded-t-2xl bg-slate-950/95 border-t border-white/10 backdrop-blur transition-transform ${
+                          igSelectorOpen ? "translate-y-0" : "translate-y-full"
+                        }`}
+                      >
+                        <div className="h-14 px-4 flex items-center justify-between border-b border-white/10">
+                          <div className="text-sm font-semibold text-white/90 min-w-0 truncate">{igSelectorCopy.title}</div>
+                          <button
+                            type="button"
+                            className="h-10 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10"
+                            onClick={() => setIgSelectorOpen(false)}
+                          >
+                            {igSelectorCopy.close}
+                          </button>
+                        </div>
+
+                        <div className="p-2 overflow-auto" style={{ maxHeight: "calc(82vh - 56px)" }}>
+                          {igAccountsLoading ? (
+                            <div className="p-3 text-sm text-white/60">{igSelectorCopy.loading}</div>
+                          ) : igAccountsError ? (
+                            <div className="p-3 text-sm text-white/60">{igSelectorCopy.empty}</div>
+                          ) : igAccounts.length ? (
+                            <div className="space-y-1">
+                              {igAccounts.map((a) => {
+                                const label = a.username ? `@${a.username.replace(/^@+/, "")}` : `${dict.igHeaderLinkedPrefix} ${shortId(a.ig_user_id)}`
+                                const active = Boolean(a.is_active)
+                                const switching = igSwitchingId === a.ig_user_id
+                                return (
+                                  <button
+                                    key={a.ig_user_id}
+                                    type="button"
+                                    onClick={() => setActiveIgAccount(a.ig_user_id)}
+                                    disabled={switching}
+                                    className={
+                                      (active ? "bg-white/5" : "") +
+                                      " w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-white/5 disabled:opacity-50 min-h-[52px]"
+                                    }
+                                  >
+                                    <span className="h-10 w-10 rounded-full bg-white/5 border border-white/10 shrink-0 overflow-hidden">
+                                      {a.profile_picture_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={a.profile_picture_url} alt="" className="h-full w-full object-cover" />
+                                      ) : (
+                                        <span className="h-full w-full inline-flex items-center justify-center text-xs text-white/40">IG</span>
+                                      )}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block text-sm text-white/90 min-w-0 truncate">{label}</span>
+                                      {active ? (
+                                        <span className="block text-[11px] text-white/50">{igSelectorCopy.active}</span>
+                                      ) : null}
+                                    </span>
+                                    <span className="shrink-0">
+                                      {active ? <Check className="h-5 w-5 text-emerald-200" /> : <span className="h-5 w-5" />}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <div className="p-3 text-sm text-white/60">{igSelectorCopy.empty}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               <LocaleSwitcher />
             </div>
           </div>

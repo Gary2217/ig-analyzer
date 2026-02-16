@@ -22,6 +22,11 @@ export const en: CopyDictionary = {
   igHeaderMultipleSuffix: "+{n}",
   igHeaderPendingBadge: "Pending",
   igHeaderLoading: "Loading",
+  igSelectorTitle: "Switch Instagram account",
+  igSelectorEmpty: "No Instagram accounts linked",
+  igSelectorLoading: "Loading…",
+  igSelectorActive: "Active",
+  igSelectorClose: "Close",
   matchmaking: {
     title: "Matchmaking",
     description: "Filter creators by platform, budget, and collaboration type.",

@@ -20,6 +20,11 @@ export type CopyDictionary = {
   igHeaderMultipleSuffix: string
   igHeaderPendingBadge: string
   igHeaderLoading: string
+  igSelectorTitle: string
+  igSelectorEmpty: string
+  igSelectorLoading: string
+  igSelectorActive: string
+  igSelectorClose: string
   matchmaking: {
     title: string
     description: string

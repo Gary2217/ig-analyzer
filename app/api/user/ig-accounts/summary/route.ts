@@ -71,6 +71,38 @@ export async function GET(req: NextRequest) {
     const ig_user_id = typeof top?.ig_user_id === "string" ? top.ig_user_id : null
     const updated_at = typeof top?.updated_at === "string" ? top.updated_at : null
 
+    let accountProfile: {
+      username: string | null
+      profile_picture_url: string | null
+      is_active: boolean | null
+      updated_at: string | null
+    } | null = null
+
+    if (ig_user_id) {
+      try {
+        const { data: profileRow } = await authed
+          .from("user_instagram_accounts")
+          .select("username,profile_picture_url,is_active,updated_at")
+          .eq("user_id", user.id)
+          .eq("ig_user_id", ig_user_id)
+          .maybeSingle()
+
+        accountProfile = profileRow
+          ? {
+              username: typeof (profileRow as any)?.username === "string" ? ((profileRow as any).username as string) : null,
+              profile_picture_url:
+                typeof (profileRow as any)?.profile_picture_url === "string"
+                  ? ((profileRow as any).profile_picture_url as string)
+                  : null,
+              is_active: typeof (profileRow as any)?.is_active === "boolean" ? ((profileRow as any).is_active as boolean) : null,
+              updated_at: typeof (profileRow as any)?.updated_at === "string" ? ((profileRow as any).updated_at as string) : null,
+            }
+          : null
+      } catch {
+        accountProfile = null
+      }
+    }
+
     return NextResponse.json(
       {
         ok: true,
@@ -80,6 +112,9 @@ export async function GET(req: NextRequest) {
               provider: "instagram",
               ig_user_id,
               ig_user_id_short: shortIgId(ig_user_id),
+              username: accountProfile?.username ?? null,
+              profile_picture_url: accountProfile?.profile_picture_url ?? null,
+              is_active: accountProfile?.is_active ?? null,
               updated_at,
             }
           : null,

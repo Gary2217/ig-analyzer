@@ -241,6 +241,36 @@ export async function GET(req: NextRequest) {
           }
 
           try {
+            const { data: activeRow, error: activeErr } = await authed
+              .from("user_instagram_accounts")
+              .select("ig_user_id")
+              .eq("user_id", user.id)
+              .eq("is_active", true)
+              .maybeSingle()
+
+            const hasActive = !activeErr && Boolean((activeRow as any)?.ig_user_id)
+
+            const baseUpsert: any = {
+              user_id: user.id,
+              ig_user_id: igUserId,
+              updated_at: new Date().toISOString(),
+            }
+
+            const payload = hasActive
+              ? baseUpsert
+              : {
+                  ...baseUpsert,
+                  is_active: true,
+                }
+
+            await authed
+              .from("user_instagram_accounts")
+              .upsert(payload, { onConflict: "user_id,ig_user_id" })
+          } catch {
+            // swallow
+          }
+
+          try {
             await authed
               .from("user_ig_account_tokens")
               .upsert(
