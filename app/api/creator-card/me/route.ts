@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { cookies } from "next/headers"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -18,10 +17,6 @@ const JSON_HEADERS = {
   "Expires": "0",
 }
 
-function shouldDebug() {
-  return process.env.NODE_ENV !== "production" || process.env.CREATOR_CARD_DEBUG === "1"
-}
-
 export async function GET(req: NextRequest) {
   try {
     const authed = await createAuthedClient()
@@ -31,23 +26,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "not_logged_in" }, { status: 200, headers: JSON_HEADERS })
     }
 
-    const fetchCardByUserId = async (client: any) => {
-      return await client.from("creator_cards").select("*, portfolio").eq("user_id", user.id).limit(1).maybeSingle()
-    }
-
-    const cookieStore = await cookies()
     const cookieIgUserId = (
-      cookieStore.get("ig_user_id")?.value ??
-      cookieStore.get("igUserId")?.value ??
+      req.cookies.get("ig_user_id")?.value ??
+      req.cookies.get("igUserId")?.value ??
       ""
     ).trim()
 
-    const fetchCardByIgUserIdForClaim = async (client: any, igUserId: string) => {
+    const fetchCardByUserId = async (client: any) => {
       return await client
         .from("creator_cards")
         .select("*, portfolio")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    }
+
+    const fetchCardByUserIdAndIgUserId = async (client: any, igUserId: string) => {
+      return await client
+        .from("creator_cards")
+        .select("*, portfolio")
+        .eq("user_id", user.id)
         .eq("ig_user_id", igUserId)
-        .or(`user_id.is.null,user_id.eq.${user.id}`)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -57,9 +57,18 @@ export async function GET(req: NextRequest) {
     let error: any = null
 
     {
-      const r = await fetchCardByUserId(authed)
-      data = (r as any)?.data
-      error = (r as any)?.error
+      const r = cookieIgUserId
+        ? ((await fetchCardByUserIdAndIgUserId(authed, cookieIgUserId)) as any)
+        : ((await fetchCardByUserId(authed)) as any)
+
+      if (cookieIgUserId && !r?.error && !r?.data) {
+        const r2 = await fetchCardByUserId(authed)
+        data = (r2 as any)?.data
+        error = (r2 as any)?.error
+      } else {
+        data = (r as any)?.data
+        error = (r as any)?.error
+      }
     }
 
     if (error) {
@@ -76,9 +85,18 @@ export async function GET(req: NextRequest) {
       }
 
       if (!missingUserIdColumn && (code === "42501" || msg.toLowerCase().includes("permission denied"))) {
-        const r2 = await fetchCardByUserId(supabaseServer)
-        data = (r2 as any)?.data
-        error = (r2 as any)?.error
+        const r2 = cookieIgUserId
+          ? ((await fetchCardByUserIdAndIgUserId(supabaseServer, cookieIgUserId)) as any)
+          : ((await fetchCardByUserId(supabaseServer)) as any)
+
+        if (cookieIgUserId && !r2?.error && !r2?.data) {
+          const r3 = await fetchCardByUserId(supabaseServer)
+          data = (r3 as any)?.data
+          error = (r3 as any)?.error
+        } else {
+          data = (r2 as any)?.data
+          error = (r2 as any)?.error
+        }
       }
     }
 
@@ -88,53 +106,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "supabase_invalid_key" }, { status: 500, headers: JSON_HEADERS })
       }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500, headers: JSON_HEADERS })
-    }
-
-    if (!data && cookieIgUserId) {
-      try {
-        const claim = await authed
-          .rpc("claim_creator_card_legacy", { p_ig_user_id: cookieIgUserId, p_user_id: user.id })
-          .maybeSingle()
-
-        if (!(claim as any)?.error && (claim as any)?.data) {
-          data = (claim as any).data
-          error = null
-          if (shouldDebug()) {
-            const claimedId = typeof (data as any)?.id === "string" ? String((data as any).id) : null
-            console.log("[creator-card/me] legacy card claimed", { id: claimedId })
-          }
-        } else {
-          const claimErr = (claim as any)?.error
-          if (claimErr && shouldDebug()) {
-            console.log("[creator-card/me] legacy claim rpc failed", {
-              message: typeof claimErr?.message === "string" ? claimErr.message : "unknown",
-              code: typeof claimErr?.code === "string" ? claimErr.code : null,
-            })
-          }
-
-          const legacyRes = await fetchCardByIgUserIdForClaim(supabaseServer, cookieIgUserId)
-          const legacyRow = (legacyRes as any)?.data
-          const legacyErr = (legacyRes as any)?.error
-          if (legacyErr) {
-            if (shouldDebug()) {
-              console.log("[creator-card/me] legacy lookup failed", {
-                message: typeof legacyErr?.message === "string" ? legacyErr.message : "unknown",
-                code: typeof legacyErr?.code === "string" ? legacyErr.code : null,
-              })
-            }
-          } else if (legacyRow && typeof legacyRow === "object") {
-            data = legacyRow
-            error = null
-          }
-        }
-      } catch (e2: unknown) {
-        if (shouldDebug()) {
-          const errObj2 = asRecord(e2)
-          console.log("[creator-card/me] legacy claim unexpected error", {
-            message: typeof errObj2?.message === "string" ? errObj2.message : "unknown",
-          })
-        }
-      }
     }
 
     if (!data) {
@@ -147,7 +118,6 @@ export async function GET(req: NextRequest) {
         ? {
             ...row,
             profileImageUrl: typeof row.profile_image_url === "string" ? row.profile_image_url : null,
-            avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
             minPrice:
               typeof (row as any).minPrice === "number"
                 ? (row as any).minPrice

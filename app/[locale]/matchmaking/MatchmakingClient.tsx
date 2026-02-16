@@ -1,508 +1,36 @@
-"use client";
+"use client"
 
-type UnknownRecord = Record<string, unknown>;
-const asRecord = (v: unknown): UnknownRecord => (v && typeof v === "object" ? (v as UnknownRecord) : {});
-const get = (v: unknown, k: string): unknown => asRecord(v)[k];
-const getRec = (v: unknown, k: string): UnknownRecord => asRecord(get(v, k));
-const getStr = (v: unknown, k: string): string => {
-  const x = get(v, k);
-  return typeof x === "string" ? x : "";
-};
-const getNum = (v: unknown, k: string): number | null => {
-  const x = get(v, k);
-  return typeof x === "number" && Number.isFinite(x) ? x : null;
-};
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { FiltersBar } from "@/app/components/matchmaking/FiltersBar"
 import { CreatorGrid } from "@/app/components/matchmaking/CreatorGrid"
 import { CreatorCard as MatchmakingCreatorCard } from "@/app/components/matchmaking/CreatorCard"
 import { FavoritesDrawer } from "@/app/components/matchmaking/FavoritesDrawer"
 import { useFavorites } from "@/app/components/matchmaking/useFavorites"
-import { loadDemoAvatars } from "@/app/components/matchmaking/demoAvatarStorage"
-import LocaleSwitcher from "@/app/components/locale-switcher"
 import { getCopy, type Locale } from "@/app/i18n"
-import { CREATOR_TYPE_MASTER, normalizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
-import {
-  applyPinnedOwnerCard,
-  getCreatorCollabTypes,
-  getCreatorPlatforms,
-  normalizeSelectedCollabTypes,
-  normalizeSelectedPlatforms,
-  shouldIncludeDemoFill,
-} from "@/app/lib/matchmaking/search"
-import { buildDemoFillCards } from "@/app/lib/matchmaking/demoFill"
-import { formatPriceLabel } from "@/app/lib/client/priceLabel"
 import type {
   BudgetRange,
   CollabType,
   CreatorCardData,
+  FormatKey,
   Platform,
+  TypeKey,
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
 const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
 
-const CACHE_TTL_MS = 10 * 60 * 1000
-const MM_DEBUG = process.env.NODE_ENV !== "production"
-
-type OwnerLookupStatus = "success" | "no_creator_card" | "not_logged_in" | "error" | "pending"
-type OwnerLookupCacheV2 = {
-  v: 2
-  ts: number
-  status: OwnerLookupStatus
-  ownerCardId: string | null
-}
-
-function clampNumber(v: number, min: number, max: number): number {
-  if (!Number.isFinite(v)) return min
-  return Math.min(max, Math.max(min, v))
-}
-
-function readOwnerLookupCacheV2(): OwnerLookupCacheV2 | null {
-  try {
-    if (typeof window === "undefined") return null
-    const raw = window.sessionStorage.getItem(OWNER_LOOKUP_CACHE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== "object" || parsed.v !== 2) return null
-
-    const ts = typeof parsed.ts === "number" ? parsed.ts : 0
-    const ownerCardId = typeof parsed.ownerCardId === "string" ? parsed.ownerCardId : parsed.ownerCardId === null ? null : null
-    const status: OwnerLookupStatus =
-      parsed.status === "success" ||
-      parsed.status === "no_creator_card" ||
-      parsed.status === "not_logged_in" ||
-      parsed.status === "error" ||
-      parsed.status === "pending"
-        ? parsed.status
-        : "error"
-
-    return { v: 2, ts, status, ownerCardId }
-  } catch {
-    return null
-  }
-}
-
-function tokenizeQuery(raw: string): string[] {
-  const s = String(raw ?? "")
-  if (!s.trim()) return []
-
-  // Split by whitespace and common separators. Keep symbols like '_' '.' '#' as part of tokens.
-  const parts = s.split(/[\s,�?；|/]+/g)
-  const out: string[] = []
-  for (const p of parts) {
-    const t = normalizeSearchText(p)
-    if (!t) continue
-    out.push(t)
-    if (out.length >= 6) break
-  }
-  return out
-}
-
-function buildCreatorIdentityHay(c: unknown): string {
-  const parts: string[] = []
-  pushFlattenedStrings(parts, c?.name)
-  pushFlattenedStrings(parts, c?.displayName)
-  pushFlattenedStrings(parts, c?.display_name)
-  pushFlattenedStrings(parts, c?.handle)
-  pushFlattenedStrings(parts, c?.username)
-  pushFlattenedStrings(parts, c?.igUsername)
-  pushFlattenedStrings(parts, c?.ig_username)
-
-  const raw = c?.__rawCard
-  if (raw && typeof raw === "object") {
-    pushFlattenedStrings(parts, (raw as unknown)?.name)
-    pushFlattenedStrings(parts, (raw as unknown)?.displayName)
-    pushFlattenedStrings(parts, (raw as unknown)?.display_name)
-    pushFlattenedStrings(parts, (raw as unknown)?.handle)
-    pushFlattenedStrings(parts, (raw as unknown)?.username)
-    pushFlattenedStrings(parts, (raw as unknown)?.igUsername)
-    pushFlattenedStrings(parts, (raw as unknown)?.ig_username)
-  }
-
-  return normalizeSearchText(parts.join("\n"))
-}
-
-function buildCreatorSearchHay(c: unknown): string {
-  const parts: string[] = []
-  pushFlattenedStrings(parts, buildCreatorIdentityHay(c))
-
-  pushFlattenedStrings(parts, c?.platforms)
-  pushFlattenedStrings(parts, c?.deliverables)
-  pushFlattenedStrings(parts, c?.topics)
-  pushFlattenedStrings(parts, c?.tagCategories)
-  pushFlattenedStrings(parts, c?.tag_categories)
-  pushFlattenedStrings(parts, c?.tags)
-
-  try {
-    const collabTypes = getCreatorCollabTypes(c)
-    pushFlattenedStrings(parts, collabTypes)
-  } catch {
-    // ignore
-  }
-
-  const raw = c?.__rawCard
-  if (raw && typeof raw === "object") {
-    pushFlattenedStrings(parts, (raw as unknown)?.platforms)
-    pushFlattenedStrings(parts, (raw as unknown)?.deliverables)
-    pushFlattenedStrings(parts, (raw as unknown)?.topics)
-    pushFlattenedStrings(parts, (raw as unknown)?.tagCategories)
-    pushFlattenedStrings(parts, (raw as unknown)?.tag_categories)
-    pushFlattenedStrings(parts, (raw as unknown)?.tags)
-    pushFlattenedStrings(parts, (raw as unknown)?.collabTypes)
-    pushFlattenedStrings(parts, (raw as unknown)?.collab_types)
-  }
-
-  return normalizeSearchText(parts.join("\n"))
-}
-
-const searchKeyForCardLike = (c: unknown): string => {
-  const creatorIdStr = typeof c?.igUserId === "string" && /^\d+$/.test(c.igUserId) ? c.igUserId : null
-  return String(creatorIdStr ?? c?.creatorId ?? c?.id ?? c?.username ?? c?.handle ?? getCardDisplayName(c) ?? "")
-}
-
-const getNumericCreatorId = (c: unknown): string | null => {
-  const candidates: unknown[] = [c?.numericId, c?.statsFetchId, c?.creatorNumericId, c?.creatorId, c?.igUserId, c?.ig_user_id, c?.id]
-  for (const v of candidates) {
-    if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
-    if (typeof v === "string") {
-      const s = v.trim()
-      if (s && /^\d+$/.test(s)) return s
-    }
-  }
-
-  const raw = c?.__rawCard
-  if (raw && typeof raw === "object") {
-    const r: unknown = raw as unknown
-    const rawCandidates: unknown[] = [r?.numericId, r?.statsFetchId, r?.creatorNumericId, r?.creatorId, r?.igUserId, r?.ig_user_id, r?.id]
-    for (const v of rawCandidates) {
-      if (typeof v === "number" && Number.isFinite(v)) return String(Math.trunc(v))
-      if (typeof v === "string") {
-        const s = v.trim()
-        if (s && /^\d+$/.test(s)) return s
-      }
-    }
-  }
-
-  return null
-}
-
-function getStatsCacheKey(card: unknown): string | null {
-  const numericId = getNumericCreatorId(card) ?? getNumericCreatorId(card?.__rawCard)
-  if (numericId != null) return String(numericId)
-
-  const fallback = card?.creatorId ?? card?.__rawCard?.creatorId ?? card?.igUserId ?? card?.id
-  return typeof fallback === "string" && fallback.length > 0 ? fallback : null
-}
-
-function getStatsFetchId(card: unknown): string | null {
-  const direct =
-    card?.statsFetchId ??
-    card?.numericId ??
-    card?.creatorNumericId ??
-    card?.ig_user_id ??
-    card?.__rawCard?.statsFetchId ??
-    card?.__rawCard?.numericId ??
-    card?.__rawCard?.creatorNumericId ??
-    card?.__rawCard?.ig_user_id
-
-  const directStr = typeof direct === "string" ? direct.trim() : ""
-  const fetchId =
-    (directStr && /^\d+$/.test(directStr) ? directStr : null) ??
-    (typeof direct === "number" && Number.isFinite(direct) ? String(Math.trunc(direct)) : null) ??
-    getNumericCreatorId(card) ??
-    getNumericCreatorId(card?.__rawCard)
-
-  if (!fetchId) {
-    try {
-      console.warn("[stats][debug] missing fetchId for card:", {
-        id: (card as unknown)?.id ?? null,
-        creatorId: (card as unknown)?.creatorId ?? null,
-        username: (card as unknown)?.username ?? null,
-        handle: (card as unknown)?.handle ?? null,
-        igUsername: (card as unknown)?.igUsername ?? null,
-        platform: (card as unknown)?.platform ?? null,
-        platforms: (card as unknown)?.platforms ?? null,
-      })
-    } catch {}
-  }
-
-  try {
-     
-    console.log("[stats][debug] fetchId inputs", {
-      direct: direct ?? null,
-      directStr: directStr ?? null,
-      fetchId: fetchId ?? null,
-      card_numericId: card?.numericId ?? null,
-      card_statsFetchId: card?.statsFetchId ?? null,
-      raw_numericId: card?.__rawCard?.numericId ?? null,
-      raw_statsFetchId: card?.__rawCard?.statsFetchId ?? null,
-      raw_creatorNumericId: card?.__rawCard?.creatorNumericId ?? null,
-      getNumeric_card: getNumericCreatorId(card) ?? null,
-      getNumeric_raw: getNumericCreatorId(card?.__rawCard) ?? null,
-    })
-  } catch {}
-
-  return fetchId
-}
-
-function writeOwnerLookupCacheV2(next: OwnerLookupCacheV2): void {
-  try {
-    if (typeof window === "undefined") return
-    window.sessionStorage.setItem(OWNER_LOOKUP_CACHE_KEY, JSON.stringify(next))
-  } catch {
-    // swallow
-  }
-}
-
-const sanitizeSelectedTagCategories = (input: unknown): string[] => {
-  const arr = Array.isArray(input) ? input : []
-  return arr
-    .map((x) => String(x ?? "").trim())
-    .filter(Boolean)
-    .filter((x) => x !== "全部" && x.toLowerCase() !== "all")
-}
-
-const toCreatorTagSet = (tagCategories: unknown): Set<string> => {
-  const arr = Array.isArray(tagCategories) ? tagCategories : []
-  return new Set(arr.map((x) => String(x ?? "").trim()).filter(Boolean))
-}
-
 interface MatchmakingClientProps {
   locale: Locale
   initialCards: CreatorCard[]
-  initialMeCard?: CreatorCard | null
 }
 
-function normalizeSearchText(input: string): string {
-  const s = String(input ?? "")
-  try {
-    return s
-      .normalize("NFKC")
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-  } catch {
-    return s
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-  }
-}
-
-function pushFlattenedStrings(out: string[], v: unknown, depth = 0): void {
-  if (v == null) return
-  if (typeof v === "string") {
-    const s = v.trim()
-    if (s) out.push(s)
-    return
-  }
-  if (typeof v === "number") {
-    if (Number.isFinite(v)) out.push(String(v))
-    return
-  }
-  if (typeof v === "boolean") {
-    return
-  }
-  if (Array.isArray(v)) {
-    for (const item of v) pushFlattenedStrings(out, item, depth + 1)
-    return
-  }
-  if (typeof v === "object") {
-    if (depth >= 2) return
-    const obj = v as Record<string, unknown>
-    for (const vv of Object.values(obj)) {
-      if (typeof vv === "string") pushFlattenedStrings(out, vv, depth + 1)
-    }
-    for (const vv of Object.values(obj)) {
-      if (vv != null && typeof vv === "object") pushFlattenedStrings(out, vv, depth + 1)
-    }
-  }
-}
-
-function buildCreatorTypeSearchParts(input: {
-  tagCategories?: unknown
-  creatorTypeOptions: string[]
-}): string[] {
-  const rawParts: string[] = []
-  pushFlattenedStrings(rawParts, input.tagCategories)
-  const normalizedRaw = new Set(rawParts.map((s) => normalizeSearchText(s)).filter(Boolean))
-  if (!normalizedRaw.size) return []
-
-  const out: string[] = []
-  for (const opt of input.creatorTypeOptions) {
-    const o = String(opt || "").trim()
-    if (!o) continue
-    if (normalizedRaw.has(normalizeSearchText(o))) out.push(o)
-  }
-
-  for (const s of rawParts) {
-    const t = String(s || "").trim()
-    if (t) out.push(t)
-  }
-  return out
-}
-
-const getCardDisplayName = (c: unknown) => String(c?.displayName ?? c?.name ?? "").trim()
-
-const dedupeByKey = <T,>(arr: T[], keyFn: (x: T) => string) => {
-  const seen = new Set<string>()
-  const out: T[] = []
-  for (const x of arr) {
-    const k = keyFn(x)
-    if (!k) continue
-    if (seen.has(k)) continue
-    seen.add(k)
-    out.push(x)
-  }
-  return out
-}
-
-const creatorKey = (c: unknown) => String(c?.creatorId ?? c?.id ?? c?.username ?? c?.handle ?? getCardDisplayName(c) ?? "")
-
-function cardSearchBlob(card: CreatorCardData): string {
-  const c: unknown = card as unknown
-  const parts: string[] = []
-
-  pushFlattenedStrings(parts, c.name)
-  pushFlattenedStrings(parts, c.displayName)
-  pushFlattenedStrings(parts, c.display_name)
-  pushFlattenedStrings(parts, c.handle)
-  pushFlattenedStrings(parts, c.ig_handle)
-  pushFlattenedStrings(parts, c.igHandle)
-  pushFlattenedStrings(parts, c.igUsername)
-  pushFlattenedStrings(parts, c.ig_username)
-  pushFlattenedStrings(parts, c.username)
-
-  pushFlattenedStrings(parts, c.platforms)
-  pushFlattenedStrings(parts, c.tags)
-  pushFlattenedStrings(parts, c.tagCategories)
-  pushFlattenedStrings(parts, c.topics)
-  pushFlattenedStrings(parts, c.deliverables)
-  pushFlattenedStrings(parts, c.collabTypes)
-  pushFlattenedStrings(parts, c.collab_types)
-  pushFlattenedStrings(parts, c.dealTypes)
-
-  if (typeof c.minPrice === "number" && Number.isFinite(c.minPrice)) parts.push(String(Math.floor(c.minPrice)))
-  if (c.__rawMinPrice === null) parts.push("洽談報價")
-
-  pushFlattenedStrings(parts, c.contact)
-
-  const raw = c.__rawCard
-  if (raw && typeof raw === "object") {
-    const r: unknown = raw as unknown
-    pushFlattenedStrings(parts, r.name)
-    pushFlattenedStrings(parts, r.displayName)
-    pushFlattenedStrings(parts, r.display_name)
-    pushFlattenedStrings(parts, r.handle)
-    pushFlattenedStrings(parts, r.ig_handle)
-    pushFlattenedStrings(parts, r.igHandle)
-    pushFlattenedStrings(parts, r.igUsername)
-    pushFlattenedStrings(parts, r.ig_username)
-    pushFlattenedStrings(parts, r.username)
-    pushFlattenedStrings(parts, r.platforms)
-    pushFlattenedStrings(parts, r.tags)
-    pushFlattenedStrings(parts, r.tagCategories)
-    pushFlattenedStrings(parts, r.tag_categories)
-    pushFlattenedStrings(parts, r.topics)
-  }
-
-  return normalizeSearchText(parts.join(" "))
-}
-
-function buildVisibleSearchBlob(card: CreatorCardData): string {
-  const c: unknown = card
-  const parts: string[] = []
-
-  // Primary visible text
-  parts.push(c.name, c.displayName, c.display_name, c.handle, c.ig_handle, c.igHandle, c.igUsername, c.username)
-
-  // Arrays rendered in UI
-  parts.push(...(c.platforms ?? []))
-  parts.push(...(c.tags ?? []))
-  parts.push(...(c.tagCategories ?? []))
-  parts.push(...(c.topics ?? []))
-
-  // Raw supabase payload (prod uses snake_case)
-  if (c.__rawCard && typeof c.__rawCard === "object") {
-    const r: unknown = c.__rawCard
-    parts.push(r.name, r.display_name, r.ig_handle, r.username, ...(r.tags ?? []), ...(r.tag_categories ?? []))
-  }
-
-  return normalizeSearchText(parts.filter(Boolean).join(" "))
-}
-
-function buildCardHaystack(input: {
-  creator: CreatorCardData & {
-    handle?: string
-    displayName?: string
-    username?: string
-    igUsername?: string
-    topics?: string[]
-    tagCategories?: string[]
-    platforms?: Platform[]
-    deliverables?: string[]
-    collabTypes?: CollabType[]
-    dealTypes?: string[]
-    minPrice?: number | null
-    contact?: string | null
-    __rawCard?: unknown
-    __rawMinPrice?: number | null | undefined
-  }
-  creatorTypeOptions: string[]
-  locale: Locale
-  creatorTypeSynonyms: Map<string, string[]>
-}): string {
-  const c = input.creator
-  const parts: string[] = []
-
-  pushFlattenedStrings(parts, (c as unknown).displayName)
-  pushFlattenedStrings(parts, (c as unknown).display_name)
-  pushFlattenedStrings(parts, c.name)
-  pushFlattenedStrings(parts, c.handle)
-  pushFlattenedStrings(parts, (c as unknown).ig_handle)
-  pushFlattenedStrings(parts, (c as unknown).igHandle)
-  pushFlattenedStrings(parts, (c as unknown).igUsername)
-  pushFlattenedStrings(parts, (c as unknown).ig_username)
-  pushFlattenedStrings(parts, (c as unknown).username)
-
-  // CreatorCard renders the visible title as `creator.name`.
-  // Search haystack must be derived from the same normalized object (`creator`) used for rendering.
-
-  parts.push(cardSearchBlob(c as unknown))
-
-  pushFlattenedStrings(parts, c.topics)
-  const creatorTypeParts = buildCreatorTypeSearchParts({ tagCategories: c.tagCategories, creatorTypeOptions: input.creatorTypeOptions })
-  pushFlattenedStrings(parts, creatorTypeParts)
-  for (const t of creatorTypeParts) {
-    const key = normalizeSearchText(t)
-    const syns = input.creatorTypeSynonyms.get(key)
-    if (syns?.length) pushFlattenedStrings(parts, syns)
-  }
-
-  pushFlattenedStrings(parts, c.platforms)
-  pushFlattenedStrings(parts, c.deliverables)
-  pushFlattenedStrings(parts, c.collabTypes)
-  pushFlattenedStrings(parts, c.dealTypes)
-
-  if (typeof c.minPrice === "number" && Number.isFinite(c.minPrice)) {
-    parts.push(String(Math.floor(c.minPrice)))
-    pushFlattenedStrings(parts, formatPriceLabel({ minPrice: c.minPrice, locale: input.locale }))
-  } else if (c.__rawMinPrice === null) {
-    parts.push("洽談報價")
-    parts.push("contact for quote")
-    pushFlattenedStrings(parts, formatPriceLabel({ minPrice: null, locale: input.locale }))
-  }
-
-  pushFlattenedStrings(parts, c.contact)
-
-  return normalizeSearchText(parts.join(" "))
+function clampNumber(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n))
 }
 
 function hashStringToInt(seed: string) {
   let h = 2166136261
-  for (let i = 0; i <seed.length; i++) {
+  for (let i = 0; i < seed.length; i++) {
     h ^= seed.charCodeAt(i)
     h = Math.imul(h, 16777619)
   }
@@ -523,18 +51,30 @@ function svgAvatarDataUrl(seed: string, label: string) {
   const r1 = 40 + (h % 140)
   const g1 = 40 + ((h >>> 8) % 140)
   const b1 = 40 + ((h >>> 16) % 140)
-  const bg = `rgb(${r1},${g1},${b1})`
-
-  const raw = String(label || "?").trim()
-  const initials = raw
+  const r2 = 40 + ((h >>> 5) % 140)
+  const g2 = 40 + ((h >>> 13) % 140)
+  const b2 = 40 + ((h >>> 21) % 140)
+  const initials = (label || "?")
+    .trim()
     .split(/\s+/)
-    .filter(Boolean)
     .slice(0, 2)
-    .map((x) => x[0])
+    .map((x) => x.slice(0, 1).toUpperCase())
     .join("")
-    .toUpperCase()
+    .slice(0, 2)
 
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">\n  <rect width="512" height="512" rx="96" fill="${bg}"/>\n  <text x="256" y="300" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto" font-size="152" font-weight="800" fill="rgba(255,255,255,0.92)">${initials || "?"}</text>\n</svg>`
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="rgb(${r1},${g1},${b1})"/>
+      <stop offset="1" stop-color="rgb(${r2},${g2},${b2})"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="80" fill="url(#g)"/>
+  <circle cx="256" cy="220" r="86" fill="rgba(255,255,255,0.22)"/>
+  <path d="M96 448c34-78 92-118 160-118s126 40 160 118" fill="rgba(255,255,255,0.20)"/>
+  <text x="256" y="260" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto" font-size="72" font-weight="800" fill="rgba(255,255,255,0.92)">${initials}</text>
+</svg>`
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
@@ -592,6 +132,23 @@ function derivePlatformsFromDeliverables(input?: string[]): Platform[] {
   return Array.from(set)
 }
 
+function deriveFormatKeysFromDeliverables(input?: string[]): FormatKey[] {
+  const d = Array.isArray(input) ? input : []
+  const set = new Set<FormatKey>()
+
+  for (const raw of d) {
+    const id = String(raw || "").trim().toLowerCase()
+    if (!id) continue
+
+    if (id === "reels") set.add("reels")
+    else if (id === "posts") set.add("posts")
+    else if (id === "stories") set.add("stories")
+    else set.add("other")
+  }
+
+  return Array.from(set)
+}
+
 function deriveCollabTypesFromDeliverables(input?: string[]): CollabType[] {
   const d = Array.isArray(input) ? input : []
   const set = new Set<CollabType>()
@@ -612,13 +169,55 @@ function deriveCollabTypesFromDeliverables(input?: string[]): CollabType[] {
   return Array.from(set)
 }
 
+function buildDemoCreators({
+  locale,
+  existingIds,
+  count,
+  seedBase,
+}: {
+  locale: "zh-TW" | "en"
+  existingIds: Set<string>
+  count: number
+  seedBase: string
+}): CreatorCard[] {
+  const out: CreatorCard[] = []
+
+  for (let i = 0; i < count; i++) {
+    const seed = `${seedBase}:demo:${i}`
+    const h = hashStringToInt(seed)
+    const rand = mulberry32(h)
+
+    const followers = Math.round(Math.pow(rand(), 0.35) * 480_000 + 5_000)
+    const er = clampNumber(1.2 + rand() * 6.2, 0.6, 9.9)
+    const avgLikes = Math.round((followers * er) / 100 * (0.82 + rand() * 0.22))
+    const avgComments = Math.round(avgLikes * (0.03 + rand() * 0.06))
+    const id = `demo_${h.toString(16)}`
+    if (existingIds.has(id)) continue
+
+    out.push({
+      id,
+      displayName: "",
+      avatarUrl: "",
+      category: "",
+      followerCount: followers,
+      avgLikes,
+      avgComments,
+      engagementRate: Math.round(er * 100) / 10000,
+      isVerified: false,
+      profileUrl: "",
+      isDemo: true,
+    })
+  }
+
+  return out
+}
+
 function safeParseContact(input: unknown): {
   emails: string[]
-  phones: string[]
-  lines: string[]
-  primaryContactMethod?: "email" | "phone" | "line"
+  instagrams: string[]
+  others: string[]
 } {
-  const empty = { emails: [] as string[], phones: [] as string[], lines: [] as string[], primaryContactMethod: undefined as unknown }
+  const empty = { emails: [] as string[], instagrams: [] as string[], others: [] as string[] }
   if (typeof input !== "string") return empty
   const raw = input.trim()
   if (!raw) return empty
@@ -626,32 +225,18 @@ function safeParseContact(input: unknown): {
     const obj = JSON.parse(raw)
     if (!obj || typeof obj !== "object") return empty
     const readArr = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim()).filter(Boolean) : [])
-    const emails = readArr((obj as unknown).emails)
-    const phones = readArr((obj as unknown).phones)
-    const lines = readArr((obj as unknown).lines)
-    const legacyOthers = readArr((obj as unknown).others)
-    const email1 = typeof (obj as unknown).email === "string" ? String((obj as unknown).email).trim() : ""
-    const phone1 = typeof (obj as unknown).phone === "string" ? String((obj as unknown).phone).trim() : ""
-    const line1 = typeof (obj as unknown).line === "string" ? String((obj as unknown).line).trim() : ""
-    const other1 = typeof (obj as unknown).other === "string" ? String((obj as unknown).other).trim() : ""
+    const emails = readArr((obj as any).emails)
+    const instagrams = readArr((obj as any).instagrams)
+    const others = readArr((obj as any).others)
+    const email1 = typeof (obj as any).email === "string" ? String((obj as any).email).trim() : ""
+    const ig1 = typeof (obj as any).instagram === "string" ? String((obj as any).instagram).trim() : ""
+    const other1 = typeof (obj as any).other === "string" ? String((obj as any).other).trim() : ""
+    const mergedEmails = [...(email1 ? [email1] : []), ...emails]
+    const mergedIgs = [...(ig1 ? [ig1] : []), ...instagrams]
+    const mergedOthers = [...(other1 ? [other1] : []), ...others]
 
     const uniq = (arr: string[]) => Array.from(new Set(arr.map((x) => x.trim()).filter(Boolean))).slice(0, 20)
-
-    const pcmRaw = typeof (obj as unknown)?.primaryContactMethod === "string" ? String((obj as unknown).primaryContactMethod).trim() : ""
-    const primaryContactMethod = pcmRaw === "email" || pcmRaw === "phone" || pcmRaw === "line" ? (pcmRaw as unknown) : undefined
-
-    const finalLines = (() => {
-      const merged = uniq([...(line1 ? [line1] : []), ...lines])
-      if (merged.length > 0) return merged
-      // Back-compat: treat legacy others/other as lines when lines is empty.
-      return uniq([...(other1 ? [other1] : []), ...legacyOthers])
-    })()
-    return {
-      emails: uniq([...(email1 ? [email1] : []), ...emails]),
-      phones: uniq([...(phone1 ? [phone1] : []), ...phones]),
-      lines: finalLines,
-      primaryContactMethod,
-    }
+    return { emails: uniq(mergedEmails), instagrams: uniq(mergedIgs), others: uniq(mergedOthers) }
   } catch {
     return empty
   }
@@ -666,141 +251,28 @@ function pinOwnerCardFirst<T extends { id: string }>(cards: T[], ownerCardId: st
   return [owner, ...rest]
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") return null
-  return value as Record<string, unknown>
-}
-
-function sanitizeMeCard(input: unknown, localePrefix: string): CreatorCard | null {
-  const id = typeof input?.id === "string" ? input.id : null
-  if (!id) return null
-
-  // IMPORTANT: keep `igUserId` on the pinned owner card.
-  // Matchmaking stats hydration keys off igUserId -> /api/creators/:id/stats.
-  const igUserId =
-    typeof input?.ig_user_id === "string"
-      ? input.ig_user_id
-      : typeof input?.igUserId === "string"
-        ? input.igUserId
-        : null
-
-  const displayNameRaw = typeof input?.ig_username === "string" ? input.ig_username : typeof input?.displayName === "string" ? input.displayName : ""
-  const displayName = displayNameRaw || id
-  const avatarUrl =
-    typeof input?.avatar_url === "string"
-      ? input.avatar_url
-      : typeof input?.avatarUrl === "string"
-        ? input.avatarUrl
-        : typeof input?.profile_image_url === "string"
-          ? input.profile_image_url
-          : typeof input?.profileImageUrl === "string"
-            ? input.profileImageUrl
-            : svgAvatarDataUrl(String(id), displayName)
-
-  const niche = typeof input?.niche === "string" ? input.niche : typeof input?.category === "string" ? input.category : "Creator"
-  const deliverables = Array.isArray(input?.deliverables) ? (input.deliverables as unknown[]).filter((x): x is string => typeof x === "string") : []
-  const isPublic = typeof input?.is_public === "boolean" ? input.is_public : typeof input?.isPublic === "boolean" ? input.isPublic : false
-
-  const collaborationNiches = (() => {
-    const raw =
-      (Array.isArray(input?.collaborationNiches) ? input.collaborationNiches : null) ??
-      (Array.isArray(input?.collaboration_niches) ? input.collaboration_niches : null) ??
-      []
-    return raw.filter((x: unknown): x is string => typeof x === "string").map((s: string) => s.trim()).filter(Boolean)
-  })()
-
-  const rawMinPrice =
-    typeof input?.min_price === "number" && Number.isFinite(input.min_price)
-      ? input.min_price
-      : typeof input?.minPrice === "number" && Number.isFinite(input.minPrice)
-        ? input.minPrice
-        : null
-
-  const contact = typeof input?.contact === "string" ? input.contact : typeof input?.contactInfo === "string" ? input.contactInfo : null
-
-  return {
-    id,
-    igUserId,
-    displayName,
-    avatarUrl,
-    category: niche || "Creator",
-    deliverables,
-    collaborationNiches,
-    minPrice: typeof rawMinPrice === "number" ? rawMinPrice : null,
-    contact,
-    followerCount: 0,
-    engagementRate: null,
-    isVerified: false,
-    profileUrl: `${localePrefix}/card/${encodeURIComponent(id)}`,
-  }
-}
-
-function MatchmakingClient(props: MatchmakingClientProps) {
-  const { locale, initialCards, initialMeCard } = props
-
+export function MatchmakingClient({ locale, initialCards }: MatchmakingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const uiCopy = getCopy(locale)
-  const localePrefix = locale === "zh-TW" ? "/zh-TW" : "/en"
   const fav = useFavorites()
   const [favOpen, setFavOpen] = useState(false)
-  const [demoAvatarMap, setDemoAvatarMap] = useState<Record<string, string>>({})
-  const [canEditDemoAvatars, setCanEditDemoAvatars] = useState(false)
 
-  const refreshDemoAvatars = useCallback(() => {
+  if (typeof window !== "undefined") {
+    const qp = new URLSearchParams(window.location.search)
+    if (qp.get("debugOwner") === "1") {
+      console.log("[debug] MatchmakingClient mounted")
+    }
+  }
+
+  const debugOwner = useMemo(() => {
     try {
-      setDemoAvatarMap(loadDemoAvatars())
+      if (typeof window === "undefined") return false
+      const qp = new URLSearchParams(window.location.search)
+      return qp.get("debugOwner") === "1"
     } catch {
-      setDemoAvatarMap({})
+      return false
     }
   }, [])
-
-  useEffect(() => {
-    refreshDemoAvatars()
-  }, [refreshDemoAvatars])
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "mm_demo_avatars_v1") refreshDemoAvatars()
-    }
-    window.addEventListener("storage", onStorage)
-    return () => window.removeEventListener("storage", onStorage)
-  }, [refreshDemoAvatars])
-
-  useEffect(() => {
-    const LS_KEY = "mm_demo_edit_enabled_v1"
-    try {
-      const sp = searchParams
-      if (sp?.get("demoEdit") === "1") {
-        window.localStorage.setItem(LS_KEY, "1")
-      }
-      setCanEditDemoAvatars(window.localStorage.getItem(LS_KEY) === "1")
-    } catch {
-      setCanEditDemoAvatars(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const disableDemoEdit = useCallback(() => {
-    const LS_KEY = "mm_demo_edit_enabled_v1"
-    try {
-      if (typeof window !== "undefined") window.localStorage.removeItem(LS_KEY)
-    } catch {
-      // swallow
-    }
-    setCanEditDemoAvatars(false)
-  }, [])
-
-  const initialMeCardResolved = useMemo(() => {
-    const raw = initialMeCard as unknown
-    const nested = raw && typeof raw === "object" && raw.card && typeof raw.card === "object" ? raw.card : null
-
-    return (nested ?? initialMeCard) as unknown
-  }, [initialMeCard])
-
-  const [meCard, setMeCard] = useState<CreatorCard | null>(() => {
-    return initialMeCardResolved ? sanitizeMeCard(initialMeCardResolved, localePrefix) : null
-  })
 
   const statsCacheRef = useRef(
     new Map<
@@ -823,66 +295,23 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
   const [statsVersion, setStatsVersion] = useState(0)
 
-  const [allCards, setAllCards] = useState<CreatorCard[]>(initialCards)
+  const uiCopy = useMemo(() => getCopy(locale), [locale])
 
-  const [searchInput, setSearchInput] = useState("")
-  const [debouncedQ, setDebouncedQ] = useState("")
-  const [remoteRawCards, setRemoteRawCards] = useState<CreatorCard[]>([])
-  const [remoteLoading, setRemoteLoading] = useState(false)
-  const [remoteError, setRemoteError] = useState<string | null>(null)
-  const remoteDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isComposingRef = useRef(false)
-  const lastFetchedQRef = useRef<string>("")
-  const remoteReqIdRef = useRef(0)
-  const lastUrlQRef = useRef<string>("")
+  const [cards, setCards] = useState<CreatorCard[]>(initialCards)
 
-  const MIN_REMOTE_Q_LEN = 2
-  const REMOTE_CACHE_TTL_MS = 5 * 60 * 1000
-  const REMOTE_CACHE_MAX = 50
-
-  type RemoteCacheEntry<T> = {
-    at: number
-    data: T
-  }
-
-  const remoteCacheRef = useRef<Map<string, RemoteCacheEntry<CreatorCard[]>>>(new Map())
-  const remoteInFlightRef = useRef<Map<string, Promise<CreatorCard[]>>>(new Map())
-
-  const getRemoteCache = useCallback(<T,>(q: string): T | null => {
-    const hit = remoteCacheRef.current.get(q)
-    if (!hit) return null
-    if (Date.now() - hit.at > REMOTE_CACHE_TTL_MS) {
-      remoteCacheRef.current.delete(q)
-      return null
-    }
-    return hit.data as unknown as T
-  }, [])
-
-  const setRemoteCache = useCallback(<T,>(q: string, data: T) => {
-    const m = remoteCacheRef.current
-    if (m.has(q)) m.delete(q)
-    m.set(q, { at: Date.now(), data: data as unknown as CreatorCard[] })
-    while (m.size > REMOTE_CACHE_MAX) {
-      const oldestKey = m.keys().next().value as string | undefined
-      if (!oldestKey) break
-      m.delete(oldestKey)
-    }
-  }, [])
-
+  const [q, setQ] = useState("")
   const [sort, setSort] = useState<"best_match" | "followers_desc" | "er_desc">("best_match")
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
-  const [selectedDealTypes, setSelectedDealTypes] = useState<CollabType[]>([])
-  const [selectedTagCategories, setSelectedTagCategories] = useState<string[]>([])
+  const [platform, setPlatform] = useState<Platform | "any">("any")
   const [budget, setBudget] = useState<BudgetRange>("any")
   const [customBudget, setCustomBudget] = useState<string>("")
-  const [page, setPage] = useState(1)
-  const [focusNonce, setFocusNonce] = useState(0)
+  const [selectedTypes, setSelectedTypes] = useState<TypeKey[]>([])
+  const [ownerCardId, setOwnerCardId] = useState<string | null>(null)
   const LS_SORT_KEY = "matchmaking:lastSort:v1"
 
-  const cardsRef = useRef(allCards)
+  const cardsRef = useRef(cards)
   useEffect(() => {
-    cardsRef.current = allCards
-  }, [allCards])
+    cardsRef.current = cards
+  }, [cards])
 
   const ownerLookupStartedRef = useRef(false)
 
@@ -891,11 +320,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       if (typeof window === "undefined") return
       const raw = window.sessionStorage.getItem(STORAGE_KEY)
       if (!raw) return
-      const parsed = JSON.parse(raw) as unknown
+      const parsed = JSON.parse(raw) as any
       const updatedAt = typeof parsed?.updatedAt === "number" ? parsed.updatedAt : 0
       if (!updatedAt || Date.now() - updatedAt > STORAGE_TTL_MS) return
 
-      const mapObj = parsed?.map && typeof parsed.map === "object" ? (parsed.map as Record<string, unknown>) : null
+      const mapObj = parsed?.map && typeof parsed.map === "object" ? (parsed.map as Record<string, any>) : null
       if (!mapObj) return
 
       let changed = false
@@ -926,52 +355,31 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   }, [])
 
   useEffect(() => {
-    setAllCards(initialCards)
+    setCards(initialCards)
   }, [initialCards])
 
   // Initialize from URL query params on first client render
   useEffect(() => {
     const qp = searchParams
     const nextQ = (qp.get("q") ?? "").slice(0, 120)
+    const nextPlatform = (qp.get("platform") ?? "any") as Platform | "any"
     const nextBudget = (qp.get("budget") ?? "any") as BudgetRange
-    const nextPageRaw = qp.get("page")
-    const nextPageNum = nextPageRaw ? Number(nextPageRaw) : 1
-    const nextPage = Number.isFinite(nextPageNum) ? Math.max(1, Math.floor(nextPageNum)) : 1
+    const nextCollab = (qp.get("collab") ?? "any") as CollabType | "any"
 
-    const platformSet = new Set<Platform>(["instagram", "tiktok", "youtube", "facebook"])
-    const nextPlatforms = qp
-      .getAll("platform")
-      .map((s) => String(s ?? "").trim().toLowerCase())
-      .filter((s): s is Platform => platformSet.has(s as Platform))
-
-    const collabSet = new Set<CollabType>([
-      "short_video",
-      "long_video",
-      "ugc",
-      "live",
-      "review_unboxing",
-      "event",
-      "other",
-    ])
-    const nextDealTypes = qp
-      .getAll("collab")
-      .map((s) => String(s ?? "").trim())
-      .filter((s): s is CollabType => collabSet.has(s as CollabType))
-
-    const nextTagCategories = (() => {
-      const all = qp.getAll("tagCategories").flatMap((x) => String(x ?? "").split(","))
-      const joined = all.map((s) => s.trim()).filter(Boolean)
-      return Array.from(new Set(joined)).slice(0, 50)
-    })()
-
-    setSearchInput(nextQ)
-    setDebouncedQ(nextQ)
+    setQ(nextQ)
+    setPlatform(nextPlatform)
     setBudget(nextBudget)
-    setCustomBudget(nextBudget === "custom" ? (qp.get("customBudget") ?? "") : "")
-    setSelectedPlatforms(nextPlatforms)
-    setSelectedDealTypes(nextDealTypes)
-    setSelectedTagCategories(nextTagCategories)
-    setPage(nextPage)
+
+    // Keep URL compatibility: initialize selected types from the existing collab param (single value).
+    const isKnownCollab: boolean =
+      nextCollab === "short_video" ||
+      nextCollab === "long_video" ||
+      nextCollab === "ugc" ||
+      nextCollab === "live" ||
+      nextCollab === "review_unboxing" ||
+      nextCollab === "event" ||
+      nextCollab === "other"
+    setSelectedTypes(isKnownCollab ? ([nextCollab as CollabType] as TypeKey[]) : [])
 
     // If budget param is not one of the known presets, fall back to any.
     const isKnownBudget: boolean =
@@ -987,6 +395,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     setBudget(isKnownBudget ? nextBudget : "any")
     setCustomBudget("")
 
+    setPlatform(nextPlatform)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1001,27 +410,35 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     } catch {
       // swallow
     }
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reset to page 1 when filters change.
+  // Sync state -> URL
   useEffect(() => {
-    setPage(1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput, sort, budget, customBudget, selectedPlatforms.join("|"), selectedDealTypes.join("|"), selectedTagCategories.join("|")])
+    const params = new URLSearchParams()
+    if (q.trim()) params.set("q", q.trim())
+    if (platform !== "any") params.set("platform", platform)
+    // Do not introduce new URL values. Only persist known preset budgets.
+    if (budget !== "any" && budget !== "custom") params.set("budget", budget)
 
-  useEffect(() => {
-    if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
+    // URL compatibility: only persist to the existing "collab" param when exactly one collab type is selected.
+    const single = selectedTypes.length === 1 ? selectedTypes[0] : null
+    const collabValue: CollabType | null =
+      single === "short_video" ||
+      single === "long_video" ||
+      single === "ugc" ||
+      single === "live" ||
+      single === "review_unboxing" ||
+      single === "event" ||
+      single === "other"
+        ? single
+        : null
+    if (collabValue) params.set("collab", collabValue)
 
-    if (isComposingRef.current) return
+    const qs = params.toString()
+    router.replace(qs ? `?${qs}` : "?", { scroll: false })
+  }, [q, platform, budget, selectedTypes, router])
 
-    remoteDebounceTimerRef.current = setTimeout(() => {
-      setDebouncedQ(String(searchInput ?? ""))
-    }, 350)
-    return () => {
-      if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
-    }
-  }, [searchInput])
 
   useEffect(() => {
     let cancelled = false
@@ -1031,92 +448,48 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       let shouldPersistOwnerLookup = true
 
       try {
-        if (initialMeCard) {
-          shouldPersistOwnerLookup = false
-          return
-        }
-
         if (ownerLookupStartedRef.current) return
         ownerLookupStartedRef.current = true
 
-        const cached = readOwnerLookupCacheV2()
-        const cacheFresh = Boolean(cached && cached.ts && Date.now() - cached.ts < CACHE_TTL_MS)
-        const cachedSuccessWithId = Boolean(
-          cacheFresh &&
-            cached?.status === "success" &&
-            typeof cached?.ownerCardId === "string" &&
-            cached.ownerCardId.trim().length > 0,
-        )
-
-        // Only suppress further lookups when we already have a loaded meCard.
-        // If meCard is null, we must fetch to hydrate it even if a previous session cache says success.
-        if (cachedSuccessWithId && meCard) {
-          shouldPersistOwnerLookup = false
-          return
+        try {
+          const raw = window.sessionStorage.getItem(OWNER_LOOKUP_CACHE_KEY)
+          if (raw) {
+            const cached = JSON.parse(raw) as any
+            if (cached?.done) {
+              shouldPersistOwnerLookup = false
+              const cachedOwnerCardId = typeof cached?.ownerCardId === "string" ? cached.ownerCardId : null
+              if (!cancelled && cachedOwnerCardId) setOwnerCardId(cachedOwnerCardId)
+              return
+            }
+          }
+          window.sessionStorage.setItem(
+            OWNER_LOOKUP_CACHE_KEY,
+            JSON.stringify({ startedAt: Date.now(), done: false, ownerCardId: null }),
+          )
+        } catch {
+          // swallow
         }
-
-        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "pending", ownerCardId: cached?.ownerCardId ?? null })
 
         const meRes = await fetch("/api/creator-card/me", {
           method: "GET",
           cache: "no-store",
           credentials: "include",
         })
-        const meJson = (await meRes.json().catch(() => null)) as unknown
+        const meJson = (await meRes.json().catch(() => null)) as any
 
-        if (MM_DEBUG) {
-          try {
-             
-            console.log("[Matchmaking] meCard fetch result:", {
-              httpOk: Boolean(meRes.ok),
-              ok: Boolean(meJson?.ok),
-              error: typeof meJson?.error === "string" ? meJson.error : null,
-              cardId: typeof meJson?.card?.id === "string" ? meJson.card.id : null,
-            })
-          } catch {
-            // ignore
-          }
+        if (debugOwner) {
+          console.log("[debug] /api/creator-card/me response status:", meRes.status)
+          console.log("[debug] /api/creator-card/me json:", meJson)
         }
 
-        if (meRes.ok && meJson?.ok === true && meJson?.card) {
-          const safe = sanitizeMeCard(meJson.card, localePrefix)
-          if (safe) setMeCard(safe)
-        }
+        if (!meRes.ok || meJson?.ok !== true) return
+
+        const ownerIgUserId = typeof meJson?.me?.igUserId === "string" ? meJson.me.igUserId : null
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
-
-        if (!meRes.ok) {
-          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
-          return
-        }
-
-        if (meJson?.ok !== true) {
-          const err = typeof meJson?.error === "string" ? meJson.error : "error"
-          const status: OwnerLookupStatus =
-            err === "not_logged_in" ? "not_logged_in" : err === "no_creator_card" ? "no_creator_card" : "error"
-          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status, ownerCardId: null })
-          return
-        }
-
-        if (!meCardId) {
-          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
-          return
-        }
-
-        const ownerIgUserId =
-          typeof meJson?.card?.ig_user_id === "string"
-            ? meJson.card.ig_user_id
-            : typeof meJson?.card?.igUserId === "string"
-              ? meJson.card.igUserId
-              : null
-
-        if (!cancelled) {
-          const safe = sanitizeMeCard(meJson?.card, localePrefix)
-          if (safe) setMeCard(safe)
-        }
+        if (!meCardId) return
 
         nextOwnerCardId = meCardId
-
-        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "success", ownerCardId: meCardId })
+        if (!cancelled) setOwnerCardId(meCardId)
 
         if (!ownerIgUserId) return
 
@@ -1125,7 +498,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           cache: "no-store",
           credentials: "include",
         })
-        const statsJson = (await statsRes.json().catch(() => null)) as unknown
+        const statsJson = (await statsRes.json().catch(() => null)) as any
         const statsOk = Boolean(statsRes.ok && statsJson?.ok === true)
         const stats = statsOk ? statsJson?.stats : null
 
@@ -1134,6 +507,9 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           const creatorIdStr = String(ownerIgUserId)
           statsErrorRef.current.set(creatorIdStr, true)
           setStatsUiVersion((v) => v + 1)
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[matchmaking] owner stats non-ok", creatorIdStr, statsRes.status)
+          }
           return
         }
 
@@ -1162,8 +538,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         statsErrorRef.current.delete(creatorIdStr)
         setStatsUiVersion((v) => v + 1)
 
-        setAllCards((prev: CreatorCard[]) =>
-          prev.map((c: CreatorCard) => {
+        setCards((prev) =>
+          prev.map((c) => {
             const cId = c?.id != null ? String(c.id) : ""
 
             const matches = cId === String(meCardId)
@@ -1182,11 +558,14 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           })
         )
       } catch {
-        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
+        // swallow
       } finally {
         if (shouldPersistOwnerLookup) {
           try {
-            // legacy v1 cache write removed in favor of v2 cache
+            window.sessionStorage.setItem(
+              OWNER_LOOKUP_CACHE_KEY,
+              JSON.stringify({ done: true, ownerCardId: typeof nextOwnerCardId === "string" ? nextOwnerCardId : null }),
+            )
           } catch {
             // swallow
           }
@@ -1199,388 +578,132 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     }
   }, [])
 
-  const creators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
-    return allCards.map((c) => {
-      const displayNameResolved =
-        typeof (c as unknown).displayName === "string" && String((c as unknown).displayName).trim()
-          ? String((c as unknown).displayName).trim()
-          : typeof (c as unknown).name === "string" && String((c as unknown).name).trim()
-            ? String((c as unknown).name).trim()
-            : typeof (c as unknown).creatorName === "string" && String((c as unknown).creatorName).trim()
-              ? String((c as unknown).creatorName).trim()
-              : typeof (c as unknown).title === "string" && String((c as unknown).title).trim()
-                ? String((c as unknown).title).trim()
-                : ""
+  const cardsWithDemos = useMemo(() => {
+    const TARGET_TOTAL = 12
+    const existingIds = new Set(cards.map((c) => c.id))
+    const realCards = cards.filter((c) => !c.isDemo)
+    const missing = Math.min(3, Math.max(0, TARGET_TOTAL - realCards.length))
+    const demos = missing > 0 ? buildDemoCreators({ locale, existingIds, count: missing, seedBase: "matchmaking" }) : []
+    return [...realCards, ...demos]
+  }, [cards, locale])
 
+  const creators: Array<CreatorCardData & { creatorId?: string }> = useMemo(() => {
+    return cardsWithDemos.map((c) => {
       const topics = (c.category ? [c.category] : []).filter(Boolean)
-      const tagCategories = normalizeCreatorTypesFromCard(c as unknown)
-      const deliverables = Array.isArray((c as unknown).deliverables) ? ((c as unknown).deliverables as string[]) : []
+      const deliverables = Array.isArray((c as any).deliverables) ? ((c as any).deliverables as string[]) : []
       const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
       const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
-      const dealTypes = derivedCollabTypes as unknown as string[]
 
-      const cacheKey = getStatsCacheKey(c)
-      const numericCreatorId = getNumericCreatorId(c)
-      const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
+      const creatorIdStr = typeof c.igUserId === "string" && /^\d+$/.test(c.igUserId) ? c.igUserId : null
+      const cachedStats = creatorIdStr ? statsCacheRef.current.get(creatorIdStr) : undefined
 
       const rawHandle =
-        typeof (c as unknown).handle === "string"
-          ? String((c as unknown).handle).trim()
-          : typeof (c as unknown).igUsername === "string"
-            ? String((c as unknown).igUsername).trim()
-            : typeof (c as unknown).username === "string"
-              ? String((c as unknown).username).trim()
-              : displayNameResolved
+        typeof (c as any).handle === "string"
+          ? String((c as any).handle).trim()
+          : typeof (c as any).igUsername === "string"
+            ? String((c as any).igUsername).trim()
+            : typeof (c as any).username === "string"
+              ? String((c as any).username).trim()
+              : typeof (c as any).displayName === "string"
+                ? String((c as any).displayName).trim()
+                : ""
       const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
 
-      const parsedContact = safeParseContact((c as unknown).contact)
+      const parsedContact = safeParseContact((c as any).contact)
       const contactEmail = parsedContact.emails[0] || undefined
-      const contactPhone = parsedContact.phones[0] || undefined
-      const contactLine = parsedContact.lines[0] || undefined
-      const primaryContactMethod = parsedContact.primaryContactMethod
+      const contactLine = parsedContact.others[0] || undefined
 
       const rawFollowers =
         typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
           ? Math.floor(cachedStats.followers)
-          : typeof (c as unknown)?.stats?.followers === "number" && Number.isFinite((c as unknown).stats.followers)
-            ? Math.floor((c as unknown).stats.followers)
-            : typeof (c as unknown)?.followerCount === "number" && Number.isFinite((c as unknown).followerCount) && (c as unknown).followerCount > 0
-              ? Math.floor((c as unknown).followerCount)
-              : undefined
+          : typeof (c as any)?.stats?.followers === "number" && Number.isFinite((c as any).stats.followers)
+          ? Math.floor((c as any).stats.followers)
+          : typeof (c as any)?.followerCount === "number" && Number.isFinite((c as any).followerCount) && (c as any).followerCount > 0
+            ? Math.floor((c as any).followerCount)
+            : undefined
 
       const rawER =
         typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
           ? cachedStats.engagementRatePct / 100
-          : typeof (c as unknown)?.stats?.engagementRatePct === "number" && Number.isFinite((c as unknown).stats.engagementRatePct)
-            ? (c as unknown).stats.engagementRatePct / 100
-          : typeof (c as unknown)?.stats?.engagementRate === "number" && Number.isFinite((c as unknown).stats.engagementRate)
-            ? (c as unknown).stats.engagementRate
-          : typeof (c as unknown)?.engagementRate === "number" && Number.isFinite((c as unknown).engagementRate)
-            ? (c as unknown).engagementRate
-            : undefined
-
-      const rawMinPriceCandidate =
-        typeof (c as unknown)?.minPrice === "number" && Number.isFinite((c as unknown).minPrice)
-          ? Math.floor((c as unknown).minPrice)
-          : (c as unknown)?.minPrice === null
-            ? null
-            : typeof (c as unknown)?.min_price === "number" && Number.isFinite((c as unknown).min_price)
-              ? Math.floor((c as unknown).min_price)
-              : (c as unknown)?.min_price === null
-                ? null
-                : undefined
-
-      const normalizedMinPrice = typeof rawMinPriceCandidate === "number" && Number.isFinite(rawMinPriceCandidate) ? Math.max(0, Math.floor(rawMinPriceCandidate)) : undefined
-
-      return {
-        id: c.id,
-        creatorId: cacheKey ?? undefined,
-        numericId: numericCreatorId ?? undefined,
-        statsFetchId: numericCreatorId ?? undefined,
-        name: displayNameResolved,
-        displayName: displayNameResolved,
-        username:
-          typeof (c as unknown).username === "string"
-            ? String((c as unknown).username).trim()
-            : undefined,
-        igUsername:
-          typeof (c as unknown).igUsername === "string"
-            ? String((c as unknown).igUsername).trim()
-            : undefined,
-        handle,
-        avatarUrl: c.avatarUrl,
-        topics,
-        tagCategories,
-        platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
-        dealTypes,
-        collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
-        deliverables,
-        minPrice: rawMinPriceCandidate === null ? null : normalizedMinPrice,
-        __rawMinPrice: rawMinPriceCandidate,
-        stats: {
-          followers: rawFollowers,
-          engagementRate: rawER,
-        },
-        contactEmail,
-        contactPhone,
-        contactLine,
-        primaryContactMethod,
-        href: c.isDemo ? "" : c.profileUrl,
-        isDemo: Boolean(c.isDemo),
-        __rawCard: c as unknown,
-      }
-    })
-  }, [allCards, statsVersion])
-
-  const localByNumericId = useMemo(() => {
-    const m = new Map<string, unknown>()
-    for (const c of allCards as unknown[]) {
-      const id = getNumericCreatorId(c)
-      if (!id) continue
-      if (!m.has(id)) m.set(id, c)
-    }
-    return m
-  }, [allCards])
-
-  const localByHandle = useMemo(() => {
-    const m = new Map<string, unknown>()
-    for (const c of allCards as unknown[]) {
-      const h =
-        (typeof (c as unknown)?.handle === "string" && (c as unknown).handle.trim()) ||
-        (typeof (c as unknown)?.username === "string" && (c as unknown).username.trim()) ||
-        (typeof (c as unknown)?.igUsername === "string" && (c as unknown).igUsername.trim()) ||
-        (typeof (c as unknown)?.__rawCard?.handle === "string" && (c as unknown).__rawCard.handle.trim()) ||
-        (typeof (c as unknown)?.__rawCard?.username === "string" && (c as unknown).__rawCard.username.trim()) ||
-        null
-      if (!h) continue
-      const key = h.toLowerCase()
-      if (!m.has(key)) m.set(key, c)
-    }
-    return m
-  }, [allCards])
-
-  const localSearchHayByKey = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of allCards as unknown[]) {
-      const k = searchKeyForCardLike(c)
-      if (!k) continue
-      if (m.has(k)) continue
-      m.set(k, buildCreatorSearchHay(c))
-    }
-    return m
-  }, [allCards])
-
-  const localIdentityHayByKey = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of allCards as unknown[]) {
-      const k = searchKeyForCardLike(c)
-      if (!k) continue
-      if (m.has(k)) continue
-      m.set(k, buildCreatorIdentityHay(c))
-    }
-    return m
-  }, [allCards])
-
-  const remoteCreators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
-    return remoteRawCards.map((c) => {
-      const displayNameResolved =
-        typeof (c as unknown).displayName === "string" && String((c as unknown).displayName).trim()
-          ? String((c as unknown).displayName).trim()
-          : typeof (c as unknown).name === "string" && String((c as unknown).name).trim()
-            ? String((c as unknown).name).trim()
-            : typeof (c as unknown).creatorName === "string" && String((c as unknown).creatorName).trim()
-              ? String((c as unknown).creatorName).trim()
-              : typeof (c as unknown).title === "string" && String((c as unknown).title).trim()
-                ? String((c as unknown).title).trim()
-                : ""
-
-      const topics = (c.category ? [c.category] : []).filter(Boolean)
-      const tagCategories = normalizeCreatorTypesFromCard(c as unknown)
-      const deliverables = Array.isArray((c as unknown).deliverables) ? ((c as unknown).deliverables as string[]) : []
-      const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
-      const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
-      const dealTypes = derivedCollabTypes as unknown as string[]
-
-      const cacheKey = getStatsCacheKey(c)
-      const remoteNumericId = getNumericCreatorId(c) ?? getNumericCreatorId((c as unknown)?.__rawCard)
-
-      const remoteHandle =
-        (typeof (c as unknown)?.handle === "string" ? (c as unknown).handle : null) ??
-        (typeof (c as unknown)?.username === "string" ? (c as unknown).username : null) ??
-        (typeof (c as unknown)?.igUsername === "string" ? (c as unknown).igUsername : null) ??
-        (typeof (c as unknown)?.__rawCard?.handle === "string" ? (c as unknown).__rawCard.handle : null) ??
-        (typeof (c as unknown)?.__rawCard?.username === "string" ? (c as unknown).__rawCard.username : null) ??
-        null
-      const remoteHandleLower = remoteHandle ? String(remoteHandle).trim().replace(/^@+/, "").toLowerCase() : null
-      const localHitByHandle = remoteHandleLower ? localByHandle.get(remoteHandleLower) : null
-
-      const localNumericId = localHitByHandle ? getNumericCreatorId(localHitByHandle) : null
-      const effectiveNumericIdStr: string | null = remoteNumericId ?? localNumericId ?? null
-      const effectiveNumericIdNum: number | null =
-        typeof effectiveNumericIdStr === "string" && /^\d+$/.test(effectiveNumericIdStr)
-          ? Number(effectiveNumericIdStr)
-          : null
-      const effectiveNumericIdSafeNum: number | null =
-        effectiveNumericIdNum != null && Number.isSafeInteger(effectiveNumericIdNum) ? effectiveNumericIdNum : null
-      const localHit = effectiveNumericIdStr ? localByNumericId.get(effectiveNumericIdStr) : null
-
-      const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
-
-      const localBase = (localHit && typeof localHit === "object" ? localHit : null) ?? (localHitByHandle && typeof localHitByHandle === "object" ? localHitByHandle : null)
-      const statsFromLocal = localBase ? (localBase as unknown)?.stats : undefined
-      const resolvedStats = cachedStats ?? statsFromLocal
-
-      const rawHandle =
-        typeof (c as unknown).handle === "string"
-          ? String((c as unknown).handle).trim()
-          : typeof (c as unknown).igUsername === "string"
-            ? String((c as unknown).igUsername).trim()
-            : typeof (c as unknown).username === "string"
-              ? String((c as unknown).username).trim()
-              : displayNameResolved
-      const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
-
-      const parsedContact = safeParseContact((c as unknown).contact)
-      const contactEmail = parsedContact.emails[0] || undefined
-      const contactPhone = parsedContact.phones[0] || undefined
-      const contactLine = parsedContact.lines[0] || undefined
-      const primaryContactMethod = parsedContact.primaryContactMethod
-
-      const rawFollowers =
-        typeof (resolvedStats as unknown)?.followers === "number" && Number.isFinite((resolvedStats as unknown).followers)
-          ? Math.floor((resolvedStats as unknown).followers)
-          : typeof (c as unknown)?.stats?.followers === "number" && Number.isFinite((c as unknown).stats.followers)
-            ? Math.floor((c as unknown).stats.followers)
-            : typeof (c as unknown)?.followerCount === "number" && Number.isFinite((c as unknown).followerCount) && (c as unknown).followerCount > 0
-              ? Math.floor((c as unknown).followerCount)
+          : typeof (c as any)?.stats?.engagementRatePct === "number" && Number.isFinite((c as any).stats.engagementRatePct)
+          ? (c as any).stats.engagementRatePct / 100
+          : typeof (c as any)?.stats?.engagementRate === "number" && Number.isFinite((c as any).stats.engagementRate)
+            ? (c as any).stats.engagementRate
+            : typeof (c as any)?.engagementRate === "number" && Number.isFinite((c as any).engagementRate)
+              ? (c as any).engagementRate
               : undefined
 
-      const rawER =
-        typeof (resolvedStats as unknown)?.engagementRatePct === "number" && Number.isFinite((resolvedStats as unknown).engagementRatePct)
-          ? (resolvedStats as unknown).engagementRatePct / 100
-          : typeof (resolvedStats as unknown)?.engagementRate === "number" && Number.isFinite((resolvedStats as unknown).engagementRate)
-            ? (resolvedStats as unknown).engagementRate
-          : typeof (c as unknown)?.stats?.engagementRatePct === "number" && Number.isFinite((c as unknown).stats.engagementRatePct)
-            ? (c as unknown).stats.engagementRatePct / 100
-            : typeof (c as unknown)?.stats?.engagementRate === "number" && Number.isFinite((c as unknown).stats.engagementRate)
-              ? (c as unknown).stats.engagementRate
-              : typeof (c as unknown)?.engagementRate === "number" && Number.isFinite((c as unknown).engagementRate)
-                ? (c as unknown).engagementRate
-                : undefined
-
-      const rawMinPriceCandidate =
-        typeof (c as unknown)?.minPrice === "number" && Number.isFinite((c as unknown).minPrice)
-          ? Math.floor((c as unknown).minPrice)
-          : (c as unknown)?.minPrice === null
-            ? null
-            : typeof (c as unknown)?.min_price === "number" && Number.isFinite((c as unknown).min_price)
-              ? Math.floor((c as unknown).min_price)
-              : (c as unknown)?.min_price === null
-                ? null
-                : undefined
-
-      const normalizedMinPrice = typeof rawMinPriceCandidate === "number" && Number.isFinite(rawMinPriceCandidate) ? Math.max(0, Math.floor(rawMinPriceCandidate)) : undefined
+      const rawMinPrice =
+        typeof (c as any).minPrice === "number" && Number.isFinite((c as any).minPrice)
+          ? (c as any).minPrice
+          : typeof (c as any).min_price === "number" && Number.isFinite((c as any).min_price)
+            ? (c as any).min_price
+            : undefined
 
       return {
         id: c.id,
-        creatorId: cacheKey ?? undefined,
-        // 🔥 CRITICAL: expose numericId for stats fetching
-        numericId: effectiveNumericIdSafeNum != null ? effectiveNumericIdSafeNum : undefined,
-
-        // 🔥 CRITICAL: expose statsFetchId for stats fetching
-        statsFetchId: effectiveNumericIdStr != null ? effectiveNumericIdStr : undefined,
-        name: displayNameResolved,
-        displayName: displayNameResolved,
-        username:
-          typeof (c as unknown).username === "string"
-            ? String((c as unknown).username).trim()
-            : undefined,
-        igUsername:
-          typeof (c as unknown).igUsername === "string"
-            ? String((c as unknown).igUsername).trim()
-            : undefined,
+        creatorId: creatorIdStr ?? undefined,
+        name: c.displayName,
         handle,
         avatarUrl: c.avatarUrl,
         topics,
-        tagCategories,
         platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
-        dealTypes,
         collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
         deliverables,
-        minPrice: rawMinPriceCandidate === null ? null : normalizedMinPrice,
-        __rawMinPrice: rawMinPriceCandidate,
+        minPrice: typeof rawMinPrice === "number" ? Math.max(0, Math.floor(rawMinPrice)) : undefined,
         stats: {
           followers: rawFollowers,
           engagementRate: rawER,
         },
         contactEmail,
-        contactPhone,
         contactLine,
-        primaryContactMethod,
-        href: c.isDemo ? "" : c.profileUrl,
+        href: c.isDemo ? "#" : c.profileUrl,
         isDemo: Boolean(c.isDemo),
-        // 🔥 CRITICAL: enrich __rawCard so fallback resolution always works
-        __rawCard: {
-          ...((c as unknown)?.__rawCard ?? (c as unknown)),
-
-          // keep the digit-string source of truth
-          creatorNumericId: effectiveNumericIdStr != null ? effectiveNumericIdStr : ((c as unknown)?.creatorNumericId ?? undefined),
-          statsFetchId: effectiveNumericIdStr != null ? effectiveNumericIdStr : ((c as unknown)?.statsFetchId ?? undefined),
-
-          // only set numericId when safe to represent as a JS number
-          numericId:
-            effectiveNumericIdSafeNum != null
-              ? effectiveNumericIdSafeNum
-              : ((c as unknown)?.numericId ?? undefined),
-        },
       }
     })
-  }, [remoteRawCards, statsVersion, localByNumericId, localByHandle])
+  }, [cardsWithDemos, statsVersion])
 
-  const remoteSearchHayByKey = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of remoteRawCards as unknown[]) {
-      const k = searchKeyForCardLike(c)
-      if (!k) continue
-      if (m.has(k)) continue
-      m.set(k, buildCreatorSearchHay(c))
-    }
-    return m
-  }, [remoteRawCards])
-
-  const remoteIdentityHayByKey = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of remoteRawCards as unknown[]) {
-      const k = searchKeyForCardLike(c)
-      if (!k) continue
-      if (m.has(k)) continue
-      m.set(k, buildCreatorIdentityHay(c))
-    }
-    return m
-  }, [remoteRawCards])
-
-  const tagCategoryOptions = useMemo(() => {
-    const set = new Set<string>()
-    CREATOR_TYPE_MASTER.forEach((x: { zh: string }) => {
-      const s = String(x?.zh || "").trim()
-      if (s) set.add(s)
-    })
+  const creatorFormatsById = useMemo(() => {
+    const map = new Map<string, FormatKey[]>()
     creators.forEach((c) => {
-      ;(c.tagCategories ?? []).forEach((x) => {
-        const s = String(x || "").trim()
-        if (s) set.add(s)
-      })
+      map.set(c.id, deriveFormatKeysFromDeliverables(c.deliverables))
     })
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hant"))
+    return map
   }, [creators])
 
-  const creatorTypeSynonyms = useMemo(() => {
-    const map = new Map<string, string[]>()
-    for (const x of CREATOR_TYPE_MASTER) {
-      const zh = String((x as unknown)?.zh || "").trim()
-      const en = String((x as unknown)?.en || "").trim()
-      const slug = String((x as unknown)?.slug || "").trim()
-      const syns = [zh, en, slug].filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim())
-      if (!syns.length) continue
-
-      const keyZh = normalizeSearchText(zh)
-      if (keyZh) map.set(keyZh, syns)
-      const keyEn = normalizeSearchText(en)
-      if (keyEn) map.set(keyEn, syns)
-      const keySlug = normalizeSearchText(slug)
-      if (keySlug) map.set(keySlug, syns)
-    }
-    return map
-  }, [])
-
-  const dealTypeOptions = useMemo(() => {
+  const platformOptions = useMemo(() => {
     const mm = uiCopy.matchmaking
-    const present = new Set<CollabType>()
+    const present = new Set<Platform>()
     creators.forEach((c) => {
-      ;((c.collabTypes ?? []) as CollabType[]).forEach((t) => present.add(t))
+      ;(c.platforms ?? []).forEach((p) => present.add(p))
     })
 
-    const order: CollabType[] = [
+    const order: Platform[] = ["instagram", "facebook", "youtube", "tiktok"]
+    const labelFor = (p: Platform) => {
+      if (p === "instagram") return mm.platformInstagram
+      if (p === "tiktok") return mm.platformTikTok
+      if (p === "youtube") return mm.platformYouTube
+      return mm.platformFacebook
+    }
+
+    return [
+      { value: "any" as const, label: mm.allPlatforms },
+      ...order.filter((p) => present.has(p)).map((p) => ({ value: p, label: labelFor(p) })),
+    ]
+  }, [creators, uiCopy.matchmaking])
+
+  const typeOptions = useMemo(() => {
+    const mm = uiCopy.matchmaking
+    const present = new Set<TypeKey>()
+    creators.forEach((c) => {
+      ;(c.collabTypes ?? []).forEach((t) => present.add(t))
+      ;(creatorFormatsById.get(c.id) ?? []).forEach((f) => present.add(f))
+    })
+
+    const order: TypeKey[] = [
+      "reels",
+      "posts",
+      "stories",
       "short_video",
       "long_video",
       "ugc",
@@ -1590,7 +713,10 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       "other",
     ]
 
-    const labelFor = (t: CollabType) => {
+    const labelFor = (t: TypeKey) => {
+      if (t === "reels") return mm.formatReels
+      if (t === "posts") return mm.formatPosts
+      if (t === "stories") return mm.formatStories
       if (t === "short_video") return mm.typeShortVideo
       if (t === "long_video") return mm.typeLongVideo
       if (t === "ugc") return mm.typeUGC
@@ -1600,253 +726,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       return mm.typeOther
     }
 
-    return order.filter((t) => present.has(t)).map((t) => ({ value: t, label: labelFor(t) }))
-  }, [creators, uiCopy.matchmaking])
-
-  const debugOverlayEnabled = useMemo(() => {
-    if (process.env.NODE_ENV === "production") return false
-    try {
-      return (searchParams?.get("debug") ?? "") === "1"
-    } catch {
-      return false
-    }
-  }, [searchParams])
-
-  const qTrim = useMemo(() => String(debouncedQ ?? "").trim(), [debouncedQ])
-
-  const localQ = qTrim
-
-  const normalizedQ = typeof searchInput === "string" ? searchInput.trim() : ""
-  const normalizedDebouncedQ = typeof debouncedQ === "string" ? debouncedQ.trim() : ""
-
-  // Use debouncedQ if available, otherwise fallback to live search input.
-  // This guarantees remote search works even if debounce fails.
-  const remoteQ = normalizedDebouncedQ.length > 0 ? normalizedDebouncedQ : normalizedQ
-
-  const localRawQuery = useMemo(() => String(debouncedQ ?? ""), [debouncedQ])
-  const localTokens = useMemo(() => tokenizeQuery(localRawQuery), [localRawQuery])
-  const primaryToken = useMemo(() => localTokens[0] ?? "", [localTokens])
-
-  const hasSearchActive = useMemo(() => localQ.length > 0, [localQ])
-  const hasRemoteSearchActive = useMemo(() => remoteQ.length >= MIN_REMOTE_Q_LEN, [remoteQ, MIN_REMOTE_Q_LEN])
-
-  useEffect(() => {
-    try {
-       
-      console.log("[mm][debug] search state", {
-        q: normalizedQ,
-        debouncedQ: normalizedDebouncedQ,
-        remoteQ,
-        hasRemoteSearchActive,
-      })
-    } catch {}
-  }, [
-    normalizedQ,
-    normalizedDebouncedQ,
-    remoteQ,
-    hasRemoteSearchActive,
-  ])
-
-  const shouldFetchRemote = typeof remoteQ === "string" && remoteQ.length >= MIN_REMOTE_Q_LEN
-
-  useEffect(() => {
-    if (!shouldFetchRemote) return
-
-    try {
-       
-      console.log("[mm][debug] remote search triggered", {
-        remoteQ,
-        length: remoteQ.length,
-      })
-    } catch {}
-  }, [shouldFetchRemote, remoteQ])
-
-  useEffect(() => {
-    // Sync URL query param q from debouncedQ without causing ping-pong.
-    try {
-      const next = String(remoteQ ?? "").slice(0, 120)
-      const current = String(searchParams?.get("q") ?? "")
-      if (current === next) {
-        lastUrlQRef.current = current
-        return
-      }
-      if (lastUrlQRef.current === next) return
-
-      const sp = new URLSearchParams(searchParams?.toString() || "")
-      if (next) sp.set("q", next)
-      else sp.delete("q")
-      sp.delete("page")
-      const qs = sp.toString()
-      lastUrlQRef.current = next
-      router.replace(qs ? `?${qs}` : "?", { scroll: false })
-    } catch {
-      // swallow
-    }
-  }, [remoteQ, router, searchParams])
-
-  useEffect(() => {
-    const q = String(remoteQ ?? "").trim()
-
-    if (q.length < MIN_REMOTE_Q_LEN) {
-      lastFetchedQRef.current = ""
-      remoteReqIdRef.current += 1
-      setRemoteLoading(false)
-      setRemoteError(null)
-      setRemoteRawCards([])
-      if (process.env.NODE_ENV !== "production") {
-        try {
-           
-          console.debug("[mm] remote skip (too short)", { q, len: q.length })
-        } catch {
-          // ignore
-        }
-      }
-      return
-    }
-
-    if (lastFetchedQRef.current === q) return
-    lastFetchedQRef.current = q
-
-    remoteReqIdRef.current += 1
-    const reqId = remoteReqIdRef.current
-    setRemoteLoading(true)
-    setRemoteError(null)
-
-    const cached = getRemoteCache<CreatorCard[]>(q)
-    if (cached) {
-      if (process.env.NODE_ENV !== "production") {
-        try {
-           
-          console.debug("[mm] remote cache hit", { q, reqId, count: cached.length })
-        } catch {
-          // ignore
-        }
-      }
-
-      if (reqId === remoteReqIdRef.current) {
-        setRemoteRawCards(cached)
-        setRemoteLoading(false)
-      }
-      return
-    }
-
-    if (MM_DEBUG) {
-      try {
-         
-        console.debug("[Matchmaking] remote search start", { q, reqId })
-      } catch {
-        // ignore
-      }
-    }
-
-    ;(async () => {
-      try {
-        const existing = remoteInFlightRef.current.get(q)
-        const doFetch: Promise<CreatorCard[]> =
-          existing ??
-          (async () => {
-            const url = `/api/matchmaking/search?q=${encodeURIComponent(q)}&limit=50&offset=0`
-            const res = await fetch(url, { method: "GET", cache: "no-store" })
-            const json = (await res.json().catch(() => null)) as unknown
-            if (!res.ok) {
-              const msg = typeof json?.error === "string" ? json.error : `remote_search_failed_${res.status}`
-              throw new Error(msg)
-            }
-            const rawItems = (json?.items ?? json?.cards ?? json?.results) as unknown
-            const items = Array.isArray(rawItems) ? (rawItems as CreatorCard[]) : []
-            return items.filter((r: unknown) => r && ((r as unknown).is_public === true || (r as unknown).isPublic === true))
-          })()
-
-        if (!existing) remoteInFlightRef.current.set(q, doFetch)
-
-        const publicOnly = await doFetch
-        if (!existing) {
-          remoteInFlightRef.current.delete(q)
-          setRemoteCache(q, publicOnly)
-        }
-
-        if (reqId !== remoteReqIdRef.current) return
-        setRemoteRawCards(publicOnly)
-        setRemoteError(null)
-      } catch (e: unknown) {
-        remoteInFlightRef.current.delete(q)
-        if (reqId !== remoteReqIdRef.current) return
-        const errObj = asRecord(e)
-        const msg = typeof errObj?.message === "string" ? errObj.message : "remote_search_failed"
-        setRemoteRawCards([])
-        setRemoteError(msg)
-      } finally {
-        if (reqId === remoteReqIdRef.current) setRemoteLoading(false)
-        if (MM_DEBUG) {
-          try {
-             
-            console.debug("[Matchmaking] remote search end", { q, reqId, applied: reqId === remoteReqIdRef.current })
-          } catch {
-            // ignore
-          }
-        }
-      }
-    })()
-  }, [MIN_REMOTE_Q_LEN, remoteQ, getRemoteCache, setRemoteCache])
-
-  const hasPlatformFilterActive = useMemo(() => {
-    const canonPlatformLocal = (v: unknown): "instagram" | "youtube" | "tiktok" | "facebook" | null => {
-      const s = String(v?.value ?? v?.id ?? v?.platform ?? v?.name ?? v ?? "")
-        .trim()
-        .toLowerCase()
-      if (!s) return null
-      if (s === "instagram" || s === "ig" || s === "insta") return "instagram"
-      if (s === "youtube" || s === "yt") return "youtube"
-      if (s === "tiktok" || s === "tt") return "tiktok"
-      if (s === "facebook" || s === "fb") return "facebook"
-      return null
-    }
-
-    const set = new Set<string>()
-    for (const x of selectedPlatforms ?? []) {
-      const c = canonPlatformLocal(x)
-      if (c) set.add(c)
-    }
-    return set.size > 0
-  }, [selectedPlatforms])
-
-  const hasCollabTypeFilterActive = useMemo(() => {
-    return normalizeSelectedCollabTypes(selectedDealTypes).length > 0
-  }, [selectedDealTypes])
-
-  const hasTagFilterActive = useMemo(() => {
-    return sanitizeSelectedTagCategories(selectedTagCategories).length > 0
-  }, [selectedTagCategories])
-
-  const hasBudgetFilterActive = useMemo(() => {
-    return budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0)
-  }, [budget, customBudget])
-
-  const hasOtherExplicitFilters = useMemo(() => {
-    return hasCollabTypeFilterActive || hasTagFilterActive || hasBudgetFilterActive
-  }, [hasCollabTypeFilterActive, hasTagFilterActive, hasBudgetFilterActive])
-
-  const shouldIncludeDemoFillLocal = shouldIncludeDemoFill({ hasTagFilterActive, hasCollabTypeFilterActive, hasBudgetFilterActive })
-
-  const pageSize = 8
-
-  const onSearchInput = useCallback(
-    (v: unknown) => {
-      const next = typeof v === "string" ? v : String((v as unknown)?.currentTarget?.value ?? (v as unknown)?.target?.value ?? v ?? "")
-      setSearchInput(next)
-    },
-    []
-  )
-
-  const onSearchCompositionStart = useCallback(() => {
-    isComposingRef.current = true
-  }, [])
-
-  const onSearchCompositionEnd = useCallback((finalValue: string) => {
-    isComposingRef.current = false
-    if (remoteDebounceTimerRef.current) clearTimeout(remoteDebounceTimerRef.current)
-    setDebouncedQ(String(finalValue ?? ""))
-  }, [])
+    return [
+      { value: "any" as const, label: mm.allTypes },
+      ...order.filter((t) => present.has(t)).map((t) => ({ value: t, label: labelFor(t) })),
+    ]
+  }, [creators, creatorFormatsById, uiCopy.matchmaking])
 
   function budgetMaxForRange(range: BudgetRange): number | null {
     if (range === "1000") return 1000
@@ -1876,50 +760,27 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return mp <= max
   }
 
-  type PlatformCanon = "instagram" | "youtube" | "tiktok" | "facebook"
-
-  const canonPlatform = (v: unknown): PlatformCanon | null => {
-    const s = String(v?.value ?? v?.id ?? v?.platform ?? v?.name ?? v ?? "")
-      .trim()
-      .toLowerCase()
-    if (!s) return null
-
-    if (s === "instagram" || s === "ig" || s === "insta") return "instagram"
-    if (s === "youtube" || s === "yt") return "youtube"
-    if (s === "tiktok" || s === "tt") return "tiktok"
-    if (s === "facebook" || s === "fb") return "facebook"
-    return null
+  function platformMatch(p: Platform | "any", ps?: Platform[]) {
+    if (p === "any") return true
+    return (ps ?? []).includes(p)
   }
 
-  const canonSet = (arr: unknown[] | undefined | null) => {
-    const set = new Set<PlatformCanon>()
-    for (const x of arr ?? []) {
-      const c = canonPlatform(x)
-      if (c) set.add(c)
+  function collabMatch(c: CollabType | "any", types?: CollabType[]) {
+    if (c === "any") return true
+    return (types ?? []).includes(c)
+  }
+
+  function typeMatchAny(selected: TypeKey[], creatorId: string, types?: CollabType[]) {
+    if (!selected.length) return true
+
+    for (const t of selected) {
+      if (t === "reels" || t === "posts" || t === "stories" || t === "other") {
+        if ((creatorFormatsById.get(creatorId) ?? []).includes(t)) return true
+      } else {
+        if ((types ?? []).includes(t)) return true
+      }
     }
-    return set
-  }
-
-  function platformMatchAny(selected: unknown[], creatorPlatforms: unknown[] | undefined | null) {
-    if (!selected || selected.length === 0) return true
-
-    const sel = canonSet(selected)
-    if (sel.size === 0) return true
-
-    const cps = canonSet(creatorPlatforms)
-    if (cps.size === 0) return false
-
-    for (const p of sel) if (cps.has(p)) return true
     return false
-  }
-
-  function dealTypeMatchAny(selected: unknown, c: unknown) {
-    const selectedNorm = normalizeSelectedCollabTypes(selected)
-    if (!selectedNorm.length) return true
-    const creatorNorm = getCreatorCollabTypes(c)
-    if (!creatorNorm.length) return false
-    const set = new Set(creatorNorm)
-    return selectedNorm.some((t) => set.has(t))
   }
 
   function budgetMatchCustom(amount: number, min?: number, max?: number) {
@@ -1932,262 +793,35 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return true
   }
 
-  const matchesDropdownFilters = useCallback(
-    (c: (typeof creators)[number]) => {
-      const selectedPlatformsArr = normalizeSelectedPlatforms(selectedPlatforms)
-      const okPlatform = platformMatchAny(selectedPlatformsArr as unknown, getCreatorPlatforms(c))
-      const okDealType = dealTypeMatchAny(selectedDealTypes, c)
-      const okTags = (() => {
-        const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
-        if (!cleanedSelectedTags.length) return true
-        const set = toCreatorTagSet(c.tagCategories)
-        return cleanedSelectedTags.some((t) => set.has(t))
-      })()
-
-      const minPriceNumberOrUndef = typeof c.minPrice === "number" && Number.isFinite(c.minPrice) ? c.minPrice : undefined
-      const okBudget =
-        budget === "custom"
-          ? budgetEligibleByMinPrice(budget, minPriceNumberOrUndef, customBudget)
-          : budgetEligibleByMinPrice(budget, minPriceNumberOrUndef)
-
-      return okPlatform && okDealType && okTags && okBudget
-    },
-    [selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget]
-  )
-
-  const hasUsableRemoteResults =
-    hasRemoteSearchActive && remoteCreators.length > 0
-
-  const baseList = useMemo(() => {
-    const useRemote =
-      hasUsableRemoteResults &&
-      Array.isArray(remoteCreators) &&
-      remoteCreators.length > 0
-
-    const source = useRemote
-      ? remoteCreators
-      : creators
-
-    return source.filter(matchesDropdownFilters)
-  }, [
-    creators,
-    remoteCreators,
-    matchesDropdownFilters,
-    hasUsableRemoteResults,
-  ])
-
-  useEffect(() => {
-    try {
-      const useRemote =
-        hasUsableRemoteResults &&
-        Array.isArray(remoteCreators) &&
-        remoteCreators.length > 0
-
-       
-      console.log("[mm][debug] baseList source", {
-        useRemote,
-        hasUsableRemoteResults,
-        hasRemoteSearchActive,
-        remoteCreatorsLen: Array.isArray(remoteCreators) ? remoteCreators.length : -1,
-        creatorsLen: Array.isArray(creators) ? creators.length : -1,
-        baseListLen: Array.isArray(baseList) ? baseList.length : -1,
-        // show the first item keys to see if numericId/statsFetchId exist
-        firstBase: (baseList ?? [])[0]
-          ? {
-              id: (baseList as unknown)[0]?.id,
-              creatorId: (baseList as unknown)[0]?.creatorId,
-              numericId: (baseList as unknown)[0]?.numericId,
-              statsFetchId: (baseList as unknown)[0]?.statsFetchId,
-              handle: (baseList as unknown)[0]?.handle,
-              username: (baseList as unknown)[0]?.username,
-              igUsername: (baseList as unknown)[0]?.igUsername,
-              raw_numericId: (baseList as unknown)[0]?.__rawCard?.numericId,
-              raw_statsFetchId: (baseList as unknown)[0]?.__rawCard?.statsFetchId,
-              raw_creatorNumericId: (baseList as unknown)[0]?.__rawCard?.creatorNumericId,
-            }
-          : null,
-      })
-    } catch {}
-  }, [
-    baseList,
-    creators,
-    remoteCreators,
-    hasUsableRemoteResults,
-    hasRemoteSearchActive,
-  ])
-
-  const demoFillCards = useMemo((): CreatorCardData[] => {
-    if (!shouldIncludeDemoFillLocal) return []
-    return buildDemoFillCards({ creators, page, pageSize, locale, demoAvatarMap })
-  }, [page, creators, demoAvatarMap, shouldIncludeDemoFillLocal, locale])
-
-  const dedupeById = useCallback(<T extends { id?: unknown; creatorId?: unknown }>(list: T[]): T[] => {
-    const seen = new Set<string>()
-    const out: T[] = []
-    for (const c of list) {
-      const keyRaw = (c as unknown)?.creatorId ?? (c as unknown)?.id
-      const key = keyRaw == null ? "" : String(keyRaw)
-      if (!key) continue
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push(c)
-    }
-    return out
-  }, [])
-
-  const searchPool = useMemo(() => {
-    if (!shouldIncludeDemoFillLocal) return baseList
-    const filler = demoFillCards.map((d) => ({ ...(d as CreatorCardData), creatorId: undefined }))
-    return [...baseList, ...filler]
-  }, [baseList, demoFillCards, shouldIncludeDemoFillLocal])
-
-  const pinnedCreator = useMemo((): (CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }) | null => {
-    if (!meCard) return null
-
-    const topics = (meCard.category ? [meCard.category] : []).filter(Boolean)
-    const tagCategories = normalizeCreatorTypesFromCard(meCard as unknown)
-    const deliverables = Array.isArray((meCard as unknown).deliverables) ? ((meCard as unknown).deliverables as string[]) : []
-    const derivedPlatforms = derivePlatformsFromDeliverables(deliverables)
-    const derivedCollabTypes = deriveCollabTypesFromDeliverables(deliverables)
-    const dealTypes = derivedCollabTypes as unknown as string[]
-
-    const cacheKey = getStatsCacheKey(meCard)
-    const creatorIdStr =
-      typeof (meCard as unknown)?.igUserId === "string" && /^\d+$/.test(String((meCard as unknown).igUserId))
-        ? String((meCard as unknown).igUserId)
-        : null
-    const cachedStats = cacheKey != null ? statsCacheRef.current.get(cacheKey) : undefined
-
-    const rawFollowers =
-      typeof cachedStats?.followers === "number" && Number.isFinite(cachedStats.followers)
-        ? Math.floor(cachedStats.followers)
-        : typeof (meCard as unknown)?.stats?.followers === "number" && Number.isFinite((meCard as unknown).stats.followers)
-          ? Math.floor((meCard as unknown).stats.followers)
-          : typeof (meCard as unknown)?.followerCount === "number" && Number.isFinite((meCard as unknown).followerCount) && (meCard as unknown).followerCount > 0
-            ? Math.floor((meCard as unknown).followerCount)
-            : undefined
-
-    const rawER =
-      typeof cachedStats?.engagementRatePct === "number" && Number.isFinite(cachedStats.engagementRatePct)
-        ? cachedStats.engagementRatePct / 100
-        : typeof (meCard as unknown)?.stats?.engagementRatePct === "number" && Number.isFinite((meCard as unknown).stats.engagementRatePct)
-          ? (meCard as unknown).stats.engagementRatePct / 100
-          : typeof (meCard as unknown)?.stats?.engagementRate === "number" && Number.isFinite((meCard as unknown).stats.engagementRate)
-            ? (meCard as unknown).stats.engagementRate
-            : typeof (meCard as unknown)?.engagementRate === "number" && Number.isFinite((meCard as unknown).engagementRate)
-              ? (meCard as unknown).engagementRate
-              : undefined
-
-    const rawHandle =
-      typeof (meCard as unknown).handle === "string"
-        ? String((meCard as unknown).handle).trim()
-        : typeof (meCard as unknown).igUsername === "string"
-          ? String((meCard as unknown).igUsername).trim()
-          : typeof (meCard as unknown).username === "string"
-            ? String((meCard as unknown).username).trim()
-            : typeof meCard.displayName === "string"
-              ? String(meCard.displayName).trim()
-              : ""
-    const handle = rawHandle ? rawHandle.replace(/^@/, "") : undefined
-
-    const rawMinPriceCandidate =
-      typeof (meCard as unknown)?.minPrice === "number" && Number.isFinite((meCard as unknown).minPrice)
-        ? Math.floor((meCard as unknown).minPrice)
-        : (meCard as unknown)?.minPrice === null
-          ? null
-          : typeof (meCard as unknown)?.min_price === "number" && Number.isFinite((meCard as unknown).min_price)
-            ? Math.floor((meCard as unknown).min_price)
-            : (meCard as unknown)?.min_price === null
-              ? null
-              : typeof (meCard as unknown)?.minPrice === "string" && (meCard as unknown).minPrice.trim() && Number.isFinite(Number((meCard as unknown).minPrice))
-                ? Math.floor(Number((meCard as unknown).minPrice))
-                : typeof (meCard as unknown)?.min_price === "string" && (meCard as unknown).min_price.trim() && Number.isFinite(Number((meCard as unknown).min_price))
-                  ? Math.floor(Number((meCard as unknown).min_price))
-                  : undefined
-
-    const normalizedMinPrice =
-      typeof rawMinPriceCandidate === "number" && Number.isFinite(rawMinPriceCandidate)
-        ? Math.max(0, Math.floor(rawMinPriceCandidate))
-        : undefined
-
-    return {
-      id: meCard.id,
-      creatorId: cacheKey ?? undefined,
-      name: meCard.displayName,
-      handle,
-      avatarUrl: meCard.avatarUrl,
-      topics,
-      tagCategories,
-      platforms: derivedPlatforms.length ? derivedPlatforms : ["instagram"],
-      dealTypes,
-      collabTypes: derivedCollabTypes.length ? derivedCollabTypes : ["other"],
-      deliverables,
-      minPrice: rawMinPriceCandidate === null ? null : normalizedMinPrice,
-      __rawMinPrice: rawMinPriceCandidate,
-      stats: {
-        followers: rawFollowers,
-        engagementRate: rawER,
-      },
-      contact: typeof (meCard as unknown)?.contact === "string" ? (meCard as unknown).contact : null,
-      primaryContactMethod: (() => {
-        const parsed = safeParseContact(typeof (meCard as unknown)?.contact === "string" ? (meCard as unknown).contact : null)
-        return parsed.primaryContactMethod
-      })(),
-      href: meCard.profileUrl,
-      isDemo: Boolean((meCard as unknown).isDemo),
-      __rawCard: meCard as unknown,
-    }
-  }, [meCard, statsVersion])
-
-  useEffect(() => {
-    if (!MM_DEBUG) return
-    try {
-       
-      console.log("[Matchmaking] pinnedCreator:", pinnedCreator ? { id: pinnedCreator.id } : null)
-    } catch {
-      // ignore
-    }
-  }, [pinnedCreator])
-
-  const searchedList = useMemo(() => {
-    if (!localTokens.length) return searchPool
-
-    const useIdentityOnly = localTokens.some((t) => t.length <= 1)
-    const hayMap = hasUsableRemoteResults
-      ? useIdentityOnly
-        ? remoteIdentityHayByKey
-        : remoteSearchHayByKey
-      : useIdentityOnly
-        ? localIdentityHayByKey
-        : localSearchHayByKey
-
-    return searchPool.filter((c) => {
-      const k = searchKeyForCardLike(c)
-      const hay = (k && hayMap.get(k)) || (useIdentityOnly ? buildCreatorIdentityHay(c) : buildCreatorSearchHay(c))
-      return localTokens.every((t) => hay.includes(t))
-    })
-  }, [
-    searchPool,
-    localTokens,
-    hasUsableRemoteResults,
-    remoteIdentityHayByKey,
-    remoteSearchHayByKey,
-    localIdentityHayByKey,
-    localSearchHayByKey,
-  ])
-
   const filtered = useMemo(() => {
-    let out = searchedList
+    const qq = q.trim().toLowerCase()
+
+    let out = creators.filter((c) => {
+      const hay = `${c.name} ${c.handle ?? ""} ${(c.topics ?? []).join(" ")}`.toLowerCase()
+      const okQ = !qq || hay.includes(qq)
+      const okPlatform = platformMatch(platform, c.platforms)
+
+      const okType = typeMatchAny(selectedTypes, c.id, c.collabTypes)
+
+      let okBudget = true
+      if (budget === "custom") {
+        okBudget = budgetEligibleByMinPrice(budget, c.minPrice, customBudget)
+      } else {
+        okBudget = budgetEligibleByMinPrice(budget, c.minPrice)
+      }
+
+      return okQ && okPlatform && okType && okBudget
+    })
 
     if (sort === "best_match") {
       const maxFollowers = out.reduce((m, c) => {
-        const f = typeof c.stats?.followers === "number" ? c.stats.followers : 0
+        const f = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers) ? c.stats.followers : 0
         return Math.max(m, f)
       }, 0)
 
       const scoreFor = (c: (typeof out)[number]) => {
-        const er = typeof c.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
-        const followers = typeof c.stats?.followers === "number" ? c.stats.followers : 0
+        const er = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate) ? c.stats.engagementRate : 0
+        const followers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers) ? c.stats.followers : 0
         const followersNormalized = maxFollowers > 0 ? Math.min(1, Math.max(0, followers / maxFollowers)) : 0
         const seed = hashStringToInt(String(c.id))
         const rand = mulberry32(seed)()
@@ -2206,177 +840,47 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     }
 
     return out
-  }, [searchedList, sort])
+  }, [creators, q, sort, platform, budget, customBudget, selectedTypes, creatorFormatsById])
 
-  const finalCards = useMemo(() => {
-    const selectedPlatformsArr = normalizeSelectedPlatforms(selectedPlatforms)
+  const pinnedCreators = useMemo(() => {
+    if (!meCard?.id) return filtered
 
-    const cleanedSelectedTags = sanitizeSelectedTagCategories(selectedTagCategories)
+    const ownerId = String(meCard.id)
 
-    const isFilteringActive =
-      (selectedPlatformsArr.length > 0 && canonSet(selectedPlatformsArr).size > 0) ||
-      (selectedDealTypes?.length ?? 0) > 0 ||
-      cleanedSelectedTags.length > 0 ||
-      (budget !== "any" && (budget !== "custom" || customBudget.trim().length > 0))
+    const idx = filtered.findIndex((c) => String(c.id) === ownerId)
 
-    const pinnedApplied = applyPinnedOwnerCard({
-      list: filtered,
-      pinned: pinnedCreator,
-      hasSearchActive,
-      isFilteringActive,
-    })
-    return dedupeById(pinnedApplied)
-  }, [filtered, pinnedCreator, matchesDropdownFilters, hasSearchActive, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+    if (idx <= 0) return filtered
 
-  useEffect(() => {
-    if (!MM_DEBUG) return
-    try {
-       
-      console.debug("[Matchmaking] q + final unique", { debouncedQ, finalUnique: finalCards.length })
-    } catch {
-      // ignore
+    const copy = filtered.slice()
+    const [owner] = copy.splice(idx, 1)
+    copy.unshift(owner)
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[pin-debug] owner pinned", ownerId)
     }
-  }, [MM_DEBUG, debouncedQ, finalCards.length])
 
-  const totalPages = useMemo(() => {
-    const n = finalCards.length
-    return Math.max(1, Math.ceil(n / pageSize))
-  }, [finalCards.length])
+    return copy
+  }, [filtered, meCard?.id])
 
-  const clampedPage = useMemo(() => Math.min(Math.max(1, page), totalPages), [page, totalPages])
-
+  const debugOwnerLastOwnerCardIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (page !== clampedPage) setPage(clampedPage)
-  }, [clampedPage, page])
-
-  const pagedRealCards = useMemo(() => {
-    const start = (clampedPage - 1) * pageSize
-    return finalCards.slice(start, start + pageSize)
-  }, [clampedPage, finalCards])
-
-  const pagedRealCardsResolved = useMemo(() => {
-    if (!Array.isArray(pagedRealCards)) return pagedRealCards
-
-    return pagedRealCards.map((c: unknown) => {
-      const rawHandle =
-        c?.handle ??
-        c?.username ??
-        c?.igUsername ??
-        c?.__rawCard?.handle ??
-        c?.__rawCard?.username ??
-        c?.__rawCard?.igUsername ??
-        c?.profile?.handle ??
-        c?.profile?.username ??
-        c?.profile?.igUsername
-
-      const normalizedHandle = rawHandle ? String(rawHandle).trim().replace(/^@+/, "").toLowerCase() : null
-
-      const localHitByHandle = normalizedHandle && localByHandle?.get?.(normalizedHandle) ? localByHandle.get(normalizedHandle) : null
-
-      // numericId fallback (if your file already has localByNumericId in scope)
-      const remoteNumericId = c?.numericId ?? c?.creatorNumericId ?? c?.creatorIdNumeric ?? c?.__rawCard?.numericId ?? c?.__rawCard?.creatorNumericId ?? null
-
-      const localHitByNumericId = remoteNumericId != null && typeof localByNumericId?.get === "function" ? localByNumericId.get(remoteNumericId) : null
-
-      const localMatch = localHitByHandle ?? localHitByNumericId
-
-      if (!localMatch) return c
-
-      const merged = {
-        ...(c as unknown),
-        ...(localMatch as unknown),
-      }
-
-      const directFromC =
-        (c as unknown)?.statsFetchId ??
-        (c as unknown)?.numericId ??
-        (c as unknown)?.creatorNumericId ??
-        (c as unknown)?.__rawCard?.statsFetchId ??
-        (c as unknown)?.__rawCard?.numericId ??
-        (c as unknown)?.__rawCard?.creatorNumericId
-
-      const directFromLocal =
-        (localMatch as unknown)?.statsFetchId ??
-        (localMatch as unknown)?.numericId ??
-        (localMatch as unknown)?.creatorNumericId ??
-        (localMatch as unknown)?.__rawCard?.statsFetchId ??
-        (localMatch as unknown)?.__rawCard?.numericId ??
-        (localMatch as unknown)?.__rawCard?.creatorNumericId
-
-      const stableFetchId =
-        directFromC ??
-        directFromLocal ??
-        (merged as unknown)?.statsFetchId ??
-        (merged as unknown)?.numericId ??
-        (merged as unknown)?.creatorNumericId
-
-      return {
-        ...merged,
-
-        // preserve numeric ids for stats fetching (do NOT let undefined from local overwrite remote)
-        numericId: (merged as unknown)?.numericId ?? stableFetchId ?? undefined,
-        statsFetchId: (merged as unknown)?.statsFetchId ?? (stableFetchId != null ? String(stableFetchId) : undefined),
-
-        __rawCard: {
-          ...((c as unknown)?.__rawCard ?? c),
-          ...(localMatch as unknown),
-
-          // same preservation inside __rawCard
-          numericId: (((c as unknown)?.__rawCard ?? c) as unknown)?.numericId ?? stableFetchId ?? undefined,
-          creatorNumericId: (((c as unknown)?.__rawCard ?? c) as unknown)?.creatorNumericId ?? stableFetchId ?? undefined,
-          statsFetchId: (((c as unknown)?.__rawCard ?? c) as unknown)?.statsFetchId ?? (stableFetchId != null ? String(stableFetchId) : undefined),
-        },
-      }
-    })
-  }, [pagedRealCards, localByHandle, localByNumericId])
-
-  const resultCount = useMemo(() => finalCards.length, [finalCards.length])
-  const hasAnySearchActive = useMemo(() => hasSearchActive || hasRemoteSearchActive, [hasSearchActive, hasRemoteSearchActive])
-  const isSearching = useMemo(() => hasRemoteSearchActive && remoteLoading, [hasRemoteSearchActive, remoteLoading])
+    if (!debugOwner) return
+    if (debugOwnerLastOwnerCardIdRef.current === ownerCardId) return
+    debugOwnerLastOwnerCardIdRef.current = ownerCardId
+    console.log("[debug] ownerCardId:", ownerCardId)
+  }, [debugOwner, ownerCardId])
 
   const selectedBudgetMax = useMemo(() => {
     if (budget === "any") return null
     if (budget === "custom") {
       const amt = Number(customBudget.trim())
-      return Number.isFinite(amt) && amt > 0 ? amt : null
+      return Number.isFinite(amt) ? amt : null
     }
     return budgetMaxForRange(budget)
   }, [budget, customBudget])
 
-  const popularCreatorId = useMemo(() => {
-    function calcPopularScore(c: unknown): number {
-      const er = typeof c?.stats?.engagementRate === "number" ? c.stats.engagementRate : 0
-      const followers = typeof c?.stats?.followers === "number" ? c.stats.followers : 0
-
-      const followerFactor = Math.log10(Math.max(1, followers))
-      const erClamped = Math.max(0, Math.min(er, 0.25))
-      return erClamped * 100 + followerFactor * 6
-    }
-
-    const candidates = creators.filter((c: unknown) => !c?.isDemo && !String(c?.id || "").startsWith("demo-"))
-    if (!candidates.length) return null
-
-    const MIN_FOLLOWERS = 3000
-    const filtered = candidates.filter((c: unknown) => (c?.stats?.followers ?? 0) >= MIN_FOLLOWERS)
-    const pool = filtered.length ? filtered : candidates
-
-    let best = pool[0]
-    let bestScore = calcPopularScore(best)
-    for (let i = 1; i < pool.length; i++) {
-      const s = calcPopularScore(pool[i])
-      if (s > bestScore) {
-        best = pool[i]
-        bestScore = s
-      }
-    }
-
-    return (best as unknown)?.creatorId || (best as unknown)?.id || null
-  }, [creators])
-
   const visibleCreatorIds = useMemo(() => {
-    const ids = pagedRealCards
-      .map((c) => getStatsCacheKey(c))
-      .filter((x): x is string => typeof x === "string" && x.length > 0)
+    const ids = pinnedCreators.map((c) => c.creatorId).filter((x): x is string => typeof x === "string" && x.length > 0)
 
     const seen = new Set<string>()
     const uniqueOrdered: string[] = []
@@ -2387,101 +891,46 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     }
 
     return uniqueOrdered
-  }, [pagedRealCards])
-
-  const statsSourceCards = pagedRealCardsResolved
-
-  const statsFetchIds = useMemo(() => {
-    const ids = statsSourceCards
-      .map((c) => getStatsFetchId(c))
-      .filter((x): x is string => typeof x === "string" && /^\d+$/.test(x))
-
-    const seen = new Set<string>()
-    const uniqueOrdered: string[] = []
-    for (const id of ids) {
-      if (seen.has(id)) continue
-      seen.add(id)
-      uniqueOrdered.push(id)
-    }
-    return uniqueOrdered
-  }, [statsSourceCards])
-
-  const statsFetchIdsKey = useMemo(() => statsFetchIds.join("|"), [statsFetchIds])
-
-  const statsCacheKeysByFetchId = useMemo(() => {
-    const m = new Map<string, string[]>()
-    for (const c of statsSourceCards) {
-      const fetchId = getStatsFetchId(c)
-      if (!fetchId || !/^\d+$/.test(fetchId)) continue
-      const cacheKey = getStatsCacheKey(c)
-      if (!cacheKey) continue
-      const arr = m.get(fetchId)
-      if (!arr) m.set(fetchId, [cacheKey])
-      else if (!arr.includes(cacheKey)) arr.push(cacheKey)
-    }
-    return m
-  }, [statsSourceCards])
-
-  useEffect(() => {
-    try {
-      console.log("[stats][debug] statsSourceCards.length =", statsSourceCards?.length ?? 0);
-
-      console.log(
-        "[stats][debug] firstCards =",
-        (statsSourceCards ?? []).slice(0, 5).map((c: unknown) => ({
-          id: c?.id ?? null,
-          creatorId: c?.creatorId ?? null,
-          username: c?.username ?? null,
-          handle: c?.handle ?? null,
-          igUsername: c?.igUsername ?? null,
-          platform: c?.platform ?? null,
-          platforms: c?.platforms ?? null,
-        }))
-      );
-
-      console.log("[stats][debug] statsFetchIds.length =", statsFetchIds?.length ?? 0);
-      console.log("[stats][debug] statsFetchIds =", statsFetchIds ?? []);
-      console.log(
-        "[stats][debug] statsCacheKeysByFetchId keys =",
-        statsCacheKeysByFetchId ? Object.keys(statsCacheKeysByFetchId) : []
-      );
-    } catch (err) {
-      console.error("[stats][debug] error during debug logging", err);
-    }
-  }, [statsSourceCards, statsFetchIds, statsCacheKeysByFetchId]);
+  }, [pinnedCreators])
 
   const visibleCreatorIdsKey = useMemo(() => visibleCreatorIds.join("|"), [visibleCreatorIds])
 
   useEffect(() => {
-    let alive = true
-    const unique = statsFetchIds
+    const ac = new AbortController()
+
+    const unique = visibleCreatorIds
     const missing = unique.filter((id) => !statsCacheRef.current.has(id) && !statsInFlightRef.current.has(id))
-    let didCancel = false
-    if (!missing.length) {
-      return () => {
-        alive = false
-        didCancel = true
-      }
+    if (!missing.length) return () => ac.abort()
+
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[matchmaking] stats prefetch start", missing.slice(0, 3))
     }
 
+    let didCancel = false
     const concurrency = 3
     let cursor = 0
 
-    if (alive) setStatsPrefetchRunning(true)
+    setStatsPrefetchRunning(true)
 
     const fetchOne = async (creatorId: string) => {
-      if (!creatorId || !/^\d+$/.test(creatorId)) return
       if (statsInFlightRef.current.has(creatorId)) return
       statsInFlightRef.current.add(creatorId)
-      if (alive) setStatsUiVersion((v) => v + 1)
+      setStatsUiVersion((v) => v + 1)
 
       const res = await fetch(`/api/creators/${encodeURIComponent(creatorId)}/stats`, {
         method: "GET",
         cache: "no-store",
         credentials: "include",
+        signal: ac.signal,
       })
-      const json = (await res.json().catch(() => null)) as unknown
+      const json = (await res.json().catch(() => null)) as any
       const stats = json?.ok === true ? json?.stats : null
+
+      if (process.env.NODE_ENV !== "production") {
+        if (!res.ok || json?.ok !== true) {
+          console.debug("[matchmaking] stats prefetch non-ok", creatorId, res.status)
+        }
+      }
 
       const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
       const engagementRatePct =
@@ -2497,15 +946,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
       const changed =
         prevCached?.followers !== nextCached.followers || prevCached?.engagementRatePct !== nextCached.engagementRatePct
-
       statsCacheRef.current.set(creatorId, nextCached)
-      const extraKeys = statsCacheKeysByFetchId.get(creatorId)
-      if (extraKeys && extraKeys.length) {
-        for (const k of extraKeys) {
-          if (k && k !== creatorId) statsCacheRef.current.set(k, nextCached)
-        }
-      }
-      if (changed && alive) setStatsVersion((v) => v + 1)
+      if (changed) setStatsVersion((v) => v + 1)
 
       if (!res.ok || json?.ok !== true) {
         statsErrorRef.current.set(creatorId, true)
@@ -2514,7 +956,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       }
 
       statsInFlightRef.current.delete(creatorId)
-      if (alive) setStatsUiVersion((v) => v + 1)
+      setStatsUiVersion((v) => v + 1)
     }
 
     const runWorker = async () => {
@@ -2524,7 +966,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         if (idx >= missing.length) return
 
         const creatorId = missing[idx]
-        if (!creatorId || !/^\d+$/.test(creatorId) || statsCacheRef.current.has(creatorId)) continue
+        if (!creatorId || statsCacheRef.current.has(creatorId)) continue
 
         try {
           await fetchOne(creatorId)
@@ -2540,11 +982,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         Promise.all(workers)
           .catch(() => null)
           .finally(() => {
-            if (!didCancel && alive) setStatsPrefetchRunning(false)
+            if (!didCancel) setStatsPrefetchRunning(false)
           })
       }
 
-      const w: unknown = typeof window !== "undefined" ? (window as unknown) : null
+      const w: any = typeof window !== "undefined" ? (window as any) : null
       if (w && typeof w.requestIdleCallback === "function") {
         w.requestIdleCallback(start)
       } else {
@@ -2553,11 +995,11 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     })()
 
     return () => {
-      alive = false
       didCancel = true
+      ac.abort()
       setStatsPrefetchRunning(false)
     }
-  }, [statsFetchIdsKey, statsCacheKeysByFetchId])
+  }, [visibleCreatorIdsKey])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -2604,7 +1046,7 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           credentials: "include",
           signal: ac.signal,
         })
-        const json = (await res.json().catch(() => null)) as unknown
+        const json = (await res.json().catch(() => null)) as any
         const stats = json?.ok === true ? json?.stats : null
 
         const followers = typeof stats?.followers === "number" && Number.isFinite(stats.followers) ? Math.floor(stats.followers) : null
@@ -2636,138 +1078,48 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return () => ac.abort()
   }
 
-  const creatorsById = useMemo(() => {
-    const map = new Map<string, CreatorCardData>()
-    for (const c of pagedRealCards) map.set(String(c.id), c)
-    return map
-  }, [pagedRealCards])
-
-  const favoriteIdsArray = useMemo(() => Array.from(fav.favoriteIds), [fav.favoriteIds])
-
-  const isEmptyResults = useMemo(
-    () => resultCount === 0 && hasAnySearchActive && !isSearching,
-    [resultCount, hasAnySearchActive, isSearching]
+  const favoritesList = useMemo(
+    () => creators.filter((c) => fav.favoriteIds.has(c.id)),
+    [creators, fav.favoriteIds]
   )
 
-  const showSkeleton = useMemo(
-    () => hasRemoteSearchActive && remoteLoading && pagedRealCards.length === 0,
-    [hasRemoteSearchActive, remoteLoading, pagedRealCards.length]
-  )
-
-  const clearSearchFromEmptyCta = useCallback(() => {
-    setSearchInput("")
-    setDebouncedQ("")
-    setPage(1)
-    setFocusNonce((n) => n + 1)
-  }, [])
+  // TEMP DEBUG (remove after verification): prove which array is rendered in the grid.
+  // The final render uses: finalCards.map(...)
+  const debugRenderLastKeyRef = useRef<string>("")
+  if (debugOwner) {
+    const renderCards = pinnedCreators
+    const renderFirst5 = renderCards.slice(0, 5).map((c) => c.id)
+    const finalFirst5 = pinnedCreators.slice(0, 5).map((c) => c.id)
+    const key = `${renderFirst5.join(",")}|${finalFirst5.join(",")}`
+    if (debugRenderLastKeyRef.current !== key) {
+      debugRenderLastKeyRef.current = key
+      console.log("[debug] render variable:", "pinnedCreators")
+      console.log("[debug] renderCards(pinnedCreators) first5:", renderFirst5)
+      console.log("[debug] pinnedCreators first5:", finalFirst5)
+    }
+  }
 
   return (
     <div className="min-h-[calc(100dvh-220px)] w-full">
-      {debugOverlayEnabled ? (
-        <div className="fixed bottom-3 right-3 z-[1000] w-[min(420px,calc(100vw-24px))] rounded-xl border border-white/10 bg-black/70 backdrop-blur-md p-3 text-[12px] text-white/80">
-          <div className="font-semibold text-white/90">MM Debug</div>
-          <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums">
-            <div>allCards</div>
-            <div className="text-right">{allCards.length}</div>
-            <div>creators</div>
-            <div className="text-right">{creators.length}</div>
-            <div>baseList</div>
-            <div className="text-right">{baseList.length}</div>
-            <div>searchedList</div>
-            <div className="text-right">{searchedList.length}</div>
-            <div>finalCards</div>
-            <div className="text-right">{finalCards.length}</div>
-            <div>pagedRealCards</div>
-            <div className="text-right">{pagedRealCards.length}</div>
-          </div>
-          <div className="mt-2 text-white/70">q: <span className="text-white/90">{String(searchInput || "")}</span></div>
-          <div className="mt-2 text-white/70">sample names:</div>
-          <div className="mt-1 max-h-[120px] overflow-auto whitespace-pre-wrap break-words text-white/85">
-            {filtered
-              .slice(0, 5)
-              .map((c) => String((c as unknown)?.name || ""))
-              .filter(Boolean)
-              .join("\n") || "(none)"}
-          </div>
-        </div>
-      ) : null}
-      <div className="pt-6 sm:pt-8 pb-1 sm:pb-2">
+      <div className="pt-6 sm:pt-8">
         <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6">
           <div className="min-w-0">
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <h1 className="text-[clamp(18px,3.6vw,26px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
-                {uiCopy.matchmaking.pageTitle}
-              </h1>
-              <div className="shrink-0">
-                <LocaleSwitcher />
-              </div>
-            </div>
-            <div className="mt-2 max-w-2xl min-w-0">
-              <p className="text-xs sm:text-sm leading-relaxed text-white/60 min-w-0 break-words">
-                {uiCopy.matchmaking.pageSubtitleLine1}
-              </p>
-              <p className="mt-1 text-xs sm:text-sm leading-relaxed text-white/55 min-w-0 break-words">
-                {uiCopy.matchmaking.pageSubtitleLine2}
-              </p>
-            </div>
-
-            {canEditDemoAvatars ? (
-              <div className="mt-3 flex items-center gap-2">
-                <div className="text-xs text-emerald-200/80">{locale === "zh-TW" ? "示範編輯模式" : "Demo edit mode"}</div>
-                <button
-                  type="button"
-                  onClick={disableDemoEdit}
-                  className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10"
-                >
-                  {locale === "zh-TW" ? "關閉" : "Turn off"}
-                </button>
-              </div>
-            ) : null}
+            <h1 className="text-[clamp(20px,4.2vw,28px)] leading-tight font-semibold text-white/90 min-w-0 truncate">
+              {uiCopy.matchmaking.pageHeadline}
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-white/55 max-w-full break-words min-w-0">
+              {uiCopy.matchmaking.pageSubheadline}
+            </p>
           </div>
         </div>
 
-        <div className="mt-4">
         <FiltersBar
           locale={locale}
-          search={searchInput}
-          onSearch={onSearchInput}
-          onSearchCompositionStart={onSearchCompositionStart}
-          onSearchCompositionEnd={onSearchCompositionEnd}
-          remoteActive={hasRemoteSearchActive}
-          remoteLoading={remoteLoading}
-          remoteError={remoteError}
-          resultCount={resultCount}
-          hasSearchActive={hasAnySearchActive}
-          isSearching={isSearching}
-          focusNonce={focusNonce}
-          selectedPlatforms={selectedPlatforms}
-          onTogglePlatform={(p: Platform) =>
-            setSelectedPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]))
-          }
-          onClearPlatforms={() => setSelectedPlatforms([])}
-          selectedTagCategories={selectedTagCategories}
-          tagCategoryOptions={tagCategoryOptions}
-          onToggleTagCategory={(tag: string) =>
-            setSelectedTagCategories((prev) => {
-              const t = String(tag || "").trim()
-              if (!t) return prev
-              return prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-            })
-          }
-          onAddCustomTagCategory={(tag: string) =>
-            setSelectedTagCategories((prev) => {
-              const t = String(tag || "").trim()
-              if (!t) return prev
-              return prev.includes(t) ? prev : [...prev, t]
-            })
-          }
-          onClearTagCategories={() => setSelectedTagCategories([])}
-          selectedDealTypes={selectedDealTypes}
-          onToggleDealType={(t: CollabType) =>
-            setSelectedDealTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
-          }
-          onClearDealTypes={() => setSelectedDealTypes([])}
-          dealTypeOptions={dealTypeOptions}
+          search={q}
+          onSearch={setQ}
+          platform={platform}
+          onPlatform={setPlatform}
+          platformOptions={platformOptions}
           budget={budget}
           onBudget={(v) => {
             setBudget(v)
@@ -2779,6 +1131,12 @@ function MatchmakingClient(props: MatchmakingClientProps) {
             setBudget("any")
             setCustomBudget("")
           }}
+          selectedTypes={selectedTypes}
+          onToggleType={(t: TypeKey) =>
+            setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+          }
+          onClearTypes={() => setSelectedTypes([])}
+          typeOptions={typeOptions}
           sort={sort}
           onSort={(v) => {
             try {
@@ -2795,137 +1153,46 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           onOpenFavorites={() => setFavOpen(true)}
           statsUpdating={statsPrefetchRunning}
         />
+
+        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
+          <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
         </div>
 
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-5 sm:mt-6 min-w-0">
-          <div className="flex items-center justify-between gap-3 min-w-0">
-            <div className="text-xs sm:text-sm text-white/70 min-w-0 truncate">{uiCopy.matchmaking.recommendedLabel}</div>
-            {statsPrefetchRunning ? (
-              <div className="hidden sm:flex items-center gap-2 text-xs text-white/45 min-w-0">
-                <div className="h-3 w-3 rounded-full border border-white/20 border-t-white/60 animate-spin shrink-0" />
-                <span className="min-w-0 truncate">{uiCopy.matchmaking.loadingHelper}</span>
-              </div>
-            ) : null}
-          </div>
-          {statsPrefetchRunning ? (
-            <div className="sm:hidden mt-2 flex items-center gap-2 text-xs text-white/45 min-w-0">
-              <div className="h-3 w-3 rounded-full border border-white/20 border-t-white/60 animate-spin shrink-0" />
-              <span className="min-w-0 break-words">{uiCopy.matchmaking.loadingHelper}</span>
-            </div>
-          ) : null}
-        </div>
+        <CreatorGrid>
+          {pinnedCreators.map((c) => {
+            const creatorId = c.creatorId
+            const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
+            const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
+            const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
+            const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
 
-        {isEmptyResults ? (
-          <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6 min-w-0">
-              <div className="text-sm sm:text-base font-semibold text-white/85 min-w-0 truncate">
-                {uiCopy.matchmaking.emptyResultsTitle}
-              </div>
-              <div className="mt-2 text-xs sm:text-sm text-white/55 leading-relaxed break-words max-w-2xl min-w-0">
-                {uiCopy.matchmaking.emptyResultsHint}
-              </div>
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={clearSearchFromEmptyCta}
-                  className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10"
-                >
-                  {uiCopy.matchmaking.clearSearchCta}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : showSkeleton ? (
-          <CreatorGrid>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="group relative rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                <div className="w-full bg-black/30 border-b border-white/10 overflow-hidden aspect-[16/10] sm:aspect-[4/5]">
-                  <div className="w-full h-full bg-white/5 animate-pulse" />
-                </div>
-                <div className="p-3 min-w-0">
-                  <div className="h-4 w-2/3 rounded-md bg-white/10 animate-pulse" />
-                  <div className="mt-2 h-3 w-1/2 rounded-md bg-white/10 animate-pulse" />
-                  <div className="mt-3 h-10 w-full rounded-xl bg-white/[0.06] animate-pulse" />
-                </div>
-              </div>
-            ))}
-          </CreatorGrid>
-        ) : (
-          <CreatorGrid>
-            {pagedRealCardsResolved.map((c) => {
-              const isOwnerCard = Boolean(pinnedCreator && c.id === pinnedCreator.id)
-              const creatorId = getNumericCreatorId(c) ?? c.creatorId
-              const hasFollowers = typeof c.stats?.followers === "number" && Number.isFinite(c.stats.followers)
-              const hasER = typeof c.stats?.engagementRate === "number" && Number.isFinite(c.stats.engagementRate)
-              const loading = Boolean(creatorId && statsInFlightRef.current.has(creatorId) && (!hasFollowers || !hasER))
-              const error = Boolean(creatorId && statsErrorRef.current.get(creatorId) && !loading && (!hasFollowers || !hasER))
-              const popularKey = String(creatorId || c.id)
-              const isPopularPicked = popularCreatorId ? popularKey === String(popularCreatorId) : undefined
-
-              return (
-                <MatchmakingCreatorCard
-                  key={c.id}
-                  creator={c}
-                  locale={locale}
-                  highlightQuery={primaryToken}
-                  isOwner={isOwnerCard}
-                  isFav={fav.isFav(c.id)}
-                  onToggleFav={() => fav.toggleFav(c.id)}
-                  onDemoAvatarChanged={refreshDemoAvatars}
-                  canEditDemoAvatars={canEditDemoAvatars}
-                  isPopularPicked={isPopularPicked}
-                  statsLoading={loading}
-                  statsError={error}
-                  selectedBudgetMax={selectedBudgetMax}
-                  onRetryStats={() => {
-                    const id = getNumericCreatorId(c) ?? creatorId
-                    if (!id) return
-                    retryStats(id)
-                  }}
-                />
-              )
-            })}
-          </CreatorGrid>
-        )}
-
-        <div className="w-full max-w-[1200px] mx-auto px-3 sm:px-6 mt-6">
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={clampedPage <= 1}
-              className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5"
-            >
-              {uiCopy.matchmaking.paginationPrev}
-            </button>
-
-            <div className="text-xs sm:text-sm text-white/60 tabular-nums whitespace-nowrap">
-              {uiCopy.matchmaking.paginationPage(clampedPage, totalPages)}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={clampedPage >= totalPages}
-              className="h-11 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/80 hover:bg-white/10 disabled:opacity-50 disabled:hover:bg-white/5"
-            >
-              {uiCopy.matchmaking.paginationNext}
-            </button>
-          </div>
-        </div>
+            return (
+              <MatchmakingCreatorCard
+                key={c.id}
+                creator={c}
+                locale={locale}
+                isFav={fav.isFav(c.id)}
+                onToggleFav={() => fav.toggleFav(c.id)}
+                statsLoading={loading}
+                statsError={error}
+                selectedBudgetMax={selectedBudgetMax}
+                onRetryStats={() => {
+                  if (!creatorId) return
+                  retryStats(creatorId)
+                }}
+              />
+            )
+          })}
+        </CreatorGrid>
       </div>
 
       <FavoritesDrawer
         locale={locale}
         open={favOpen}
         onClose={() => setFavOpen(false)}
-        favoriteIds={favoriteIdsArray}
-        getCreatorById={(id) => creatorsById.get(String(id))}
+        favorites={favoritesList}
         onClearAll={fav.clearAll}
       />
     </div>
   )
 }
-
-export { MatchmakingClient }
-export default MatchmakingClient
