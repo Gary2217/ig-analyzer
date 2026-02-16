@@ -213,7 +213,13 @@ export default function AppHeader({ locale }: { locale: string }) {
   }, [igSelectorOpen])
 
   const pending = Boolean((igSummary as any)?.pending)
-  const linkedCount = typeof (igSummary as any)?.linked_count === "number" ? Number((igSummary as any).linked_count) : 0
+  const linkedCount =
+    igAccounts?.length && igAccounts.length > 0
+      ? igAccounts.length
+      : typeof (igSummary as any)?.linked_count === "number"
+        ? Number((igSummary as any).linked_count)
+        : 0
+  const extraLinked = linkedCount > 1 ? linkedCount - 1 : 0
   const displayShort =
     typeof (igSummary as any)?.display?.ig_user_id_short === "string" ? String((igSummary as any).display.ig_user_id_short) : ""
   const displayUsername = typeof (igSummary as any)?.display?.username === "string" ? String((igSummary as any).display.username) : ""
@@ -224,7 +230,7 @@ export default function AppHeader({ locale }: { locale: string }) {
     igSummary === null
       ? `${dict.igHeaderLinkedPrefix} ${dict.igHeaderLoading}`
       : (igSummary as any)?.ok === true && linkedCount > 0
-        ? `${dict.igHeaderLinkedPrefix} ${igPillLabel}${linkedCount > 1 ? " " + dict.igHeaderMultipleSuffix.replace("{n}", String(linkedCount - 1)) : ""}`
+        ? `${dict.igHeaderLinkedPrefix} ${igPillLabel}${extraLinked > 0 ? ` (+${extraLinked})` : ""}`
         : `${dict.igHeaderLinkedPrefix} ${dict.igHeaderNotLinked}`
 
   const igSelectorCopy = useMemo(
