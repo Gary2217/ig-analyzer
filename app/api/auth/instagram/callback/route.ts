@@ -229,7 +229,19 @@ export async function GET(req: NextRequest) {
       return redirectWithError("exchange_failed")
     }
 
+    let accountsFromPages: Array<{ page_id: string; ig_user_id: string; username: string | null; profile_picture_url: string | null }> = []
+    try {
+      accountsFromPages = await fetchIgAccountsFromPages(accessToken)
+    } catch {
+      accountsFromPages = []
+    }
+
+    const shouldOpenPicker = accountsFromPages.length > 1
+
     const dest = buildSafeRedirect(origin, nextPath)
+    if (shouldOpenPicker) {
+      dest.searchParams.set("ig_picker", "1")
+    }
     const res = NextResponse.redirect(dest)
 
     // Persist session in the same cookies used by existing /api/auth/instagram/me etc.
@@ -280,7 +292,7 @@ export async function GET(req: NextRequest) {
           }
 
           try {
-            const accounts = await fetchIgAccountsFromPages(accessToken)
+            const accounts = accountsFromPages
             if (accounts.length) {
               for (let i = 0; i < accounts.length; i++) {
                 const a = accounts[i]

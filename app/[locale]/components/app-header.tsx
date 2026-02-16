@@ -61,6 +61,7 @@ export default function AppHeader({ locale }: { locale: string }) {
   const [igAccountsError, setIgAccountsError] = useState(false)
   const [igSwitchingId, setIgSwitchingId] = useState<string>("")
   const [igSwitchError, setIgSwitchError] = useState(false)
+  const [igPickerHint, setIgPickerHint] = useState(false)
   const igSelectorRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -109,6 +110,27 @@ export default function AppHeader({ locale }: { locale: string }) {
       window.removeEventListener("pointerdown", onPointerDown)
       window.removeEventListener("keydown", onKeyDown)
     }
+  }, [igSelectorOpen])
+
+  useEffect(() => {
+    const v = searchParams?.get("ig_picker")
+    if (v !== "1") return
+    setIgSelectorOpen(true)
+    setIgPickerHint(true)
+
+    try {
+      const p = new URLSearchParams(searchParams?.toString() || "")
+      p.delete("ig_picker")
+      const qs = p.toString()
+      const nextUrl = `${pathname || ""}${qs ? `?${qs}` : ""}`
+      router.replace(nextUrl, { scroll: false })
+    } catch {
+      // ignore
+    }
+  }, [searchParams, pathname, router])
+
+  useEffect(() => {
+    if (!igSelectorOpen) setIgPickerHint(false)
   }, [igSelectorOpen])
 
   const refreshIgSummary = async () => {
@@ -241,6 +263,7 @@ export default function AppHeader({ locale }: { locale: string }) {
       close: dict.igSelectorClose,
       active: dict.igSelectorActive,
       switchFailed: dict.igSelectorSwitchFailed,
+      pickerHint: dict.igSelectorMultiLinkedHint,
     }),
     [dict],
   )
@@ -279,6 +302,7 @@ export default function AppHeader({ locale }: { locale: string }) {
         return
       }
       await Promise.all([refreshIgList(), refreshIgSummary()])
+      setIgPickerHint(false)
     } catch {
       setIgSwitchError(true)
     } finally {
@@ -422,6 +446,9 @@ export default function AppHeader({ locale }: { locale: string }) {
                                 {reconnectLabel}
                               </Link>
                             </div>
+                            {igPickerHint ? (
+                              <div className="px-3 pb-2 text-xs text-white/60">{igSelectorCopy.pickerHint}</div>
+                            ) : null}
                             {igSwitchError ? (
                               <div className="px-3 pb-2 text-xs text-rose-200/80">{igSelectorCopy.switchFailed}</div>
                             ) : null}
@@ -507,6 +534,9 @@ export default function AppHeader({ locale }: { locale: string }) {
                                   {reconnectLabel}
                                 </Link>
                               </div>
+                              {igPickerHint ? (
+                                <div className="px-3 pb-1 text-xs text-white/60">{igSelectorCopy.pickerHint}</div>
+                              ) : null}
                               {igSwitchError ? (
                                 <div className="px-3 pb-1 text-xs text-rose-200/80">{igSelectorCopy.switchFailed}</div>
                               ) : null}

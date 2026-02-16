@@ -26,6 +26,7 @@ export type CopyDictionary = {
   igSelectorActive: string
   igSelectorClose: string
   igSelectorSwitchFailed: string
+  igSelectorMultiLinkedHint: string
   matchmaking: {
     title: string
     description: string

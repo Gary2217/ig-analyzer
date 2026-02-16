@@ -28,6 +28,7 @@ export const zhTW: CopyDictionary = {
   igSelectorActive: "使用中",
   igSelectorClose: "關閉",
   igSelectorSwitchFailed: "切換失敗，請稍後再試",
+  igSelectorMultiLinkedHint: "已連結多個帳號，請選擇使用中帳號",
   matchmaking: {
     title: "媒合配對",
     description: "依平台、預算、合作形式篩選創作者",
