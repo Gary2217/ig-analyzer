@@ -7,6 +7,8 @@ export const en: CopyDictionary = {
     favorites: "Shortlist",
     all: "All",
     searchPlaceholder: "Search name / handle / keyword...",
+    clear: "Clear",
+    add: "Add",
   },
   matchmaking: {
     title: "Matchmaking",
@@ -117,5 +119,22 @@ export const en: CopyDictionary = {
     paginationPrev: "Prev",
     paginationNext: "Next",
     paginationPage: (page: number, total: number) => `Page ${page} / ${total}`,
+
+    platformFilterLabel: "Platforms",
+    otherLabel: "Other",
+    customCreatorTypePlaceholder: "Custom type",
+    clearSearchAria: "Clear search",
+
+    demoEditModeLabel: "Demo edit mode",
+    turnOffLabel: "Turn off",
+
+    editCardCta: "Edit card",
+
+    uploadImageCta: "Upload image",
+    resetCta: "Reset",
+
+    pageErrorTitle: "Something went wrong",
+    pageErrorBody: "Please refresh the page or try again later.",
+    pageErrorRetry: "Retry",
   },
 }

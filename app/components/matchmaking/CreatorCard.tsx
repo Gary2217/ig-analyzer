@@ -238,7 +238,7 @@ export function CreatorCard({
               className="inline-flex items-center justify-center h-10 px-3 rounded-full border border-white/15 bg-black/40 text-[12px] font-semibold text-white/85 backdrop-blur-sm hover:bg-black/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 whitespace-nowrap"
               style={{ minHeight: "44px" }}
             >
-              {locale === "zh-TW" ? "編輯名片" : "Edit card"}
+              {mm.editCardCta}
             </button>
           </div>
         ) : null}
@@ -256,8 +256,8 @@ export function CreatorCard({
                 ? "bg-emerald-500/25 border-emerald-400/30 text-emerald-100"
                 : "bg-black/40 border-white/15 text-white/85 hover:bg-black/55"
             }`}
-            aria-label={isFav ? "Remove favorite / 取消收藏" : "Add favorite / 加入收藏"}
-            title={isFav ? "Remove favorite / 取消收藏" : "Add favorite / 加入收藏"}
+            aria-label={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
+            title={isFav ? mm.favoriteRemoveAria : mm.favoriteAddAria}
           >
             <span className="text-base leading-none">{isFav ? "♥" : "♡"}</span>
           </button>
@@ -270,7 +270,7 @@ export function CreatorCard({
         <div className="px-3 pt-3 sm:px-3">
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center justify-center h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/80 hover:bg-white/10 cursor-pointer whitespace-nowrap">
-              {locale === "zh-TW" ? "上傳圖片" : "Upload image"}
+              {mm.uploadImageCta}
               <input
                 type="file"
                 accept="image/*"
@@ -299,7 +299,7 @@ export function CreatorCard({
                 onDemoAvatarChanged?.()
               }}
             >
-              {locale === "zh-TW" ? "重設" : "Reset"}
+              {mm.resetCta}
             </button>
           </div>
         </div>
@@ -404,8 +404,9 @@ export function CreatorCard({
   )
 
   return (
+    // 保險：卡片區域
     <div
-      className="group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full md:hover:border-white/20 md:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_46px_-28px_rgba(0,0,0,0.65)] md:focus-within:border-white/20 md:focus-within:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_46px_-28px_rgba(0,0,0,0.65)]"
+      className="creator-card group relative rounded-2xl border border-white/10 bg-white/5 hover:bg-white/[0.07] transition shadow-sm overflow-hidden flex flex-col h-full md:hover:border-white/20 md:hover:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_46px_-28px_rgba(0,0,0,0.65)] md:focus-within:border-white/20 md:focus-within:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_18px_46px_-28px_rgba(0,0,0,0.65)]"
     >
       {showPopularBadge && !isEmpty ? (
         <div className="absolute top-2 left-2 z-10">

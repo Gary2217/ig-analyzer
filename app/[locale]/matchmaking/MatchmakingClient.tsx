@@ -2702,13 +2702,13 @@ function MatchmakingClient(props: MatchmakingClientProps) {
 
             {canEditDemoAvatars ? (
               <div className="mt-3 flex items-center gap-2">
-                <div className="text-xs text-emerald-200/80">{locale === "zh-TW" ? "示範編輯模式" : "Demo edit mode"}</div>
+                <div className="text-xs text-emerald-200/80">{uiCopy.matchmaking.demoEditModeLabel}</div>
                 <button
                   type="button"
                   onClick={disableDemoEdit}
                   className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10"
                 >
-                  {locale === "zh-TW" ? "關閉" : "Turn off"}
+                  {uiCopy.matchmaking.turnOffLabel}
                 </button>
               </div>
             ) : null}

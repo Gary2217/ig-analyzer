@@ -5,6 +5,8 @@ export type CopyDictionary = {
     favorites: string
     all: string
     searchPlaceholder: string
+    clear: string
+    add: string
   }
   matchmaking: {
     title: string
@@ -115,5 +117,22 @@ export type CopyDictionary = {
     paginationPrev: string
     paginationNext: string
     paginationPage: (page: number, total: number) => string
+
+    platformFilterLabel: string
+    otherLabel: string
+    customCreatorTypePlaceholder: string
+    clearSearchAria: string
+
+    demoEditModeLabel: string
+    turnOffLabel: string
+
+    editCardCta: string
+
+    uploadImageCta: string
+    resetCta: string
+
+    pageErrorTitle: string
+    pageErrorBody: string
+    pageErrorRetry: string
   }
 }

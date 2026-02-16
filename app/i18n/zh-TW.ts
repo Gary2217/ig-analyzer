@@ -7,6 +7,8 @@ export const zhTW: CopyDictionary = {
     favorites: "已收藏",
     all: "全部",
     searchPlaceholder: "搜尋名稱 / 帳號 / 關鍵字…",
+    clear: "清除",
+    add: "新增",
   },
   matchmaking: {
     title: "媒合配對",
@@ -117,5 +119,22 @@ export const zhTW: CopyDictionary = {
     paginationPrev: "上一頁",
     paginationNext: "下一頁",
     paginationPage: (page: number, total: number) => `第 ${page} / ${total} 頁`,
+
+    platformFilterLabel: "創作者平台",
+    otherLabel: "其他",
+    customCreatorTypePlaceholder: "輸入自訂類型",
+    clearSearchAria: "清除搜尋",
+
+    demoEditModeLabel: "示範編輯模式",
+    turnOffLabel: "關閉",
+
+    editCardCta: "編輯名片",
+
+    uploadImageCta: "上傳圖片",
+    resetCta: "重設",
+
+    pageErrorTitle: "頁面載入失敗",
+    pageErrorBody: "請重新整理或稍後再試。",
+    pageErrorRetry: "重試",
   },
 }

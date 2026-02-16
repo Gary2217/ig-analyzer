@@ -87,8 +87,8 @@ export function FiltersBar(props: Props) {
     }
   }, [closeAll])
 
-  const clearLabel = props.locale === "zh-TW" ? "清除" : "Clear"
-  const addLabel = props.locale === "zh-TW" ? "新增" : "Add"
+  const clearLabel = copy.common.clear
+  const addLabel = copy.common.add
 
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -193,7 +193,8 @@ export function FiltersBar(props: Props) {
             <div className="p-2.5 sm:p-3">
               <div className="grid grid-cols-12 gap-2 sm:gap-3 items-end min-w-0">
                 <div className="col-span-12 lg:col-span-4 min-w-0 w-full">
-                  <div className="relative min-w-0 w-full lg:max-w-[360px]">
+                  {/* 保險：搜尋框區域 */}
+                  <div className="relative min-w-0 w-full lg:max-w-[360px] mm-search">
                     <input
                       ref={searchInputRef}
                       value={props.search}
@@ -224,7 +225,7 @@ export function FiltersBar(props: Props) {
                       autoCorrect="off"
                       spellCheck={false}
                       placeholder={copy.common.searchPlaceholder}
-                      className="h-10 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 pl-3 pr-20 text-sm text-white/90 placeholder:text-white/30"
+                      className="search-input h-10 w-full min-w-0 rounded-lg bg-white/5 border border-white/10 pl-3 pr-20 text-sm text-white/90 placeholder:text-white/30"
                     />
 
                     {props.remoteActive && props.remoteLoading ? (
@@ -238,8 +239,8 @@ export function FiltersBar(props: Props) {
                         type="button"
                         onClick={clearSearch}
                         className="absolute right-1 top-1 h-10 w-10 grid place-items-center rounded-md text-white/60 hover:text-white/85 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25"
-                        aria-label={props.locale === "zh-TW" ? "清除搜尋" : "Clear search"}
-                        title={props.locale === "zh-TW" ? "清除搜尋" : "Clear search"}
+                        aria-label={mm.clearSearchAria}
+                        title={mm.clearSearchAria}
                         style={{ minHeight: "44px", minWidth: "44px" }}
                       >
                         <span className="text-lg leading-none">×</span>
@@ -261,7 +262,7 @@ export function FiltersBar(props: Props) {
                 </div>
 
                 <div className="col-span-12 sm:col-span-6 lg:col-span-2 min-w-0">
-                  <div className="text-[11px] text-white/45 mb-1">創作者平台</div>
+                  <div className="text-[11px] text-white/45 mb-1">{mm.platformFilterLabel}</div>
                   <div className="relative">
                     <button
                       type="button"
@@ -281,7 +282,7 @@ export function FiltersBar(props: Props) {
                     {platformOpen ? (
                       <div className="absolute z-50 mt-2 w-full sm:w-[240px] max-h-[70vh] overflow-auto overscroll-contain rounded-xl border border-white/10 bg-slate-950/90 backdrop-blur-md shadow-xl p-2">
                         <div className="flex items-center justify-between gap-2 px-2 py-1">
-                          <div className="text-[11px] text-white/55">創作者平台</div>
+                          <div className="text-[11px] text-white/55">{mm.platformFilterLabel}</div>
                           {props.selectedPlatforms.length ? (
                             <button
                               type="button"
@@ -380,12 +381,12 @@ export function FiltersBar(props: Props) {
                         </div>
 
                         <div className="mt-2 border-t border-white/10 pt-2 px-2">
-                          <div className="text-[11px] text-white/55">其他</div>
+                          <div className="text-[11px] text-white/55">{mm.otherLabel}</div>
                           <div className="mt-1 flex items-center gap-2">
                             <input
                               value={customTagDraft}
                               onChange={(e) => setCustomTagDraft(e.target.value.slice(0, 30))}
-                              placeholder="輸入自訂類型"
+                              placeholder={mm.customCreatorTypePlaceholder}
                               className="h-10 flex-1 min-w-0 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white/90 placeholder:text-white/30"
                             />
                             <button
@@ -471,7 +472,7 @@ export function FiltersBar(props: Props) {
                     }}
                     className="h-10 px-4 rounded-lg border border-white/10 bg-white/5 text-sm text-white/70 hover:bg-white/10 whitespace-nowrap"
                   >
-                    {copy.common.all}
+                    {mm.clearAll}
                   </button>
                 ) : null}
               </div>
