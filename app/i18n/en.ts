@@ -22,7 +22,7 @@ export const en: CopyDictionary = {
   igHeaderMultipleSuffix: "+{n}",
   igHeaderPendingBadge: "Pending",
   igHeaderLoading: "Loading",
-  igSelectorTitle: "Switch Instagram account",
+  igSelectorTitle: "Instagram Accounts",
   igSelectorEmpty: "No Instagram accounts linked",
   igSelectorLoading: "Loading…",
   igSelectorActive: "Active",

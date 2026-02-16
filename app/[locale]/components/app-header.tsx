@@ -59,7 +59,6 @@ export default function AppHeader({ locale }: { locale: string }) {
     { ig_user_id: string; username: string | null; profile_picture_url: string | null; is_active: boolean; updated_at: string | null }[]
   >([])
   const [igAccountsError, setIgAccountsError] = useState(false)
-  const [igSwitchingId, setIgSwitchingId] = useState<string>("")
   const igSelectorRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -186,6 +185,8 @@ export default function AppHeader({ locale }: { locale: string }) {
     [dict],
   )
 
+  const reconnectLabel = locale === "zh-TW" ? "重新連接 Instagram" : "Reconnect Instagram"
+
   const shortId = (raw: string) => {
     const s = String(raw || "").trim()
     if (!s) return ""
@@ -193,101 +194,8 @@ export default function AppHeader({ locale }: { locale: string }) {
     return `${s.slice(0, 4)}…${s.slice(-3)}`
   }
 
-  const refreshIgSummary = async () => {
-    try {
-      const r = await fetch("/api/user/ig-accounts/summary", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      })
-      const j = (await r.json()) as any
-      setIgSummary(j)
-      lastFetchAtRef.current = Date.now()
-    } catch {
-      // ignore
-    }
-  }
-
-  const refreshIgList = async () => {
-    try {
-      const r = await fetch("/api/user/ig-accounts/list", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      })
-      const j = (await r.json()) as any
-      const rows: any[] = (j as any)?.ok === true && Array.isArray((j as any)?.accounts) ? (j as any).accounts : []
-      const normalized = rows
-        .map((row) => {
-          const ig_user_id = typeof row?.ig_user_id === "string" ? row.ig_user_id.trim() : ""
-          if (!ig_user_id) return null
-          return {
-            ig_user_id,
-            username: typeof row?.username === "string" ? row.username : null,
-            profile_picture_url: typeof row?.profile_picture_url === "string" ? row.profile_picture_url : null,
-            is_active: typeof row?.is_active === "boolean" ? row.is_active : false,
-            updated_at: typeof row?.updated_at === "string" ? row.updated_at : null,
-          }
-        })
-        .filter(Boolean) as {
-        ig_user_id: string
-        username: string | null
-        profile_picture_url: string | null
-        is_active: boolean
-        updated_at: string | null
-      }[]
-
-      setIgAccounts(normalized)
-    } catch {
-      // ignore
-    }
-  }
-
-  const setActiveIgAccount = async (ig_user_id: string) => {
-    const target = igAccounts.find((a) => a.ig_user_id === ig_user_id) || null
-    const prevSummary = igSummary
-
-    if (target && prevSummary && (prevSummary as any)?.ok === true) {
-      try {
-        setIgSummary({
-          ...(prevSummary as any),
-          display: {
-            ...(prevSummary as any).display,
-            ig_user_id: target.ig_user_id,
-            ig_user_id_short: shortId(target.ig_user_id),
-            username: target.username,
-            profile_picture_url: target.profile_picture_url,
-            is_active: true,
-          },
-        })
-      } catch {
-        // ignore
-      }
-    }
-
-    setIgSwitchingId(ig_user_id)
-    try {
-      const r = await fetch("/api/user/ig-accounts/set-active", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ig_user_id }),
-      })
-      const j = (await r.json()) as any
-      if (!(j as any)?.ok) {
-        if (prevSummary) setIgSummary(prevSummary as any)
-        return
-      }
-
-      await Promise.all([refreshIgList(), refreshIgSummary()])
-      setIgSelectorOpen(false)
-    } catch {
-      if (prevSummary) setIgSummary(prevSummary as any)
-    } finally {
-      setIgSwitchingId("")
-    }
-  }
+  const oauthNext = encodeURIComponent(pathname || `/${locale}`)
+  const oauthUrl = `/api/auth/instagram?locale=${encodeURIComponent(locale)}&next=${oauthNext}`
 
   const handleBackToResults = () => {
     if (typeof window === "undefined") return
@@ -420,19 +328,20 @@ export default function AppHeader({ locale }: { locale: string }) {
                           <div className="p-3 text-sm text-white/60">{igSelectorCopy.empty}</div>
                         ) : igAccounts.length ? (
                           <div className="p-1">
+                            <div className="p-2">
+                              <Link href={oauthUrl} className="w-full inline-flex items-center justify-center h-10 rounded-lg border border-white/10 bg-white/5 text-sm text-white/85 hover:bg-white/10">
+                                {reconnectLabel}
+                              </Link>
+                            </div>
                             {igAccounts.map((a) => {
                               const label = a.username ? `@${a.username.replace(/^@+/, "")}` : `${dict.igHeaderLinkedPrefix} ${shortId(a.ig_user_id)}`
                               const active = Boolean(a.is_active)
-                              const switching = igSwitchingId === a.ig_user_id
                               return (
-                                <button
+                                <div
                                   key={a.ig_user_id}
-                                  type="button"
-                                  onClick={() => setActiveIgAccount(a.ig_user_id)}
-                                  disabled={switching}
                                   className={
                                     (active ? "bg-white/5" : "") +
-                                    " w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-white/5 disabled:opacity-50"
+                                    " w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left"
                                   }
                                 >
                                   <span className="h-9 w-9 rounded-full bg-white/5 border border-white/10 shrink-0 overflow-hidden">
@@ -452,7 +361,7 @@ export default function AppHeader({ locale }: { locale: string }) {
                                   <span className="shrink-0">
                                     {active ? <Check className="h-4 w-4 text-emerald-200" /> : <span className="h-4 w-4" />}
                                   </span>
-                                </button>
+                                </div>
                               )
                             })}
                           </div>
@@ -490,19 +399,20 @@ export default function AppHeader({ locale }: { locale: string }) {
                             <div className="p-3 text-sm text-white/60">{igSelectorCopy.empty}</div>
                           ) : igAccounts.length ? (
                             <div className="space-y-1">
+                              <div className="p-1">
+                                <Link href={oauthUrl} className="w-full inline-flex items-center justify-center h-11 rounded-xl border border-white/10 bg-white/5 text-sm text-white/85 hover:bg-white/10">
+                                  {reconnectLabel}
+                                </Link>
+                              </div>
                               {igAccounts.map((a) => {
                                 const label = a.username ? `@${a.username.replace(/^@+/, "")}` : `${dict.igHeaderLinkedPrefix} ${shortId(a.ig_user_id)}`
                                 const active = Boolean(a.is_active)
-                                const switching = igSwitchingId === a.ig_user_id
                                 return (
-                                  <button
+                                  <div
                                     key={a.ig_user_id}
-                                    type="button"
-                                    onClick={() => setActiveIgAccount(a.ig_user_id)}
-                                    disabled={switching}
                                     className={
                                       (active ? "bg-white/5" : "") +
-                                      " w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-white/5 disabled:opacity-50 min-h-[52px]"
+                                      " w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left min-h-[52px]"
                                     }
                                   >
                                     <span className="h-10 w-10 rounded-full bg-white/5 border border-white/10 shrink-0 overflow-hidden">
@@ -522,7 +432,7 @@ export default function AppHeader({ locale }: { locale: string }) {
                                     <span className="shrink-0">
                                       {active ? <Check className="h-5 w-5 text-emerald-200" /> : <span className="h-5 w-5" />}
                                     </span>
-                                  </button>
+                                  </div>
                                 )
                               })}
                             </div>
