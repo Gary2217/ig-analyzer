@@ -36,6 +36,45 @@ function buildSafeRedirect(origin: string, pathOrUrl: string) {
   }
 }
 
+async function fetchIgAccountsFromPages(accessToken: string): Promise<
+  Array<{ page_id: string; ig_user_id: string; username: string | null; profile_picture_url: string | null }>
+> {
+  const token = String(accessToken || "").trim()
+  if (!token) return []
+
+  try {
+    const graphUrl = new URL("https://graph.facebook.com/v21.0/me/accounts")
+    graphUrl.searchParams.set("fields", "id,name,instagram_business_account{id,username,profile_picture_url}")
+    graphUrl.searchParams.set("limit", "50")
+    graphUrl.searchParams.set("access_token", token)
+
+    const r = await fetch(graphUrl.toString(), { method: "GET", cache: "no-store" })
+    if (!r.ok) return []
+    const body: any = await safeJson(r)
+    const list: any[] = Array.isArray(body?.data) ? body.data : []
+
+    const out: Array<{ page_id: string; ig_user_id: string; username: string | null; profile_picture_url: string | null }> = []
+
+    for (const row of list) {
+      const page_id = typeof row?.id === "string" ? row.id.trim() : ""
+      const iba = row?.instagram_business_account
+      const ig_user_id = typeof iba?.id === "string" ? iba.id.trim() : ""
+      if (!page_id || !ig_user_id) continue
+
+      out.push({
+        page_id,
+        ig_user_id,
+        username: typeof iba?.username === "string" ? iba.username : null,
+        profile_picture_url: typeof iba?.profile_picture_url === "string" ? iba.profile_picture_url : null,
+      })
+    }
+
+    return out
+  } catch {
+    return []
+  }
+}
+
 async function safeJson(res: Response) {
   try {
     return await res.json()
@@ -225,6 +264,67 @@ export async function GET(req: NextRequest) {
             console.warn("[ig-oauth] skip db persist (missing ig_user_id)")
           }
         } else {
+          let hasActive: boolean | null = null
+
+          try {
+            const { data: activeRow, error: activeErr } = await authed
+              .from("user_instagram_accounts")
+              .select("ig_user_id")
+              .eq("user_id", user.id)
+              .eq("is_active", true)
+              .maybeSingle()
+
+            hasActive = !activeErr && Boolean((activeRow as any)?.ig_user_id)
+          } catch {
+            hasActive = null
+          }
+
+          try {
+            const accounts = await fetchIgAccountsFromPages(accessToken)
+            if (accounts.length) {
+              for (let i = 0; i < accounts.length; i++) {
+                const a = accounts[i]
+
+                try {
+                  await authed
+                    .from("user_ig_account_identities")
+                    .upsert(
+                      {
+                        user_id: user.id,
+                        provider: "instagram",
+                        ig_user_id: a.ig_user_id,
+                      },
+                      { onConflict: "user_id,provider,ig_user_id" },
+                    )
+                } catch {
+                  // swallow
+                }
+
+                const baseUpsert: any = {
+                  user_id: user.id,
+                  ig_user_id: a.ig_user_id,
+                  page_id: a.page_id,
+                  username: a.username,
+                  profile_picture_url: a.profile_picture_url,
+                  updated_at: new Date().toISOString(),
+                }
+
+                const allowSetActive = hasActive === false
+                const payload = allowSetActive && i === 0 ? { ...baseUpsert, is_active: true } : baseUpsert
+
+                await authed
+                  .from("user_instagram_accounts")
+                  .upsert(payload, { onConflict: "user_id,ig_user_id" })
+              }
+
+              // Multi-account succeeded; keep existing single-account logic below for tokens only.
+            }
+          } catch {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("[ig-oauth] multi-account fetch/upsert failed")
+            }
+          }
+
           try {
             await authed
               .from("user_ig_account_identities")
@@ -241,27 +341,13 @@ export async function GET(req: NextRequest) {
           }
 
           try {
-            const { data: activeRow, error: activeErr } = await authed
-              .from("user_instagram_accounts")
-              .select("ig_user_id")
-              .eq("user_id", user.id)
-              .eq("is_active", true)
-              .maybeSingle()
-
-            const hasActive = !activeErr && Boolean((activeRow as any)?.ig_user_id)
-
             const baseUpsert: any = {
               user_id: user.id,
               ig_user_id: igUserId,
               updated_at: new Date().toISOString(),
             }
 
-            const payload = hasActive
-              ? baseUpsert
-              : {
-                  ...baseUpsert,
-                  is_active: true,
-                }
+            const payload = hasActive === true ? baseUpsert : { ...baseUpsert, ...(hasActive === false ? { is_active: true } : null) }
 
             await authed
               .from("user_instagram_accounts")

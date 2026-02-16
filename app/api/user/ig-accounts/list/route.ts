@@ -15,6 +15,7 @@ const JSON_HEADERS = {
 
 type AccountRow = {
   ig_user_id: string
+  page_id: string | null
   username: string | null
   profile_picture_url: string | null
   is_active: boolean
@@ -40,7 +41,7 @@ export async function GET(_req: NextRequest) {
 
     const { data, error } = await authed
       .from("user_instagram_accounts")
-      .select("ig_user_id,username,profile_picture_url,is_active,updated_at,created_at")
+      .select("ig_user_id,page_id,username,profile_picture_url,is_active,updated_at,created_at")
       .eq("user_id", user.id)
       .order("is_active", { ascending: false })
       .order("updated_at", { ascending: false })
@@ -58,6 +59,7 @@ export async function GET(_req: NextRequest) {
         if (!ig_user_id) return null
         return {
           ig_user_id,
+          page_id: typeof r?.page_id === "string" ? r.page_id : null,
           username: typeof r?.username === "string" ? r.username : null,
           profile_picture_url: typeof r?.profile_picture_url === "string" ? r.profile_picture_url : null,
           is_active: typeof r?.is_active === "boolean" ? r.is_active : false,
