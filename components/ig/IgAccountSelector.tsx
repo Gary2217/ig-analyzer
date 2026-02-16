@@ -55,6 +55,19 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
   const [query, setQuery] = useState("")
 
   const igSelectorRef = useRef<HTMLDivElement | null>(null)
+  const routerRefreshInFlightRef = useRef(false)
+
+  const requestRouterRefresh = () => {
+    if (routerRefreshInFlightRef.current) return
+    routerRefreshInFlightRef.current = true
+    try {
+      router.refresh()
+    } finally {
+      window.setTimeout(() => {
+        routerRefreshInFlightRef.current = false
+      }, 800)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -303,8 +316,35 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
         setIgSwitchError(true)
         return
       }
-      await Promise.all([refreshIgList(), refreshIgSummary()])
+
+      setIgAccounts((prev) =>
+        prev.map((row) => ({
+          ...row,
+          is_active: row.ig_user_id === id,
+        })),
+      )
+
+      setIgSummary((prev) => {
+        if (!prev || (prev as any)?.ok !== true) return prev
+        if (!current) return prev
+        return {
+          ...(prev as any),
+          display: {
+            ig_user_id: id,
+            ig_user_id_short: shortId(id),
+            updated_at: current.updated_at ?? null,
+            username: current.username,
+            profile_picture_url: current.profile_picture_url,
+            is_active: true,
+          },
+        } as IgSummary
+      })
+
+      setIgSelectorOpen(false)
       setIgPickerHint(false)
+      requestRouterRefresh()
+
+      await Promise.all([refreshIgList(), refreshIgSummary()])
     } catch {
       setIgSwitchError(true)
     } finally {
