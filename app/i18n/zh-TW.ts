@@ -10,6 +10,13 @@ export const zhTW: CopyDictionary = {
     clear: "清除",
     add: "新增",
   },
+  settingsIgAccountsTitle: "我的 Instagram 帳號",
+  settingsIgAccountsEmpty: "目前沒有連結的 Instagram 帳號。",
+  settingsIgAccountsUnauthorized: "請先登入。",
+  settingsIgAccountsDisabled: "Instagram accounts 功能尚未啟用。",
+  settingsIgAccountsConnected: "已連結",
+  settingsIgAccountsExpired: "Token 已過期",
+  settingsIgAccountsNoToken: "無 Token",
   matchmaking: {
     title: "媒合配對",
     description: "依平台、預算、合作形式篩選創作者",

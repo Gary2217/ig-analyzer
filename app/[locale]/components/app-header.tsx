@@ -20,11 +20,13 @@ export default function AppHeader({ locale }: { locale: string }) {
         back: "返回",
         opportunities: "名片展示區",
         homeAria: "回到首頁",
+        settingsIgAccounts: "IG 帳號",
       }
     : {
         back: "Back",
         opportunities: "Card showcase",
         homeAria: "Go to homepage",
+        settingsIgAccounts: "IG Accounts",
       }
 
   const handleBackToResults = () => {
@@ -105,6 +107,14 @@ export default function AppHeader({ locale }: { locale: string }) {
                   </Link>
                 </>
               )}
+              <Link
+                href={`/${locale}/settings/ig-accounts`}
+                className={BUTTON_BASE_CLASSES + " min-h-[44px]"}
+                aria-label={copy.settingsIgAccounts}
+              >
+                <span className="hidden sm:inline">{copy.settingsIgAccounts}</span>
+                <span className="sm:hidden text-[10px] text-white/75 max-w-[92px] truncate">{copy.settingsIgAccounts}</span>
+              </Link>
               <LocaleSwitcher />
             </div>
           </div>

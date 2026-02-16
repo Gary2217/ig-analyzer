@@ -8,6 +8,13 @@ export type CopyDictionary = {
     clear: string
     add: string
   }
+  settingsIgAccountsTitle: string
+  settingsIgAccountsEmpty: string
+  settingsIgAccountsUnauthorized: string
+  settingsIgAccountsDisabled: string
+  settingsIgAccountsConnected: string
+  settingsIgAccountsExpired: string
+  settingsIgAccountsNoToken: string
   matchmaking: {
     title: string
     description: string

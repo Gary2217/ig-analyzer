@@ -10,6 +10,13 @@ export const en: CopyDictionary = {
     clear: "Clear",
     add: "Add",
   },
+  settingsIgAccountsTitle: "My Instagram Accounts",
+  settingsIgAccountsEmpty: "No Instagram accounts connected yet.",
+  settingsIgAccountsUnauthorized: "Please log in first.",
+  settingsIgAccountsDisabled: "Instagram accounts feature not enabled yet.",
+  settingsIgAccountsConnected: "Connected",
+  settingsIgAccountsExpired: "Token expired",
+  settingsIgAccountsNoToken: "No token",
   matchmaking: {
     title: "Matchmaking",
     description: "Filter creators by platform, budget, and collaboration type.",
