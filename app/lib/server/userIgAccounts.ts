@@ -14,6 +14,15 @@ export type UserIgAccountRow = {
   revoked_at: string | null
 }
 
+export type UserIgAccountIdentityRow = {
+  id: string
+  user_id: string
+  provider: string
+  ig_user_id: string
+  created_at: string
+  updated_at: string
+}
+
 export async function getUserIgAccountForAuthedUser(
   supabase: SupabaseClient,
   opts?: { provider?: string }
@@ -46,4 +55,36 @@ export async function getUserIgAccountForAuthedUser(
   }
 
   return { row: (data as any) ?? null, error: null }
+}
+
+export async function listUserIgAccountIdentitiesForAuthedUser(
+  supabase: SupabaseClient,
+  opts?: { provider?: string }
+): Promise<{ rows: UserIgAccountIdentityRow[]; error: string | null }> {
+  const provider = opts?.provider ?? "instagram"
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError) {
+    return { rows: [], error: authError.message }
+  }
+  if (!user) {
+    return { rows: [], error: "not_authenticated" }
+  }
+
+  const { data, error } = await supabase
+    .from("user_ig_account_identities")
+    .select("id,user_id,provider,ig_user_id,created_at,updated_at")
+    .eq("user_id", user.id)
+    .eq("provider", provider)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    return { rows: [], error: error.message }
+  }
+
+  return { rows: (data as any[]) as UserIgAccountIdentityRow[], error: null }
 }
