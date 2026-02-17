@@ -608,6 +608,30 @@ function pinOwnerCardFirst<T extends { id: string }>(cards: T[], ownerCardId: st
   return [owner, ...rest]
 }
 
+function moveOwnerCardFirst<T extends { id?: unknown }>(cards: T[], isOwner: (c: T) => boolean): T[] {
+  if (!Array.isArray(cards)) return cards
+  const idx = cards.findIndex((c) => {
+    try {
+      return Boolean(isOwner(c))
+    } catch {
+      return false
+    }
+  })
+  if (idx < 0) return cards
+
+  const owner = cards[idx]
+  const ownerId = typeof (owner as any)?.id === "string" ? String((owner as any).id) : ""
+  const rest = cards.filter((c, i) => {
+    if (i === idx) return false
+    if (!ownerId) return true
+    const cid = typeof (c as any)?.id === "string" ? String((c as any).id) : ""
+    return cid !== ownerId
+  })
+
+  if (idx === 0 && rest.length === cards.length - 1) return cards
+  return [owner, ...rest]
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null
   return value as Record<string, unknown>
@@ -2151,8 +2175,16 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       hasSearchActive,
       isFilteringActive,
     })
-    return dedupeById(pinnedApplied)
-  }, [filtered, pinnedCreator, matchesDropdownFilters, hasSearchActive, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget])
+
+    const deduped = dedupeById(pinnedApplied)
+    const ownerId = typeof (meCard as any)?.id === "string" ? String((meCard as any).id) : null
+    if (!ownerId) return deduped
+
+    return moveOwnerCardFirst(deduped, (c: any) => {
+      const cid = typeof c?.id === "string" ? String(c.id) : ""
+      return Boolean(cid) && cid === ownerId
+    })
+  }, [filtered, pinnedCreator, matchesDropdownFilters, hasSearchActive, searchInput, selectedPlatforms, selectedDealTypes, selectedTagCategories, budget, customBudget, meCard])
 
   useEffect(() => {
     if (!MM_DEBUG) return
