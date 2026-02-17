@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
+import { createAuthedClient } from "@/lib/supabase/server"
+import { readIgPostAnalysisCache, upsertIgPostAnalysisCache } from "@/lib/server/igCache"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const GRAPH_VERSION = "v21.0"
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`
+
+const DB_STALE_MS = 10 * 60 * 1000 // 10 minutes
 
 type CookieStore = Awaited<ReturnType<typeof cookies>>
 
@@ -197,10 +201,69 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const raw = url.searchParams.get("url") || ""
 
+    const normalizedPermalink = (raw || "").trim()
+
+    let authedUserId: string | null = null
+    let authedClient: any = null
+    try {
+      const authed = await createAuthedClient()
+      authedClient = authed
+      const userRes = await authed.auth.getUser()
+      const user = userRes?.data?.user ?? null
+      authedUserId = user?.id ? String(user.id) : null
+    } catch {
+      authedUserId = null
+      authedClient = null
+    }
+
     const parsed = parseInstagramShortcode(raw)
     if (!parsed) {
       const e = mapError(400)
       return NextResponse.json(e.body, { status: e.status })
+    }
+
+    if (authedUserId && authedClient && normalizedPermalink) {
+      const db = await readIgPostAnalysisCache({
+        authed: authedClient,
+        userId: authedUserId,
+        normalizedPermalink,
+        staleMs: DB_STALE_MS,
+      })
+      if (db.ok && db.isFresh) {
+        const row = db.row as any
+        const cachedMedia = row?.raw?.media
+        const cachedInsights = row?.raw?.insights
+        if (cachedMedia && typeof cachedMedia === "object") {
+          const m: any = cachedMedia
+          const ins: any = cachedInsights && typeof cachedInsights === "object" ? cachedInsights : {}
+          return NextResponse.json(
+            {
+              ok: true,
+              media: {
+                id: String(m?.id || ""),
+                shortcode: parsed.shortcode,
+                media_type: m?.media_type ?? null,
+                media_url: m?.media_url ?? null,
+                thumbnail_url: m?.thumbnail_url ?? null,
+                caption: m?.caption ?? null,
+                timestamp: m?.timestamp ?? null,
+              },
+              counts: {
+                like_count: typeof m?.like_count === "number" ? m.like_count : null,
+                comments_count: typeof m?.comments_count === "number" ? m.comments_count : null,
+              },
+              insights: {
+                impressions: typeof ins?.impressions === "number" ? ins.impressions : null,
+                reach: typeof ins?.reach === "number" ? ins.reach : null,
+                plays: typeof ins?.plays === "number" ? ins.plays : null,
+                saved: typeof ins?.saved === "number" ? ins.saved : null,
+                shares: typeof ins?.shares === "number" ? ins.shares : null,
+              },
+            },
+            { status: 200 },
+          )
+        }
+      }
     }
 
     const c = await cookies()
@@ -241,6 +304,44 @@ export async function GET(req: Request) {
 
     const insightsRes = await fetchInsights(String(media?.id || ""), pageTokenRes.pageToken, String(media?.media_type || ""))
     const insights: Record<string, number | null> = insightsRes.ok ? insightsRes.insights : {}
+
+    if (authedUserId && authedClient && normalizedPermalink) {
+      try {
+        const like_count = typeof media?.like_count === "number" ? media.like_count : Number(media?.like_count ?? 0) || 0
+        const comments_count = typeof media?.comments_count === "number" ? media.comments_count : Number(media?.comments_count ?? 0) || 0
+        const engagement = like_count + comments_count
+
+        await upsertIgPostAnalysisCache({
+          authed: authedClient,
+          row: {
+            user_id: authedUserId,
+            ig_user_id: ids.ig_id,
+            normalized_permalink: normalizedPermalink,
+            original_permalink: normalizedPermalink,
+            media_id: typeof media?.id === "string" ? media.id : String(media?.id || "") || null,
+            media_type: media?.media_type ?? null,
+            taken_at: typeof media?.timestamp === "string" ? media.timestamp : null,
+            like_count,
+            comments_count,
+            insights: {
+              impressions: insights["impressions"] ?? null,
+              reach: insights["reach"] ?? null,
+              plays: insights["plays"] ?? null,
+              saved: insights["saved"] ?? null,
+              shares: insights["shares"] ?? null,
+            },
+            computed: { engagement },
+            raw: {
+              media: media ?? null,
+              insights: insights ?? null,
+            },
+            analyzed_at: new Date().toISOString(),
+          },
+        })
+      } catch {
+        // swallow
+      }
+    }
 
     return NextResponse.json(
       {

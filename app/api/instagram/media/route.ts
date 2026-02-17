@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { cookies } from "next/headers"
+import { createAuthedClient } from "@/lib/supabase/server"
+import { readIgMediaItems, upsertIgMediaItems } from "@/lib/server/igCache"
 
 const GRAPH_VERSION = "v24.0"
 
@@ -104,6 +106,8 @@ type MediaCacheEntry = {
 
 const SUCCESS_TTL_MS = 600 * 1000 // 10 minutes
 const RATE_LIMIT_TTL_MS = 120 * 1000 // 2 minutes cooldown
+
+const DB_STALE_MS = 5 * 60 * 1000 // 5 minutes
 
 const __mediaCache = new Map<string, MediaCacheEntry>()
 
@@ -400,6 +404,52 @@ export async function GET(req: NextRequest) {
       __mediaCache.delete(cacheKey)
     }
 
+    let authedUserId: string | null = null
+    let authedClient: any = null
+    try {
+      const authed = await createAuthedClient()
+      authedClient = authed
+      const userRes = await authed.auth.getUser()
+      const user = userRes?.data?.user ?? null
+      authedUserId = user?.id ? String(user.id) : null
+    } catch {
+      authedUserId = null
+      authedClient = null
+    }
+
+    if (authedUserId && authedClient) {
+      const db = await readIgMediaItems({
+        authed: authedClient,
+        userId: authedUserId,
+        igUserId: igBusinessId,
+        limit: Number(limit),
+        staleMs: DB_STALE_MS,
+      })
+      if (db.ok && db.isFresh && db.list.length > 0) {
+        const data = db.list
+          .map((row: any) => {
+            const raw = row?.raw
+            return raw && typeof raw === "object" ? raw : null
+          })
+          .filter(Boolean)
+
+        if (data.length > 0) {
+          const graphLike = {
+            data,
+            paging: { cursors: { after: null }, next: null },
+          }
+
+          enrichVideoThumbsInPlace(graphLike)
+          return jsonRes(graphLike, 200, {
+            cache: "miss",
+            kind: "success",
+            ageSeconds: 0,
+            upstream: "skipped",
+          })
+        }
+      }
+    }
+
     let pageTokenRes: Response
     try {
       pageTokenRes = await fetchWithTimeout(
@@ -527,6 +577,41 @@ export async function GET(req: NextRequest) {
 
     // Enrich missing VIDEO/REELS thumbnails when derivable (pure string transformation; no network)
     enrichVideoThumbsInPlace(safeMediaJson)
+
+    if (authedUserId && authedClient) {
+      try {
+        const list = Array.isArray((safeMediaJson as any)?.data) ? (safeMediaJson as any).data : []
+        const rows = list
+          .map((it: any) => {
+            const id = typeof it?.id === "string" ? it.id.trim() : ""
+            if (!id) return null
+            return {
+              user_id: authedUserId,
+              ig_user_id: igBusinessId,
+              media_id: id,
+              media_type: typeof it?.media_type === "string" ? it.media_type : null,
+              permalink: typeof it?.permalink === "string" ? it.permalink : null,
+              caption: typeof it?.caption === "string" ? it.caption : null,
+              taken_at: typeof it?.timestamp === "string" ? it.timestamp : null,
+              thumbnail_url: typeof it?.thumbnail_url === "string" ? it.thumbnail_url : null,
+              media_url: typeof it?.media_url === "string" ? it.media_url : null,
+              like_count: typeof it?.like_count === "number" ? Math.floor(it.like_count) : it?.like_count != null ? Math.floor(Number(it.like_count)) : null,
+              comments_count:
+                typeof it?.comments_count === "number"
+                  ? Math.floor(it.comments_count)
+                  : it?.comments_count != null
+                    ? Math.floor(Number(it.comments_count))
+                    : null,
+              raw: it ?? null,
+            }
+          })
+          .filter(Boolean)
+
+        await upsertIgMediaItems({ authed: authedClient, rows: rows as any })
+      } catch {
+        // swallow
+      }
+    }
 
     const dataLen = safeLen((safeMediaJson as any)?.data)
     if (dataLen > 0) {

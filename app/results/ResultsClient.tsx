@@ -4632,20 +4632,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     try {
       const nextPath = `/${activeLocale}/results`
       const oauthUrl = `/api/auth/instagram?provider=instagram&locale=${activeLocale}&next=${encodeURIComponent(nextPath)}`
-      
-      // Check if OAuth endpoint is available
-      const checkRes = await fetch(oauthUrl, { method: "HEAD" }).catch(() => null)
-      if (checkRes && checkRes.status === 500) {
-        const jsonRes = await fetch(oauthUrl, { method: "GET", redirect: "manual" })
-        const data = await jsonRes.json().catch(() => null)
-        if (data?.code === "missing_env") {
-          setConnectEnvError("missing_env")
-          setConnecting(false)
-          showToast(t("results.toast.connectSoon"))
-          return
-        }
-      }
-      
+
       // Redirect to OAuth
       window.location.href = oauthUrl
       // Keep connecting state true during redirect
