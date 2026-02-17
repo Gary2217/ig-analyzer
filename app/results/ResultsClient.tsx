@@ -2819,7 +2819,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const hasRealProfile = Boolean(isConnected)
   const allowDemoProfile = !hasConnectedFlag && !hasRealProfile && !igMeLoading
 
-  const recentPosts = igMe?.recent_media
+  const recentPosts = effectiveRecentMedia
 
   const snapshotTopPosts = useMemo(() => {
     if (!isRecord(dailySnapshotData)) return [] as unknown[]
