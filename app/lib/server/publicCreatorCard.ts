@@ -1,4 +1,5 @@
 import { createHash } from "crypto"
+import { unstable_cache } from "next/cache"
 import { createServiceClient } from "@/lib/supabase/server"
 
 function ensureProxiedThumbnail(url: string): string {
@@ -51,6 +52,7 @@ function normalizeFeaturedItems(raw: unknown): any[] {
 }
 
 export type PublicCreatorCard = {
+  avatarUrl: string | null
   profileImageUrl: string | null
   displayName: string | null
   username: string | null
@@ -77,13 +79,23 @@ export async function fetchPublicCreatorCardById(id: string): Promise<{
   }
 
   try {
-    const supabase = createServiceClient()
-    const { data, error } = await supabase
-      .from("creator_cards")
-      .select("id, ig_username, display_name, niche, primary_niche, profile_image_url, avatar_url, is_public, about_text, audience, theme_types, audience_profiles, deliverables, collaboration_niches, past_collaborations, portfolio, featured_items")
-      .eq("id", id)
-      .eq("is_public", true)
-      .maybeSingle()
+    const read = unstable_cache(
+      async () => {
+        const supabase = createServiceClient()
+        return await supabase
+          .from("creator_cards")
+          .select(
+            "id, ig_username, display_name, niche, primary_niche, profile_image_url, avatar_url, is_public, about_text, audience, theme_types, audience_profiles, deliverables, collaboration_niches, past_collaborations, portfolio, featured_items",
+          )
+          .eq("id", id)
+          .eq("is_public", true)
+          .maybeSingle()
+      },
+      ["publicCreatorCardById", id],
+      { revalidate: 300 },
+    )
+
+    const { data, error } = await read()
 
     if (error) {
       return { ok: false, etag: computeEtag({ id, miss: "err" }), card: null, error: "service_error" }
@@ -110,6 +122,7 @@ export async function fetchPublicCreatorCardById(id: string): Promise<{
     const featuredItems = normalizeFeaturedItems(rawItems)
 
     const card: PublicCreatorCard = {
+      avatarUrl: ((data as any).avatar_url || null) as string | null,
       profileImageUrl: ((data as any).avatar_url || (data as any).profile_image_url || null) as string | null,
       displayName: ((data as any).display_name || (data as any).ig_username || null) as string | null,
       username: ((data as any).ig_username || null) as string | null,

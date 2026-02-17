@@ -814,13 +814,17 @@ export async function POST(req: Request) {
 
     // Map snake_case DB column to camelCase for client
     const featuredItems = Array.isArray(dataObj?.featured_items) ? dataObj.featured_items : []
+    const responseAvatarUrl = typeof (dataObj as any)?.avatar_url === "string" ? String((dataObj as any).avatar_url) : null
+    const responseProfileImageUrl = typeof (dataObj as any)?.profile_image_url === "string" ? String((dataObj as any).profile_image_url) : null
 
     const durationMs = Date.now() - t0
 
     return jsonWithRequestId(
       {
         ok: true,
-        card: data ? { ...data, featuredItems } : { featuredItems },
+        card: data
+          ? { ...data, featuredItems, avatarUrl: responseAvatarUrl, profileImageUrl: responseProfileImageUrl }
+          : { featuredItems, avatarUrl: responseAvatarUrl, profileImageUrl: responseProfileImageUrl },
         completionPct,
       },
       { status: 200, headers: { "Server-Timing": `creator_card_upsert;dur=${durationMs}, ig_me_resolve;dur=${tMeMs}` } },

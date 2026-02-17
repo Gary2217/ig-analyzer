@@ -2,6 +2,7 @@ import { MatchmakingClient } from "./MatchmakingClient"
 import { createPublicClient } from "@/lib/supabase/server"
 import { createAuthedClient } from "@/lib/supabase/server"
 import type { CreatorCard } from "./types"
+import { unstable_cache } from "next/cache"
 
 export const dynamic = "force-dynamic"
 
@@ -55,13 +56,20 @@ function svgAvatarDataUrl(seed: string, label: string) {
 
 async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCard[]> {
   try {
-    const supabase = createPublicClient()
+    const read = unstable_cache(
+      async () => {
+        const supabase = createPublicClient()
+        return await supabase
+          .from("creator_cards")
+          .select("id, ig_user_id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, min_price, contact, collaboration_niches")
+          .eq("is_public", true)
+          .order("updated_at", { ascending: false })
+      },
+      ["matchmakingPublicCreatorCards", localePrefix],
+      { revalidate: 120 },
+    )
 
-    const { data, error } = await supabase
-      .from("creator_cards")
-      .select("id, ig_user_id, ig_username, niche, profile_image_url, avatar_url, updated_at, deliverables, min_price, contact, collaboration_niches")
-      .eq("is_public", true)
-      .order("updated_at", { ascending: false })
+    const { data, error } = await read()
 
     if (error) {
       console.error("Error fetching public creator cards:", error)

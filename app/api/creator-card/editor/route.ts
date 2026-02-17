@@ -213,7 +213,19 @@ export async function GET(req: Request) {
             : null,
     }
 
-    const body = { ok: true, card: cardObj, thumbs, me, stats, igConnection }
+    const body = {
+      ok: true,
+      card: {
+        ...cardObj,
+        profileImageUrl:
+          typeof (cardObj as any).profile_image_url === "string" ? (cardObj as any).profile_image_url : null,
+        avatarUrl: typeof (cardObj as any).avatar_url === "string" ? (cardObj as any).avatar_url : null,
+      },
+      thumbs,
+      me,
+      stats,
+      igConnection,
+    }
 
     const etag = computeEtag({
       v: HANDLER_VERSION,

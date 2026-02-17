@@ -218,7 +218,7 @@ async function fetchCreatorCardViaPublicEndpoint(id: string): Promise<FetchResul
       niche: typeof c.primaryNiche === "string" ? c.primaryNiche : null,
       primary_niche: typeof c.primaryNiche === "string" ? c.primaryNiche : null,
       profile_image_url: typeof c.profileImageUrl === "string" ? c.profileImageUrl : null,
-      avatar_url: typeof c.profileImageUrl === "string" ? c.profileImageUrl : null,
+      avatar_url: typeof c.avatarUrl === "string" ? c.avatarUrl : null,
       is_public: true,
       about_text: typeof c.aboutText === "string" ? c.aboutText : null,
       audience: typeof c.aboutText === "string" ? c.aboutText : null,

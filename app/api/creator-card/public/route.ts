@@ -142,6 +142,7 @@ export async function GET(req: Request) {
     const safeCard = {
       id: typeof row.id === "string" ? row.id : null,
       handle: typeof row.handle === "string" ? row.handle : null,
+      avatarUrl: typeof (row as any).avatar_url === "string" ? (row as any).avatar_url : null,
       profileImageUrl: typeof (row as any).avatar_url === "string" ? (row as any).avatar_url : typeof row.profile_image_url === "string" ? row.profile_image_url : null,
       displayName: typeof (row as any).display_name === "string" ? (row as any).display_name : typeof (row as any).ig_username === "string" ? (row as any).ig_username : null,
       username: typeof (row as any).ig_username === "string" ? (row as any).ig_username : null,
