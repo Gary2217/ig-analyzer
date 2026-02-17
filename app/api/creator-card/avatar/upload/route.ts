@@ -361,6 +361,7 @@ export async function POST(req: NextRequest) {
         .from("creator_cards")
         .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
         .eq("id", cardId)
+        .eq("user_id", user.id)
         .select("id")
         .maybeSingle()
     } catch (e: unknown) {
@@ -392,7 +393,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return withRequestId(NextResponse.json({ ok: true, avatarUrl }), requestId)
+    return withRequestId(NextResponse.json({ ok: true, success: true, avatarUrl }), requestId)
   } catch (e: unknown) {
     const requestId = makeRequestId()
     const errObj = asRecord(e)
