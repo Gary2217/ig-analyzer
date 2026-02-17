@@ -1587,11 +1587,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const igRecentLen = isRecord(igMe) && Array.isArray(igMe.recent_media) ? igMe.recent_media.length : 0
   const mediaLen = Array.isArray(media) ? media.length : 0
   const effectiveRecentMedia = useMemo(() => {
-    const fromApi = Array.isArray(media) ? media : []
-    if (fromApi.length > 0) return fromApi
+    // ALWAYS prefer full media list from /api/instagram/media
+    if (Array.isArray(media) && media.length > 0) {
+      return media
+    }
 
-    const fromMe = isRecord(igMe) && Array.isArray(igMe.recent_media) ? igMe.recent_media : []
-    if (fromMe.length > 0) return fromMe
+    // fallback only if media empty
+    if (Array.isArray(igMe?.recent_media) && igMe.recent_media.length > 0) {
+      return igMe.recent_media
+    }
 
     return []
   }, [igMe, media])
