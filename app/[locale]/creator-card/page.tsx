@@ -5541,6 +5541,7 @@ export default function CreatorCardPage() {
                     ...previewData,
                     creatorCard: {
                       ...(previewData.creatorCard ?? {}),
+                      avatarUrl: draftCard.avatarUrl,
                       profileImageUrl: draftCard.profileImageUrl,
                       displayName: draftCard.displayName,
                       username: (draftCard as any).username ?? null,
@@ -5607,6 +5608,7 @@ export default function CreatorCardPage() {
                       photoUploadEnabled={false}
                       onProfileImageFileChange={undefined}
                       username={displayUsername || null}
+                      avatarUrl={currentAvatarSrc}
                       profileImageUrl={currentAvatarSrc}
                       displayName={displayName}
                       aboutText={baseCard?.audience ?? null}
