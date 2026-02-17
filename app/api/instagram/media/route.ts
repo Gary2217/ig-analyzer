@@ -382,7 +382,21 @@ export async function GET(req: NextRequest) {
     const igBusinessId = igIdFromCookie
     const pageId = pageIdFromCookie
 
-    const cacheKey = `${igBusinessId}:${pageId}`
+    let authedUserId: string | null = null
+    let authedClient: any = null
+    try {
+      const authed = await createAuthedClient()
+      authedClient = authed
+      const userRes = await authed.auth.getUser()
+      const user = userRes?.data?.user ?? null
+      authedUserId = user?.id ? String(user.id) : null
+    } catch {
+      authedUserId = null
+      authedClient = null
+    }
+
+    const baseKey = `${igBusinessId}:${pageId}`
+    const cacheKey = authedUserId ? `${authedUserId}:${baseKey}` : baseKey
     const cached = __mediaCache.get(cacheKey)
     if (cached) {
       const ttl =
@@ -416,19 +430,6 @@ export async function GET(req: NextRequest) {
         })
       }
       __mediaCache.delete(cacheKey)
-    }
-
-    let authedUserId: string | null = null
-    let authedClient: any = null
-    try {
-      const authed = await createAuthedClient()
-      authedClient = authed
-      const userRes = await authed.auth.getUser()
-      const user = userRes?.data?.user ?? null
-      authedUserId = user?.id ? String(user.id) : null
-    } catch {
-      authedUserId = null
-      authedClient = null
     }
 
     if (authedUserId && authedClient) {
