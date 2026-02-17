@@ -226,6 +226,7 @@ export function CreatorCardPreviewShell({
         locale={locale}
         className="border-white/10 bg-transparent"
         headerClassName="px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 border-b border-white/10"
+        avatarUrl={(typeof creatorCard.avatarUrl === "string" ? creatorCard.avatarUrl : null) ?? null}
         profileImageUrl={(typeof creatorCard.profileImageUrl === "string" ? creatorCard.profileImageUrl : null) ?? null}
         displayName={(typeof creatorCard.displayName === "string" ? creatorCard.displayName : null) ?? displayName ?? null}
         username={(typeof creatorCard.username === "string" ? creatorCard.username : null) ?? username ?? null}

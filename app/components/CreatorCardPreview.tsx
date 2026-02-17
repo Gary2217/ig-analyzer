@@ -10,6 +10,7 @@ import { MobileCreatorCardLayout } from "./creator-card/MobileCreatorCardLayout"
 import { useAvatarBuster, withAvatarBuster } from "@/app/lib/client/avatarBuster"
 import { formatPriceLabel } from "@/app/lib/client/priceLabel"
 import { localizeCreatorTypes, normalizeCreatorTypesFromCard } from "@/app/lib/creatorTypes"
+import { pickAvatarSrc } from "@/app/lib/client/pickAvatarSrc"
 import { normalizeIgThumbnailUrlOrNull } from "./creator-card/useCreatorCardPreviewData"
 import type { OEmbedState } from "./creator-card/igOEmbedTypes"
 import {
@@ -399,6 +400,7 @@ export type CreatorCardPreviewProps = {
 
   onProfileImageFileChange?: (file: File | null) => void
 
+  avatarUrl?: string | null
   profileImageUrl?: string | null
   displayName?: string | null
   username?: string | null
@@ -497,6 +499,7 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
     useWidePhotoLayout,
     photoUploadEnabled,
     onProfileImageFileChange,
+    avatarUrl,
     profileImageUrl,
     displayName,
     username,
@@ -839,9 +842,9 @@ export function CreatorCardPreviewCard(props: CreatorCardPreviewProps) {
   }, [photoOverrideUrl])
 
   const effectivePhotoUrl = useMemo(() => {
-    const raw = (photoOverrideUrl ?? profileImageUrl ?? null) as string | null
+    const raw = (photoOverrideUrl ?? pickAvatarSrc({ avatarUrl, profileImageUrl }) ?? null) as string | null
     return withAvatarBuster(raw, avatarBuster)
-  }, [avatarBuster, photoOverrideUrl, profileImageUrl])
+  }, [avatarBuster, avatarUrl, photoOverrideUrl, profileImageUrl])
   const wideLayout = Boolean(useWidePhotoLayout)
   const leftSpanClassName = wideLayout ? "md:col-span-4" : "md:col-span-3"
   const rightSpanClassName = wideLayout ? "md:col-span-8" : "md:col-span-9"

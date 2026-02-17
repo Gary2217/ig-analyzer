@@ -27,48 +27,13 @@ import type {
   Platform,
 } from "@/app/components/matchmaking/types"
 import type { CreatorCard } from "./types"
-const OWNER_LOOKUP_CACHE_KEY = "matchmaking_owner_lookup_v1"
-
-const CACHE_TTL_MS = 10 * 60 * 1000
 const MM_DEBUG = process.env.NODE_ENV !== "production"
-
-type OwnerLookupStatus = "success" | "no_creator_card" | "not_logged_in" | "error" | "pending"
-type OwnerLookupCacheV2 = {
-  v: 2
-  ts: number
-  status: OwnerLookupStatus
-  ownerCardId: string | null
-}
 
 function clampNumber(v: number, min: number, max: number): number {
   if (!Number.isFinite(v)) return min
   return Math.min(max, Math.max(min, v))
 }
 
-function readOwnerLookupCacheV2(): OwnerLookupCacheV2 | null {
-  try {
-    if (typeof window === "undefined") return null
-    const raw = window.sessionStorage.getItem(OWNER_LOOKUP_CACHE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as any
-    if (!parsed || typeof parsed !== "object" || parsed.v !== 2) return null
-
-    const ts = typeof parsed.ts === "number" ? parsed.ts : 0
-    const ownerCardId = typeof parsed.ownerCardId === "string" ? parsed.ownerCardId : parsed.ownerCardId === null ? null : null
-    const status: OwnerLookupStatus =
-      parsed.status === "success" ||
-      parsed.status === "no_creator_card" ||
-      parsed.status === "not_logged_in" ||
-      parsed.status === "error" ||
-      parsed.status === "pending"
-        ? parsed.status
-        : "error"
-
-    return { v: 2, ts, status, ownerCardId }
-  } catch {
-    return null
-  }
-}
 
 function tokenizeQuery(raw: string): string[] {
   const s = String(raw ?? "")
@@ -231,15 +196,6 @@ function getStatsFetchId(card: any): string | null {
   } catch {}
 
   return fetchId
-}
-
-function writeOwnerLookupCacheV2(next: OwnerLookupCacheV2): void {
-  try {
-    if (typeof window === "undefined") return
-    window.sessionStorage.setItem(OWNER_LOOKUP_CACHE_KEY, JSON.stringify(next))
-  } catch {
-    // swallow
-  }
 }
 
 const sanitizeSelectedTagCategories = (input: unknown): string[] => {
@@ -784,6 +740,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return (nested ?? initialMeCard) as any
   }, [initialMeCard])
 
+  const [ownerInitLoading, setOwnerInitLoading] = useState(() => !Boolean(initialMeCardResolved))
+
   const [meCard, setMeCard] = useState<CreatorCard | null>(() => {
     return initialMeCardResolved ? sanitizeMeCard(initialMeCardResolved, localePrefix) : null
   })
@@ -1019,29 +977,14 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       try {
         if (initialMeCard) {
           shouldPersistOwnerLookup = false
+          if (!cancelled) setOwnerInitLoading(false)
           return
         }
 
         if (ownerLookupStartedRef.current) return
         ownerLookupStartedRef.current = true
 
-        const cached = readOwnerLookupCacheV2()
-        const cacheFresh = Boolean(cached && cached.ts && Date.now() - cached.ts < CACHE_TTL_MS)
-        const cachedSuccessWithId = Boolean(
-          cacheFresh &&
-            cached?.status === "success" &&
-            typeof cached?.ownerCardId === "string" &&
-            cached.ownerCardId.trim().length > 0,
-        )
-
-        // Only suppress further lookups when we already have a loaded meCard.
-        // If meCard is null, we must fetch to hydrate it even if a previous session cache says success.
-        if (cachedSuccessWithId && meCard) {
-          shouldPersistOwnerLookup = false
-          return
-        }
-
-        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "pending", ownerCardId: cached?.ownerCardId ?? null })
+        if (!cancelled) setOwnerInitLoading(true)
 
         const meRes = await fetch("/api/creator-card/me", {
           method: "GET",
@@ -1071,20 +1014,14 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         const meCardId = typeof meJson?.card?.id === "string" ? meJson.card.id : null
 
         if (!meRes.ok) {
-          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
           return
         }
 
         if (meJson?.ok !== true) {
-          const err = typeof meJson?.error === "string" ? meJson.error : "error"
-          const status: OwnerLookupStatus =
-            err === "not_logged_in" ? "not_logged_in" : err === "no_creator_card" ? "no_creator_card" : "error"
-          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status, ownerCardId: null })
           return
         }
 
         if (!meCardId) {
-          writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
           return
         }
 
@@ -1101,8 +1038,6 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         }
 
         nextOwnerCardId = meCardId
-
-        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "success", ownerCardId: meCardId })
 
         if (!ownerIgUserId) return
 
@@ -1168,22 +1103,21 @@ function MatchmakingClient(props: MatchmakingClientProps) {
           })
         )
       } catch {
-        writeOwnerLookupCacheV2({ v: 2, ts: Date.now(), status: "error", ownerCardId: null })
+        // swallow
       } finally {
-        if (shouldPersistOwnerLookup) {
-          try {
-            // legacy v1 cache write removed in favor of v2 cache
-          } catch {
-            // swallow
-          }
-        }
+        if (!shouldPersistOwnerLookup) return
+        if (!cancelled) setOwnerInitLoading(false)
       }
     })()
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [initialMeCard, localePrefix, meCard])
+
+  useEffect(() => {
+    if (initialMeCardResolved) setOwnerInitLoading(false)
+  }, [initialMeCardResolved])
 
   const creators: Array<CreatorCardData & { creatorId?: string; __rawCard?: unknown; __rawMinPrice?: number | null | undefined }> = useMemo(() => {
     return allCards.map((c) => {
@@ -2642,8 +2576,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
   )
 
   const showSkeleton = useMemo(
-    () => hasRemoteSearchActive && remoteLoading && pagedRealCards.length === 0,
-    [hasRemoteSearchActive, remoteLoading, pagedRealCards.length]
+    () => (ownerInitLoading && !initialMeCardResolved) || (hasRemoteSearchActive && remoteLoading && pagedRealCards.length === 0),
+    [hasRemoteSearchActive, initialMeCardResolved, ownerInitLoading, pagedRealCards.length, remoteLoading]
   )
 
   const clearSearchFromEmptyCta = useCallback(() => {

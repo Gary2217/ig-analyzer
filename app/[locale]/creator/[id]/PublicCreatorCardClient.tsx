@@ -33,6 +33,7 @@ export function PublicCreatorCardClient({ locale, creatorCard, messages }: Publi
           locale={locale}
           className="border-0 bg-transparent"
           headerClassName="px-4 py-3 sm:px-6 sm:py-4 border-b border-white/10"
+          avatarUrl={creatorCard.avatarUrl ?? null}
           profileImageUrl={creatorCard.profileImageUrl}
           displayName={creatorCard.displayName}
           username={creatorCard.username}
