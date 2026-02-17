@@ -2180,6 +2180,29 @@ function MatchmakingClient(props: MatchmakingClientProps) {
     return finalCards.slice(start, start + pageSize)
   }, [clampedPage, finalCards])
 
+  function mergeStatsPreferDefined(remoteStats: any, localStats: any) {
+    const r = remoteStats && typeof remoteStats === "object" ? remoteStats : null
+    const l = localStats && typeof localStats === "object" ? localStats : null
+
+    const pickNum = (a: any, b: any) => {
+      const va = typeof a === "number" && Number.isFinite(a) ? a : null
+      const vb = typeof b === "number" && Number.isFinite(b) ? b : null
+      return va != null ? va : vb != null ? vb : undefined
+    }
+
+    const followers = pickNum(r?.followers, l?.followers)
+    const engagementRate = pickNum(r?.engagementRate, l?.engagementRate)
+
+    if (followers == null && engagementRate == null) return r ?? l ?? undefined
+
+    return {
+      ...(l ?? {}),
+      ...(r ?? {}),
+      followers,
+      engagementRate,
+    }
+  }
+
   const pagedRealCardsResolved = useMemo(() => {
     if (!Array.isArray(pagedRealCards)) return pagedRealCards
 
@@ -2207,6 +2230,9 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const localMatch = localHitByHandle ?? localHitByNumericId
 
       if (!localMatch) return c
+
+      const mergedStats = mergeStatsPreferDefined((c as any)?.stats, (localMatch as any)?.stats)
+      const mergedRawStats = mergeStatsPreferDefined((((c as any)?.__rawCard ?? c) as any)?.stats, (localMatch as any)?.stats)
 
       const merged = {
         ...(c as any),
@@ -2239,6 +2265,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       return {
         ...merged,
 
+        stats: mergedStats,
+
         // preserve numeric ids for stats fetching (do NOT let undefined from local overwrite remote)
         numericId: (merged as any)?.numericId ?? stableFetchId ?? undefined,
         statsFetchId: (merged as any)?.statsFetchId ?? (stableFetchId != null ? String(stableFetchId) : undefined),
@@ -2246,6 +2274,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         __rawCard: {
           ...((c as any)?.__rawCard ?? c),
           ...(localMatch as any),
+
+          stats: mergedRawStats,
 
           // same preservation inside __rawCard
           numericId: (((c as any)?.__rawCard ?? c) as any)?.numericId ?? stableFetchId ?? undefined,
