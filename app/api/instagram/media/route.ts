@@ -111,6 +111,20 @@ const DB_STALE_MS = 5 * 60 * 1000 // 5 minutes
 
 const __mediaCache = new Map<string, MediaCacheEntry>()
 
+function graphLikeFromDbList(dbList: any[]) {
+  const data = (Array.isArray(dbList) ? dbList : [])
+    .map((row: any) => {
+      const raw = row?.raw
+      return raw && typeof raw === "object" ? raw : null
+    })
+    .filter(Boolean)
+
+  return {
+    data,
+    paging: { cursors: { after: null }, next: null },
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Response header builder
 // ─────────────────────────────────────────────────────────────────────────────
@@ -426,20 +440,16 @@ export async function GET(req: NextRequest) {
         staleMs: DB_STALE_MS,
       })
       if (db.ok && db.isFresh && db.list.length >= Number(limit)) {
-        const data = db.list
-          .map((row: any) => {
-            const raw = row?.raw
-            return raw && typeof raw === "object" ? raw : null
-          })
-          .filter(Boolean)
+        const graphLike = graphLikeFromDbList(db.list)
 
-        if (data.length > 0) {
-          const graphLike = {
-            data,
-            paging: { cursors: { after: null }, next: null },
-          }
-
+        if (Array.isArray((graphLike as any)?.data) && (graphLike as any).data.length > 0) {
           enrichVideoThumbsInPlace(graphLike)
+          __mediaCache.set(cacheKey, {
+            at: Date.now(),
+            status: 200,
+            data: graphLike,
+            kind: "success",
+          })
           return jsonRes(graphLike, 200, {
             cache: "miss",
             kind: "success",
@@ -610,6 +620,36 @@ export async function GET(req: NextRequest) {
         await upsertIgMediaItems({ authed: authedClient, rows: rows as any })
       } catch {
         // swallow
+      }
+    }
+
+    if (authedUserId && authedClient) {
+      const db2 = await readIgMediaItems({
+        authed: authedClient,
+        userId: authedUserId,
+        igUserId: igBusinessId,
+        limit: Number(limit),
+        staleMs: DB_STALE_MS,
+      })
+
+      if (db2.ok && db2.isFresh && db2.list.length >= Number(limit)) {
+        const graphLike2 = graphLikeFromDbList(db2.list)
+        const data2 = (graphLike2 as any)?.data
+        if (Array.isArray(data2) && data2.length >= Number(limit)) {
+          enrichVideoThumbsInPlace(graphLike2)
+          __mediaCache.set(cacheKey, {
+            at: Date.now(),
+            status: 200,
+            data: graphLike2,
+            kind: "success",
+          })
+          return jsonRes(graphLike2, 200, {
+            cache: "miss",
+            kind: "success",
+            ageSeconds: 0,
+            upstream: "called",
+          })
+        }
       }
     }
 
