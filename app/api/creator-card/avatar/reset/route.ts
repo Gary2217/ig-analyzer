@@ -50,6 +50,41 @@ function withRequestId(res: NextResponse, requestId: string) {
   return res
 }
 
+async function clearAvatarFieldsBestEffort(opts: {
+  supabase: ReturnType<typeof createServiceClient>
+  cardId: string
+  userId: string
+}) {
+  const { supabase, cardId, userId } = opts
+  const nowIso = new Date().toISOString()
+
+  const attempt1 = await supabase
+    .from("creator_cards")
+    .update({
+      avatar_url: null,
+      avatar_storage_path: null,
+      avatar_updated_at: nowIso,
+      updated_at: nowIso,
+    } as any)
+    .eq("id", cardId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle()
+
+  if (!(attempt1 as any)?.error) return { ok: true as const }
+
+  const attempt2 = await supabase
+    .from("creator_cards")
+    .update({ avatar_url: null, updated_at: nowIso })
+    .eq("id", cardId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle()
+
+  if ((attempt2 as any)?.error) return { ok: false as const, error: (attempt2 as any).error }
+  return { ok: true as const, partial: true as const }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const requestId = makeRequestId()
@@ -152,22 +187,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let updated: any
-    try {
-      updated = await supabase
-        .from("creator_cards")
-        .update({ avatar_url: null, updated_at: new Date().toISOString() })
-        .eq("id", cardId)
-        .eq("user_id", user.id)
-        .select("id")
-        .maybeSingle()
-    } catch (e: unknown) {
-      const errObj = asRecord(e)
-      const msg = typeof errObj?.message === "string" ? errObj.message : "db_update_failed"
-      return withRequestId(NextResponse.json({ ok: false, error: "db_update_failed", message: msg, requestId }, { status: 500 }), requestId)
-    }
-
-    if ((updated as any)?.error) {
+    const cleared = await clearAvatarFieldsBestEffort({ supabase, cardId, userId: user.id })
+    if (!cleared.ok) {
       return withRequestId(NextResponse.json({ ok: false, error: "db_update_failed", requestId }, { status: 500 }), requestId)
     }
 

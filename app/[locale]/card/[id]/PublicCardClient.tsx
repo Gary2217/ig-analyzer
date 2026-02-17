@@ -60,11 +60,6 @@ export function PublicCardClient({ locale, creatorCard, messages, isOwner }: Pub
     typeof creatorCard.avatarUrl === "string" && creatorCard.avatarUrl.trim() ? creatorCard.avatarUrl.trim() : null,
   )
 
-  const effectiveProfileImageUrl =
-    localAvatarUrl ??
-    (typeof creatorCard.fallbackUrl === "string" && creatorCard.fallbackUrl.trim() ? creatorCard.fallbackUrl.trim() : null) ??
-    (typeof creatorCard.profileImageUrl === "string" && creatorCard.profileImageUrl.trim() ? creatorCard.profileImageUrl.trim() : null)
-
   return (
     <CardMobilePreviewShell mode="page">
       {isOwner ? (
@@ -72,7 +67,7 @@ export function PublicCardClient({ locale, creatorCard, messages, isOwner }: Pub
           <CreatorAvatarEditor
             locale={normalizedLocale}
             avatarUrl={localAvatarUrl}
-            fallbackUrl={creatorCard.fallbackUrl ?? null}
+            fallbackUrl={null}
             canEdit={true}
             onChanged={(nextUrl) => {
               setLocalAvatarUrl(nextUrl)
@@ -91,7 +86,7 @@ export function PublicCardClient({ locale, creatorCard, messages, isOwner }: Pub
         className="border-0 bg-transparent"
         headerClassName="px-4 py-1 sm:px-6 sm:py-4 border-b border-white/10"
         avatarUrl={localAvatarUrl ?? creatorCard.avatarUrl ?? null}
-        profileImageUrl={effectiveProfileImageUrl}
+        profileImageUrl={localAvatarUrl ?? creatorCard.avatarUrl ?? null}
         displayName={creatorCard.displayName}
         username={creatorCard.username}
         aboutText={creatorCard.aboutText}

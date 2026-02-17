@@ -81,7 +81,7 @@ async function fetchPublicCreatorCards(localePrefix: string): Promise<CreatorCar
       .filter((card) => card.id) // Only include cards with valid id
       .map((card) => {
         const displayName = card.ig_username || card.id
-        const avatarUrl = (card as any).avatar_url || card.profile_image_url || svgAvatarDataUrl(String(card.id), displayName)
+        const avatarUrl = (card as any).avatar_url || svgAvatarDataUrl(String(card.id), displayName)
         return {
         id: card.id,
         igUserId: typeof (card as any).ig_user_id === "string" ? (card as any).ig_user_id : null,
@@ -122,7 +122,7 @@ async function fetchMyCreatorCardPublicSafe(localePrefix: string): Promise<Creat
     if (error || !data?.id) return null
 
     const displayName = (data as any).ig_username || data.id
-    const avatarUrl = (data as any).avatar_url || (data as any).profile_image_url || svgAvatarDataUrl(String(data.id), displayName)
+    const avatarUrl = (data as any).avatar_url || svgAvatarDataUrl(String(data.id), displayName)
     const isPublic = typeof (data as any).is_public === "boolean" ? Boolean((data as any).is_public) : false
 
     return {

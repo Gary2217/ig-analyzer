@@ -52,7 +52,7 @@ export function CreatorAvatarEditor({
         const fd = new FormData()
         fd.append("file", file)
 
-        const res = await fetch("/api/creator-card/avatar/upload", {
+        const res = await fetch("/api/creator-cards/avatar", {
           method: "POST",
           credentials: "same-origin",
           body: fd,

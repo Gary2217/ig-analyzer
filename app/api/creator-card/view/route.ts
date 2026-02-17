@@ -204,8 +204,8 @@ export async function GET(req: NextRequest) {
 
     const card = {
       avatarUrl: ((data as any).avatar_url || null) as string | null,
-      fallbackUrl: ((data as any).profile_image_url || null) as string | null,
-      profileImageUrl: ((data as any).avatar_url || (data as any).profile_image_url || null) as string | null,
+      fallbackUrl: null as string | null,
+      profileImageUrl: ((data as any).avatar_url || null) as string | null,
       displayName: ((data as any).display_name || (data as any).ig_username || null) as string | null,
       username: ((data as any).ig_username || null) as string | null,
       aboutText: ((data as any).about_text || (data as any).audience || null) as string | null,

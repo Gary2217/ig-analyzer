@@ -3652,13 +3652,7 @@ export default function CreatorCardPage() {
                       <CreatorAvatarEditor
                         locale={activeLocale as any}
                         avatarUrl={typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : null}
-                        fallbackUrl={
-                          (typeof baseCard?.profileImageUrl === "string" && baseCard.profileImageUrl.trim())
-                            ? baseCard.profileImageUrl
-                            : (typeof igProfile?.profile_picture_url === "string" && igProfile.profile_picture_url.trim())
-                              ? igProfile.profile_picture_url
-                              : null
-                        }
+                        fallbackUrl={null}
                         canEdit={true}
                         onChanged={(nextUrl) => {
                           bumpAvatarBuster()
@@ -5069,13 +5063,7 @@ export default function CreatorCardPage() {
                               <CreatorAvatarEditor
                                 locale={activeLocale as any}
                                 avatarUrl={typeof (baseCard as any)?.avatarUrl === "string" ? String((baseCard as any).avatarUrl) : null}
-                                fallbackUrl={
-                                  (typeof baseCard?.profileImageUrl === "string" && baseCard.profileImageUrl.trim())
-                                    ? baseCard.profileImageUrl
-                                    : (typeof igProfile?.profile_picture_url === "string" && igProfile.profile_picture_url.trim())
-                                      ? igProfile.profile_picture_url
-                                      : null
-                                }
+                                fallbackUrl={null}
                                 canEdit={true}
                                 onChanged={(nextUrl) => {
                                   bumpAvatarBuster()

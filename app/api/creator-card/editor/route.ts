@@ -206,11 +206,7 @@ export async function GET(req: Request) {
       connected: Boolean(creatorId || igUsername),
       username: igUsername,
       profileImageUrl:
-        typeof (cardObj as any).avatar_url === "string"
-          ? (cardObj as any).avatar_url
-          : typeof (cardObj as any).profile_image_url === "string"
-            ? (cardObj as any).profile_image_url
-            : null,
+        typeof (cardObj as any).avatar_url === "string" ? (cardObj as any).avatar_url : null,
     }
 
     const body = {
@@ -218,7 +214,7 @@ export async function GET(req: Request) {
       card: {
         ...cardObj,
         profileImageUrl:
-          typeof (cardObj as any).profile_image_url === "string" ? (cardObj as any).profile_image_url : null,
+          null,
         avatarUrl: typeof (cardObj as any).avatar_url === "string" ? (cardObj as any).avatar_url : null,
       },
       thumbs,

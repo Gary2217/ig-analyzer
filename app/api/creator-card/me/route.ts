@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
       row
         ? {
             ...row,
-            profileImageUrl: typeof row.profile_image_url === "string" ? row.profile_image_url : null,
+            profileImageUrl: null,
             avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
             minPrice:
               typeof (row as any).minPrice === "number"
