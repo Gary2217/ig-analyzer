@@ -4,6 +4,11 @@ import { createPublicClient } from "@/lib/supabase/server"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  Pragma: "no-cache",
+} as const
+
 function clampInt(v: unknown, fallback: number, min: number, max: number) {
   const n = typeof v === "string" && v.trim() ? Number(v) : typeof v === "number" ? v : NaN
   if (!Number.isFinite(n)) return fallback
@@ -32,7 +37,7 @@ export async function GET(req: Request) {
     const offset = clampInt(url.searchParams.get("offset"), 0, 0, 1_000_000)
 
     if (!q) {
-      return NextResponse.json({ items: [], limit, offset })
+      return NextResponse.json({ items: [], limit, offset }, { headers: NO_STORE_HEADERS })
     }
 
     const supabase = createPublicClient()
@@ -82,7 +87,7 @@ export async function GET(req: Request) {
           limit,
           offset,
         },
-        { status: 500 },
+        { status: 500, headers: NO_STORE_HEADERS },
       )
     }
 
@@ -149,12 +154,12 @@ export async function GET(req: Request) {
     const publicOnly = items.filter((r: any) => r?.is_public === true)
     const sliced = publicOnly.slice(offset, offset + limit)
 
-    return NextResponse.json({ items: sliced, total: publicOnly.length, limit, offset })
+    return NextResponse.json({ items: sliced, total: publicOnly.length, limit, offset }, { headers: NO_STORE_HEADERS })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "unknown"
     return NextResponse.json(
       { items: [], error: msg, limit: 24, offset: 0 },
-      { status: 500 },
+      { status: 500, headers: NO_STORE_HEADERS },
     )
   }
 }

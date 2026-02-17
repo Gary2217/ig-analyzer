@@ -2234,6 +2234,12 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       const mergedStats = mergeStatsPreferDefined((c as any)?.stats, (localMatch as any)?.stats)
       const mergedRawStats = mergeStatsPreferDefined((((c as any)?.__rawCard ?? c) as any)?.stats, (localMatch as any)?.stats)
 
+      const remoteAvatarUrl = typeof (c as any)?.avatarUrl === "string" ? String((c as any).avatarUrl).trim() : ""
+      const localAvatarUrl = typeof (localMatch as any)?.avatarUrl === "string" ? String((localMatch as any).avatarUrl).trim() : ""
+      const localRawAvatarUrl =
+        typeof (localMatch as any)?.__rawCard?.avatarUrl === "string" ? String((localMatch as any).__rawCard.avatarUrl).trim() : ""
+      const mergedAvatarUrl = localAvatarUrl || localRawAvatarUrl || remoteAvatarUrl || undefined
+
       const merged = {
         ...(c as any),
         ...(localMatch as any),
@@ -2265,6 +2271,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
       return {
         ...merged,
 
+        avatarUrl: mergedAvatarUrl,
+
         stats: mergedStats,
 
         // preserve numeric ids for stats fetching (do NOT let undefined from local overwrite remote)
@@ -2274,6 +2282,8 @@ function MatchmakingClient(props: MatchmakingClientProps) {
         __rawCard: {
           ...((c as any)?.__rawCard ?? c),
           ...(localMatch as any),
+
+          avatarUrl: mergedAvatarUrl,
 
           stats: mergedRawStats,
 
