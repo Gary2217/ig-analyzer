@@ -9,6 +9,33 @@ const NO_STORE_HEADERS = {
   Pragma: "no-cache",
 } as const
 
+function safeTrim(v: unknown): string {
+  return typeof v === "string" ? v.trim() : ""
+}
+
+function pickCardId(item: any): string {
+  return safeTrim(item?.creatorCardId) || safeTrim(item?.cardId) || safeTrim(item?.id)
+}
+
+function withV(inputUrl: string, v: string) {
+  const base = safeTrim(inputUrl)
+  const vv = safeTrim(v)
+  if (!base) return base
+  if (!vv) return base
+
+  try {
+    const u = new URL(base)
+    u.searchParams.set("v", vv)
+    return u.toString()
+  } catch {
+    // ignore
+  }
+
+  const hasQ = base.includes("?")
+  const join = hasQ ? "&" : "?"
+  return `${base}${join}v=${encodeURIComponent(vv)}`
+}
+
 function clampInt(v: unknown, fallback: number, min: number, max: number) {
   const n = typeof v === "string" && v.trim() ? Number(v) : typeof v === "number" ? v : NaN
   if (!Number.isFinite(n)) return fallback
@@ -153,6 +180,50 @@ export async function GET(req: Request) {
 
     const publicOnly = items.filter((r: any) => r?.is_public === true)
     const sliced = publicOnly.slice(offset, offset + limit)
+
+    // Hydrate latest avatar_url from DB SSOT (RPC may be stale)
+    try {
+      const ids = Array.from(
+        new Set(
+          sliced
+            .map((it: any) => pickCardId(it))
+            .map((s: string) => s.trim())
+            .filter(Boolean),
+        ),
+      )
+
+      if (ids.length) {
+        const avatarRes = await supabase.from("creator_cards").select("id, avatar_url, updated_at").in("id", ids)
+        if (!(avatarRes as any)?.error) {
+          const rows2 = Array.isArray((avatarRes as any)?.data) ? (avatarRes as any).data : []
+          const byId = new Map<string, { avatar_url: string | null; updated_at: string | null }>()
+          for (const r of rows2) {
+            const id = safeTrim((r as any)?.id)
+            if (!id) continue
+            const avatarUrl = safeTrim((r as any)?.avatar_url) || null
+            const updatedAt = safeTrim((r as any)?.updated_at) || null
+            byId.set(id, { avatar_url: avatarUrl, updated_at: updatedAt })
+          }
+
+          for (const it of sliced as any[]) {
+            const id = pickCardId(it)
+            if (!id) continue
+            const hit = byId.get(id)
+            const avatar = safeTrim(hit?.avatar_url)
+            if (!avatar) continue
+            const v = safeTrim(hit?.updated_at) || String(Date.now())
+            const next = withV(avatar, v)
+            if (!next) continue
+            ;(it as any).avatarUrl = next
+            if ((it as any).__rawCard && typeof (it as any).__rawCard === "object") {
+              ;(it as any).__rawCard.avatarUrl = next
+            }
+          }
+        }
+      }
+    } catch {
+      // best-effort only
+    }
 
     return NextResponse.json({ items: sliced, total: publicOnly.length, limit, offset }, { headers: NO_STORE_HEADERS })
   } catch (e: unknown) {
