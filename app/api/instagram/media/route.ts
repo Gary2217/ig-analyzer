@@ -425,7 +425,7 @@ export async function GET(req: NextRequest) {
         limit: Number(limit),
         staleMs: DB_STALE_MS,
       })
-      if (db.ok && db.isFresh && db.list.length > 0) {
+      if (db.ok && db.isFresh && db.list.length >= Number(limit)) {
         const data = db.list
           .map((row: any) => {
             const raw = row?.raw
