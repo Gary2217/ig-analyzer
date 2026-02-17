@@ -21,11 +21,14 @@ export function CreatorAvatarEditor({
   const [uploading, setUploading] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [errorText, setErrorText] = useState<string | null>(null)
+  const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(
+    typeof avatarUrl === "string" && avatarUrl.trim() ? avatarUrl.trim() : null,
+  )
 
   const effective = useMemo(() => {
-    const picked = (String(avatarUrl || "") || String(fallbackUrl || "")).trim()
+    const picked = (String(localAvatarUrl || "") || String(avatarUrl || "") || String(fallbackUrl || "")).trim()
     return withAvatarBuster(picked || null, buster)
-  }, [avatarUrl, buster, fallbackUrl])
+  }, [avatarUrl, buster, fallbackUrl, localAvatarUrl])
 
   const t = useCallback(
     (zh: string, en: string) => (locale === "zh-TW" ? zh : en),
@@ -58,10 +61,13 @@ export function CreatorAvatarEditor({
           body: fd,
         })
 
-        const json: any = await res.json().catch(() => null)
-        const nextUrl = typeof json?.avatarUrl === "string" ? json.avatarUrl.trim() : ""
+        const data: any = await res.json().catch(() => null)
+        if (data?.ok && typeof data?.avatarUrl === "string") {
+          setLocalAvatarUrl(data.avatarUrl)
+        }
+        const nextUrl = typeof data?.avatarUrl === "string" ? data.avatarUrl.trim() : ""
 
-        if (!res.ok || json?.ok !== true || !nextUrl) {
+        if (!res.ok || data?.ok !== true || !nextUrl) {
           setErrorText(t("上傳圖片失敗（請稍後再試）", "Upload image failed (please try again)"))
           return
         }
@@ -95,6 +101,7 @@ export function CreatorAvatarEditor({
         return
       }
 
+      setLocalAvatarUrl(null)
       bumpAvatarBuster()
       onChanged?.(null)
     } catch {
