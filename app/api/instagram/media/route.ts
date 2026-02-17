@@ -274,7 +274,7 @@ export async function GET(req: NextRequest) {
     const limitRaw = url.searchParams.get("limit") || ""
     const parsedLimit = Number(limitRaw)
     const limitNum = Number.isFinite(parsedLimit) && Number.isInteger(parsedLimit) ? parsedLimit : DEFAULT_LIMIT
-    const limit = String(Math.max(1, Math.min(MAX_LIMIT, limitNum)))
+    const limit = String(Math.max(3, Math.min(MAX_LIMIT, limitNum)))
 
     const c = await cookies()
     const isHttps = getIsHttps(req)
