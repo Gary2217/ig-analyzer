@@ -92,6 +92,20 @@ function getCookieValue(key: string): string {
   }
 }
 
+function getIgScope(): string {
+  try {
+    const igId = getCookieValue("ig_ig_id").trim()
+    const pageId = getCookieValue("ig_page_id").trim()
+
+    const base = igId || "session"
+    const page = pageId || ""
+
+    return `${base}|${page}`
+  } catch {
+    return "session|"
+  }
+}
+
 function isAbortError(err: unknown): boolean {
   if (!isRecord(err)) return false
   const name = typeof err.name === "string" ? err.name : ""
@@ -1214,14 +1228,23 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const manualRefreshOverlayRef = useRef(false)
   const trendLoadingRef = useRef(false)
 
-  const LS_COMPARE_ENABLED = "results:trendCompareEnabled"
-  const LS_COMPARE_DAYS = "results:trendCompareDays"
-  const LS_COMPARE_OPACITY = "results:trendCompareOpacity"
+  const scope = getIgScope()
+
+  const LS_COMPARE_ENABLED = `results:trendCompareEnabled:${scope}`
+  const LS_COMPARE_DAYS = `results:trendCompareDays:${scope}`
+  const LS_COMPARE_OPACITY = `results:trendCompareOpacity:${scope}`
+
+  const LS_COMPARE_ENABLED_LEGACY = "results:trendCompareEnabled"
+  const LS_COMPARE_DAYS_LEGACY = "results:trendCompareDays"
+  const LS_COMPARE_OPACITY_LEGACY = "results:trendCompareOpacity"
 
   const [compareEnabled, setCompareEnabled] = useState(() => {
     try {
       if (typeof window === "undefined") return false
-      return window.localStorage.getItem(LS_COMPARE_ENABLED) === "1"
+      return (
+        window.localStorage.getItem(LS_COMPARE_ENABLED) ??
+        window.localStorage.getItem(LS_COMPARE_ENABLED_LEGACY)
+      ) === "1"
     } catch {
       return false
     }
@@ -1230,7 +1253,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const [compareRangeDays, setCompareRangeDays] = useState<90 | 60 | 30 | 14 | 7>(() => {
     try {
       if (typeof window === "undefined") return 30
-      const raw = Number(window.localStorage.getItem(LS_COMPARE_DAYS))
+      const raw = Number(
+        window.localStorage.getItem(LS_COMPARE_DAYS) ??
+          window.localStorage.getItem(LS_COMPARE_DAYS_LEGACY),
+      )
       if (raw === 90 || raw === 60 || raw === 30 || raw === 14 || raw === 7) return raw
       return 30
     } catch {
@@ -1240,7 +1266,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const [compareOpacity, setCompareOpacity] = useState<number>(() => {
     try {
       if (typeof window === "undefined") return 0.5
-      const raw = Number(window.localStorage.getItem(LS_COMPARE_OPACITY) ?? "0.5")
+      const raw = Number(
+        window.localStorage.getItem(LS_COMPARE_OPACITY) ??
+          window.localStorage.getItem(LS_COMPARE_OPACITY_LEGACY) ??
+          "0.5",
+      )
       if (!Number.isFinite(raw)) return 0.5
       return Math.max(0.2, Math.min(0.9, raw))
     } catch {
@@ -1887,16 +1917,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   )
 
   const igCacheId = String((isRecord(igMe) && isRecord(igMe.profile) ? (igMe.profile.id ?? igMe.profile.username) : isRecord(igMe) ? igMe.username : "me") || "me")
-  const cookieIgId = getCookieValue("ig_ig_id").trim()
-  const cookiePageId = getCookieValue("ig_page_id").trim()
-  const base = (cookieIgId || igCacheId || "session").trim() || "session"
-  const page = cookiePageId.trim()
-  const scope = `${base}|${page || ""}`
-  const resultsCacheKey = `results_cache:${scope}:7`
+  const resultsCacheKey = `results_cache:${igCacheId}:7`
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const key = "results:scrollY"
+    const key = `results:scrollY:${scope}`
+    const legacyKey = "results:scrollY"
 
     const save = () => {
       try {
@@ -1917,10 +1943,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   useEffect(() => {
     if (typeof window === "undefined") return
     if (hasRestoredResultsScrollRef.current) return
-    const key = "results:scrollY"
+    const key = `results:scrollY:${scope}`
+    const legacyKey = "results:scrollY"
     let raw: string | null = null
     try {
-      raw = sessionStorage.getItem(key)
+      raw = sessionStorage.getItem(key) ?? sessionStorage.getItem(legacyKey)
     } catch {
       raw = null
     }
@@ -1941,6 +1968,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
           hasRestoredResultsScrollRef.current = true
           try {
             sessionStorage.removeItem(key)
+            sessionStorage.removeItem(legacyKey)
           } catch {
             // ignore
           }
@@ -1958,8 +1986,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   useEffect(() => {
     if (hasRestoredResultsCacheRef.current) return
 
-    const legacyKeySameLocale = `results_cache:${scope}:7:${activeLocale}`
-    const legacyKeyOtherLocale = `results_cache:${scope}:7:${activeLocale === "zh-TW" ? "en" : "zh-TW"}`
+    const legacyKeySameLocale = `results_cache:${igCacheId}:7:${activeLocale}`
+    const legacyKeyOtherLocale = `results_cache:${igCacheId}:7:${activeLocale === "zh-TW" ? "en" : "zh-TW"}`
 
     const cached =
       saReadResultsCache(resultsCacheKey) ??
@@ -4657,7 +4685,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     if (typeof window === "undefined") return
     if (connecting) return
     if (igMeLoading) return // Wait for auth check to complete
-    
+
     const AUTO_CONNECT_KEY = "ig_auto_connect_attempted"
     const AUTO_CONNECT_TTL = 5 * 60 * 1000 // 5 minutes
     
