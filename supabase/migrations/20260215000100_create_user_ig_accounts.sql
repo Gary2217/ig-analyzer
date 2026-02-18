@@ -57,12 +57,12 @@ begin
     create or replace function public.set_updated_at_timestamp()
     returns trigger
     language plpgsql
-    as $$
+    as $fn$
     begin
       new.updated_at = now();
       return new;
     end;
-    $$;
+    $fn$;
   end if;
 
   if not exists (
