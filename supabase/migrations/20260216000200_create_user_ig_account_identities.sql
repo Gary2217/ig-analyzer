@@ -1,3 +1,18 @@
+do $$
+begin
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relname = 'user_ig_account_identities'
+      and c.relkind = 'v'
+  ) then
+    drop view public.user_ig_account_identities;
+  end if;
+end
+$$;
+
 create table if not exists public.user_ig_account_identities (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
@@ -39,12 +54,12 @@ begin
     create or replace function public.set_updated_at_timestamp()
     returns trigger
     language plpgsql
-    as $$
+    as $fn$
     begin
       new.updated_at = now();
       return new;
     end;
-    $$;
+    $fn$;
   end if;
 
   if not exists (
