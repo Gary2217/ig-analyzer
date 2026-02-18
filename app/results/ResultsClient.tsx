@@ -1704,7 +1704,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     items: Array<{ label: string; color: string; value: string }>
   }) {
     return (
-      <div className="pointer-events-none absolute top-2 left-2 rounded-lg border border-white/10 bg-[#0b1220]/85 backdrop-blur px-3 py-2 shadow-xl max-w-[min(280px,70vw)]">
+      <div
+        className={
+          "pointer-events-none absolute top-2 left-2 rounded-lg border border-white/10 bg-[#0b1220]/85 backdrop-blur px-3 py-2 shadow-xl max-w-[min(280px,70vw)]"
+        }
+      >
         <div className="text-[11px] text-white/70 tabular-nums whitespace-nowrap truncate min-w-0">{title}</div>
         <div className="mt-1 space-y-1">
           {items.map((it, i) => (
@@ -5893,7 +5897,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
             <Card className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
               <CardHeader className="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-2 lg:px-6 lg:py-3 flex items-start sm:items-center justify-between gap-3 min-w-0">
-                <CardTitle className="text-xl font-bold text-white min-w-0 truncate shrink-0">{t("results.trend.title")}</CardTitle>
+                <div className="min-w-0 shrink-0">
+                  <CardTitle className="text-xl font-bold text-white min-w-0 truncate">{t("results.trend.title")}</CardTitle>
+                  {focusedAccountTrendMetric === "followers" ? (
+                    <div className="mt-1 text-[11px] text-white/55 leading-snug min-w-0 break-words">
+                      {isZh
+                        ? "提示：粉絲是累積值，使用階梯線顯示每日變化；滑動查看單日增量"
+                        : "Tip: Followers are cumulative. Step chart shows daily changes; hover to see deltas."}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="text-[11px] sm:text-sm text-slate-400 min-w-0 leading-snug text-left sm:text-right overflow-hidden max-w-[45%]">
                   <div className="min-w-0 truncate">帳號互動趨勢</div>
                   <div className="min-w-0 truncate hidden sm:block">Account engagement trend</div>
@@ -6565,7 +6578,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       ? Math.max(0, Math.min(dataForChart.length - 1, hoveredAccountTrendIndex))
                       : null
 
+                  const followersTooltipIdx = (() => {
+                    if (!focusedIsFollowers) return null
+                    if (dataForChart.length < 1) return null
+                    if (typeof clampedHoverIdx === "number") return clampedHoverIdx
+                    return Math.max(0, dataForChart.length - 1)
+                  })()
+
                   const hoverPoint = clampedHoverIdx !== null ? dataForChart[clampedHoverIdx] : null
+                  const followersHoverPoint =
+                    typeof followersTooltipIdx === "number" ? dataForChart[followersTooltipIdx] : null
 
                   const reachRawByIndex = focusedIsReach
                     ? dataForChart.map((p) => {
@@ -6591,85 +6613,103 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       })
                     : []
 
-                  const tooltipItems = hoverPoint
-                    ? (() => {
-                        if (focusedIsFollowers) {
-                          const v =
-                            typeof clampedHoverIdx === "number" &&
-                            clampedHoverIdx >= 0 &&
-                            clampedHoverIdx < followersSeriesValues.length
-                              ? followersSeriesValues[clampedHoverIdx]
-                              : null
-                          if (typeof v !== "number" || !Number.isFinite(v)) return []
+                  const tooltipItems = (() => {
+                    if (focusedIsFollowers) {
+                      const idx = followersTooltipIdx
+                      if (typeof idx !== "number") return []
+                      const v = idx >= 0 && idx < followersSeriesValues.length ? followersSeriesValues[idx] : null
+                      const prev = idx >= 1 && idx - 1 < followersSeriesValues.length ? followersSeriesValues[idx - 1] : null
+                      const first = followersSeriesValues.length >= 1 ? followersSeriesValues[0] : null
 
-                          const delta =
-                            typeof clampedHoverIdx === "number" &&
-                            clampedHoverIdx >= 0 &&
-                            clampedHoverIdx < deltasByIndex.length
-                              ? deltasByIndex[clampedHoverIdx]
-                              : null
-                          const deltaText =
-                            typeof delta === "number" && Number.isFinite(delta)
-                              ? `${delta >= 0 ? "+" : ""}${delta.toLocaleString()}`
-                              : ""
+                      const deltaDay =
+                        typeof v === "number" &&
+                        Number.isFinite(v) &&
+                        typeof prev === "number" &&
+                        Number.isFinite(prev)
+                          ? v - prev
+                          : null
+                      const deltaRange =
+                        typeof v === "number" &&
+                        Number.isFinite(v) &&
+                        typeof first === "number" &&
+                        Number.isFinite(first)
+                          ? v - first
+                          : null
 
-                          return [
-                            {
-                              label: labelFor("followers"),
-                              color: colorFor("followers"),
-                              value: `${Math.round(v).toLocaleString()}（Δ ${deltaText}）`,
-                            },
-                          ]
+                      const fmt = (n: number | null) =>
+                        typeof n === "number" && Number.isFinite(n) ? Math.round(n).toLocaleString() : "—"
+                      const fmtDelta = (n: number | null) =>
+                        typeof n === "number" && Number.isFinite(n)
+                          ? `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString()}`
+                          : "—"
+
+                      return [
+                        {
+                          label: isZh ? "粉絲" : "Followers",
+                          color: colorFor("followers"),
+                          value: fmt(typeof v === "number" && Number.isFinite(v) ? v : null),
+                        },
+                        {
+                          label: isZh ? "單日增量" : "Δ vs prev day",
+                          color: "rgba(255,255,255,0.70)",
+                          value: fmtDelta(deltaDay),
+                        },
+                        {
+                          label: isZh ? `區間增量（${renderedTrendRangeDays}天）` : `Δ over ${renderedTrendRangeDays}d`,
+                          color: "rgba(255,255,255,0.70)",
+                          value: fmtDelta(deltaRange),
+                        },
+                      ]
+                    }
+
+                    if (!hoverPoint) return []
+
+                    if (focusedIsReach) {
+                      const raw = hoverPoint.reach
+                      const rawText =
+                        typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw).toLocaleString() : "—"
+                      const ma7 = typeof clampedHoverIdx === "number" ? reachMa7ByIndex[clampedHoverIdx] : null
+                      const ma7Text = typeof ma7 === "number" && Number.isFinite(ma7) ? Math.round(ma7).toLocaleString() : "—"
+
+                      return [
+                        {
+                          label: labelFor("reach"),
+                          color: colorFor("reach"),
+                          value: rawText,
+                        },
+                        {
+                          label: "MA7 (7d avg) 7日均線",
+                          color: "rgba(255,255,255,0.70)",
+                          value: ma7Text,
+                        },
+                      ]
+                    }
+
+                    return selected
+                      .map((k) => {
+                        if (k === "followers") return null
+                        const val =
+                          k === "reach"
+                            ? hoverPoint.reach
+                            : k === "interactions"
+                              ? hoverPoint.interactions
+                              : k === "impressions"
+                                ? hoverPoint.impressions
+                                : k === "engaged"
+                                  ? hoverPoint.engaged
+                                  : hoverPoint.followerDelta
+                        if (typeof val !== "number" || !Number.isFinite(val)) return null
+                        return {
+                          label: labelFor(k),
+                          color: colorFor(k),
+                          value:
+                            k === "followerDelta"
+                              ? `${val > 0 ? "+" : ""}${Math.round(val).toLocaleString()}`
+                              : Math.round(val).toLocaleString(),
                         }
-
-                        if (focusedIsReach) {
-                          const raw = hoverPoint.reach
-                          const rawText =
-                            typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw).toLocaleString() : "—"
-                          const ma7 = typeof clampedHoverIdx === "number" ? reachMa7ByIndex[clampedHoverIdx] : null
-                          const ma7Text =
-                            typeof ma7 === "number" && Number.isFinite(ma7) ? Math.round(ma7).toLocaleString() : "—"
-
-                          return [
-                            {
-                              label: labelFor("reach"),
-                              color: colorFor("reach"),
-                              value: rawText,
-                            },
-                            {
-                              label: "MA7 (7d avg) 7日均線",
-                              color: "rgba(255,255,255,0.70)",
-                              value: ma7Text,
-                            },
-                          ]
-                        }
-
-                        return selected
-                          .map((k) => {
-                            if (k === "followers") return null
-                            const val =
-                              k === "reach"
-                                ? hoverPoint.reach
-                                : k === "interactions"
-                                  ? hoverPoint.interactions
-                                  : k === "impressions"
-                                    ? hoverPoint.impressions
-                                    : k === "engaged"
-                                      ? hoverPoint.engaged
-                                      : hoverPoint.followerDelta
-                            if (typeof val !== "number" || !Number.isFinite(val)) return null
-                            return {
-                              label: labelFor(k),
-                              color: colorFor(k),
-                              value:
-                                k === "followerDelta"
-                                  ? `${val > 0 ? "+" : ""}${Math.round(val).toLocaleString()}`
-                                  : Math.round(val).toLocaleString(),
-                            }
-                          })
-                          .filter(Boolean) as Array<{ label: string; color: string; value: string }>
-                      })()
-                    : []
+                      })
+                      .filter(Boolean) as Array<{ label: string; color: string; value: string }>
+                  })()
 
                   const followersCountFromProfileRaw = isRecord(igMe) && isRecord(igMe.profile) ? igMe.profile.followers_count : null
                   const followersCountFromProfile = (() => {
@@ -7256,6 +7296,33 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     })()
                                   : null}
 
+                                {focusedIsFollowers && clampedHoverIdx === null
+                                  ? (() => {
+                                      const lastIdx = dataForChart.length - 1
+                                      if (lastIdx < 0) return null
+                                      const s0 = drawable.find((s) => s.k === "followers")
+                                      if (!s0) return null
+                                      const hit = s0.points.find((p) => p.i === lastIdx)
+                                      if (!hit) return null
+                                      const cx = sx(lastIdx)
+                                      const cy = sy(hit.yNorm)
+                                      if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+                                      const r = isSmUp ? 3.8 : 5
+                                      return (
+                                        <circle
+                                          key="trend-followers-last-dot"
+                                          cx={cx}
+                                          cy={cy}
+                                          r={r}
+                                          fill={s0.color}
+                                          stroke="rgba(255,255,255,0.28)"
+                                          strokeWidth={2}
+                                          opacity={0.92}
+                                        />
+                                      )
+                                    })()
+                                  : null}
+
                                 {trendMeta?.isToday
                                   ? (() => {
                                       const lastIdx = dataForChart.length - 1
@@ -7373,15 +7440,17 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   )
                                 })()}
                               </svg>
-                            </div>
-
-                            {clampedHoverIdx !== null && hoverPoint ? (
-                              <TrendHoverTooltip title={String(hoverPoint.t ?? "")} items={tooltipItems} />
-                            ) : null}
                           </div>
-                        )}
-                      </>
-                    )
+
+                          {focusedIsFollowers && followersHoverPoint ? (
+                            <TrendHoverTooltip title={String(followersHoverPoint.t ?? "")} items={tooltipItems} />
+                          ) : clampedHoverIdx !== null && hoverPoint ? (
+                            <TrendHoverTooltip title={String(hoverPoint.t ?? "")} items={tooltipItems} />
+                          ) : null}
+                        </div>
+                      )}
+                    </>
+                  )
                   })()}
               </CardContent>
             </Card>
