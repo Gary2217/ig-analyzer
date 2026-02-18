@@ -1262,13 +1262,27 @@ export async function POST(req: Request) {
       let followersSeries: Array<{ day: string; followers_count: number }> = []
       let followersUsedSource = "none"
 
-      if (ssotAccount?.id) {
-        try {
-          const authed = await createAuthedClient()
+      try {
+        const authed = await createAuthedClient()
+
+        const {
+          data: { user },
+        } = await authed.auth.getUser()
+
+        const { data: ssotAccountResolved } = await authed
+          .from("user_instagram_accounts")
+          .select("id")
+          .eq("ig_user_id", resolvedIgId)
+          .eq("user_id", user?.id)
+          .maybeSingle()
+
+        const ssotId = ssotAccountResolved && typeof (ssotAccountResolved as any).id === "string" ? String((ssotAccountResolved as any).id) : null
+
+        if (ssotId) {
           const { data: followerRows, error: followerError } = await authed
             .from("ig_daily_followers")
             .select("day, followers_count")
-            .eq("ig_account_id", ssotAccount.id)
+            .eq("ig_account_id", ssotId)
             .gte("day", rangeStart)
             .lte("day", rangeEnd)
             .order("day", { ascending: true })
@@ -1285,9 +1299,9 @@ export async function POST(req: Request) {
 
             followersUsedSource = "ssot_db"
           }
-        } catch {
-          // ignore followers SSOT read; keep as none
         }
+      } catch {
+        // ignore followers SSOT read; keep as none
       }
 
       if (__DEBUG_DAILY_SNAPSHOT__) {
