@@ -1887,7 +1887,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   )
 
   const igCacheId = String((isRecord(igMe) && isRecord(igMe.profile) ? (igMe.profile.id ?? igMe.profile.username) : isRecord(igMe) ? igMe.username : "me") || "me")
-  const resultsCacheKey = `results_cache:${igCacheId}:7`
+  const cookieIgId = getCookieValue("ig_ig_id").trim()
+  const cookiePageId = getCookieValue("ig_page_id").trim()
+  const base = (cookieIgId || igCacheId || "session").trim() || "session"
+  const page = cookiePageId.trim()
+  const scope = `${base}|${page || ""}`
+  const resultsCacheKey = `results_cache:${scope}:7`
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1953,8 +1958,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   useEffect(() => {
     if (hasRestoredResultsCacheRef.current) return
 
-    const legacyKeySameLocale = `results_cache:${igCacheId}:7:${activeLocale}`
-    const legacyKeyOtherLocale = `results_cache:${igCacheId}:7:${activeLocale === "zh-TW" ? "en" : "zh-TW"}`
+    const legacyKeySameLocale = `results_cache:${scope}:7:${activeLocale}`
+    const legacyKeyOtherLocale = `results_cache:${scope}:7:${activeLocale === "zh-TW" ? "en" : "zh-TW"}`
 
     const cached =
       saReadResultsCache(resultsCacheKey) ??
