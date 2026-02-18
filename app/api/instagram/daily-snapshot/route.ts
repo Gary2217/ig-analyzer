@@ -128,19 +128,20 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
 
 async function readFollowersDailyRows(params: { igId: string; start: string; today: string; ssotId?: string | null }) {
   try {
-    const base = supabaseServer
-      .from("ig_daily_followers")
-      .select("day,followers_count,captured_at")
-      .gte("day", params.start)
-      .lte("day", params.today)
-      .order("day", { ascending: true })
+    const makeBase = () =>
+      supabaseServer
+        .from("ig_daily_followers")
+        .select("day,followers_count,captured_at")
+        .gte("day", params.start)
+        .lte("day", params.today)
+        .order("day", { ascending: true })
 
     const runByAccountId = async (id: string) => {
-      return await base.eq("ig_account_id", String(id))
+      return await makeBase().eq("ig_account_id", String(id))
     }
 
     const runByIgUserId = async (igId: string) => {
-      return await base.eq("ig_user_id", String(igId))
+      return await makeBase().eq("ig_user_id", String(igId))
     }
 
     let data: any = null
