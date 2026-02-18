@@ -1272,12 +1272,15 @@ export async function POST(req: Request) {
 
         if (user?.id) {
           // resolve active SSOT account for this user
-          const { data: ssotAccountResolved } = await authed
+          const {
+            data: ssotAccountResolved,
+            error: ssotResolveError,
+          } = await authed
             .from("user_instagram_accounts")
             .select("id")
             .eq("user_id", user.id)
-            .eq("ig_user_id", resolvedIgId)
             .eq("is_active", true)
+            .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle()
 
@@ -1286,6 +1289,12 @@ export async function POST(req: Request) {
             typeof (ssotAccountResolved as any).id === "string"
               ? String((ssotAccountResolved as any).id)
               : null
+
+          console.log("[SSOT resolve]", {
+            user_id: user.id,
+            ssotId,
+            error: ssotResolveError?.message,
+          })
 
           if (ssotId) {
             const { data: followerRows, error } = await authed
