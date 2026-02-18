@@ -33,8 +33,15 @@ export function CreatorCardPreviewSection({
   const data = useCreatorCardPreviewData({ enabled: isConnected })
 
   const editCardUrl = `/${locale}/creator-card`
-  const resolvedCardId = cardId ?? (typeof (data as any)?.cardId === "string" ? ((data as any).cardId as string) : undefined)
-  const publicCardUrl = resolvedCardId ? `/${locale}/creator/${resolvedCardId}` : null
+  const dbCardId = typeof (data as any)?.cardId === "string" ? ((data as any).cardId as string) : undefined
+  const resolvedCardId = dbCardId ?? cardId
+  const dbIsPublic = (() => {
+    const cc = (data as any)?.creatorCard
+    if (!cc) return false
+    const raw = (cc as any).is_public ?? (cc as any).isPublic
+    return typeof raw === "boolean" ? raw : Boolean(raw)
+  })()
+  const publicCardUrl = resolvedCardId && dbIsPublic ? `/${locale}/creator/${resolvedCardId}` : null
 
   const ensureProxiedThumbnail = (url: string): string => {
     if (!url) return ""

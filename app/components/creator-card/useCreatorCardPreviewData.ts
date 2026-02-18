@@ -100,7 +100,7 @@ function normalizeCreatorCardPayload(payload: unknown): NormalizedCreatorCard | 
   const avatarUrl = pick<string>(base, "avatarUrl", "avatar_url")
   const profileImageUrl = pick<string>(base, "profileImageUrl", "profile_image_url")
   const displayName = pick<string>(base, "displayName", "display_name", "name")
-  const username = pick<string>(base, "username", "handle")
+  const username = pick<string>(base, "username", "handle", "ig_username", "igUsername")
   const aboutText = pick<string>(base, "aboutText", "about_text", "bio", "audience")
   const primaryNiche = pick<string>(base, "primaryNiche", "primary_niche", "niche")
 
