@@ -128,6 +128,9 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
 
 async function readFollowersDailyRows(params: { igId: string; start: string; today: string; ssotId?: string | null }) {
   try {
+    type FollowersDailyRow = { day: string; followers_count: number | null; captured_at: string | null }
+    let followersUsedSource: "ssot" | "legacy_fallback" | "legacy_only" | "error" = "legacy_only"
+
     const makeBase = () =>
       supabaseServer
         .from("ig_daily_followers")
@@ -144,30 +147,37 @@ async function readFollowersDailyRows(params: { igId: string; start: string; tod
       return await makeBase().eq("ig_user_id", String(igId))
     }
 
-    let data: any = null
-    let error: any = null
+    let data: FollowersDailyRow[] | null = null
+    let error: unknown = null
 
     if (params.ssotId) {
       const r1 = await runByAccountId(params.ssotId)
-      data = (r1 as any)?.data
-      error = (r1 as any)?.error
+      data = (r1 as any)?.data ?? null
+      error = (r1 as any)?.error ?? null
 
       if (!error && Array.isArray(data) && data.length === 0) {
+        followersUsedSource = "legacy_fallback"
+        console.log("[daily-snapshot] followers SSOT returned 0 rows; fallback to legacy ig_user_id", { ssotId: params.ssotId, igId: params.igId })
         const r2 = await runByIgUserId(params.igId)
-        data = (r2 as any)?.data
-        error = (r2 as any)?.error
+        data = (r2 as any)?.data ?? null
+        error = (r2 as any)?.error ?? null
+      } else {
+        followersUsedSource = "ssot"
       }
     } else {
+      followersUsedSource = "legacy_only"
       const r = await runByIgUserId(params.igId)
-      data = (r as any)?.data
-      error = (r as any)?.error
+      data = (r as any)?.data ?? null
+      error = (r as any)?.error ?? null
     }
 
     if (error || !Array.isArray(data)) {
+      followersUsedSource = "error"
       return {
         rows: [] as Array<{ day: string; followers_count: number }>,
         availableDays: 0,
         lastWriteAt: null as string | null,
+        followers_used_source: followersUsedSource,
       }
     }
 
@@ -193,12 +203,15 @@ async function readFollowersDailyRows(params: { igId: string; start: string; tod
       rows,
       availableDays: set.size,
       lastWriteAt: maxCapturedAt,
+      followers_used_source: followersUsedSource,
     }
   } catch {
+    const followersUsedSource: "ssot" | "legacy_fallback" | "legacy_only" | "error" = "error"
     return {
       rows: [] as Array<{ day: string; followers_count: number }>,
       availableDays: 0,
       lastWriteAt: null as string | null,
+      followers_used_source: followersUsedSource,
     }
   }
 }
@@ -1277,7 +1290,7 @@ export async function POST(req: Request) {
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
-              __diag: { snap_rows: snapRows.length, used_source: "snap", start, end: today },
+              __diag: { snap_rows: snapRows.length, used_source: "snap", start, end: today, followers_used_source: followersSnap.followers_used_source },
             },
           }
         }
@@ -1359,7 +1372,7 @@ export async function POST(req: Request) {
                   insights_daily: totals.insights_daily,
                   insights_daily_series: [],
                   series_ok: true,
-                  __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today },
+                  __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today, followers_used_source: followersSnap.followers_used_source },
                 },
               }
             }
@@ -1441,7 +1454,7 @@ export async function POST(req: Request) {
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
-              __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today },
+              __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today, followers_used_source: followersSnap.followers_used_source },
             },
           }
         }
@@ -1581,6 +1594,7 @@ export async function POST(req: Request) {
                 end: today,
                 token_source: tokenSource,
                 totals_ok: totals.ok,
+                followers_used_source: followersSnap.followers_used_source,
               },
             },
           }
@@ -1682,6 +1696,7 @@ export async function POST(req: Request) {
               end: today,
               token_source: tokenSource,
               totals_ok: totals.ok,
+              followers_used_source: followersSnap.followers_used_source,
             },
           },
         }
@@ -1727,7 +1742,7 @@ export async function POST(req: Request) {
         insights_daily: [],
         insights_daily_series: [],
         series_ok: true,
-        __diag: { snap_rows: 0, used_source: "empty", start, end: today },
+        __diag: { snap_rows: 0, used_source: "empty", start, end: today, followers_used_source: followersSnap.followers_used_source },
       },
     }
   })()
