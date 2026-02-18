@@ -1265,43 +1265,58 @@ export async function POST(req: Request) {
       try {
         const authed = await createAuthedClient()
 
+        // resolve authenticated user namespace (CRITICAL for multi-user SaaS SSOT)
         const {
           data: { user },
         } = await authed.auth.getUser()
 
-        const { data: ssotAccountResolved } = await authed
-          .from("user_instagram_accounts")
-          .select("id")
-          .eq("ig_user_id", resolvedIgId)
-          .eq("user_id", user?.id)
-          .maybeSingle()
+        if (user?.id) {
+          // resolve active SSOT account for this user
+          const { data: ssotAccountResolved } = await authed
+            .from("user_instagram_accounts")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("is_active", true)
+            .limit(1)
+            .maybeSingle()
 
-        const ssotId = ssotAccountResolved && typeof (ssotAccountResolved as any).id === "string" ? String((ssotAccountResolved as any).id) : null
+          const ssotId =
+            ssotAccountResolved &&
+            typeof (ssotAccountResolved as any).id === "string"
+              ? String((ssotAccountResolved as any).id)
+              : null
 
-        if (ssotId) {
-          const { data: followerRows, error: followerError } = await authed
-            .from("ig_daily_followers")
-            .select("day, followers_count")
-            .eq("ig_account_id", ssotId)
-            .gte("day", rangeStart)
-            .lte("day", rangeEnd)
-            .order("day", { ascending: true })
+          if (ssotId) {
+            const { data: followerRows, error } = await authed
+              .from("ig_daily_followers")
+              .select("day, followers_count")
+              .eq("ig_account_id", ssotId)
+              .gte("day", rangeStart)
+              .lte("day", rangeEnd)
+              .order("day", { ascending: true })
 
-          if (!followerError && Array.isArray(followerRows) && followerRows.length > 0) {
-            followersSeries = followerRows
-              .map((r: any) => {
-                const day = String(r?.day ?? "").trim()
-                const n = Number((r as any)?.followers_count)
-                if (!day || !Number.isFinite(n)) return null
-                return { day, followers_count: Math.floor(n) }
-              })
-              .filter((x: any): x is { day: string; followers_count: number } => x !== null)
+            if (!error && Array.isArray(followerRows) && followerRows.length > 0) {
+              followersSeries = followerRows
+                .map((r: any) => {
+                  const day = String(r?.day ?? "").trim()
+                  const n = Number((r as any)?.followers_count)
+                  if (!day || !Number.isFinite(n)) return null
+                  return {
+                    day,
+                    followers_count: Math.floor(n),
+                  }
+                })
+                .filter(
+                  (x: any): x is { day: string; followers_count: number } =>
+                    x !== null,
+                )
 
-            followersUsedSource = "ssot_db"
+              followersUsedSource = "ssot_db"
+            }
           }
         }
       } catch {
-        // ignore followers SSOT read; keep as none
+        // fail-safe: do not break daily-snapshot if SSOT read fails
       }
 
       if (__DEBUG_DAILY_SNAPSHOT__) {
