@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createHash } from "crypto"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
+import { getMeState } from "@/app/lib/server/instagramMeResolver"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -26,6 +27,22 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function toFiniteNumOrNull(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v)
   return Number.isFinite(n) ? n : null
+}
+
+function hasAnyNullishCounts(row: any): boolean {
+  if (!row || typeof row !== "object") return true
+  const f = toFiniteNumOrNull((row as any).followers)
+  const following = toFiniteNumOrNull((row as any).following)
+  const posts = toFiniteNumOrNull((row as any).posts)
+  return f === null || following === null || posts === null
+}
+
+function isMissingColumnError(err: unknown, column: string): boolean {
+  const e = err as any
+  const code = typeof e?.code === "string" ? e.code : ""
+  const msg = typeof e?.message === "string" ? e.message.toLowerCase() : ""
+  if (code === "42703") return true
+  return msg.includes("column") && msg.includes(column.toLowerCase())
 }
 
 function getRequestId(req: NextRequest) {
@@ -158,15 +175,6 @@ export async function GET(req: NextRequest) {
     const creatorId = typeof (cardObj as any).ig_user_id === "string" ? String((cardObj as any).ig_user_id) : null
     const igUsername = typeof (cardObj as any).ig_username === "string" ? String((cardObj as any).ig_username) : null
 
-    const statsPromise = creatorId
-      ? supabaseServer
-          .from("creator_stats")
-          .select("creator_id, engagement_rate_pct, followers, avg_likes, avg_comments, updated_at")
-          .eq("creator_id", creatorId)
-          .limit(1)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null } as any)
-
     const thumbsPromise = cardId
       ? authed
           .from("creator_card_ig_posts")
@@ -177,19 +185,96 @@ export async function GET(req: NextRequest) {
           .maybeSingle()
       : Promise.resolve({ data: null, error: null } as any)
 
-    const [statsRes, thumbsRes] = await Promise.all([statsPromise, thumbsPromise])
+    let supportsFollowingPosts = true
+    const statsRes = await (async () => {
+      if (!creatorId) return { data: null, error: null } as any
+
+      const full = await supabaseServer
+        .from("creator_stats")
+        .select("creator_id, engagement_rate_pct, followers, following, posts, avg_likes, avg_comments, updated_at")
+        .eq("creator_id", creatorId)
+        .limit(1)
+        .maybeSingle()
+
+      if (!(full as any)?.error) return full
+
+      const err = (full as any).error
+      if (!isMissingColumnError(err, "following") && !isMissingColumnError(err, "posts")) {
+        return full
+      }
+
+      supportsFollowingPosts = false
+      return supabaseServer
+        .from("creator_stats")
+        .select("creator_id, engagement_rate_pct, followers, avg_likes, avg_comments, updated_at")
+        .eq("creator_id", creatorId)
+        .limit(1)
+        .maybeSingle()
+    })()
+
+    const [thumbsRes] = await Promise.all([thumbsPromise])
 
     const tDbMs = Date.now() - tDbStart
 
-    const statsRow = (statsRes as any)?.data ?? null
+    let statsRow = (statsRes as any)?.data ?? null
+
+    // Safe fallback sync: if core counts missing, attempt a one-shot IG profile resolve and upsert into DB.
+    // Guardrails:
+    // - only if connected
+    // - only if resolver igUserId matches creatorId from the user's creator card
+    // - write is scoped by creator_id derived from the authenticated user's card
+    if (creatorId && (supportsFollowingPosts ? hasAnyNullishCounts(statsRow) : toFiniteNumOrNull((statsRow as any)?.followers) === null)) {
+      try {
+        const meState = await getMeState(req)
+        const meOk = Boolean((meState as any)?.connected)
+        const meIgUserId = typeof (meState as any)?.igUserId === "string" ? String((meState as any).igUserId) : ""
+
+        if (meOk && meIgUserId && meIgUserId === creatorId) {
+          const profile = asRecord((meState as any)?.profile)
+          const followers = toFiniteNumOrNull(profile?.followers_count)
+          const following = supportsFollowingPosts ? toFiniteNumOrNull(profile?.follows_count ?? profile?.following_count) : null
+          const posts = supportsFollowingPosts ? toFiniteNumOrNull(profile?.media_count) : null
+
+          if (followers !== null || following !== null || posts !== null) {
+            const upsertPayload: Record<string, unknown> = {
+              creator_id: creatorId,
+              ...(followers !== null ? { followers: Math.floor(Math.max(0, followers)) } : null),
+              ...(following !== null ? { following: Math.floor(Math.max(0, following)) } : null),
+              ...(posts !== null ? { posts: Math.floor(Math.max(0, posts)) } : null),
+              updated_at: new Date().toISOString(),
+            }
+
+            const upsertRes = await supabaseServer
+              .from("creator_stats")
+              .upsert(upsertPayload, { onConflict: "creator_id" })
+              .select(
+                supportsFollowingPosts
+                  ? "creator_id, engagement_rate_pct, followers, following, posts, avg_likes, avg_comments, updated_at"
+                  : "creator_id, engagement_rate_pct, followers, avg_likes, avg_comments, updated_at",
+              )
+              .maybeSingle()
+
+            if (!(upsertRes as any)?.error && (upsertRes as any)?.data) {
+              statsRow = (upsertRes as any).data
+            }
+          }
+        }
+      } catch {
+        // best-effort only
+      }
+    }
+
     const stats = (() => {
-      if (!statsRow || typeof statsRow !== "object") return null
+      // For connected users with a creator card, keep a stable object shape.
+      const row = statsRow && typeof statsRow === "object" ? statsRow : null
       return {
-        followers: toFiniteNumOrNull((statsRow as any).followers),
-        engagementRatePct: toFiniteNumOrNull((statsRow as any).engagement_rate_pct),
-        avgLikes: toFiniteNumOrNull((statsRow as any).avg_likes),
-        avgComments: toFiniteNumOrNull((statsRow as any).avg_comments),
-        updatedAt: typeof (statsRow as any).updated_at === "string" ? (statsRow as any).updated_at : null,
+        followers: row ? toFiniteNumOrNull((row as any).followers) : null,
+        following: supportsFollowingPosts && row ? toFiniteNumOrNull((row as any).following) : null,
+        posts: supportsFollowingPosts && row ? toFiniteNumOrNull((row as any).posts) : null,
+        engagementRatePct: row ? toFiniteNumOrNull((row as any).engagement_rate_pct) : null,
+        avgLikes: row ? toFiniteNumOrNull((row as any).avg_likes) : null,
+        avgComments: row ? toFiniteNumOrNull((row as any).avg_comments) : null,
+        updatedAt: row && typeof (row as any).updated_at === "string" ? (row as any).updated_at : null,
       }
     })()
 
