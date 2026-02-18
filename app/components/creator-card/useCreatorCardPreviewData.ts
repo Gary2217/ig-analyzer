@@ -33,6 +33,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function finiteNumOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  if (typeof v === "string" && v.trim() === "") return null
   const n = typeof v === "number" ? v : Number(v)
   return Number.isFinite(n) ? n : null
 }

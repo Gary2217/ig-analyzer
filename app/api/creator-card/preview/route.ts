@@ -25,6 +25,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function toFiniteNumOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  if (typeof v === "string" && v.trim() === "") return null
   const n = typeof v === "number" ? v : Number(v)
   return Number.isFinite(n) ? n : null
 }
