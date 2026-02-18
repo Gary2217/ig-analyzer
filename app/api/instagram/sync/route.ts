@@ -160,9 +160,14 @@ export async function GET(req: Request) {
       const followersCount = typeof followersCountRaw === "number" && Number.isFinite(followersCountRaw) ? Math.floor(followersCountRaw) : null
 
       if (followersCount !== null) {
+        const {
+          data: { user },
+        } = await supabaseServer.auth.getUser()
+
         const { data: ssotAccount } = await supabaseServer
           .from("user_instagram_accounts")
           .select("id")
+          .eq("user_id", user?.id)
           .eq("ig_user_id", igUserId)
           .eq("is_active", true)
           .limit(1)
