@@ -1255,9 +1255,40 @@ export async function POST(req: Request) {
       }
 
       const { today, start } = utcDateRangeForDays(safeDays)
+      const rangeStart = start
+      const rangeEnd = today
       const availableDays: number | null = null
 
-      const followersSnap = await readFollowersDailyRows({ igId: followersIgId || resolvedIgId, ssotId, start, today })
+      let followersSeries: Array<{ day: string; followers_count: number }> = []
+      let followersUsedSource = "none"
+
+      if (ssotAccount?.id) {
+        try {
+          const authed = await createAuthedClient()
+          const { data: followerRows, error: followerError } = await authed
+            .from("ig_daily_followers")
+            .select("day, followers_count")
+            .eq("ig_account_id", ssotAccount.id)
+            .gte("day", rangeStart)
+            .lte("day", rangeEnd)
+            .order("day", { ascending: true })
+
+          if (!followerError && Array.isArray(followerRows) && followerRows.length > 0) {
+            followersSeries = followerRows
+              .map((r: any) => {
+                const day = String(r?.day ?? "").trim()
+                const n = Number((r as any)?.followers_count)
+                if (!day || !Number.isFinite(n)) return null
+                return { day, followers_count: Math.floor(n) }
+              })
+              .filter((x: any): x is { day: string; followers_count: number } => x !== null)
+
+            followersUsedSource = "ssot_db"
+          }
+        } catch {
+          // ignore followers SSOT read; keep as none
+        }
+      }
 
       if (__DEBUG_DAILY_SNAPSHOT__) {
         console.log("[daily-snapshot] scope", { days: safeDays, start, today, userScopeKey, resolvedIgId, resolvedPageId })
@@ -1312,9 +1343,9 @@ export async function POST(req: Request) {
               rangeStart: start,
               rangeEnd: today,
               available_days: availableDaysCount,
-              followers_daily_rows: followersSnap.rows,
-              followers_available_days: followersSnap.availableDays,
-              followers_last_write_at: followersSnap.lastWriteAt,
+              followers_daily_rows: followersSeries,
+              followers_available_days: followersSeries.length,
+              followers_last_write_at: null,
               points: pointsPadded,
               points_ok: true,
               points_source: "snap",
@@ -1323,7 +1354,7 @@ export async function POST(req: Request) {
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
-              __diag: { snap_rows: snapRows.length, used_source: "snap", start, end: today, followers_used_source: followersSnap.followers_used_source },
+              __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
             },
           }
         }
@@ -1394,9 +1425,9 @@ export async function POST(req: Request) {
                   rangeStart: start,
                   rangeEnd: today,
                   available_days: availableDaysCount,
-                  followers_daily_rows: followersSnap.rows,
-                  followers_available_days: followersSnap.availableDays,
-                  followers_last_write_at: followersSnap.lastWriteAt,
+                  followers_daily_rows: followersSeries,
+                  followers_available_days: followersSeries.length,
+                  followers_last_write_at: null,
                   points: pointsPadded,
                   points_ok: true,
                   points_source: "legacy_db",
@@ -1405,7 +1436,7 @@ export async function POST(req: Request) {
                   insights_daily: totals.insights_daily,
                   insights_daily_series: [],
                   series_ok: true,
-                  __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today, followers_used_source: followersSnap.followers_used_source },
+                  __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
                 },
               }
             }
@@ -1476,9 +1507,9 @@ export async function POST(req: Request) {
               rangeStart: start,
               rangeEnd: today,
               available_days: availableDaysCount,
-              followers_daily_rows: followersSnap.rows,
-              followers_available_days: followersSnap.availableDays,
-              followers_last_write_at: followersSnap.lastWriteAt,
+              followers_daily_rows: followersSeries,
+              followers_available_days: followersSeries.length,
+              followers_last_write_at: null,
               points: pointsPadded,
               points_ok: true,
               points_source: "legacy_db",
@@ -1487,7 +1518,7 @@ export async function POST(req: Request) {
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
-              __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today, followers_used_source: followersSnap.followers_used_source },
+              __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
             },
           }
         }
@@ -1609,9 +1640,9 @@ export async function POST(req: Request) {
               rangeStart: start,
               rangeEnd: today,
               available_days: availableDays,
-              followers_daily_rows: followersSnap.rows,
-              followers_available_days: followersSnap.availableDays,
-              followers_last_write_at: followersSnap.lastWriteAt,
+              followers_daily_rows: followersSeries,
+              followers_available_days: followersSeries.length,
+              followers_last_write_at: null,
               points: [],
               points_ok: false,
               points_source: "empty",
@@ -1620,15 +1651,7 @@ export async function POST(req: Request) {
               insights_daily,
               insights_daily_series: series.data,
               series_ok: true,
-              __diag: {
-                snap_rows: 0,
-                used_source: "graph",
-                start,
-                end: today,
-                token_source: tokenSource,
-                totals_ok: totals.ok,
-                followers_used_source: followersSnap.followers_used_source,
-              },
+              __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
             },
           }
         }
@@ -1711,9 +1734,9 @@ export async function POST(req: Request) {
             rangeStart: start,
             rangeEnd: today,
             available_days: availableDays,
-            followers_daily_rows: followersSnap.rows,
-            followers_available_days: followersSnap.availableDays,
-            followers_last_write_at: followersSnap.lastWriteAt,
+            followers_daily_rows: followersSeries,
+            followers_available_days: followersSeries.length,
+            followers_last_write_at: null,
             points,
             points_ok: true,
             points_source: "graph_series_v24",
@@ -1722,15 +1745,7 @@ export async function POST(req: Request) {
             insights_daily,
             insights_daily_series: series.data,
             series_ok: true,
-            __diag: {
-              snap_rows: 0,
-              used_source: "graph",
-              start,
-              end: today,
-              token_source: tokenSource,
-              totals_ok: totals.ok,
-              followers_used_source: followersSnap.followers_used_source,
-            },
+            __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
           },
         }
       } catch (e: any) {
@@ -1764,9 +1779,9 @@ export async function POST(req: Request) {
         rangeStart: start,
         rangeEnd: today,
         available_days: availableDays,
-        followers_daily_rows: followersSnap.rows,
-        followers_available_days: followersSnap.availableDays,
-        followers_last_write_at: followersSnap.lastWriteAt,
+        followers_daily_rows: followersSeries,
+        followers_available_days: followersSeries.length,
+        followers_last_write_at: null,
         points: [],
         points_ok: false,
         points_source: "empty",
@@ -1775,7 +1790,7 @@ export async function POST(req: Request) {
         insights_daily: [],
         insights_daily_series: [],
         series_ok: true,
-        __diag: { snap_rows: 0, used_source: "empty", start, end: today, followers_used_source: followersSnap.followers_used_source },
+        __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
       },
     }
   })()
