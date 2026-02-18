@@ -29,6 +29,8 @@ type DsResponsePayload = {
 
 type CacheEntry<T> = { at: number; ttl: number; value: T }
 
+type ActiveIgAccount = { id: string; ig_user_id: string | null } | null
+
 const __dsInflight = new Map<string, Promise<DsResponsePayload>>()
 const __dsInflightJoinCount = new Map<string, number>()
 const __dsCache = new Map<
@@ -71,15 +73,71 @@ function pruneOldest<T>(map: Map<string, CacheEntry<T>>, maxEntries: number) {
   }
 }
 
-async function readFollowersDailyRows(params: { igId: string; start: string; today: string }) {
+async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
   try {
-    const { data, error } = await supabaseServer
+    let c: any = null
+    try {
+      c = await (cookies() as any)
+    } catch {
+      c = null
+    }
+
+    const cookieId =
+      (typeof c?.get === "function" ? String(c.get("ig_account_id")?.value ?? "").trim() : "") ||
+      (typeof c?.get === "function" ? String(c.get("ig_active_account_id")?.value ?? "").trim() : "") ||
+      (typeof c?.get === "function" ? String(c.get("ig_active_ig_account_id")?.value ?? "").trim() : "")
+
+    const authed = await createAuthedClient()
+    const userRes = await authed.auth.getUser()
+    const user = userRes?.data?.user ?? null
+    if (!user?.id) return null
+
+    if (cookieId) {
+      const { data } = await authed
+        .from("user_ig_accounts")
+        .select("id,ig_user_id")
+        .eq("id", cookieId)
+        .eq("user_id", user.id)
+        .eq("provider", "instagram")
+        .limit(1)
+        .maybeSingle()
+
+      const id = data && typeof (data as any).id === "string" ? String((data as any).id) : ""
+      const ig_user_id = data && typeof (data as any).ig_user_id === "string" ? String((data as any).ig_user_id) : null
+      if (id) return { id, ig_user_id }
+    }
+
+    const { data: latest } = await authed
+      .from("user_ig_accounts")
+      .select("id,ig_user_id")
+      .eq("user_id", user.id)
+      .eq("provider", "instagram")
+      .is("revoked_at", null)
+      .order("connected_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const id = latest && typeof (latest as any).id === "string" ? String((latest as any).id) : ""
+    const ig_user_id = latest && typeof (latest as any).ig_user_id === "string" ? String((latest as any).ig_user_id) : null
+    if (id) return { id, ig_user_id }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+async function readFollowersDailyRows(params: { igId: string; start: string; today: string; ssotId?: string | null }) {
+  try {
+    let q = supabaseServer
       .from("ig_daily_followers")
       .select("day,followers_count,captured_at")
-      .eq("ig_user_id", String(params.igId))
       .gte("day", params.start)
       .lte("day", params.today)
       .order("day", { ascending: true })
+
+    q = params.ssotId ? q.eq("ig_account_id", String(params.ssotId)) : q.eq("ig_user_id", String(params.igId))
+
+    const { data, error } = await q
 
     if (error || !Array.isArray(data)) {
       return {
@@ -161,6 +219,7 @@ async function writeFollowersBestEffortCached(params: {
   followersKey: string
   token: string
   igId: string
+  ssotId?: string | null
 }) {
   // Best-effort: never throw, never fail the request.
   try {
@@ -192,15 +251,15 @@ async function writeFollowersBestEffortCached(params: {
         if (followersCount !== null) {
           const dayStr = todayUtcDateString()
           try {
-            await supabaseServer.from("ig_daily_followers").upsert(
-              {
-                ig_user_id: String(params.igId),
-                day: dayStr,
-                followers_count: Math.floor(followersCount),
-                captured_at: capturedAt,
-              } as any,
-              { onConflict: "ig_user_id,day" },
-            )
+            const payload: any = {
+              day: dayStr,
+              followers_count: Math.floor(followersCount),
+              captured_at: capturedAt,
+              ig_user_id: String(params.igId),
+            }
+            if (params.ssotId) payload.ig_account_id = String(params.ssotId)
+            const onConflict = params.ssotId ? "ig_account_id,day" : "ig_user_id,day"
+            await supabaseServer.from("ig_daily_followers").upsert(payload, { onConflict })
           } catch (e: any) {
             if (__DEBUG_DAILY_SNAPSHOT__) {
               console.log("[daily-snapshot] followers_upsert_failed", { message: e?.message ?? String(e) })
@@ -1115,13 +1174,20 @@ export async function POST(req: Request) {
     }
 
     const run = (async (): Promise<DsResponsePayload> => {
+      const ssotAccount = cronMode ? null : await resolveActiveIgAccountForRequest()
+      const ssotId = ssotAccount?.id ?? null
+      const ssotIgUserId = ssotAccount?.ig_user_id ?? null
+      const followersIgId = resolvedIgId || ssotIgUserId || ""
+
       // Best-effort: write today's followers_count snapshot (do not affect API success)
-      void writeFollowersBestEffortCached({ followersKey, token, igId: resolvedIgId })
+      if (followersIgId) {
+        void writeFollowersBestEffortCached({ followersKey, token, igId: followersIgId, ssotId })
+      }
 
       const { today, start } = utcDateRangeForDays(safeDays)
       const availableDays: number | null = null
 
-      const followersSnap = await readFollowersDailyRows({ igId: resolvedIgId, start, today })
+      const followersSnap = await readFollowersDailyRows({ igId: followersIgId || resolvedIgId, ssotId, start, today })
 
       if (__DEBUG_DAILY_SNAPSHOT__) {
         console.log("[daily-snapshot] scope", { days: safeDays, start, today, userScopeKey, resolvedIgId, resolvedPageId })
