@@ -2533,40 +2533,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
           signal: ac.signal,
         })
 
-        const igUserIdStr = getCookieValue("ig_ig_id")
-        const pageIdStr = getCookieValue("ig_page_id")
-        const ig_user_id = Number(igUserIdStr)
-        const page_id = Number(pageIdStr)
-
-        const canQueryDb = Boolean(
-          supabaseBrowser &&
-            igUserIdStr &&
-            pageIdStr &&
-            Number.isFinite(ig_user_id) &&
-            Number.isFinite(page_id)
-        )
-
-        const dbReq = canQueryDb
-          ? supabaseBrowser!
-              .from("ig_daily_insights")
-              .select("day,reach,impressions,total_interactions,accounts_engaged")
-              .eq("ig_user_id", ig_user_id)
-              .eq("page_id", page_id)
-              .gte("day", (() => {
-                const now = new Date()
-                const ms =
-                  Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0) -
-                  (daysForRequest - 1) * 24 * 60 * 60 * 1000
-                const d = new Date(ms)
-                const y = d.getUTCFullYear()
-                const m = String(d.getUTCMonth() + 1).padStart(2, "0")
-                const dd = String(d.getUTCDate()).padStart(2, "0")
-                return `${y}-${m}-${dd}`
-              })())
-              .order("day", { ascending: true })
-          : Promise.resolve({ data: [], error: null })
-
-        const [igRes, dbRes] = await Promise.all([igReq, dbReq])
+        const igRes = await igReq
 
         if (dailySnapshotRequestSeqRef.current !== nextReqId) return
         if (selectedTrendRangeDays !== daysForRequest) return
@@ -2609,11 +2576,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
         const totalsRaw = Array.isArray(json7?.insights_daily) ? json7.insights_daily : []
         setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
-
-        const dbRows = isRecord(dbRes) ? dbRes.data : null
         const merged = mergeToContinuousTrendPoints({
           days: daysForRequest,
-          baseDbRowsRaw: dbRows,
+          baseDbRowsRaw: [],
           overridePointsRaw: json7?.points,
         })
 
@@ -2657,7 +2622,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     mergeToContinuousTrendPoints,
     normalizeTotalsFromInsightsDaily,
     selectedTrendRangeDays,
-    supabaseBrowser,
     applyTrendSeries,
     trendSigFor,
   ])

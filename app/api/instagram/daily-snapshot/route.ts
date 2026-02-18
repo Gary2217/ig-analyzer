@@ -204,16 +204,16 @@ function utcDateRangeForDays(days: number) {
 function buildPaddedPointsFromRows(rows: any[], days: number) {
   const byDate = new Map<
     string,
-    { reach: number; impressions: number; interactions: number; engaged_accounts: number }
+    { reach: number | null; impressions: number | null; interactions: number | null; engaged_accounts: number | null }
   >()
   for (const r of rows as any[]) {
     const dateStr = String(r?.day || "").trim()
     if (!dateStr) continue
     byDate.set(dateStr, {
-      reach: toSafeInt(r?.reach),
-      impressions: toSafeInt(r?.impressions),
-      interactions: toSafeInt(r?.total_interactions),
-      engaged_accounts: toSafeInt(r?.accounts_engaged),
+      reach: toFiniteNonNegIntOrNull(r?.reach),
+      impressions: toFiniteNonNegIntOrNull(r?.impressions),
+      interactions: toFiniteNonNegIntOrNull(r?.total_interactions),
+      engaged_accounts: toFiniteNonNegIntOrNull(r?.accounts_engaged),
     })
   }
   return buildPaddedPoints({ days, byDate })
@@ -343,17 +343,25 @@ function toSafeInt(v: unknown) {
   return Math.max(0, Math.floor(n))
 }
 
+function toFiniteNonNegIntOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  if (typeof v === "string" && v.trim() === "") return null
+  const n = typeof v === "number" ? v : Number(v)
+  if (!Number.isFinite(n)) return null
+  return Math.max(0, Math.floor(n))
+}
+
 type DailySnapshotPoint = {
   date: string
-  reach: number
-  impressions: number // v24: keep for backward-compat; we set to 0 (impressions not available in our /insights usage)
-  interactions: number
-  engaged_accounts: number // v24: accounts_engaged requires metric_type=total_value; no per-day series. Keep 0 in points.
+  reach: number | null
+  impressions: number | null // v24: keep for backward-compat; we set to null when missing
+  interactions: number | null
+  engaged_accounts: number | null // v24: keep for backward-compat; we set to null when missing
 }
 
 function buildPaddedPoints(params: {
   days: number
-  byDate: Map<string, { reach: number; impressions: number; interactions: number; engaged_accounts: number }>
+  byDate: Map<string, { reach: number | null; impressions: number | null; interactions: number | null; engaged_accounts: number | null }>
 }) {
   const out: DailySnapshotPoint[] = []
   for (let i = params.days - 1; i >= 0; i--) {
@@ -361,13 +369,24 @@ function buildPaddedPoints(params: {
     const row = params.byDate.get(date)
     out.push({
       date,
-      reach: row ? row.reach : 0,
-      impressions: row ? row.impressions : 0,
-      interactions: row ? row.interactions : 0,
-      engaged_accounts: row ? row.engaged_accounts : 0,
+      reach: row ? row.reach : null,
+      impressions: row ? row.impressions : null,
+      interactions: row ? row.interactions : null,
+      engaged_accounts: row ? row.engaged_accounts : null,
     })
   }
   return out
+}
+
+function countCollectedDaysFromRows(rows: any[]): number {
+  const set = new Set<string>()
+  const list = Array.isArray(rows) ? rows : []
+  for (const r of list as any[]) {
+    const day = typeof r?.day === "string" ? String(r.day).trim() : ""
+    if (!day) continue
+    set.add(day)
+  }
+  return set.size
 }
 
 function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days: number) {
@@ -539,6 +558,14 @@ function respondWithEtag(params: {
 
 function buildTrendPointsV2(points: DailySnapshotPoint[]) {
   const list = Array.isArray(points) ? points : []
+
+  const toFiniteNumOrNull = (raw: unknown): number | null => {
+    if (raw === null || raw === undefined) return null
+    if (typeof raw === "string" && raw.trim() === "") return null
+    const v = typeof raw === "number" ? raw : Number(raw)
+    return Number.isFinite(v) ? v : null
+  }
+
   const fmtLabel = (ts: number) => {
     try {
       return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
@@ -551,7 +578,10 @@ function buildTrendPointsV2(points: DailySnapshotPoint[]) {
   }
 
   const reachByIndex: Array<number | null> = list.map((p) => {
-    const v = typeof p?.reach === "number" ? p.reach : Number(p?.reach)
+    const raw = (p as any)?.reach
+    if (raw === null || raw === undefined) return null
+    if (typeof raw === "string" && raw.trim() === "") return null
+    const v = typeof raw === "number" ? raw : Number(raw)
     return Number.isFinite(v) ? Math.max(0, Math.floor(v)) : null
   })
 
@@ -579,10 +609,10 @@ function buildTrendPointsV2(points: DailySnapshotPoint[]) {
         date,
         ts: tsOk,
         t: tsOk !== null ? fmtLabel(tsOk) : date,
-        reach: typeof p?.reach === "number" ? p.reach : null,
-        impressions: typeof p?.impressions === "number" ? p.impressions : null,
-        interactions: typeof p?.interactions === "number" ? p.interactions : null,
-        engaged: typeof p?.engaged_accounts === "number" ? p.engaged_accounts : null,
+        reach: toFiniteNumOrNull((p as any)?.reach),
+        impressions: toFiniteNumOrNull((p as any)?.impressions),
+        interactions: toFiniteNumOrNull((p as any)?.interactions),
+        engaged: toFiniteNumOrNull((p as any)?.engaged_accounts),
         reach_ma7: typeof reachMa7ByIndex[i] === "number" && Number.isFinite(reachMa7ByIndex[i] as number) ? (reachMa7ByIndex[i] as number) : null,
       }
     })
@@ -1065,6 +1095,8 @@ export async function POST(req: Request) {
           const pointsPadded = buildPaddedPointsFromRows(snapRows, safeDays)
           mark("build", tBuildStart)
 
+          const availableDaysCount = countCollectedDaysFromRows(snapRows)
+
           const maxUpdatedAt = snapRows.reduce((max: string | null, r: any) => {
             const ua = typeof r?.updated_at === "string" ? String(r.updated_at).trim() : ""
             return ua && (!max || ua > max) ? ua : max
@@ -1091,7 +1123,7 @@ export async function POST(req: Request) {
               rangeDays: safeDays,
               rangeStart: start,
               rangeEnd: today,
-              available_days: snapRows.length,
+              available_days: availableDaysCount,
               points: pointsPadded,
               points_ok: true,
               points_source: "snap",
@@ -1140,6 +1172,8 @@ export async function POST(req: Request) {
           const pointsPadded = buildPaddedPointsFromRows(list, safeDays)
           mark("build", tBuildStart)
 
+          const availableDaysCount = countCollectedDaysFromRows(list)
+
           const maxUpdatedAt = list.reduce((max: string | null, r: any) => {
             const ua = typeof r?.updated_at === "string" ? String(r.updated_at).trim() : ""
             return ua && (!max || ua > max) ? ua : max
@@ -1166,7 +1200,7 @@ export async function POST(req: Request) {
               rangeDays: safeDays,
               rangeStart: start,
               rangeEnd: today,
-              available_days: list.length,
+              available_days: availableDaysCount,
               points: pointsPadded,
               points_ok: true,
               points_source: "legacy_db",
