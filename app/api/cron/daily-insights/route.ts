@@ -49,6 +49,14 @@ function toSafeInt(v: unknown) {
   return Math.max(0, Math.floor(n))
 }
 
+function toFiniteNonNegIntOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  if (typeof v === "string" && v.trim() === "") return null
+  const n = typeof v === "number" ? v : Number(v)
+  if (!Number.isFinite(n)) return null
+  return Math.max(0, Math.floor(n))
+}
+
 async function safeJson(res: Response) {
   try {
     return await res.json()
@@ -163,7 +171,7 @@ async function runCron(req: Request) {
       )
     }
 
-    const today = todayUtcDateString()
+    const todayDay = todayUtcDateString()
 
     let credsRows: any = null
     let credsErr: any = null
@@ -227,6 +235,38 @@ async function runCron(req: Request) {
         continue
       }
 
+      // Best-effort: persist today's followers snapshot (independent from insights write).
+      try {
+        const meUrl = new URL(`${GRAPH_BASE}/${encodeURIComponent(igUserIdStr)}`)
+        meUrl.searchParams.set("fields", "followers_count")
+        meUrl.searchParams.set("access_token", pageAccessToken)
+
+        const meRes = await fetch(meUrl.toString(), { method: "GET", cache: "no-store" })
+        const meBody = await safeJson(meRes)
+        const followersCount = toFiniteNonNegIntOrNull((meBody as any)?.followers_count)
+        if (followersCount !== null) {
+          await supabaseServer.from("ig_daily_followers").upsert(
+            {
+              ig_user_id: igUserIdStr,
+              day: todayDay,
+              followers_count: followersCount,
+              captured_at: new Date().toISOString(),
+            } as any,
+            { onConflict: "ig_user_id,day" },
+          )
+        }
+      } catch (e: any) {
+        if (__DEBUG_CRON__) {
+          console.log(
+            JSON.stringify({
+              status: "followers_upsert_failed",
+              ig_user_id,
+              error: { message: e?.message ?? String(e) },
+            }),
+          )
+        }
+      }
+
       // Pull the last few days so we can persist the last fully completed day(s).
       // We will explicitly filter out "today" to avoid partial-day persistence.
       const untilMs = Date.now()
@@ -279,7 +319,7 @@ async function runCron(req: Request) {
           const endTime = typeof v?.end_time === "string" ? v.end_time : ""
           const dayKey = endTime ? ymdFromIsoEndTime(endTime) : null
           if (!dayKey) continue
-          if (dayKey >= today) continue // do NOT persist partial "today"
+          if (dayKey >= todayDay) continue // do NOT persist partial "today"
           const rec = ensure(dayKey)
           rec[field] = toSafeInt(v?.value)
         }
@@ -393,7 +433,7 @@ async function runCron(req: Request) {
     }
 
     return NextResponse.json(
-      { ok: true, day: today, upserted, skipped, total: rows.length, build_marker: BUILD_MARKER },
+      { ok: true, day: todayDay, upserted, skipped, total: rows.length, build_marker: BUILD_MARKER },
       { status: 200, headers: baseHeaders },
     )
   } catch (e: any) {

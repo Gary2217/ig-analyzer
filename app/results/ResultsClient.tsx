@@ -3934,108 +3934,47 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       return
     }
 
-    const igUserIdFromSnapshot = (() => {
-      if (!isRecord(dailySnapshotData)) return ""
-      const series = isRecord(dailySnapshotData.insights_daily_series) || Array.isArray(dailySnapshotData.insights_daily_series) ? dailySnapshotData.insights_daily_series : null
-      const firstItem = Array.isArray(series) && series.length > 0 ? series[0] : null
-      const insightId = isRecord(firstItem) && typeof firstItem.id === "string" ? firstItem.id : ""
-      return extractIgUserIdFromInsightsId(insightId)
-    })()
-
-    if (!meQuery.data && !igUserIdFromSnapshot && !getCookieValue("ig_ig_id").trim()) {
-      return
-    }
-
-    const igUserIdFromMe =
-      isRecord(meQuery.data) && typeof meQuery.data.igId === "string"
-        ? String(meQuery.data.igId).trim()
-        : ""
-    const igUserIdFromCookie = getCookieValue("ig_ig_id").trim()
-    const igUserIdStr = (igUserIdFromMe || igUserIdFromSnapshot || igUserIdFromCookie).trim()
-
-    if (__DEBUG_RESULTS__) {
-      dlog("[followers] resolved igUserId", {
-        igUserId: igUserIdStr || null,
-        source: igUserIdFromMe
-          ? "me"
-          : igUserIdFromSnapshot
-            ? "snapshot"
-            : igUserIdFromCookie
-              ? "cookie"
-              : "none",
-      })
-    }
-
-    if (!supabaseBrowser || !igUserIdStr) {
+    const ok = isRecord(dailySnapshotData) && (dailySnapshotData as any).ok === true
+    if (!ok) {
       setFollowersDailyRows([])
       setFollowersLastWriteAt(null)
       return
     }
 
+    const rowsRaw = isRecord(dailySnapshotData) && Array.isArray((dailySnapshotData as any).followers_daily_rows)
+      ? ((dailySnapshotData as any).followers_daily_rows as unknown[])
+      : []
+
+    const rows = rowsRaw
+      .map((r) => {
+        if (!isRecord(r)) return null
+        const day = typeof r.day === "string" ? r.day : ""
+        const n = typeof r.followers_count === "number" ? r.followers_count : Number((r as any).followers_count)
+        if (!day || !Number.isFinite(n)) return null
+        return { day, followers_count: Math.floor(n) }
+      })
+      .filter((x): x is { day: string; followers_count: number } => x !== null)
+
+    const lastWriteAt =
+      isRecord(dailySnapshotData) && typeof (dailySnapshotData as any).followers_last_write_at === "string"
+        ? String((dailySnapshotData as any).followers_last_write_at).trim() || null
+        : null
+
+    setFollowersDailyRows(rows)
+    setFollowersLastWriteAt(lastWriteAt)
+
     if (__DEBUG_RESULTS__) {
-      dlog("[followers] fetch start", { igUserId: igUserIdStr })
+      const firstDay = rows[0]?.day ?? ""
+      const lastDay = rows[rows.length - 1]?.day ?? ""
+      dlog("[followers] snapshot applied", {
+        rows: rows.length,
+        firstDay,
+        lastDay,
+        lastWriteAt,
+        fetchedAt: new Date().toISOString(),
+      })
     }
-
-    let cancelled = false
-    ;(async () => {
-      try {
-        const resp = await supabaseBrowser
-          .from("ig_daily_followers")
-          .select("day,followers_count")
-          .eq("ig_user_id", igUserIdStr)
-          .order("day", { ascending: true })
-
-        const data = isRecord(resp) ? resp.data : null
-        const error = isRecord(resp) ? resp.error : null
-
-        if (cancelled) return
-        if (error || !Array.isArray(data)) {
-          setFollowersDailyRows([])
-          setFollowersLastWriteAt(null)
-          return
-        }
-
-        const rows = (Array.isArray(data) ? data : [])
-          .map((r) => {
-            if (!isRecord(r)) return null
-            const day = typeof r.day === "string" ? r.day : ""
-            const n =
-              typeof r.followers_count === "number"
-                ? r.followers_count
-                : Number(r.followers_count)
-            if (!day || !Number.isFinite(n)) return null
-            return { day, followers_count: Math.floor(n) }
-          })
-          .filter((x): x is { day: string; followers_count: number } => x !== null)
-
-        setFollowersDailyRows(rows)
-
-        setFollowersLastWriteAt(null)
-
-        if (__DEBUG_RESULTS__) {
-          const firstDay = rows[0]?.day ?? ""
-          const lastDay = rows[rows.length - 1]?.day ?? ""
-          dlog("[followers] fetch done", {
-            igUserId: igUserIdStr,
-            rows: rows.length,
-            firstDay,
-            lastDay,
-            lastWriteAt: null,
-            lastDataDay: lastDay,
-            fetchedAt: new Date().toISOString(),
-          })
-        }
-      } catch {
-        if (cancelled) return
-        setFollowersDailyRows([])
-        setFollowersLastWriteAt(null)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram, meQuery.data, supabaseBrowser])
+  }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram])
 
   useEffect(() => {
     if (typeof window === "undefined") return

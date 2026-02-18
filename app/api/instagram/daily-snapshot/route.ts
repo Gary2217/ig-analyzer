@@ -71,6 +71,56 @@ function pruneOldest<T>(map: Map<string, CacheEntry<T>>, maxEntries: number) {
   }
 }
 
+async function readFollowersDailyRows(params: { igId: string; start: string; today: string }) {
+  try {
+    const { data, error } = await supabaseServer
+      .from("ig_daily_followers")
+      .select("day,followers_count,captured_at")
+      .eq("ig_user_id", String(params.igId))
+      .gte("day", params.start)
+      .lte("day", params.today)
+      .order("day", { ascending: true })
+
+    if (error || !Array.isArray(data)) {
+      return {
+        rows: [] as Array<{ day: string; followers_count: number }>,
+        availableDays: 0,
+        lastWriteAt: null as string | null,
+      }
+    }
+
+    const set = new Set<string>()
+    let maxCapturedAt: string | null = null
+    const rows = (Array.isArray(data) ? data : [])
+      .map((r: any) => {
+        const day = typeof r?.day === "string" ? String(r.day).trim() : ""
+        const nRaw = r?.followers_count
+        const n = typeof nRaw === "number" ? nRaw : Number(nRaw)
+        if (!day || !Number.isFinite(n)) return null
+
+        set.add(day)
+
+        const ca = typeof r?.captured_at === "string" ? String(r.captured_at).trim() : ""
+        if (ca && (!maxCapturedAt || ca > maxCapturedAt)) maxCapturedAt = ca
+
+        return { day, followers_count: Math.floor(n) }
+      })
+      .filter((x: any): x is { day: string; followers_count: number } => x !== null)
+
+    return {
+      rows,
+      availableDays: set.size,
+      lastWriteAt: maxCapturedAt,
+    }
+  } catch {
+    return {
+      rows: [] as Array<{ day: string; followers_count: number }>,
+      availableDays: 0,
+      lastWriteAt: null as string | null,
+    }
+  }
+}
+
 function tokenSignature(rawToken: string) {
   const t = String(rawToken || "").trim()
   if (!t) return ""
@@ -1071,6 +1121,8 @@ export async function POST(req: Request) {
       const { today, start } = utcDateRangeForDays(safeDays)
       const availableDays: number | null = null
 
+      const followersSnap = await readFollowersDailyRows({ igId: resolvedIgId, start, today })
+
       if (__DEBUG_DAILY_SNAPSHOT__) {
         console.log("[daily-snapshot] scope", { days: safeDays, start, today, userScopeKey, resolvedIgId, resolvedPageId })
       }
@@ -1124,6 +1176,9 @@ export async function POST(req: Request) {
               rangeStart: start,
               rangeEnd: today,
               available_days: availableDaysCount,
+              followers_daily_rows: followersSnap.rows,
+              followers_available_days: followersSnap.availableDays,
+              followers_last_write_at: followersSnap.lastWriteAt,
               points: pointsPadded,
               points_ok: true,
               points_source: "snap",
@@ -1201,6 +1256,9 @@ export async function POST(req: Request) {
               rangeStart: start,
               rangeEnd: today,
               available_days: availableDaysCount,
+              followers_daily_rows: followersSnap.rows,
+              followers_available_days: followersSnap.availableDays,
+              followers_last_write_at: followersSnap.lastWriteAt,
               points: pointsPadded,
               points_ok: true,
               points_source: "legacy_db",
@@ -1331,6 +1389,9 @@ export async function POST(req: Request) {
               rangeStart: start,
               rangeEnd: today,
               available_days: availableDays,
+              followers_daily_rows: followersSnap.rows,
+              followers_available_days: followersSnap.availableDays,
+              followers_last_write_at: followersSnap.lastWriteAt,
               points: [],
               points_ok: false,
               points_source: "empty",
@@ -1429,6 +1490,9 @@ export async function POST(req: Request) {
             rangeStart: start,
             rangeEnd: today,
             available_days: availableDays,
+            followers_daily_rows: followersSnap.rows,
+            followers_available_days: followersSnap.availableDays,
+            followers_last_write_at: followersSnap.lastWriteAt,
             points,
             points_ok: true,
             points_source: "graph_series_v24",
@@ -1478,6 +1542,9 @@ export async function POST(req: Request) {
         rangeStart: start,
         rangeEnd: today,
         available_days: availableDays,
+        followers_daily_rows: followersSnap.rows,
+        followers_available_days: followersSnap.availableDays,
+        followers_last_write_at: followersSnap.lastWriteAt,
         points: [],
         points_ok: false,
         points_source: "empty",
