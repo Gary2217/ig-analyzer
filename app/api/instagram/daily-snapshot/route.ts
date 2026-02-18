@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { supabaseServer } from "@/lib/supabase/server"
+import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 import { createHash } from "crypto"
 
 export const runtime = "nodejs"
@@ -1193,6 +1193,90 @@ export async function POST(req: Request) {
         }
       } catch {
         // ignore snapshot failures; fall back to legacy DB path
+      }
+
+      // 2) SSOT-first read: ig_daily_insights scoped by ig_account_id
+      // Minimal READ-ONLY patch: do not write-back/upsert in this step.
+      try {
+        const tSsotStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+        const authed = await createAuthedClient()
+        const userRes = await authed.auth.getUser()
+        const user = userRes?.data?.user ?? null
+
+        if (user?.id) {
+          const { data: acct } = await authed
+            .from("user_ig_accounts")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("provider", "instagram")
+            .order("connected_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          const ig_account_id = acct && typeof (acct as any).id === "string" ? String((acct as any).id) : ""
+
+          if (ig_account_id) {
+            const { data: ssotRows, error: ssotErr } = await supabaseServer
+              .from("ig_daily_insights")
+              .select("day,reach,impressions,total_interactions,accounts_engaged,captured_at")
+              .eq("ig_account_id", ig_account_id)
+              .gte("day", start)
+              .lte("day", today)
+              .order("day", { ascending: true })
+
+            mark("db", tSsotStart)
+
+            const list = Array.isArray(ssotRows) ? ssotRows : []
+            if (!ssotErr && list.length > 0) {
+              const pointsPadded = buildPaddedPointsFromRows(list, safeDays)
+
+              const availableDaysCount = countCollectedDaysFromRows(list)
+              const maxCapturedAt = list.reduce((max: string | null, r: any) => {
+                const ca = typeof r?.captured_at === "string" ? String(r.captured_at).trim() : ""
+                return ca && (!max || ca > max) ? ca : max
+              }, null)
+
+              const etag = weakEtagFromParts(["ds", "db", resolvedIgId, resolvedPageId, safeDays, maxCapturedAt ?? today])
+              if (isIfNoneMatchHit(req, etag)) {
+                return { status: 200, source: "db", body: null, etag }
+              }
+
+              const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+              const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+              const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
+              mark("totals", tTotalsStart)
+
+              return {
+                status: 200,
+                source: "db",
+                etag,
+                body: {
+                  build_marker: BUILD_MARKER,
+                  ok: true,
+                  days: safeDays,
+                  rangeDays: safeDays,
+                  rangeStart: start,
+                  rangeEnd: today,
+                  available_days: availableDaysCount,
+                  followers_daily_rows: followersSnap.rows,
+                  followers_available_days: followersSnap.availableDays,
+                  followers_last_write_at: followersSnap.lastWriteAt,
+                  points: pointsPadded,
+                  points_ok: true,
+                  points_source: "legacy_db",
+                  points_end_date: today,
+                  trend_points_v2: buildTrendPointsV2(pointsPadded),
+                  insights_daily: totals.insights_daily,
+                  insights_daily_series: [],
+                  series_ok: true,
+                  __diag: { db_rows: list.length, used_source: "legacy_db", start, end: today },
+                },
+              }
+            }
+          }
+        }
+      } catch {
+        // ignore SSOT read failures; continue with existing paths
       }
 
       // 2) Legacy ig_daily_insights (fallback)
