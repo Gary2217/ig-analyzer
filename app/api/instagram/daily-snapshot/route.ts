@@ -29,7 +29,7 @@ type DsResponsePayload = {
 
 type CacheEntry<T> = { at: number; ttl: number; value: T }
 
-type ActiveIgAccount = { id: string; ig_user_id: string | null } | null
+type ActiveIgAccount = { id: string; ig_user_id: string } | null
 
 const __dsInflight = new Map<string, Promise<DsResponsePayload>>()
 const __dsInflightJoinCount = new Map<string, number>()
@@ -92,7 +92,23 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
     const user = userRes?.data?.user ?? null
     if (!user?.id) return null
 
-    // Prefer the user's active IG account mapping (ig_user_id -> SSOT user_ig_accounts.id)
+    // B) If cookieId exists (usually SSOT user_ig_accounts.id), try it first.
+    if (cookieId) {
+      const { data } = await authed
+        .from("user_ig_accounts")
+        .select("id,ig_user_id")
+        .eq("id", cookieId)
+        .eq("user_id", user.id)
+        .eq("provider", "instagram")
+        .limit(1)
+        .maybeSingle()
+
+      const id = data && typeof (data as any).id === "string" ? String((data as any).id) : ""
+      const ig_user_id = data && (data as any).ig_user_id != null ? String((data as any).ig_user_id) : ""
+      if (id) return { id, ig_user_id }
+    }
+
+    // C) Try user_instagram_accounts active mapping: ig_user_id -> user_ig_accounts.id (SSOT uuid)
     try {
       const { data: activeIg } = await authed
         .from("user_instagram_accounts")
@@ -114,31 +130,14 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
           .maybeSingle()
 
         const id = ssotRow && typeof (ssotRow as any).id === "string" ? String((ssotRow as any).id) : ""
-        const ig_user_id = ssotRow && typeof (ssotRow as any).ig_user_id === "string" ? String((ssotRow as any).ig_user_id) : activeIgUserId
+        const ig_user_id = ssotRow && (ssotRow as any).ig_user_id != null ? String((ssotRow as any).ig_user_id) : activeIgUserId
         if (id) return { id, ig_user_id }
-
-        // If we have an active ig_user_id but no SSOT row, still return ig_user_id for legacy fallback paths.
-        return { id: "", ig_user_id: activeIgUserId }
       }
     } catch {
-      // ignore; continue to cookie/latest fallback
+      // ignore; continue to final fallback
     }
 
-    if (cookieId) {
-      const { data } = await authed
-        .from("user_ig_accounts")
-        .select("id,ig_user_id")
-        .eq("id", cookieId)
-        .eq("user_id", user.id)
-        .eq("provider", "instagram")
-        .limit(1)
-        .maybeSingle()
-
-      const id = data && typeof (data as any).id === "string" ? String((data as any).id) : ""
-      const ig_user_id = data && typeof (data as any).ig_user_id === "string" ? String((data as any).ig_user_id) : null
-      if (id) return { id, ig_user_id }
-    }
-
+    // D) Fallback: latest connected user_ig_accounts row
     const { data: latest } = await authed
       .from("user_ig_accounts")
       .select("id,ig_user_id")
@@ -146,11 +145,13 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
       .eq("provider", "instagram")
       .is("revoked_at", null)
       .order("connected_at", { ascending: false })
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
 
     const id = latest && typeof (latest as any).id === "string" ? String((latest as any).id) : ""
-    const ig_user_id = latest && typeof (latest as any).ig_user_id === "string" ? String((latest as any).ig_user_id) : null
+    const ig_user_id = latest && (latest as any).ig_user_id != null ? String((latest as any).ig_user_id) : ""
     if (id) return { id, ig_user_id }
   } catch {
     // ignore
