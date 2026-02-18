@@ -1276,6 +1276,7 @@ export async function POST(req: Request) {
             .from("user_instagram_accounts")
             .select("id")
             .eq("user_id", user.id)
+            .eq("ig_user_id", resolvedIgId)
             .eq("is_active", true)
             .limit(1)
             .maybeSingle()
