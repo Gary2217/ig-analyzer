@@ -29,6 +29,18 @@ function toFiniteNumOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function pickPositiveCount(obj: Record<string, unknown> | null, keys: string[]): number | null {
+  const o = obj && typeof obj === "object" ? obj : null
+  if (!o) return null
+
+  for (const k of keys) {
+    const v = (o as any)[k]
+    const n = toFiniteNumOrNull(v)
+    if (n !== null && n > 0) return Math.floor(n)
+  }
+  return null
+}
+
 function hasAnyNullishCounts(row: any): boolean {
   if (!row || typeof row !== "object") return true
   const f = toFiniteNumOrNull((row as any).followers)
@@ -231,16 +243,26 @@ export async function GET(req: NextRequest) {
 
         if (meOk && meIgUserId && meIgUserId === creatorId) {
           const profile = asRecord((meState as any)?.profile)
-          const followers = toFiniteNumOrNull(profile?.followers_count)
-          const following = supportsFollowingPosts ? toFiniteNumOrNull(profile?.follows_count ?? profile?.following_count) : null
-          const posts = supportsFollowingPosts ? toFiniteNumOrNull(profile?.media_count) : null
+          const followersDb = toFiniteNumOrNull((statsRow as any)?.followers)
+          const followingDb = supportsFollowingPosts ? toFiniteNumOrNull((statsRow as any)?.following) : null
+          const postsDb = supportsFollowingPosts ? toFiniteNumOrNull((statsRow as any)?.posts) : null
 
-          if (followers !== null || following !== null || posts !== null) {
+          const followersIg = followersDb === null
+            ? pickPositiveCount(profile, ["followers_count", "follower_count", "followers"])
+            : null
+          const followingIg = supportsFollowingPosts && followingDb === null
+            ? pickPositiveCount(profile, ["follows_count", "following_count", "following", "follows"])
+            : null
+          const postsIg = supportsFollowingPosts && postsDb === null
+            ? pickPositiveCount(profile, ["media_count", "posts", "post_count", "mediaCount"])
+            : null
+
+          if (followersIg !== null || followingIg !== null || postsIg !== null) {
             const upsertPayload: Record<string, unknown> = {
               creator_id: creatorId,
-              ...(followers !== null ? { followers: Math.floor(Math.max(0, followers)) } : null),
-              ...(following !== null ? { following: Math.floor(Math.max(0, following)) } : null),
-              ...(posts !== null ? { posts: Math.floor(Math.max(0, posts)) } : null),
+              ...(followersIg !== null ? { followers: followersIg } : {}),
+              ...(followingIg !== null ? { following: followingIg } : {}),
+              ...(postsIg !== null ? { posts: postsIg } : {}),
               updated_at: new Date().toISOString(),
             }
 
