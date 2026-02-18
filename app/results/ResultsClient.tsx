@@ -2491,12 +2491,25 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     const now = Date.now()
     const daysForRequest = selectedTrendRangeDays
 
+    const isRangeSwitching =
+      Boolean(isChangingRange) ||
+      Boolean(rangeOverlayInFlightRef.current && rangeOverlayInFlightRef.current.days === daysForRequest)
+
     const shouldStartTrendFetch = (d: 90 | 60 | 30 | 14 | 7, t: number) => {
       if (inFlightTrendDaysRef.current === d) return false
       const lastAt = lastFetchAtByDaysRef.current.get(d) ?? 0
-      if (t - lastAt < cooldownMs) return false
-      if (fetchedByDaysRef.current.get(d) === true) return false
+      if (!isRangeSwitching && t - lastAt < cooldownMs) return false
+      if (!isRangeSwitching && fetchedByDaysRef.current.get(d) === true) return false
       return true
+    }
+
+    if (process.env.NODE_ENV !== "production" && isRangeSwitching) {
+      const lastAt = lastFetchAtByDaysRef.current.get(daysForRequest) ?? 0
+      const isCooldown = now - lastAt < cooldownMs
+      const isFetched = fetchedByDaysRef.current.get(daysForRequest) === true
+      if (isCooldown || isFetched) {
+        console.debug("[trend][fetch] bypass_gate_for_switch", { days: daysForRequest, isCooldown, isFetched })
+      }
     }
 
     if (!shouldStartTrendFetch(daysForRequest, now)) return
@@ -5914,6 +5927,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                 if (selectedTrendRangeDays === d) return
                                 // Prevent duplicate clicks while loading
                                 if (isChangingRange) return
+
+                                const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", d))
+                                const cacheHit = Boolean(cached && Array.isArray(cached.points) && cached.points.length >= 1)
+                                if (process.env.NODE_ENV !== "production") {
+                                  console.debug("[trend][ui] range_click", { days: d, cacheHit })
+                                }
                                 
                                 const requestId = rangeChangeRequestIdRef.current + 1
                                 rangeChangeRequestIdRef.current = requestId
@@ -5934,9 +5953,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   console.debug("[trend][perf] range click start", { days: d, requestId })
                                 }
 
-                                fetchedByDaysRef.current.delete(d)
+                                if (!cacheHit) {
+                                  fetchedByDaysRef.current.delete(d)
+                                } else {
+                                  fetchedByDaysRef.current.set(d, true)
+                                }
 
-                                const cached = trendPointsByDaysRef.current.get(trendCacheKey("reach", d))
                                 if (process.env.NODE_ENV !== "production" && typeof performance !== "undefined") {
                                   console.debug(
                                     cached && Array.isArray(cached.points) && cached.points.length >= 1
@@ -5945,6 +5967,19 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     { days: d, requestId },
                                   )
                                 }
+
+                                if (cacheHit && cached && Array.isArray(cached.points) && cached.points.length >= 1) {
+                                  if (process.env.NODE_ENV !== "production") {
+                                    console.debug("[trend][ui] range_cache_apply", { days: d, requestId })
+                                  }
+                                  applyTrendSeries({
+                                    days: d,
+                                    points: cached.points,
+                                    fetchedAt: typeof cached.fetchedAt === "number" ? cached.fetchedAt : null,
+                                  })
+                                  return
+                                }
+
                                 requestAnimationFrame(() => {
                                   if (!isMountedRef.current) return
                                   if (requestId !== rangeChangeRequestIdRef.current) return
@@ -5952,11 +5987,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   // Arm safety timeout
                                   armRangeSwitchTimeout(requestId)
 
-                                  if (cached && Array.isArray(cached.points) && cached.points.length >= 1) {
-                                    applyCachedTrendSeriesDirect({ days: d, cached })
-                                  } else {
-                                    // Loading state will be reset when data arrives via trendFetchStatus or safety timeout
-                                  }
+                                  // Loading state will be reset when data arrives via trendFetchStatus or safety timeout
                                 })
                               }}
                               className={
