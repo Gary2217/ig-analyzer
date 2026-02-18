@@ -1279,19 +1279,20 @@ export async function POST(req: Request) {
             .from("user_instagram_accounts")
             .select("id")
             .eq("user_id", user.id)
+            .eq("ig_user_id", resolvedIgId)
             .eq("is_active", true)
-            .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle()
 
           const ssotId =
             ssotAccountResolved &&
-            typeof (ssotAccountResolved as any).id === "string"
-              ? String((ssotAccountResolved as any).id)
+            typeof ssotAccountResolved.id === "string"
+              ? ssotAccountResolved.id
               : null
 
-          console.log("[SSOT resolve]", {
+          console.log("[SSOT resolve FINAL]", {
             user_id: user.id,
+            resolvedIgId,
             ssotId,
             error: ssotResolveError?.message,
           })
