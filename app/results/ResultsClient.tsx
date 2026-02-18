@@ -30,6 +30,7 @@ import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints
 import { PostsDebugPanel } from "./PostsDebugPanel"
 import { CreatorCardShowcase } from "./CreatorCardShowcase"
 import { toIgDirectMediaUrl } from "@/app/lib/ig/toIgDirectMediaUrl"
+import { useCreatorCardPreviewData } from "../components/creator-card/useCreatorCardPreviewData"
 
 // Dev StrictMode can mount/unmount/mount causing useRef to reset.
 // Module-scope flag survives remount in the same session and prevents duplicate fetch.
@@ -1632,13 +1633,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
   const effectiveRecentLen = Array.isArray(effectiveRecentMedia) ? effectiveRecentMedia.length : 0
   const topPostsLen = effectiveRecentLen
-
-  // Profile stats (UI-only)
-  // Source of truth: Meta returns these on `profile`.
-  const profileStats = isRecord(igMe) && isRecord(igMe.profile) ? igMe.profile : null
-  const followersCount = toNum(profileStats?.followers_count)
-  const followsCount = toNum(profileStats?.follows_count)
-  const mediaCount = toNum(profileStats?.media_count) ?? (mediaLoaded && Array.isArray(media) ? media.length : undefined)
   const formatCompact = (n?: number) => {
     if (typeof n !== "number" || !Number.isFinite(n)) return "—"
     try {
@@ -2100,6 +2094,28 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     Boolean(isRecord(igMe) && igMe.connected === true) ||
     Boolean(isRecord(igMe) && igMe.connected ? (isRecord(igProfile) ? igProfile.username : undefined) : (isRecord(igMe) ? igMe.username : undefined))
   const isConnectedInstagram = cookieConnected || Boolean(isRecord(igMe) && igMe.connected === true) || isConnected
+
+  const creatorCardPreviewData = useCreatorCardPreviewData({ enabled: isConnectedInstagram })
+
+  // Profile stats (UI-only)
+  // Source of truth: DB (creator_stats). If DB stats missing, show placeholder.
+  const followersCount = (() => {
+    const db = typeof creatorCardPreviewData?.followers === "number" && Number.isFinite(creatorCardPreviewData.followers) ? creatorCardPreviewData.followers : undefined
+    if (typeof db === "number" && Number.isFinite(db)) return db
+    return undefined
+  })()
+  const followsCount = (() => {
+    const db = typeof creatorCardPreviewData?.following === "number" && Number.isFinite(creatorCardPreviewData.following) ? creatorCardPreviewData.following : undefined
+    if (typeof db === "number" && Number.isFinite(db)) return db
+    return undefined
+  })()
+  const mediaCount = (() => {
+    const db = typeof creatorCardPreviewData?.posts === "number" && Number.isFinite(creatorCardPreviewData.posts) ? creatorCardPreviewData.posts : undefined
+    if (typeof db === "number" && Number.isFinite(db)) return db
+    void mediaLoaded
+    void media
+    return undefined
+  })()
 
   const hasTriggeredPrefetchRef = useRef(false)
   const prefetchInFlightDaysRef = useRef<Set<90 | 60 | 30 | 14 | 7>>(new Set())
@@ -3105,8 +3121,13 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     ? (isRecord(igProfile) && typeof igProfile.username === "string" ? String(igProfile.username).trim() : "")
     : ""
 
+  const dbAvatarUrl = typeof creatorCardPreviewData?.creatorCard?.avatarUrl === "string" ? String(creatorCardPreviewData.creatorCard.avatarUrl).trim() : ""
+  const dbDisplayName = typeof creatorCardPreviewData?.creatorCard?.displayName === "string" ? String(creatorCardPreviewData.creatorCard.displayName).trim() : ""
+  const dbIgUsername = typeof creatorCardPreviewData?.creatorCard?.username === "string" ? String(creatorCardPreviewData.creatorCard.username).trim() : ""
+
   const displayName = (() => {
     if (allowDemoProfile) return mockAnalysis.profile.displayName
+    if (dbDisplayName) return dbDisplayName
     const raw = isRecord(igProfile) && typeof igProfile.name === "string" ? igProfile.name : null
     if (typeof raw === "string" && raw.trim()) return raw.trim()
     return displayUsername ? displayUsername : "—"
@@ -3227,6 +3248,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
   const displayHandle = (() => {
     if (allowDemoProfile) return `@${mockAnalysis.profile.username}`
+    if (dbIgUsername) return `@${dbIgUsername}`
     return displayUsername ? `@${displayUsername}` : "—"
   })()
 
@@ -3294,10 +3316,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
   // KPI numbers should accept numeric strings from API responses.
   const dashKpis = isRecord(dashSummary) && isRecord(dashSummary.kpis) ? (dashSummary.kpis as Record<string, unknown>) : null
-  const kpiFollowers = finiteNumOrNull(dashKpis ? dashKpis.followers_count : (isRecord(igProfile) ? igProfile.followers_count : null))
-  const kpiFollowing = finiteNumOrNull(dashKpis ? dashKpis.follows_count : (isRecord(igProfile) ? igProfile.follows_count : null))
-  const kpiMediaCount = finiteNumOrNull(dashKpis ? dashKpis.media_count : (isRecord(igProfile) ? igProfile.media_count : null))
-  const kpiPosts = kpiMediaCount
+  void dashKpis
+
+  const kpiFollowers = typeof creatorCardPreviewData?.followers === "number" && Number.isFinite(creatorCardPreviewData.followers) ? creatorCardPreviewData.followers : null
+  const kpiFollowing = null as number | null
+  const kpiPosts = null as number | null
 
   // Treat any non-empty media array as real media; do NOT require like/comment metrics.
   const hasRealMedia = Array.isArray(effectiveRecentMedia) && effectiveRecentMedia.length > 0
@@ -3548,7 +3571,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const safePercent = (n: number | null) => (n === null ? 0 : clamp0to100(n))
   const formatPct = (n: number | null) => (n === null ? "—" : `${Math.round(n)}%`)
 
-  const engagementRate = isConnected ? (computedMetrics?.engagementRatePct ?? null) : null
+  const engagementRate = (() => {
+    if (!isConnected) return null
+    const db = typeof creatorCardPreviewData?.engagementRate === "number" && Number.isFinite(creatorCardPreviewData.engagementRate) ? creatorCardPreviewData.engagementRate : null
+    return typeof db === "number" && Number.isFinite(db) ? db : null
+  })()
 
   const cadenceScore = (() => {
     if (!isConnected) return null
@@ -5037,38 +5064,50 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       id: "engagementRate",
       titleKey: "results.kpis.engagementRate.title",
       descriptionKey: "results.kpis.engagementRate.description",
-      value: isConnected ? engagementRatePctFormatted : `${(mockAnalysis.metrics.engagementRate * 100).toFixed(1)}%`,
-      preview: isConnected ? computedMetrics?.engagementRatePct === null : false,
+      value: (() => {
+        if (!isConnected) return `${(mockAnalysis.metrics.engagementRate * 100).toFixed(1)}%`
+        const dbPct = typeof creatorCardPreviewData?.engagementRate === "number" && Number.isFinite(creatorCardPreviewData.engagementRate) ? creatorCardPreviewData.engagementRate : null
+        return dbPct === null ? "—" : `${dbPct.toFixed(2)}%`
+      })(),
+      preview: isConnected ? (typeof creatorCardPreviewData?.engagementRate !== "number" || !Number.isFinite(creatorCardPreviewData.engagementRate)) : false,
     },
     {
       id: "avgLikes",
       titleKey: "results.kpis.avgLikes.title",
       descriptionKey: "results.kpis.avgLikes.description",
-      value: isConnected ? avgLikesFormatted : mockAnalysis.metrics.avgLikes.toLocaleString(),
-      preview: isConnected ? computedMetrics?.avgLikes === null : false,
+      value: (() => {
+        if (!isConnected) return mockAnalysis.metrics.avgLikes.toLocaleString()
+        const dbAvg = typeof creatorCardPreviewData?.avgLikes === "number" && Number.isFinite(creatorCardPreviewData.avgLikes) ? creatorCardPreviewData.avgLikes : null
+        return dbAvg === null ? "—" : Math.round(dbAvg).toLocaleString()
+      })(),
+      preview: isConnected,
     },
     {
       id: "avgComments",
       titleKey: "results.kpis.avgComments.title",
       descriptionKey: "results.kpis.avgComments.description",
-      value: isConnected ? avgCommentsFormatted : mockAnalysis.metrics.avgComments.toLocaleString(),
-      preview: isConnected ? computedMetrics?.avgComments === null : false,
+      value: (() => {
+        if (!isConnected) return mockAnalysis.metrics.avgComments.toLocaleString()
+        const dbAvg = typeof creatorCardPreviewData?.avgComments === "number" && Number.isFinite(creatorCardPreviewData.avgComments) ? creatorCardPreviewData.avgComments : null
+        return dbAvg === null ? "—" : Math.round(dbAvg).toLocaleString()
+      })(),
+      preview: isConnected,
     },
     {
       id: "engagementVolume",
       titleKey: "results.kpis.engagementVolume.title",
       descriptionKey: "results.kpis.engagementVolume.description",
       value: isConnected
-        ? formatNum(computedMetrics?.engagementVolume ?? null)
+        ? "—"
         : (mockAnalysis.metrics.avgLikes + mockAnalysis.metrics.avgComments).toLocaleString(),
-      preview: isConnected ? computedMetrics?.engagementVolume === null : false,
+      preview: isConnected,
     },
     {
       id: "postsPerWeek",
       titleKey: "results.kpis.postsPerWeek.title",
       descriptionKey: "results.kpis.postsPerWeek.description",
-      value: isConnected ? formatNum(computedMetrics?.postsPerWeek ?? null) : mockAnalysis.metrics.postsPerWeek.toFixed(1),
-      preview: isConnected ? computedMetrics?.postsPerWeek === null : false,
+      value: isConnected ? "—" : mockAnalysis.metrics.postsPerWeek.toFixed(1),
+      preview: isConnected,
     },
   ]
 
@@ -5383,15 +5422,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       {recentPosts.slice(0, 3).map((m) => {
                         const caption = typeof m.caption === "string" ? m.caption : ""
                         const mediaUrl = typeof m.media_url === "string" ? m.media_url : ""
+                        const previewUrl = mediaUrl && mediaUrl.startsWith("http") ? toThumbProxyUrl(mediaUrl) : mediaUrl
                         const ts = typeof m.timestamp === "string" ? m.timestamp : ""
                         const dateLabel = ts ? new Date(ts).toLocaleString() : ""
 
                         return (
                           <div key={m.id} className="rounded-xl border border-white/10 bg-white/5 overflow-visible">
                             <div className="aspect-square bg-black/20">
-                              {mediaUrl ? (
+                              {previewUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <SafeIgThumb src={mediaUrl} alt={caption ? caption.slice(0, 40) : m.id} className="h-full w-full object-cover" />
+                                <SafeIgThumb src={previewUrl} alt={caption ? caption.slice(0, 40) : m.id} className="h-full w-full object-cover" />
                               ) : (
                                 <div className="h-full w-full flex items-center justify-center text-sm text-slate-400">
                                   {t("results.instagram.recentPostsNoPreview")}
@@ -5788,8 +5828,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
               <CardContent className="p-3 md:p-4">
                 <div className="flex items-start gap-4">
                   {(() => {
-                    const avatarUrl =
-                      isRecord(igMe) && typeof igMe.profile_picture_url === "string"
+                    const avatarUrl = dbAvatarUrl
+                      ? dbAvatarUrl
+                      : isRecord(igMe) && typeof igMe.profile_picture_url === "string"
                         ? String(igMe.profile_picture_url)
                         : ""
 

@@ -214,6 +214,14 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
   const [creatorCard, setCreatorCard] = useState<NormalizedCreatorCard | null>(null)
   const [igProfile, setIgProfile] = useState<IgProfile | null>(null)
   const [engagementRatePct, setEngagementRatePct] = useState<number | null>(null)
+  const [previewStats, setPreviewStats] = useState<{
+    followers?: number
+    following?: number
+    posts?: number
+    avgLikes?: number
+    avgComments?: number
+    engagementRatePct?: number
+  } | null>(null)
 
   const igConn = useOptionalInstagramConnection()
   const igMeOk = (() => {
@@ -252,10 +260,27 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
 
               const pct = finiteNumOrNull(statsObj?.engagementRatePct) ?? finiteNumOrNull(statsObj?.engagement_rate_pct)
               const followersFromStats = finiteNumOrNull(statsObj?.followers)
+              const followingFromStats = finiteNumOrNull(statsObj?.following)
+              const postsFromStats = finiteNumOrNull(statsObj?.posts)
+              const avgLikesFromStats = finiteNumOrNull(statsObj?.avgLikes) ?? finiteNumOrNull(statsObj?.avg_likes)
+              const avgCommentsFromStats = finiteNumOrNull(statsObj?.avgComments) ?? finiteNumOrNull(statsObj?.avg_comments)
 
               if (!cancelled) {
                 setCreatorCard(normalized)
                 setEngagementRatePct(pct)
+
+                setPreviewStats(
+                  statsObj
+                    ? {
+                        followers: followersFromStats ?? undefined,
+                        following: followingFromStats ?? undefined,
+                        posts: postsFromStats ?? undefined,
+                        avgLikes: avgLikesFromStats ?? undefined,
+                        avgComments: avgCommentsFromStats ?? undefined,
+                        engagementRatePct: pct ?? undefined,
+                      }
+                    : null,
+                )
 
                 // Best-effort: allow stats to fill followers if IG profile isn't available yet.
                 // (Keep current return shape: followers/following/posts still primarily from igProfile.)
@@ -386,10 +411,12 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
     creatorId: creatorCard?.creatorId ?? null,
     creatorCard,
     igProfile,
-    stats: engagementRatePct !== null ? { engagementRatePct } : null,
-    followers: followers ?? undefined,
-    following: following ?? undefined,
-    posts: posts ?? undefined,
-    engagementRate: engagementRatePct ?? undefined,
+    stats: previewStats ?? (engagementRatePct !== null ? { engagementRatePct } : null),
+    followers: previewStats?.followers ?? undefined,
+    following: previewStats?.following ?? undefined,
+    posts: previewStats?.posts ?? undefined,
+    avgLikes: previewStats?.avgLikes ?? undefined,
+    avgComments: previewStats?.avgComments ?? undefined,
+    engagementRate: (previewStats?.engagementRatePct ?? engagementRatePct) ?? undefined,
   }
 }
