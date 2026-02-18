@@ -2697,14 +2697,6 @@ function MatchmakingClient(props: MatchmakingClientProps) {
                 {uiCopy.matchmaking.pageTitle}
               </h1>
             </div>
-            <div className="mt-2 max-w-2xl min-w-0">
-              <p className="text-xs sm:text-sm leading-relaxed text-white/60 min-w-0 break-words">
-                {uiCopy.matchmaking.pageSubtitleLine1}
-              </p>
-              <p className="mt-1 text-xs sm:text-sm leading-relaxed text-white/55 min-w-0 break-words">
-                {uiCopy.matchmaking.pageSubtitleLine2}
-              </p>
-            </div>
 
             {canEditDemoAvatars ? (
               <div className="mt-3 flex items-center gap-2">

@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Check, Instagram, X } from "lucide-react"
 import { BUTTON_BASE_CLASSES } from "@/app/components/TopRightActions"
 import { getCopy } from "@/app/i18n"
-import { Input } from "@/components/ui/input"
 
 type IgAccountRow = {
   ig_user_id: string
@@ -52,7 +51,6 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
   const [igSwitchingId, setIgSwitchingId] = useState<string>("")
   const [igSwitchError, setIgSwitchError] = useState(false)
   const [igPickerHint, setIgPickerHint] = useState(false)
-  const [query, setQuery] = useState("")
 
   const igSelectorRef = useRef<HTMLDivElement | null>(null)
   const routerRefreshInFlightRef = useRef(false)
@@ -137,7 +135,6 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
   useEffect(() => {
     if (!igSelectorOpen) {
       setIgPickerHint(false)
-      setQuery("")
     }
   }, [igSelectorOpen])
 
@@ -272,8 +269,6 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
 
   const reconnectLabel = isZh ? "重新連接 Instagram" : "Reconnect Instagram"
 
-  const searchPlaceholder = isZh ? "搜尋 IG 帳號" : "Search IG accounts"
-
   const shortId = (raw: string) => {
     const s = String(raw || "").trim()
     if (!s) return ""
@@ -285,15 +280,8 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
   const oauthUrl = `/api/auth/instagram?locale=${encodeURIComponent(locale)}&next=${oauthNext}`
 
   const filteredAccounts = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase()
-    if (!q) return igAccounts
-
-    return igAccounts.filter((a) => {
-      const uname = String(a.username || "").toLowerCase().replace(/^@+/, "")
-      const id = String(a.ig_user_id || "").toLowerCase()
-      return uname.includes(q.replace(/^@+/, "")) || id.includes(q)
-    })
-  }, [igAccounts, query])
+    return igAccounts
+  }, [igAccounts])
 
   const switchActive = async (ig_user_id: string) => {
     const id = String(ig_user_id || "").trim()
@@ -449,16 +437,6 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
               </button>
             </div>
 
-            <div className="p-2 border-b border-white/10">
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={searchPlaceholder}
-                aria-label={searchPlaceholder}
-                className="bg-white/5 border-white/10 text-white placeholder:text-white/40"
-              />
-            </div>
-
             <div className="max-h-[60vh] overflow-auto">
               <div className="p-1">
                 <div className="p-2">
@@ -496,16 +474,6 @@ export default function IgAccountSelector({ locale }: { locale: string }) {
               </div>
 
               <div className="p-2 overflow-auto" style={{ maxHeight: "calc(82vh - 56px)" }}>
-                <div className="p-1">
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={searchPlaceholder}
-                    aria-label={searchPlaceholder}
-                    className="h-11 rounded-xl bg-white/5 border-white/10 text-white placeholder:text-white/40"
-                  />
-                </div>
-
                 {igAccountsLoading ? (
                   <div className="p-3 text-sm text-white/60">{igSelectorCopy.loading}</div>
                 ) : igAccountsError ? (
