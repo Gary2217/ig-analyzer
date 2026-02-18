@@ -6966,6 +6966,19 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                       return d.join(" ")
                                     }
 
+                                    const buildStepAfterPath = (pts: Array<{ x: number; y: number }>) => {
+                                      if (pts.length < 2) return ""
+                                      const d: string[] = []
+                                      d.push(`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`)
+                                      for (let i = 1; i < pts.length; i++) {
+                                        const prev = pts[i - 1]
+                                        const cur = pts[i]
+                                        d.push(`L${cur.x.toFixed(1)},${prev.y.toFixed(1)}`)
+                                        d.push(`L${cur.x.toFixed(1)},${cur.y.toFixed(1)}`)
+                                      }
+                                      return d.join(" ")
+                                    }
+
                                     if (focusedIsReach && s.k === "reach") {
                                       const reachPts = s.points
                                         .map((p) => {
@@ -7098,20 +7111,42 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                           })
                                           .filter(Boolean) as Array<{ x: number; y: number }>
 
-                                        return buildSmoothPath(pts)
+                                        return buildStepAfterPath(pts)
                                       })()
 
-                                      return comparePath ? (
-                                        <path
-                                          key={`trend-line-compare-${s.k}`}
-                                          d={comparePath}
-                                          stroke="rgba(255,255,255,0.95)"
-                                          strokeWidth={isSmUp ? 1.8 : 1.4}
-                                          strokeDasharray="6 4"
-                                          fill="none"
-                                          opacity={compareOpacity}
-                                        />
-                                      ) : null
+                                      const mainPts = s.points
+                                        .map((p) => {
+                                          const x = sx(p.i)
+                                          const y = sy(p.yNorm)
+                                          if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                          return { x, y }
+                                        })
+                                        .filter(Boolean) as Array<{ x: number; y: number }>
+
+                                      const d = buildStepAfterPath(mainPts)
+
+                                      return (
+                                        <g key={`trend-line-${s.k}`}>
+                                          <path
+                                            d={d}
+                                            stroke={s.color}
+                                            strokeWidth={2}
+                                            fill="none"
+                                            opacity={isFocused ? 0.99 : 0.55}
+                                          />
+                                          {comparePath ? (
+                                            <path
+                                              key={`trend-line-compare-${s.k}`}
+                                              d={comparePath}
+                                              stroke="rgba(255,255,255,0.95)"
+                                              strokeWidth={isSmUp ? 1.8 : 1.4}
+                                              strokeDasharray="6 4"
+                                              fill="none"
+                                              opacity={compareOpacity}
+                                            />
+                                          ) : null}
+                                        </g>
+                                      )
                                     }
 
                                     const d = s.points
@@ -7141,6 +7176,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   const focus = drawable.find((s) => s.k === focusedAccountTrendMetric)
                                   if (!focus) return null
                                   if (focusedIsReach && focus.k === "reach") return null
+                                  if (focusedIsFollowers && focus.k === "followers") return null
                                   return focus.points.map((p) => {
                                     const cx = sx(p.i)
                                     const cy = sy(p.yNorm)
@@ -7174,7 +7210,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                       const cx = sx(hit.i)
                                       const cy = sy(hit.yNorm)
                                       if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
-                                      const r = isSmUp ? 4.2 : 6
+                                      const r = focusedIsFollowers ? 4 : isSmUp ? 4.2 : 6
                                       return (
                                         <circle
                                           key={`trend-dot-focus`}
