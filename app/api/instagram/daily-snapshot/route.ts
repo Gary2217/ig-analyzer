@@ -92,6 +92,38 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
     const user = userRes?.data?.user ?? null
     if (!user?.id) return null
 
+    // Prefer the user's active IG account mapping (ig_user_id -> SSOT user_ig_accounts.id)
+    try {
+      const { data: activeIg } = await authed
+        .from("user_instagram_accounts")
+        .select("ig_user_id")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle()
+
+      const activeIgUserId = activeIg && (activeIg as any).ig_user_id != null ? String((activeIg as any).ig_user_id) : ""
+      if (activeIgUserId) {
+        const { data: ssotRow } = await authed
+          .from("user_ig_accounts")
+          .select("id,ig_user_id")
+          .eq("user_id", user.id)
+          .eq("provider", "instagram")
+          .eq("ig_user_id", activeIgUserId)
+          .limit(1)
+          .maybeSingle()
+
+        const id = ssotRow && typeof (ssotRow as any).id === "string" ? String((ssotRow as any).id) : ""
+        const ig_user_id = ssotRow && typeof (ssotRow as any).ig_user_id === "string" ? String((ssotRow as any).ig_user_id) : activeIgUserId
+        if (id) return { id, ig_user_id }
+
+        // If we have an active ig_user_id but no SSOT row, still return ig_user_id for legacy fallback paths.
+        return { id: "", ig_user_id: activeIgUserId }
+      }
+    } catch {
+      // ignore; continue to cookie/latest fallback
+    }
+
     if (cookieId) {
       const { data } = await authed
         .from("user_ig_accounts")
