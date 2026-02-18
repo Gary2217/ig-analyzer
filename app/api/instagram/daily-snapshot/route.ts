@@ -1279,7 +1279,6 @@ export async function POST(req: Request) {
             .from("user_instagram_accounts")
             .select("id")
             .eq("user_id", user.id)
-            .eq("ig_user_id", resolvedIgId)
             .eq("is_active", true)
             .limit(1)
             .maybeSingle()
@@ -1290,9 +1289,8 @@ export async function POST(req: Request) {
               ? ssotAccountResolved.id
               : null
 
-          console.log("[SSOT resolve FINAL]", {
+          console.log("[SSOT resolve FINAL FIX]", {
             user_id: user.id,
-            resolvedIgId,
             ssotId,
             error: ssotResolveError?.message,
           })
