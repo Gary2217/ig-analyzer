@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { graphGet, type GraphApiError } from "@/lib/instagram/graph"
 import type { GraphListResponse, IgMediaDetails, IgMediaListItem, IgInsightsResponse } from "@/lib/instagram/types"
+import { supabaseServer } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -151,6 +152,40 @@ export async function GET(req: Request) {
 
     if (!igUserId || !token) {
       return json({ ok: false, igUserId: igUserId || "", fetchedAt, pageCount: 0, itemCount: 0, items: [] }, 500)
+    }
+
+    try {
+      const profile = await graphGet<any>(`/${igUserId}`, { fields: "followers_count" })
+      const followersCountRaw = (profile as any)?.followers_count
+      const followersCount = typeof followersCountRaw === "number" && Number.isFinite(followersCountRaw) ? Math.floor(followersCountRaw) : null
+
+      if (followersCount !== null) {
+        const { data: ssotAccount } = await supabaseServer
+          .from("user_instagram_accounts")
+          .select("id")
+          .eq("ig_user_id", igUserId)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle()
+
+        const ssotId = ssotAccount && typeof (ssotAccount as any).id === "string" ? String((ssotAccount as any).id) : ""
+        if (ssotId) {
+          const today = new Date().toISOString().slice(0, 10)
+          await supabaseServer.from("ig_daily_followers").upsert(
+            {
+              ig_account_id: ssotId,
+              day: today,
+              followers_count: followersCount,
+              captured_at: new Date().toISOString(),
+            } as any,
+            {
+              onConflict: "ig_account_id,day",
+            },
+          )
+        }
+      }
+    } catch {
+      // ignore followers snapshot persistence; do not break sync
     }
 
     const sinceMs = parseSinceMs(url.searchParams.get("since"))
