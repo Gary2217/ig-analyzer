@@ -131,7 +131,7 @@ export async function getMeState(req: Request) {
           profile = pickProfile(igProfileBody)
         } else {
           const basicUrl = new URL(`https://graph.instagram.com/${encodeURIComponent(igId)}`)
-          basicUrl.searchParams.set("fields", "id,username,account_type,media_count")
+          basicUrl.searchParams.set("fields", "id,username,account_type,followers_count,follows_count,media_count")
           basicUrl.searchParams.set("access_token", token)
           const basicRes = await fetch(basicUrl.toString(), { method: "GET", cache: "no-store" })
           const basicBody = await safeJson(basicRes)
