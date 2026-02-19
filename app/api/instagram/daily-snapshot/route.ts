@@ -1278,10 +1278,12 @@ export async function POST(req: Request) {
             error: ssotResolveError,
           } = await authed
             .from("user_instagram_accounts")
-            .select("id, ig_user_id, user_id, is_active")
+            .select("id, ig_user_id, user_id, is_active, created_at")
             .eq("user_id", user.id)
             .eq("ig_user_id", resolvedIgId)
             .eq("is_active", true)
+            .order("created_at", { ascending: false })
+            .limit(1)
             .maybeSingle()
 
           ssotId =
