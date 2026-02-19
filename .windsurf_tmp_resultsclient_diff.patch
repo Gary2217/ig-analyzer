@@ -1,0 +1,138 @@
+﻿diff --git a/app/results/ResultsClient.tsx b/app/results/ResultsClient.tsx
+index 8185e37..8873e0e 100644
+--- a/app/results/ResultsClient.tsx
++++ b/app/results/ResultsClient.tsx
+@@ -7126,21 +7126,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+                                   return ordered.map((s) => {
+                                     const isFocused = s.k === focusedAccountTrendMetric
+ 
+-                                    const toSegments = (pts: Array<{ x: number; y: number } | null>) => {
+-                                      const out: Array<Array<{ x: number; y: number }>> = []
+-                                      let cur: Array<{ x: number; y: number }> = []
+-                                      for (const p of pts) {
+-                                        if (!p) {
+-                                          if (cur.length >= 2) out.push(cur)
+-                                          cur = []
+-                                          continue
+-                                        }
+-                                        cur.push(p)
+-                                      }
+-                                      if (cur.length >= 2) out.push(cur)
+-                                      return out
+-                                    }
+-
+                                     const buildSmoothPath = (pts: Array<{ x: number; y: number }>) => {
+                                       if (pts.length < 2) return ""
+                                       if (pts.length === 2) {
+@@ -7179,7 +7164,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+ 
+                                     if (focusedIsReach && s.k === "reach") {
+                                       const span = Math.max(s.max - s.min, 0)
+-                                      const reachPtsWithGaps = chartRowsAligned.map((r, i) => {
++                                      const reachPts = chartRowsAligned
++                                        .map((r, i) => {
+                                         const raw = r.reach
+                                         if (typeof raw !== "number" || !Number.isFinite(raw)) return null
+                                         const norm = span > 0 ? ((raw - s.min) / span) * 100 : 50
+@@ -7187,9 +7173,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+                                         const y = sy(Number.isFinite(norm) ? norm : 50)
+                                         if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                         return { x, y }
+-                                      })
++                                        })
++                                        .filter(Boolean) as Array<{ x: number; y: number }>
+ 
+-                                      const reachSegments = toSegments(reachPtsWithGaps)
++                                      const reachPath = buildSmoothPath(reachPts)
+ 
+                                       const comparePath = (() => {
+                                         if (!compareEnabled) return ""
+@@ -7244,8 +7231,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+                                           return { x, y }
+                                         })
+ 
+-                                        const segs = toSegments(ptsWithGaps)
+-                                        return segs.length ? buildSmoothPath(segs[0]) : ""
++                                        const pts = ptsWithGaps.filter(Boolean) as Array<{ x: number; y: number }>
++                                        return pts.length >= 2 ? buildSmoothPath(pts) : ""
+                                       })()
+ 
+                                       const maPtsWithGaps = reachMa7ByIndex.map((v, i) => {
+@@ -7257,30 +7244,13 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+                                         return { x, y }
+                                       })
+ 
+-                                      const maSegments = toSegments(maPtsWithGaps)
++                                      const maPts = maPtsWithGaps.filter(Boolean) as Array<{ x: number; y: number }>
++                                      const maPath = buildSmoothPath(maPts)
+ 
+                                       return (
+                                         <g key={`trend-line-${s.k}`}>
+-                                          {reachSegments.map((seg, idx) => (
+-                                            <path
+-                                              key={`trend-line-${s.k}-raw-${idx}`}
+-                                              d={buildSmoothPath(seg)}
+-                                              stroke={s.color}
+-                                              strokeWidth={isSmUp ? 2 : 1.4}
+-                                              fill="none"
+-                                              opacity={0.42}
+-                                            />
+-                                          ))}
+-                                          {maSegments.map((seg, idx) => (
+-                                            <path
+-                                              key={`trend-line-${s.k}-ma7-${idx}`}
+-                                              d={buildSmoothPath(seg)}
+-                                              stroke={s.color}
+-                                              strokeWidth={isSmUp ? 2.2 : 1.6}
+-                                              fill="none"
+-                                              opacity={0.92}
+-                                            />
+-                                          ))}
++                                          <path d={reachPath} stroke={s.color} strokeWidth={isSmUp ? 2 : 1.4} fill="none" opacity={0.42} />
++                                          <path d={maPath} stroke={s.color} strokeWidth={isSmUp ? 2.2 : 1.6} fill="none" opacity={0.92} />
+                                           {comparePath ? (
+                                             <path
+                                               d={comparePath}
+@@ -7329,7 +7299,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+                                       })()
+ 
+                                       const span = Math.max(s.max - s.min, 0)
+-                                      const mainPtsWithGaps = chartRowsAligned.map((r, i) => {
++                                      const mainPts = chartRowsAligned
++                                        .map((r, i) => {
+                                         const raw = r.followers
+                                         if (typeof raw !== "number" || !Number.isFinite(raw)) return null
+                                         const norm = span > 0 ? ((raw - s.min) / span) * 100 : 50
+@@ -7337,22 +7308,20 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+                                         const y = sy(Number.isFinite(norm) ? norm : 50)
+                                         if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                         return { x, y }
+-                                      })
++                                        })
++                                        .filter(Boolean) as Array<{ x: number; y: number }>
+ 
+-                                      const mainSegments = toSegments(mainPtsWithGaps)
++                                      const d = buildStepAfterPath(mainPts)
+ 
+                                       return (
+                                         <g key={`trend-line-${s.k}`}>
+-                                          {mainSegments.map((seg, idx) => (
+-                                            <path
+-                                              key={`trend-line-${s.k}-main-${idx}`}
+-                                              d={buildStepAfterPath(seg)}
+-                                              stroke={s.color}
+-                                              strokeWidth={2}
+-                                              fill="none"
+-                                              opacity={isFocused ? 0.99 : 0.55}
+-                                            />
+-                                          ))}
++                                          <path
++                                            d={d}
++                                            stroke={s.color}
++                                            strokeWidth={2}
++                                            fill="none"
++                                            opacity={isFocused ? 0.99 : 0.55}
++                                          />
+                                           {comparePath ? (
+                                             <path
+                                               key={`trend-line-compare-${s.k}`}
