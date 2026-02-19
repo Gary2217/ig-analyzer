@@ -46,6 +46,12 @@ const __dsTotalsCache = new Map<string, CacheEntry<{ ok: boolean; insights_daily
 const __dsFollowersCache = new Map<string, CacheEntry<{ followersCount: number | null; capturedAt: string }>>()
 const __dsFollowersInflight = new Map<string, Promise<void>>()
 
+const __dsReachSyncAt = new Map<string, number>()
+
+const REACH_SYNC_TTL_HOURS = 6
+const REACH_SYNC_RECENT_DAYS_SCAN = 3
+const REACH_SYNC_FETCH_DAYS = 7
+
 function nowMs() {
   return Date.now()
 }
@@ -1274,6 +1280,143 @@ export async function POST(req: Request) {
     const totalsKey = `ds_totals|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|pg:${resolvedPageId}|days:${safeDays}|tok:${tokSig}`
     const followersKey = `ds_followers|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|tok:${tokSig}`
 
+    const { today, start } = utcDateRangeForDays(safeDays)
+    const rangeStart = start
+    const rangeEnd = today
+
+    // SAFETY: Reach sync is controlled + per-user token only (no global IG_ACCESS_TOKEN fallback).
+    // Run the sync gate before any cache/inflight early returns.
+    try {
+      const reachSyncKey = `reach_sync|u:${userScopeKey}|ig:${resolvedIgId}|pg:${resolvedPageId}`
+      const lastSyncAt = __dsReachSyncAt.get(reachSyncKey) ?? 0
+      const ttlMs = REACH_SYNC_TTL_HOURS * 60 * 60 * 1000
+      const isStaleByTtl = !lastSyncAt || nowMs() - lastSyncAt > ttlMs
+
+      const dayMs = 24 * 60 * 60 * 1000
+      const rangeEndMs = Date.parse(`${rangeEnd}T00:00:00.000Z`)
+      const recentStartMs = rangeEndMs - (REACH_SYNC_RECENT_DAYS_SCAN - 1) * dayMs
+      const recentStartDay = Number.isFinite(recentStartMs) ? new Date(recentStartMs).toISOString().slice(0, 10) : rangeStart
+
+      const { data: recentRows, error: recentErr } = await supabaseServer
+        .from("account_daily_snapshot")
+        .select("day,reach")
+        .eq("user_id", userScopeKey)
+        .eq("ig_user_id", Number(resolvedIgId))
+        .eq("page_id", Number(resolvedPageId))
+        .gte("day", recentStartDay)
+        .lte("day", rangeEnd)
+        .order("day", { ascending: true })
+
+      const list = Array.isArray(recentRows) ? (recentRows as any[]) : []
+      const byDay = new Map<string, { reach: any }>()
+      for (const r of list) {
+        const day = typeof r?.day === "string" ? String(r.day).slice(0, 10) : ""
+        if (!day) continue
+        byDay.set(day, { reach: (r as any)?.reach })
+      }
+
+      const endDay = rangeEnd
+      const prevDay = (() => {
+        const prevMs = rangeEndMs - dayMs
+        return Number.isFinite(prevMs) ? new Date(prevMs).toISOString().slice(0, 10) : ""
+      })()
+
+      const missingOrNull = (day: string) => {
+        if (!day) return true
+        if (!byDay.has(day)) return true
+        const v = byDay.get(day)?.reach
+        return v === null || v === undefined
+      }
+
+      const shouldSyncReach = isStaleByTtl || missingOrNull(endDay) || missingOrNull(prevDay)
+
+      if (shouldSyncReach) {
+        console.log("REACH SYNC START", {
+          userScopeKey,
+          igUserId: resolvedIgId,
+          pageId: resolvedPageId,
+          rangeStart,
+          rangeEnd,
+          isStaleByTtl,
+          recentErr: recentErr ? { message: (recentErr as any).message, code: (recentErr as any).code } : null,
+        })
+
+        const pageToken = await getPageAccessToken(token, resolvedPageId)
+        if (!pageToken.ok) {
+          console.log("REACH SYNC SKIP: NO PAGE TOKEN")
+        } else {
+          const accessToken = pageToken.pageAccessToken
+
+          const fetchEndMs = rangeEndMs
+          const fetchStartMs = fetchEndMs - (REACH_SYNC_FETCH_DAYS - 1) * dayMs
+          const fetchStartDay = Number.isFinite(fetchStartMs)
+            ? new Date(fetchStartMs).toISOString().slice(0, 10)
+            : rangeStart
+
+          const sinceDay = fetchStartDay < rangeStart ? rangeStart : fetchStartDay
+          const untilDay = rangeEnd
+
+          const insightsRes = await fetch(
+            `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
+              `?metric=reach` +
+              `&period=day` +
+              `&since=${sinceDay}` +
+              `&until=${untilDay}` +
+              `&access_token=${accessToken}`
+          )
+
+          const insightsJson = await safeJson(insightsRes)
+
+          if (!insightsRes.ok) {
+            console.log("REACH SYNC DONE", { rows: 0, reason: "graph_not_ok", status: insightsRes.status })
+          } else {
+            console.log("IG REACH SERIES RAW", {
+              count: insightsJson?.data?.[0]?.values?.length ?? 0,
+              sample: insightsJson?.data?.[0]?.values?.slice(-5) ?? null,
+            })
+
+            const reachSeries = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
+
+            if (!Array.isArray(reachSeries) || reachSeries.length === 0) {
+              console.log("IG REACH SERIES PARSED", { count: 0 })
+              console.log("REACH SYNC DONE", { rows: 0, reason: "empty_series" })
+            } else {
+              console.log("IG REACH SERIES PARSED", { count: reachSeries.length })
+
+              const rows = reachSeries
+                .map((v: any) => {
+                  const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+                  const reachRaw = v?.value
+                  const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
+                  return {
+                    user_id: userScopeKey,
+                    ig_user_id: Number(resolvedIgId),
+                    page_id: Number(resolvedPageId),
+                    day,
+                    reach,
+                  }
+                })
+                .filter((r: any) => typeof r?.day === "string" && r.day.length === 10)
+                .filter((r: any) => typeof r?.reach === "number" && Number.isFinite(r.reach))
+
+              console.log("REACH SYNC UPSERT COUNT", { rows: rows.length })
+
+              if (rows.length > 0) {
+                await supabaseServer.from("account_daily_snapshot").upsert(rows as any, {
+                  onConflict: "user_id,ig_user_id,page_id,day",
+                })
+                __dsReachSyncAt.set(reachSyncKey, nowMs())
+              }
+
+              console.log("REACH SYNC DONE", { rows: rows.length })
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.error("REACH SYNC DONE", { rows: 0, err: String(e) })
+    }
+
     const cachedResp = readCache(__dsCache, requestKey)
     if (cachedResp) {
       mark("total", t0)
@@ -1335,13 +1478,10 @@ export async function POST(req: Request) {
         void writeFollowersBestEffortCached({ followersKey, token, igId: followersIgId, ssotId })
       }
 
-      const { today, start } = utcDateRangeForDays(safeDays)
-      const rangeStart = start
-      const rangeEnd = today
       const availableDays: number | null = null
 
       let followersSeries: Array<{ day: string; followers_count: number }> = []
-      let followersUsedSource = "none"
+      let followersUsedSource: "ssot_db" | "legacy_fallback" = "legacy_fallback"
       let followersError: any = null
 
       try {
