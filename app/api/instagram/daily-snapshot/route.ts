@@ -1293,6 +1293,7 @@ export async function POST(req: Request) {
 
       let followersSeries: Array<{ day: string; followers_count: number }> = []
       let followersUsedSource = "none"
+      let followersError: any = null
 
       try {
         let ssotIdForFollowersRead: string | null = ssotId ?? null
@@ -1332,6 +1333,23 @@ export async function POST(req: Request) {
         }
 
         const { data: followerRows, error } = await followersQuery
+
+        followersError = error
+
+        if (error) {
+          console.error("[daily-snapshot] followers query error", {
+            message: error.message,
+            code: (error as any).code,
+            details: (error as any).details,
+            hint: (error as any).hint,
+            hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+            ssotIdForFollowersRead,
+            resolvedIgId,
+            ssotIgUserId,
+            rangeStart,
+            rangeEnd,
+          })
+        }
 
         if (!error && Array.isArray(followerRows) && followerRows.length > 0) {
           followersSeries = followerRows
@@ -1413,7 +1431,13 @@ export async function POST(req: Request) {
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
-              __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
+              __diag: {
+                db_rows: followersSeries.length,
+                used_source: followersUsedSource,
+                start: rangeStart,
+                end: rangeEnd,
+                followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+              },
             },
           }
         }
@@ -1498,7 +1522,13 @@ export async function POST(req: Request) {
                 insights_daily: totals.insights_daily,
                 insights_daily_series: [],
                 series_ok: true,
-                __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
+                __diag: {
+                  db_rows: followersSeries.length,
+                  used_source: followersUsedSource,
+                  start: rangeStart,
+                  end: rangeEnd,
+                  followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                },
               },
             }
           }
@@ -1579,7 +1609,13 @@ export async function POST(req: Request) {
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
-              __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
+              __diag: {
+                db_rows: followersSeries.length,
+                used_source: followersUsedSource,
+                start: rangeStart,
+                end: rangeEnd,
+                followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+              },
             },
           }
         }
@@ -1712,7 +1748,13 @@ export async function POST(req: Request) {
               insights_daily,
               insights_daily_series: series.data,
               series_ok: true,
-              __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
+              __diag: {
+                db_rows: followersSeries.length,
+                used_source: followersUsedSource,
+                start: rangeStart,
+                end: rangeEnd,
+                followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+              },
             },
           }
         }
@@ -1806,7 +1848,13 @@ export async function POST(req: Request) {
             insights_daily,
             insights_daily_series: series.data,
             series_ok: true,
-            __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
+            __diag: {
+              db_rows: followersSeries.length,
+              used_source: followersUsedSource,
+              start: rangeStart,
+              end: rangeEnd,
+              followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+            },
           },
         }
       } catch (e: any) {
@@ -1851,7 +1899,13 @@ export async function POST(req: Request) {
         insights_daily: [],
         insights_daily_series: [],
         series_ok: true,
-        __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
+        __diag: {
+          db_rows: followersSeries.length,
+          used_source: followersUsedSource,
+          start: rangeStart,
+          end: rangeEnd,
+          followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+        },
       },
     }
   })()
