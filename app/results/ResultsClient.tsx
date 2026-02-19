@@ -2597,6 +2597,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
           return
         }
 
+        console.log("DAILY-SNAPSHOT SOURCE DEBUG", {
+          points_source: json7?.points_source ?? null,
+          used_source: json7?.__diag?.used_source ?? null,
+          rangeStart: json7?.rangeStart ?? null,
+          rangeEnd: json7?.rangeEnd ?? null,
+          available_days: json7?.available_days ?? null,
+        })
+
         setDailySnapshotData(json7)
 
         const availableDaysFromApi = typeof json7?.available_days === "number" && Number.isFinite(json7.available_days) ? (json7.available_days as number) : null
@@ -6559,6 +6567,26 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                         interactions: r.interactions,
                       }))
 
+                      const lastFiniteReach = (() => {
+                        if (!Array.isArray(chartRowsAligned) || chartRowsAligned.length === 0) return null
+                        for (let i = chartRowsAligned.length - 1; i >= 0; i--) {
+                          const r = chartRowsAligned[i]
+                          const v = r?.reach
+                          if (typeof v === "number" && Number.isFinite(v)) return { day: r?.day ?? null, v }
+                        }
+                        return null
+                      })()
+
+                      const lastPositiveReach = (() => {
+                        if (!Array.isArray(chartRowsAligned) || chartRowsAligned.length === 0) return null
+                        for (let i = chartRowsAligned.length - 1; i >= 0; i--) {
+                          const r = chartRowsAligned[i]
+                          const v = r?.reach
+                          if (typeof v === "number" && Number.isFinite(v) && v > 0) return { day: r?.day ?? null, v }
+                        }
+                        return null
+                      })()
+
                       const last10TrendPoints = Array.isArray(trendPoints)
                         ? trendPoints.slice(-10).map((p: any) => ({
                             ts: p?.ts,
@@ -6573,6 +6601,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                         chartRowsAligned_last10: last10Aligned,
                         trendPoints_last10: last10TrendPoints,
                         dailySnapshotTotals,
+                        lastFiniteReach,
+                        lastPositiveReach,
                       }
 
                       console.log("window.__DEBUG_REACH_SSOT__ READY")
@@ -6621,6 +6651,22 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       if (i === lastIdx && v === 0) continue
 
                       if (typeof v === "number" && Number.isFinite(v)) {
+                        return { v, day: r?.day ?? null }
+                      }
+                    }
+
+                    return { v: null as number | null, day: null as string | null }
+                  })()
+
+                  const latestReachPositiveFromAligned = (() => {
+                    if (!Array.isArray(chartRowsAligned) || chartRowsAligned.length === 0) {
+                      return { v: null as number | null, day: null as string | null }
+                    }
+
+                    for (let i = chartRowsAligned.length - 1; i >= 0; i--) {
+                      const r = chartRowsAligned[i]
+                      const v = r?.reach
+                      if (typeof v === "number" && Number.isFinite(v) && v > 0) {
                         return { v, day: r?.day ?? null }
                       }
                     }
@@ -7014,8 +7060,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   return (
                     <>
                       <LatestReachTileBridge
-                        v={latestReachFromAligned.v}
-                        day={latestReachFromAligned.day}
+                        v={latestReachPositiveFromAligned.v}
+                        day={latestReachPositiveFromAligned.day}
                         setV={setLatestReachForTile}
                         setDay={setLatestReachDayForTile}
                       />
