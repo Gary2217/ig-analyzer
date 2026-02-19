@@ -1135,8 +1135,10 @@ export async function POST(req: Request) {
 
     if (!cronMode) {
       try {
-        authed = await createAuthedClient()
-        const userRes = await authed.auth.getUser()
+        const supabase = await createAuthedClient()
+        authed = supabase
+
+        const userRes = await supabase.auth.getUser()
         const u = userRes?.data?.user ?? null
         userId = u?.id ? String(u.id) : ""
       } catch (e) {
