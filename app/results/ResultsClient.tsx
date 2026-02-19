@@ -5681,6 +5681,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
             {renderMediaErrorBanner()}
 
+            <TrendCard />
+
             <Card
               id="top-posts-section"
               data-testid="top-performing-posts"
@@ -6091,8 +6093,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                 </div>
               </CardContent>
             </Card>
-
-            <TrendCard />
 
             <Card
               id="latest-posts-section"
