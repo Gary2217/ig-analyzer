@@ -1322,11 +1322,10 @@ export async function POST(req: Request) {
           .lte("day", rangeEnd)
           .order("day", { ascending: true })
 
-        if (ssotIdForFollowersRead) {
-          followersQuery = followersQuery.eq("ig_account_id", ssotIdForFollowersRead)
+        if (resolvedIgId) {
+          followersQuery = followersQuery.eq("ig_user_id", String(resolvedIgId))
         } else if (ssotIgUserId) {
-          // fallback ONLY for legacy data
-          followersQuery = followersQuery.eq("ig_user_id", ssotIgUserId)
+          followersQuery = followersQuery.eq("ig_user_id", String(ssotIgUserId))
         } else {
           // no identity available
           followersQuery = followersQuery.limit(0)
