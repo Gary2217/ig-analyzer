@@ -6543,6 +6543,40 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     }
                   })
 
+                  // =====================
+                  // DEBUG REACH SSOT — FORCE EXPORT
+                  // =====================
+                  if (typeof window !== "undefined") {
+                    try {
+                      const last10Aligned = chartRowsAligned.slice(-10).map((r) => ({
+                        day: r.day,
+                        reach: r.reach,
+                        impressions: r.impressions,
+                        interactions: r.interactions,
+                      }))
+
+                      const last10TrendPoints = Array.isArray(trendPoints)
+                        ? trendPoints.slice(-10).map((p: any) => ({
+                            ts: p?.ts,
+                            day: typeof p?.ts === "number" ? new Date(p.ts).toISOString().slice(0, 10) : null,
+                            reach: p?.reach,
+                            impressions: p?.impressions,
+                            interactions: p?.interactions,
+                          }))
+                        : []
+
+                      ;(window as any).__DEBUG_REACH_SSOT__ = {
+                        chartRowsAligned_last10: last10Aligned,
+                        trendPoints_last10: last10TrendPoints,
+                        dailySnapshotTotals,
+                      }
+
+                      console.log("window.__DEBUG_REACH_SSOT__ READY")
+                    } catch (e) {
+                      console.error("DEBUG REACH SSOT ERROR:", e)
+                    }
+                  }
+
                   // fill leading null followers with first known value (prevents empty left segment)
                   const firstKnownFollowers =
                     chartRowsAligned.find((r) => typeof r.followers === "number" && Number.isFinite(r.followers))?.followers ?? null
