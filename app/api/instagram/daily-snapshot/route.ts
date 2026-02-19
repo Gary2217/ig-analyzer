@@ -16,6 +16,8 @@ const HANDLER_HEADERS = {
   "X-Handler-Build-Marker": BUILD_MARKER,
 } as const
 
+const DS_DEBUG_VERSION = "ds-reach-null-v1"
+
 const __DEBUG_DAILY_SNAPSHOT__ = process.env.IG_GRAPH_DEBUG === "1"
 
 const __DEV__ = process.env.NODE_ENV !== "production"
@@ -447,6 +449,20 @@ async function upsertAccountDailySnapshots(params: {
 }) {
   if (params.rows.length === 0) return { ok: true as const, error: null }
   try {
+    for (const r of params.rows) {
+      const day = r.day
+      const reachRaw = r.reach
+      const reach = r.reach
+      console.log("SSOT SNAPSHOT WRITE", {
+        ts: new Date().toISOString(),
+        day,
+        reachRaw,
+        reachStored: reach,
+        hasReachRaw: typeof reachRaw === "number",
+        isFiniteReachRaw: typeof reachRaw === "number" && Number.isFinite(reachRaw),
+      })
+    }
+
     const { error } = await supabaseServer.from("account_daily_snapshot").upsert(
       params.rows.map((r) => ({
         user_id: params.userScopeKey,
@@ -460,9 +476,18 @@ async function upsertAccountDailySnapshots(params: {
       })),
       { onConflict: "user_id,ig_user_id,page_id,day" }
     )
+
+    if (!error) {
+      for (const r of params.rows) {
+        console.log("SSOT SNAPSHOT WRITE OK", { day: r.day, reachStored: r.reach })
+      }
+    }
     return { ok: !error, error }
-  } catch (e: any) {
-    return { ok: false, error: e }
+  } catch (err: any) {
+    for (const r of params.rows) {
+      console.error("SSOT SNAPSHOT WRITE FAIL", { day: r.day, err: String(err) })
+    }
+    return { ok: false, error: err }
   }
 }
 
@@ -693,6 +718,8 @@ function jsonError(message: string, extra?: any, status = 400) {
     headers: {
       "Cache-Control": "no-store",
       "Content-Type": "application/json; charset=utf-8",
+      "x-debug-ds-version": DS_DEBUG_VERSION,
+      "x-debug-ds-time": new Date().toISOString(),
       ...HANDLER_HEADERS,
     },
   })
@@ -731,6 +758,8 @@ function respondWithEtag(params: {
     "Cache-Control": "no-store",
     ETag: params.etag,
     "Timing-Allow-Origin": "*",
+    "x-debug-ds-version": DS_DEBUG_VERSION,
+    "x-debug-ds-time": new Date().toISOString(),
     ...HANDLER_HEADERS,
   }
 
@@ -1039,6 +1068,12 @@ async function fetchTotalsBestEffort(params: {
 }
 
 export async function POST(req: Request) {
+  console.log("=== DAILY SNAPSHOT ROUTE HIT ===", {
+    ts: new Date().toISOString(),
+    url: req?.url ?? null,
+    method: req?.method ?? null,
+  })
+
   const t0 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
   const timingMarks: Array<{ name: string; dur: number }> = []
   const hasMark = (name: string) => timingMarks.some((m) => m.name === name)
@@ -1781,9 +1816,12 @@ export async function POST(req: Request) {
               const reachRaw = p.reach
               const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
               console.log("SSOT SNAPSHOT WRITE", {
+                ts: new Date().toISOString(),
                 day,
                 reachRaw,
                 reachStored: reach,
+                hasReachRaw: typeof reachRaw === "number",
+                isFiniteReachRaw: typeof reachRaw === "number" && Number.isFinite(reachRaw),
               })
 
               return {
@@ -1837,9 +1875,18 @@ export async function POST(req: Request) {
             }))
 
           if (rowsToUpsert.length >= 1) {
-            await supabaseServer.from("ig_daily_insights").upsert(rowsToUpsert as any, {
-              onConflict: "ig_user_id,page_id,day",
-            })
+            try {
+              await supabaseServer.from("ig_daily_insights").upsert(rowsToUpsert as any, {
+                onConflict: "ig_user_id,page_id,day",
+              })
+              for (const r of rowsToUpsert as any[]) {
+                console.log("SSOT SNAPSHOT WRITE OK", { day: r?.day, reachStored: r?.reach ?? null })
+              }
+            } catch (err: any) {
+              for (const r of rowsToUpsert as any[]) {
+                console.error("SSOT SNAPSHOT WRITE FAIL", { day: r?.day, err: String(err) })
+              }
+            }
           }
         } catch {
           // ignore db write failures

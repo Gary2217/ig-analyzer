@@ -2170,6 +2170,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             url.pathname = `/api/instagram/daily-snapshot`
             url.searchParams.set("days", String(days))
 
+            console.log("RESULTS FETCH daily-snapshot URL", url.toString())
+
             const res = await fetch(url.toString(), {
               method: "POST",
               cache: "no-store",
@@ -2556,7 +2558,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
     ;(async () => {
       try {
-        const igReq = fetch(`/api/instagram/daily-snapshot?days=${daysForRequest}`, {
+        const dsUrl = `/api/instagram/daily-snapshot?days=${daysForRequest}`
+        console.log("RESULTS FETCH daily-snapshot URL", dsUrl)
+        const igReq = fetch(dsUrl, {
           method: "POST",
           cache: "no-store",
           credentials: "include",
