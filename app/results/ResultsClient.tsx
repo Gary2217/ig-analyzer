@@ -293,6 +293,19 @@ type ResultsCachePayloadV1 = {
   trendFetchedAt: number | null
 }
 
+function LatestReachTileBridge(props: {
+  v: number | null
+  day: string | null
+  setV: (v: number | null) => void
+  setDay: (d: string | null) => void
+}) {
+  useEffect(() => {
+    props.setV(props.v)
+    props.setDay(props.day)
+  }, [props.day, props.setDay, props.setV, props.v])
+  return null
+}
+
 const RESULTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const __resultsCacheMem: Record<string, ResultsCachePayloadV1> = {}
 
@@ -1508,6 +1521,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   ])
   const [focusedAccountTrendMetric, setFocusedAccountTrendMetric] = useState<AccountTrendMetricKey>("reach")
   const [hoveredAccountTrendIndex, setHoveredAccountTrendIndex] = useState<number | null>(null)
+
+  const [latestReachForTile, setLatestReachForTile] = useState<number | null>(null)
+  const [latestReachDayForTile, setLatestReachDayForTile] = useState<string | null>(null)
 
   const trendRangeSwitchStartRef = useRef<{ at: number; days: 90 | 60 | 30 | 14 | 7 } | null>(null)
 
@@ -6299,14 +6315,33 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     (focusedAccountTrendMetric === "reach" ? "opacity-100" : "opacity-0 pointer-events-none")
                                   }
                                 >
-                                  {renderTiles(
-                                    reachLabels,
-                                    {
-                                      a: committedStatValues.reach.latest,
-                                      b: committedStatValues.reach.deltaDay,
-                                      c: committedStatValues.reach.deltaRange,
-                                    },
-                                  )}
+                                  {(() => {
+                                    // Avoid rendering missing reach as 0; show N/A when no non-null value exists.
+                                    const subtleLoading = showRangeOverlay ? "opacity-90 animate-pulse" : ""
+                                    const aText = typeof latestReachForTile === "number" && Number.isFinite(latestReachForTile) ? Math.round(latestReachForTile).toLocaleString() : "N/A"
+                                    return (
+                                      <div className={"w-full sm:w-auto min-w-0 max-w-full overflow-hidden " + subtleLoading}>
+                                        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 min-w-0">
+                                          <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
+                                            <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.a}</div>
+                                            <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">{aText}</div>
+                                          </div>
+                                          <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
+                                            <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.b}</div>
+                                            <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">
+                                              {fmtDelta(committedStatValues.reach.deltaDay)}
+                                            </div>
+                                          </div>
+                                          <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
+                                            <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.c}</div>
+                                            <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">
+                                              {fmtDelta(committedStatValues.reach.deltaRange)}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })()}
                                 </div>
                                 <div
                                   className={
@@ -6460,6 +6495,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     interactions: number | null
                     engaged: number | null
                     followers: number | null
+                    followerDelta: number | null
                   }
 
                   // forward-fill followers to ensure continuous time series (SSOT remains chartRowsAligned)
@@ -6501,6 +6537,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       interactions,
                       engaged,
                       followers,
+                      followerDelta: null,
                     }
                   })
 
@@ -6514,6 +6551,29 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       r.followers = firstKnownFollowers
                     }
                   }
+
+                  for (let i = 0; i < chartRowsAligned.length; i++) {
+                    const cur = chartRowsAligned[i]?.followers
+                    const prev = i >= 1 ? chartRowsAligned[i - 1]?.followers : null
+                    const delta =
+                      typeof cur === "number" &&
+                      Number.isFinite(cur) &&
+                      typeof prev === "number" &&
+                      Number.isFinite(prev)
+                        ? cur - prev
+                        : null
+                    chartRowsAligned[i].followerDelta = delta
+                  }
+
+                  const latestReachFromAligned = (() => {
+                    for (let i = chartRowsAligned.length - 1; i >= 0; i--) {
+                      const v = chartRowsAligned[i]?.reach
+                      if (typeof v === "number" && Number.isFinite(v)) {
+                        return { v, day: chartRowsAligned[i]?.day ?? null }
+                      }
+                    }
+                    return { v: null as number | null, day: null as string | null }
+                  })()
 
                   const computeMA = (values: Array<number | null>, window = 7) => {
                     const w = Math.max(1, Math.floor(window))
@@ -6651,6 +6711,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                         .filter((x): x is number => typeof x === "number" && Number.isFinite(x))
                     }
 
+                    if (k === "followerDelta") {
+                      return chartRowsAligned
+                        .map((r) => r.followerDelta)
+                        .filter((x): x is number => typeof x === "number" && Number.isFinite(x))
+                    }
+
                     return vals
                   }
 
@@ -6682,7 +6748,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   // UX rule: only Reach + Followers are allowed to render a line chart.
                   const shouldShowTotalValuePanel = !focusedIsReach && !focusedIsFollowers
 
-                  const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : focusedIsFollowers ? ["followers"] : []
+                  const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : focusedIsFollowers ? ["followers", "followerDelta"] : []
 
                   const series = seriesKeys.map((k) => {
                     const raw = chartRowsAligned
@@ -6692,6 +6758,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                             ? r.reach
                             : k === "followers"
                               ? r.followers
+                              : k === "followerDelta"
+                                ? r.followerDelta
                               : k === "interactions"
                                 ? r.interactions
                                 : k === "impressions"
@@ -6769,6 +6837,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       const v = idx >= 0 && idx < chartRowsAligned.length ? chartRowsAligned[idx]?.followers : null
                       const prev = idx >= 1 && idx - 1 < chartRowsAligned.length ? chartRowsAligned[idx - 1]?.followers : null
                       const first = chartRowsAligned.length >= 1 ? chartRowsAligned[0]?.followers : null
+                      const deltaValue = idx >= 0 && idx < chartRowsAligned.length ? chartRowsAligned[idx]?.followerDelta : null
 
                       const deltaDay =
                         typeof v === "number" &&
@@ -6797,6 +6866,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                           label: isZh ? "粉絲" : "Followers",
                           color: colorFor("followers"),
                           value: fmt(typeof v === "number" && Number.isFinite(v) ? v : null),
+                        },
+                        {
+                          label: isZh ? "變化" : "Change",
+                          color: "rgba(255,255,255,0.70)",
+                          value: fmtDelta(typeof deltaValue === "number" && Number.isFinite(deltaValue) ? deltaValue : null),
                         },
                         {
                           label: isZh ? "單日增量" : "Δ vs prev day",
@@ -6884,6 +6958,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                   return (
                     <>
+                      <LatestReachTileBridge
+                        v={latestReachFromAligned.v}
+                        day={latestReachFromAligned.day}
+                        setV={setLatestReachForTile}
+                        setDay={setLatestReachDayForTile}
+                      />
                       {shouldShowTotalValuePanel ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
                           <div className="text-[11px] sm:text-xs text-white/70 leading-snug min-w-0 break-words overflow-wrap-anywhere">
