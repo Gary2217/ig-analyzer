@@ -24,33 +24,6 @@ function utcDayStringFromMs(ms: number): string {
   return `${y}-${m}-${dd}`
 }
 
-async function resolveActiveIgAccountIdDbOnly(authed: Awaited<ReturnType<typeof createAuthedClient>>, userId: string): Promise<string | null> {
-  const { data: activeIg } = await authed
-    .from("user_instagram_accounts")
-    .select("ig_user_id")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const ig_user_id = activeIg && (activeIg as any).ig_user_id != null ? String((activeIg as any).ig_user_id).trim() : ""
-  if (!ig_user_id) return null
-
-  const { data: ssot } = await authed
-    .from("user_ig_accounts")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("provider", "instagram")
-    .eq("ig_user_id", ig_user_id)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const id = ssot && typeof (ssot as any).id === "string" ? String((ssot as any).id).trim() : ""
-  return id || null
-}
-
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -79,7 +52,16 @@ export async function GET(req: Request) {
     }
 
     // Resolve active IG account from DB ONLY. No cookies.
-    const ig_account_id = await resolveActiveIgAccountIdDbOnly(authed, user.id)
+    const { data: activeAccount } = await authed
+      .from("user_instagram_accounts")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const ig_account_id = activeAccount && typeof (activeAccount as any).id === "string" ? String((activeAccount as any).id).trim() : ""
     if (!ig_account_id) {
       return NextResponse.json({ error: "NO_ACTIVE_IG_ACCOUNT" }, { status: 400, headers: { "Cache-Control": "no-store" } })
     }
