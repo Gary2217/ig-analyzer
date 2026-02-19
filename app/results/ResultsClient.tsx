@@ -6331,6 +6331,22 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     // Avoid rendering missing reach as 0; show N/A when no non-null value exists.
                                     const subtleLoading = showRangeOverlay ? "opacity-90 animate-pulse" : ""
                                     const formatNumber = (n: number) => Math.round(n).toLocaleString()
+
+                                    const totalReachInWindowForTile = (() => {
+                                      const days = selectedTrendRangeDays
+                                      const windowPts = Array.isArray(trendPoints) ? trendPoints.slice(-days) : []
+                                      let sum = 0
+                                      let countedDays = 0
+                                      for (const p of windowPts as any[]) {
+                                        const v = (p as any)?.reach
+                                        if (typeof v === "number" && Number.isFinite(v)) {
+                                          sum += v
+                                          countedDays += 1
+                                        }
+                                      }
+                                      return { days, sum: countedDays > 0 ? sum : null, countedDays }
+                                    })()
+
                                     return (
                                       <div className={"w-full sm:w-auto min-w-0 max-w-full overflow-hidden " + subtleLoading}>
                                         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 min-w-0">
@@ -6338,6 +6354,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                             <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.a}</div>
                                             <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">
                                               {latestReachForTile === null ? "N/A" : formatNumber(latestReachForTile)}
+                                            </div>
+                                          </div>
+                                          <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
+                                            <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">總觸及數</div>
+                                            <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">
+                                              {totalReachInWindowForTile.sum === null ? "N/A" : formatNumber(totalReachInWindowForTile.sum)}
                                             </div>
                                           </div>
                                           <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
@@ -6555,6 +6577,21 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     }
                   })
 
+                  const totalReachInWindow = (() => {
+                    const days = selectedTrendRangeDays
+                    const windowRows = Array.isArray(chartRowsAligned) ? chartRowsAligned.slice(-days) : []
+                    let sum = 0
+                    let countedDays = 0
+                    for (const r of windowRows) {
+                      const v = (r as any)?.reach
+                      if (typeof v === "number" && Number.isFinite(v)) {
+                        sum += v
+                        countedDays += 1
+                      }
+                    }
+                    return { days, sum: countedDays > 0 ? sum : null, countedDays }
+                  })()
+
                   // =====================
                   // DEBUG REACH SSOT — FORCE EXPORT
                   // =====================
@@ -6603,6 +6640,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                         dailySnapshotTotals,
                         lastFiniteReach,
                         lastPositiveReach,
+                        totalReachInWindow,
                       }
 
                       console.log("window.__DEBUG_REACH_SSOT__ READY")
