@@ -6313,7 +6313,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                             {isZh ? "載入失敗" : "Failed"}
                           </div>
                         ) : null}
-                        <div className="w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
+                        <div className="w-full sm:w-auto min-w-0 max-w-full">
                           {(() => {
                             const fmt = (v: number | null) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v).toLocaleString() : "—")
                             const fmtDelta = (v: number | null) =>
@@ -6322,7 +6322,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                             const renderTiles = (labels: { a: string; b: string; c: string }, vals: { a: number | null; b: number | null; c: number | null }) => {
                               const subtleLoading = showRangeOverlay ? "opacity-90 animate-pulse" : ""
                               return (
-                                <div className={"w-full sm:w-auto min-w-0 max-w-full overflow-hidden " + subtleLoading}>
+                                <div className={"w-full sm:w-auto min-w-0 max-w-full " + subtleLoading}>
                                   <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 min-w-0">
                                     <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
                                       <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{labels.a}</div>
@@ -6372,7 +6372,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     })()
 
                                     return (
-                                      <div className={"w-full sm:w-auto min-w-0 max-w-full overflow-hidden " + subtleLoading}>
+                                      <div className={"w-full sm:w-auto min-w-0 max-w-full " + subtleLoading}>
                                         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 min-w-0">
                                           <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
                                             <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.a}</div>

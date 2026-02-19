@@ -51,6 +51,7 @@ const __dsReachSyncAt = new Map<string, number>()
 const REACH_SYNC_TTL_HOURS = 6
 const REACH_SYNC_RECENT_DAYS_SCAN = 3
 const REACH_SYNC_FETCH_DAYS = 7
+const MAX_REACH_BACKFILL_DAYS = 90
 
 function nowMs() {
   return Date.now()
@@ -1292,6 +1293,8 @@ export async function POST(req: Request) {
       const ttlMs = REACH_SYNC_TTL_HOURS * 60 * 60 * 1000
       const isStaleByTtl = !lastSyncAt || nowMs() - lastSyncAt > ttlMs
 
+      const fetchDaysForThisRequest = Math.max(7, Math.min(MAX_REACH_BACKFILL_DAYS, safeDays))
+
       const dayMs = 24 * 60 * 60 * 1000
       const rangeEndMs = Date.parse(`${rangeEnd}T00:00:00.000Z`)
       const recentStartMs = rangeEndMs - (REACH_SYNC_RECENT_DAYS_SCAN - 1) * dayMs
@@ -1337,6 +1340,7 @@ export async function POST(req: Request) {
           pageId: resolvedPageId,
           rangeStart,
           rangeEnd,
+          fetchDaysForThisRequest,
           isStaleByTtl,
           recentErr: recentErr ? { message: (recentErr as any).message, code: (recentErr as any).code } : null,
         })
@@ -1348,7 +1352,7 @@ export async function POST(req: Request) {
           const accessToken = pageToken.pageAccessToken
 
           const fetchEndMs = rangeEndMs
-          const fetchStartMs = fetchEndMs - (REACH_SYNC_FETCH_DAYS - 1) * dayMs
+          const fetchStartMs = fetchEndMs - (fetchDaysForThisRequest - 1) * dayMs
           const fetchStartDay = Number.isFinite(fetchStartMs)
             ? new Date(fetchStartMs).toISOString().slice(0, 10)
             : rangeStart
