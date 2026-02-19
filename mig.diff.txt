@@ -1,0 +1,83 @@
+﻿diff --git a/supabase/migrations/20260219000100_ssot_keys_for_reach_followers.sql b/supabase/migrations/20260219000100_ssot_keys_for_reach_followers.sql
+new file mode 100644
+index 0000000..4de2006
+--- /dev/null
++++ b/supabase/migrations/20260219000100_ssot_keys_for_reach_followers.sql
+@@ -0,0 +1,77 @@
++-- Add SSOT-stable keys for Results SSOT trend reads
++-- Goal: make reach + followers queryable by (ig_account_id, day)
++-- Safety: auto-deduplicate before enforcing unique indexes.
++
++-- ============================================================
++-- account_daily_snapshot: add ig_account_id (SSOT user_ig_accounts.id)
++-- ============================================================
++
++alter table public.account_daily_snapshot
++  add column if not exists ig_account_id uuid;
++
++-- Backfill: map existing snapshot rows to the latest matching user_ig_accounts row.
++-- Prefer matching both ig_user_id and page_id when possible.
++update public.account_daily_snapshot ads
++set ig_account_id = (
++  select u.id
++  from public.user_ig_accounts u
++  where u.provider = 'instagram'
++    and u.ig_user_id is not null
++    and u.ig_user_id = (ads.ig_user_id::text)
++    and (u.page_id is null or u.page_id = (ads.page_id::text))
++  order by u.updated_at desc
++  limit 1
++)
++where ads.ig_account_id is null;
++
++-- Deduplicate for (ig_account_id, day): keep the newest row by ctid (no captured_at in this table reliably)
++delete from public.account_daily_snapshot a
++using public.account_daily_snapshot b
++where a.ig_account_id is not null
++  and b.ig_account_id is not null
++  and a.ig_account_id = b.ig_account_id
++  and a.day = b.day
++  and a.ctid < b.ctid;
++
++create index if not exists idx_account_daily_snapshot_ig_account_day
++  on public.account_daily_snapshot (ig_account_id, day);
++
++create unique index if not exists uq_account_daily_snapshot_ig_account_day
++  on public.account_daily_snapshot (ig_account_id, day)
++  where ig_account_id is not null;
++
++-- ============================================================
++-- ig_daily_followers: add ig_account_id (SSOT user_ig_accounts.id)
++-- ============================================================
++
++alter table public.ig_daily_followers
++  add column if not exists ig_account_id uuid;
++
++-- Backfill: map followers rows to the latest matching user_ig_accounts row by ig_user_id.
++update public.ig_daily_followers f
++set ig_account_id = (
++  select u.id
++  from public.user_ig_accounts u
++  where u.provider = 'instagram'
++    and u.ig_user_id is not null
++    and u.ig_user_id = f.ig_user_id
++  order by u.updated_at desc
++  limit 1
++)
++where f.ig_account_id is null;
++
++-- Deduplicate for (ig_account_id, day): keep the newest row by ctid
++delete from public.ig_daily_followers a
++using public.ig_daily_followers b
++where a.ig_account_id is not null
++  and b.ig_account_id is not null
++  and a.ig_account_id = b.ig_account_id
++  and a.day = b.day
++  and a.ctid < b.ctid;
++
++create index if not exists idx_ig_daily_followers_ig_account_day
++  on public.ig_daily_followers (ig_account_id, day);
++
++create unique index if not exists uq_ig_daily_followers_ig_account_day
++  on public.ig_daily_followers (ig_account_id, day)
++  where ig_account_id is not null;

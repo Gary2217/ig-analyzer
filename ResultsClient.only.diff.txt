@@ -1,0 +1,229 @@
+﻿diff --git a/app/results/ResultsClient.tsx b/app/results/ResultsClient.tsx
+index 6a1da89..f42a651 100644
+--- a/app/results/ResultsClient.tsx
++++ b/app/results/ResultsClient.tsx
+@@ -1194,6 +1194,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+     error: "",
+     lastDays: null,
+   })
++
++  // SSOT (DB) trend payload for the currently selected range.
++  // Primary data sources (after SSOT migration):
++  // - Reach series (daily points) -> `trendPoints`
++  // - Followers series (daily points) -> `followersDailyRows`
++  // - Range labels (domain) -> `ssotTrendMeta` (preferred over `dailySnapshotData`)
++  const [ssotTrendMeta, setSsotTrendMeta] = useState<{ rangeStart: string; rangeEnd: string; available_days: number | null } | null>(
++    null,
++  )
+   const [selectedTrendRangeDays, setSelectedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
+   const [renderedTrendRangeDays, setRenderedTrendRangeDays] = useState<90 | 60 | 30 | 14 | 7>(90)
+   const [isChangingRange, setIsChangingRange] = useState(false)
+@@ -1631,6 +1640,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+     }
+   }, [followersSeriesValues, trendPoints])
+ 
++  // DISPLAY SSOT (Results UI)
++  // A) Tiles numbers:
++  //    - Reach tiles: `latestReachForTile`, `totalReachSumForTile`, `committedStatValues.reach.*`
++  //    - Followers tiles: `committedStatValues.followers.*` (derived from `followersSeriesValues`)
++  // B) Chart series arrays:
++  //    - Reach: `reachSeriesForChartWindow` (built from `chartRowsAligned` which is aligned from `trendPoints`)
++  //    - Followers: `chartRowsAligned.map(r => r.followers)` where `followers` is forward-filled from `followersDailyRows`
++  // C) Loading/overlay state:
++  //    - `isLoadingOverlay` is driven by `showRangeOverlay`, `isChangingRange`, `trendFetchStatus.loading`, `manualRefreshOverlay`
++
+   // UI state flags for loading skeleton and empty-state
+   const hasCommittedTrend = Array.isArray(trendPoints) && trendPoints.length > 0
+   const hasCommittedFollowers = Array.isArray(followersSeriesValues) && followersSeriesValues.length > 0
+@@ -2591,85 +2610,100 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+ 
+     ;(async () => {
+       try {
+-        const dsUrl = `/api/instagram/daily-snapshot?days=${daysForRequest}`
+-        console.log("RESULTS FETCH daily-snapshot URL", dsUrl)
+-        const igReq = fetch(dsUrl, {
+-          method: "POST",
++        const ssotUrl = `/api/instagram/ssot-trend?days=${daysForRequest}`
++        console.log("RESULTS FETCH ssot-trend URL", ssotUrl)
++        const ssotReq = fetch(ssotUrl, {
++          method: "GET",
+           cache: "no-store",
+           credentials: "include",
+-          headers: {
+-            Accept: "application/json",
+-          },
++          headers: { Accept: "application/json" },
+           signal: ac.signal,
+         })
+ 
+-        const igRes = await igReq
++        const ssotRes = await ssotReq
+ 
+         if (dailySnapshotRequestSeqRef.current !== nextReqId) return
+         if (selectedTrendRangeDays !== daysForRequest) return
+ 
+-        if (igRes.status === 401 || igRes.status === 403) {
++        if (ssotRes.status === 401 || ssotRes.status === 403) {
+           setTrendNeedsConnectHint(true)
+           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+           failLatestRangeSwitch(daysForRequest)
+           return
+         }
+ 
+-        const ct = (igRes.headers.get("content-type") ?? "").toLowerCase()
++        const ct = (ssotRes.headers.get("content-type") ?? "").toLowerCase()
+         if (!ct.includes("application/json")) {
+-          throw new Error(`daily_snapshot_non_json status=${igRes.status} url=/api/instagram/daily-snapshot?days=${daysForRequest}`)
++          throw new Error(`ssot_trend_non_json status=${ssotRes.status} url=/api/instagram/ssot-trend?days=${daysForRequest}`)
+         }
+ 
+-        const json7 = await igRes.json().catch(() => null)
++        const json7 = await ssotRes.json().catch(() => null)
+         if (dailySnapshotRequestSeqRef.current !== nextReqId) return
+         if (selectedTrendRangeDays !== daysForRequest) return
+-        if (!igRes.ok || !json7?.ok) {
+-          setDailySnapshotData(null)
++        if (!ssotRes.ok || !json7?.ok) {
++          setSsotTrendMeta(null)
++          setTrendPoints([])
++          setFollowersDailyRows([])
++          setFollowersLastWriteAt(null)
+           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+           failLatestRangeSwitch(daysForRequest)
+           return
+         }
+ 
+-        console.log("DAILY-SNAPSHOT SOURCE DEBUG", {
+-          points_source: json7?.points_source ?? null,
+-          used_source: json7?.__diag?.used_source ?? null,
+-          rangeStart: json7?.rangeStart ?? null,
+-          rangeEnd: json7?.rangeEnd ?? null,
+-          available_days: json7?.available_days ?? null,
+-        })
++        const rangeStart = typeof json7?.rangeStart === "string" ? String(json7.rangeStart).trim() : ""
++        const rangeEnd = typeof json7?.rangeEnd === "string" ? String(json7.rangeEnd).trim() : ""
++        const availableDaysFromApi =
++          typeof json7?.available_days === "number" && Number.isFinite(json7.available_days) ? (json7.available_days as number) : null
+ 
+-        setDailySnapshotData(json7)
+-
+-        const availableDaysFromApi = typeof json7?.available_days === "number" && Number.isFinite(json7.available_days) ? (json7.available_days as number) : null
+-        if (availableDaysFromApi !== null) setDailySnapshotAvailableDays(availableDaysFromApi)
+-
+-        const pointsSource = typeof json7?.points_source === "string" ? json7.points_source : ""
+-        lastDailySnapshotPointsSourceRef.current = pointsSource
+-
+-        if (pointsSource === "empty") {
+-          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+-          failLatestRangeSwitch(daysForRequest)
+-          return
++        if (rangeStart && rangeEnd) {
++          setSsotTrendMeta({ rangeStart, rangeEnd, available_days: availableDaysFromApi })
++        } else {
++          setSsotTrendMeta(null)
+         }
+ 
+-        const totalsRaw = Array.isArray(json7?.insights_daily) ? json7.insights_daily : []
+-        setDailySnapshotTotals(normalizeTotalsFromInsightsDaily(totalsRaw))
+-        const merged = mergeToContinuousTrendPoints({
+-          days: daysForRequest,
+-          baseDbRowsRaw: [],
+-          overridePointsRaw: json7?.points,
+-        })
+-
+-        if (merged.length >= 1) {
+-          if (dailySnapshotRequestSeqRef.current !== nextReqId) return
+-          if (selectedTrendRangeDays !== daysForRequest) return
+-          const sig = trendSigFor(daysForRequest, merged)
+-          const fetchedAt = Date.now()
+-          hasAppliedDailySnapshotTrendRef.current = true
+-          trendPointsByDaysRef.current.set(trendCacheKey("reach", daysForRequest), { points: merged, fetchedAt, sig })
+-          fetchedByDaysRef.current.set(daysForRequest, true)
+-          applyTrendSeries({ days: daysForRequest, points: merged, fetchedAt })
+-        }
++        const reachSeriesRaw = Array.isArray(json7?.reachSeries) ? (json7.reachSeries as unknown[]) : []
++        const reachPoints: AccountTrendPoint[] = reachSeriesRaw
++          .map((row: any) => {
++            const day = typeof row?.day === "string" ? String(row.day).trim() : ""
++            const vRaw = row?.value
++            const v = typeof vRaw === "number" ? vRaw : Number(vRaw)
++            if (!day || !Number.isFinite(v)) return null
++            const ts = Date.parse(`${day}T00:00:00.000Z`)
++            if (!Number.isFinite(ts)) return null
++            const label = (() => {
++              try {
++                return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
++              } catch {
++                const d = new Date(ts)
++                const m = String(d.getMonth() + 1).padStart(2, "0")
++                const dd = String(d.getDate()).padStart(2, "0")
++                return `${m}/${dd}`
++              }
++            })()
++            return { t: label, ts, reach: Math.floor(v) } as AccountTrendPoint
++          })
++          .filter(Boolean) as AccountTrendPoint[]
++
++        const followersSeriesRaw = Array.isArray(json7?.followersSeries) ? (json7.followersSeries as unknown[]) : []
++        const followersRows = followersSeriesRaw
++          .map((row: any) => {
++            const day = typeof row?.day === "string" ? String(row.day).trim() : ""
++            const vRaw = row?.value
++            const v = typeof vRaw === "number" ? vRaw : Number(vRaw)
++            if (!day || !Number.isFinite(v)) return null
++            return { day, followers_count: Math.floor(v) }
++          })
++          .filter(Boolean) as Array<{ day: string; followers_count: number }>
++
++        setTrendPoints(reachPoints)
++        setFollowersDailyRows(followersRows)
++        setFollowersLastWriteAt(null)
++
++        const sig = trendSigFor(daysForRequest, reachPoints)
++        const fetchedAt = Date.now()
++        trendPointsByDaysRef.current.set(trendCacheKey("reach", daysForRequest), { points: reachPoints, fetchedAt, sig })
++        fetchedByDaysRef.current.set(daysForRequest, true)
++        applyTrendSeries({ days: daysForRequest, points: reachPoints, fetchedAt })
+ 
+         setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+       } catch (e: unknown) {
+@@ -2681,7 +2715,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+               reqId: nextReqId,
+             })
+           }
+-          setDailySnapshotData(null)
++          setSsotTrendMeta(null)
++          setTrendPoints([])
++          setFollowersDailyRows([])
++          setFollowersLastWriteAt(null)
+           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+           failLatestRangeSwitch(daysForRequest)
+         }
+@@ -4012,10 +4049,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+       return
+     }
+ 
++    // SSOT-first: do not allow dailySnapshot payloads to overwrite SSOT display series.
++    // dailySnapshot remains a backfill/diag payload, not the primary display writer.
++    return
++
+     const ok = isRecord(dailySnapshotData) && (dailySnapshotData as any).ok === true
+     if (!ok) {
+-      setFollowersDailyRows([])
+-      setFollowersLastWriteAt(null)
++      // SSOT-first: keep SSOT-derived `followersDailyRows` when dailySnapshotData is absent/invalid.
++      // dailySnapshot remains a backfill/diag payload, not the primary display series.
+       return
+     }
+ 
+@@ -6506,8 +6547,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+                   }
+ 
+                   const rangeFromApi = (() => {
+-                    const start = isRecord(dailySnapshotData) && typeof (dailySnapshotData as any).rangeStart === "string" ? String((dailySnapshotData as any).rangeStart).trim() : ""
+-                    const end = isRecord(dailySnapshotData) && typeof (dailySnapshotData as any).rangeEnd === "string" ? String((dailySnapshotData as any).rangeEnd).trim() : ""
++                    const start = ssotTrendMeta && typeof (ssotTrendMeta as any).rangeStart === "string" ? String((ssotTrendMeta as any).rangeStart).trim() : ""
++                    const end = ssotTrendMeta && typeof (ssotTrendMeta as any).rangeEnd === "string" ? String((ssotTrendMeta as any).rangeEnd).trim() : ""
+                     if (start && end) return { start, end }
+                     const days = renderedTrendRangeDays
+                     const now = new Date()

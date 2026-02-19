@@ -302,6 +302,9 @@ async function writeFollowersBestEffortCached(params: {
 }) {
   // Best-effort: never throw, never fail the request.
   try {
+    // SSOT-only: once ig_account_id exists, do not write followers snapshots without a stable ssotId.
+    if (!params.ssotId) return
+
     const existing = readCache(__dsFollowersCache, params.followersKey)
     if (existing) return
 
@@ -336,8 +339,8 @@ async function writeFollowersBestEffortCached(params: {
               captured_at: capturedAt,
               ig_user_id: String(params.igId),
             }
-            if (params.ssotId) payload.ig_account_id = String(params.ssotId)
-            const onConflict = params.ssotId ? "ig_account_id,day" : "ig_user_id,day"
+            payload.ig_account_id = String(params.ssotId)
+            const onConflict = "ig_account_id,day"
 
             if (__DEBUG_DAILY_SNAPSHOT__) {
               console.log("[daily-snapshot][followers_write]", {
@@ -446,6 +449,7 @@ async function upsertAccountDailySnapshots(params: {
   userScopeKey: string
   igId: string
   pageId: string
+  ssotId: string
   rows: Array<{
     day: string
     reach: number | null
@@ -472,6 +476,8 @@ async function upsertAccountDailySnapshots(params: {
 
     const { error } = await supabaseServer.from("account_daily_snapshot").upsert(
       params.rows.map((r) => ({
+        // SSOT-only: reach rows must be keyed by (ig_account_id, day)
+        ig_account_id: String(params.ssotId),
         user_id: params.userScopeKey,
         ig_user_id: Number(params.igId),
         page_id: Number(params.pageId),
@@ -481,7 +487,7 @@ async function upsertAccountDailySnapshots(params: {
         total_interactions: r.total_interactions,
         accounts_engaged: r.accounts_engaged,
       })),
-      { onConflict: "user_id,ig_user_id,page_id,day" }
+      { onConflict: "ig_account_id,day" }
     )
 
     if (!error) {
@@ -504,6 +510,7 @@ async function backfillMissingSnapshotsFromGraph(params: {
   envToken: string
   igId: string
   pageId: string
+  ssotId: string
   start: string
   today: string
   maxDays: number
@@ -560,6 +567,7 @@ async function backfillMissingSnapshotsFromGraph(params: {
       userScopeKey: params.userScopeKey,
       igId: params.igId,
       pageId: params.pageId,
+      ssotId: params.ssotId,
       rows,
     })
     if (!upsertRes.ok) {
@@ -1288,6 +1296,11 @@ export async function POST(req: Request) {
     // SAFETY: Reach sync is controlled + per-user token only (no global IG_ACCESS_TOKEN fallback).
     // Run the sync gate before any cache/inflight early returns.
     try {
+      // Resolve ssotId for reach writes (stable across devices) if available.
+      // This is used only to populate `ig_account_id` (we keep existing onConflict key unchanged for safety).
+      const ssotAccountForReachWrite = cronMode ? null : await resolveActiveIgAccountForRequest()
+      const ssotIdForReachWrite = ssotAccountForReachWrite?.id ?? null
+
       const reachSyncKey = `reach_sync|u:${userScopeKey}|ig:${resolvedIgId}|pg:${resolvedPageId}`
       const lastSyncAt = __dsReachSyncAt.get(reachSyncKey) ?? 0
       const ttlMs = REACH_SYNC_TTL_HOURS * 60 * 60 * 1000
@@ -1345,11 +1358,16 @@ export async function POST(req: Request) {
           recentErr: recentErr ? { message: (recentErr as any).message, code: (recentErr as any).code } : null,
         })
 
-        const pageToken = await getPageAccessToken(token, resolvedPageId)
-        if (!pageToken.ok) {
-          console.log("REACH SYNC SKIP: NO PAGE TOKEN")
+        // SSOT-only: do not write reach snapshots without a stable ssotId.
+        if (!ssotIdForReachWrite) {
+          console.log("REACH SYNC SKIP: NO SSOT ID")
         } else {
-          const accessToken = pageToken.pageAccessToken
+
+          const pageToken = await getPageAccessToken(token, resolvedPageId)
+          if (!pageToken.ok) {
+            console.log("REACH SYNC SKIP: NO PAGE TOKEN")
+          } else {
+            const accessToken = pageToken.pageAccessToken
 
           const fetchEndMs = rangeEndMs
           const fetchStartMs = fetchEndMs - (fetchDaysForThisRequest - 1) * dayMs
@@ -1393,6 +1411,7 @@ export async function POST(req: Request) {
                   const reachRaw = v?.value
                   const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
                   return {
+                    ig_account_id: String(ssotIdForReachWrite),
                     user_id: userScopeKey,
                     ig_user_id: Number(resolvedIgId),
                     page_id: Number(resolvedPageId),
@@ -1407,13 +1426,14 @@ export async function POST(req: Request) {
 
               if (rows.length > 0) {
                 await supabaseServer.from("account_daily_snapshot").upsert(rows as any, {
-                  onConflict: "user_id,ig_user_id,page_id,day",
+                  onConflict: "ig_account_id,day",
                 })
                 __dsReachSyncAt.set(reachSyncKey, nowMs())
               }
 
               console.log("REACH SYNC DONE", { rows: rows.length })
             }
+          }
           }
         }
       }
@@ -1896,24 +1916,28 @@ export async function POST(req: Request) {
         const insights_daily = totals.insights_daily
 
         // Backfill snapshots on-demand (last 120d) if we hit Graph path
-        try {
-          const tBackfillStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-          const backfill = await backfillMissingSnapshotsFromGraph({
-            userScopeKey,
-            token,
-            envToken,
-            igId: resolvedIgId,
-            pageId: resolvedPageId,
-            start,
-            today,
-            maxDays: 120,
-          })
-          mark("backfill", tBackfillStart)
-          if (__DEBUG_DAILY_SNAPSHOT__) {
-            console.log("[daily-snapshot] backfill", { ok: backfill.ok, rows: backfill.rows.length, tokenSource: backfill.tokenSource, maxDays: 120 })
+        // SSOT-only: only attempt backfill when ssotId is available.
+        if (ssotId) {
+          try {
+            const tBackfillStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+            const backfill = await backfillMissingSnapshotsFromGraph({
+              userScopeKey,
+              token,
+              envToken,
+              igId: resolvedIgId,
+              pageId: resolvedPageId,
+              ssotId: String(ssotId),
+              start,
+              today,
+              maxDays: 120,
+            })
+            mark("backfill", tBackfillStart)
+            if (__DEBUG_DAILY_SNAPSHOT__) {
+              console.log("[daily-snapshot] backfill", { ok: backfill.ok, rows: backfill.rows.length, tokenSource: backfill.tokenSource, maxDays: 120 })
+            }
+          } catch {
+            // ignore backfill failures; continue with Graph response
           }
-        } catch {
-          // ignore backfill failures; continue with Graph response
         }
 
         if (!hasAnyNonZero) {
