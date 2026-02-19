@@ -1340,6 +1340,30 @@ export async function POST(req: Request) {
       })
     }
 
+    let ssotAccountId = ""
+    try {
+      if (authed && userId) {
+        const { data: activeRow } = await authed
+          .from("user_instagram_accounts")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        ssotAccountId = activeRow?.id ? String(activeRow.id) : ""
+      }
+    } catch (e) {
+      ssotAccountId = ""
+    }
+
+    if (!ssotAccountId) {
+      console.warn("[daily-snapshot] missing ssotAccountId; continue without SSOT reach write", {
+        cronMode: Boolean(cronMode),
+      })
+    }
+
     const tokSig = cronMode ? "cron" : tokenSignature(token)
     const userScopeKey = cronMode ? "cron" : tokSig
     const requestKey = `ds|${cronMode ? "cron" : "user"}|ig:${resolvedIgId}|pg:${resolvedPageId}|days:${safeDays}|tok:${tokSig}`
@@ -1353,10 +1377,7 @@ export async function POST(req: Request) {
     // SAFETY: Reach sync is controlled + per-user token only (no global IG_ACCESS_TOKEN fallback).
     // Run the sync gate before any cache/inflight early returns.
     try {
-      // Resolve ssotId for reach writes (stable across devices) if available.
-      // This is used only to populate `ig_account_id` (we keep existing onConflict key unchanged for safety).
-      const ssotAccountForReachWrite = cronMode ? null : await resolveActiveIgAccountForRequest()
-      const ssotIdForReachWrite = ssotAccountForReachWrite?.id ?? null
+      const reachWriteSsotId = ssotAccountId
 
       const reachSyncKey = `reach_sync|u:${userScopeKey}|ig:${resolvedIgId}|pg:${resolvedPageId}`
       const lastSyncAt = __dsReachSyncAt.get(reachSyncKey) ?? 0
@@ -1416,7 +1437,7 @@ export async function POST(req: Request) {
         })
 
         // SSOT-only: do not write reach snapshots without a stable ssotId.
-        if (!ssotIdForReachWrite) {
+        if (!reachWriteSsotId) {
           console.log("REACH SYNC SKIP: NO SSOT ID")
         } else {
 
@@ -1468,7 +1489,7 @@ export async function POST(req: Request) {
                   const reachRaw = v?.value
                   const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
                   return {
-                    ig_account_id: String(ssotIdForReachWrite),
+                    ig_account_id: String(reachWriteSsotId),
                     user_id: userScopeKey,
                     ig_user_id: Number(resolvedIgId),
                     page_id: Number(resolvedPageId),
@@ -1529,7 +1550,7 @@ export async function POST(req: Request) {
 
     const run = (async (): Promise<DsResponsePayload> => {
       const ssotAccount = cronMode ? null : await resolveActiveIgAccountForRequest()
- 
+
       let ssotId: string | null = ssotAccount?.id ?? null
       const ssotIgUserId = ssotAccount?.ig_user_id ?? null
 
@@ -1973,8 +1994,7 @@ export async function POST(req: Request) {
         const insights_daily = totals.insights_daily
 
         // Backfill snapshots on-demand (last 120d) if we hit Graph path
-        // SSOT-only: only attempt backfill when ssotId is available.
-        if (ssotId) {
+        if (ssotAccountId) {
           try {
             const tBackfillStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
             const backfill = await backfillMissingSnapshotsFromGraph({
@@ -1983,7 +2003,7 @@ export async function POST(req: Request) {
               envToken,
               igId: resolvedIgId,
               pageId: resolvedPageId,
-              ssotId: String(ssotId),
+              ssotId: ssotAccountId,
               start,
               today,
               maxDays: 120,
