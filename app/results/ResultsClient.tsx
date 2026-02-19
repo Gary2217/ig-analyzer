@@ -6257,7 +6257,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     </div>
                   </div>
 
-                  <div className="min-w-0 sm:flex-1 sm:flex sm:justify-center w-full overflow-hidden">
+                  <div className="min-w-0 sm:flex-1 sm:flex sm:justify-center w-full overflow-visible">
                     <div className="w-full min-w-0">
                       <div className="hidden sm:flex w-full min-w-0 flex flex-wrap items-center justify-center gap-2">
                         {(
@@ -6292,7 +6292,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                       <div
                         className={
-                          "w-full min-w-0 mt-2 relative min-h-[40px] " +
+                          "w-full min-w-0 mt-2 relative min-h-[96px] sm:min-h-[40px] pb-2 " +
                           ((focusedAccountTrendMetric === "followers" || focusedAccountTrendMetric === "reach")
                             ? "opacity-100"
                             : "opacity-0 pointer-events-none")
