@@ -6318,13 +6318,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   {(() => {
                                     // Avoid rendering missing reach as 0; show N/A when no non-null value exists.
                                     const subtleLoading = showRangeOverlay ? "opacity-90 animate-pulse" : ""
-                                    const aText = typeof latestReachForTile === "number" && Number.isFinite(latestReachForTile) ? Math.round(latestReachForTile).toLocaleString() : "N/A"
+                                    const formatNumber = (n: number) => Math.round(n).toLocaleString()
                                     return (
                                       <div className={"w-full sm:w-auto min-w-0 max-w-full overflow-hidden " + subtleLoading}>
                                         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 min-w-0">
                                           <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
                                             <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.a}</div>
-                                            <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">{aText}</div>
+                                            <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">
+                                              {latestReachForTile === null ? "N/A" : formatNumber(latestReachForTile)}
+                                            </div>
                                           </div>
                                           <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
                                             <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.b}</div>
@@ -6566,13 +6568,20 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   }
 
                   const latestReachFromAligned = (() => {
+                    if (!Array.isArray(chartRowsAligned) || chartRowsAligned.length === 0) {
+                      return { v: null, day: null }
+                    }
+
                     for (let i = chartRowsAligned.length - 1; i >= 0; i--) {
-                      const v = chartRowsAligned[i]?.reach
+                      const r = chartRowsAligned[i]
+                      const v = r?.reach
+
                       if (typeof v === "number" && Number.isFinite(v)) {
-                        return { v, day: chartRowsAligned[i]?.day ?? null }
+                        return { v, day: r?.day ?? null }
                       }
                     }
-                    return { v: null as number | null, day: null as string | null }
+
+                    return { v: null, day: null }
                   })()
 
                   const computeMA = (values: Array<number | null>, window = 7) => {
