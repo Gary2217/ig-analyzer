@@ -1274,6 +1274,25 @@ export async function POST(req: Request) {
       let followersUsedSource = "none"
 
       try {
+        let ssotIdForFollowersRead: string | null = ssotId ?? null
+
+        if (!ssotIdForFollowersRead && resolvedIgId) {
+          const { data: ssotAccountResolved } = await supabaseServer
+            .from("user_instagram_accounts")
+            .select("id")
+            .eq("ig_user_id", resolvedIgId)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          ssotIdForFollowersRead =
+            ssotAccountResolved &&
+            typeof (ssotAccountResolved as any).id === "string"
+              ? String((ssotAccountResolved as any).id)
+              : null
+        }
+
         let followersQuery = supabaseServer
           .from("ig_daily_followers")
           .select("day, followers_count")
@@ -1281,8 +1300,8 @@ export async function POST(req: Request) {
           .lte("day", rangeEnd)
           .order("day", { ascending: true })
 
-        if (ssotId) {
-          followersQuery = followersQuery.eq("ig_account_id", ssotId)
+        if (ssotIdForFollowersRead) {
+          followersQuery = followersQuery.eq("ig_account_id", ssotIdForFollowersRead)
         } else if (ssotIgUserId) {
           // fallback ONLY for legacy data
           followersQuery = followersQuery.eq("ig_user_id", ssotIgUserId)
@@ -1303,7 +1322,7 @@ export async function POST(req: Request) {
             })
             .filter((x: any): x is { day: string; followers_count: number } => x !== null)
 
-          followersUsedSource = ssotId ? "ssot_db" : "legacy_fallback"
+          followersUsedSource = ssotIdForFollowersRead ? "ssot_db" : "legacy_fallback"
         }
       } catch {
         // fail-safe: do not break daily-snapshot if SSOT read fails
@@ -1385,79 +1404,81 @@ export async function POST(req: Request) {
       // Minimal READ-ONLY patch: do not write-back/upsert in this step.
       try {
         const tSsotStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-        const authed = await createAuthedClient()
-        const userRes = await authed.auth.getUser()
-        const user = userRes?.data?.user ?? null
+        let ssotId: string | null = null
 
-        if (user?.id) {
-          const { data: acct } = await authed
-            .from("user_ig_accounts")
+        if (resolvedIgId) {
+          const { data: ssotAccountResolved } = await supabaseServer
+            .from("user_instagram_accounts")
             .select("id")
-            .eq("user_id", user.id)
-            .eq("provider", "instagram")
-            .order("connected_at", { ascending: false })
+            .eq("ig_user_id", resolvedIgId)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle()
 
-          const ig_account_id = acct && typeof (acct as any).id === "string" ? String((acct as any).id) : ""
+          ssotId =
+            ssotAccountResolved &&
+            typeof (ssotAccountResolved as any).id === "string"
+              ? String((ssotAccountResolved as any).id)
+              : null
+        }
 
-          if (ig_account_id) {
-            const { data: ssotRows, error: ssotErr } = await supabaseServer
-              .from("ig_daily_insights")
-              .select("day,reach,impressions,total_interactions,accounts_engaged,captured_at")
-              .eq("ig_account_id", ig_account_id)
-              .gte("day", start)
-              .lte("day", today)
-              .order("day", { ascending: true })
+        if (ssotId) {
+          const { data: ssotRows, error: ssotErr } = await supabaseServer
+            .from("ig_daily_insights")
+            .select("day,reach,impressions,total_interactions,accounts_engaged,captured_at")
+            .eq("ig_account_id", ssotId)
+            .gte("day", start)
+            .lte("day", today)
+            .order("day", { ascending: true })
 
-            mark("db", tSsotStart)
+          mark("db", tSsotStart)
 
-            const list = Array.isArray(ssotRows) ? ssotRows : []
-            if (!ssotErr && list.length > 0) {
-              const pointsPadded = buildPaddedPointsFromRows(list, safeDays)
+          const list = Array.isArray(ssotRows) ? ssotRows : []
+          if (!ssotErr && list.length > 0) {
+            const pointsPadded = buildPaddedPointsFromRows(list, safeDays)
 
-              const availableDaysCount = countCollectedDaysFromRows(list)
-              const maxCapturedAt = list.reduce((max: string | null, r: any) => {
-                const ca = typeof r?.captured_at === "string" ? String(r.captured_at).trim() : ""
-                return ca && (!max || ca > max) ? ca : max
-              }, null)
+            const availableDaysCount = countCollectedDaysFromRows(list)
+            const maxCapturedAt = list.reduce((max: string | null, r: any) => {
+              const ca = typeof r?.captured_at === "string" ? String(r.captured_at).trim() : ""
+              return ca && (!max || ca > max) ? ca : max
+            }, null)
 
-              const etag = weakEtagFromParts(["ds", "db", resolvedIgId, resolvedPageId, safeDays, maxCapturedAt ?? today])
-              if (isIfNoneMatchHit(req, etag)) {
-                return { status: 200, source: "db", body: null, etag }
-              }
+            const etag = weakEtagFromParts(["ds", "db", resolvedIgId, resolvedPageId, safeDays, maxCapturedAt ?? today])
+            if (isIfNoneMatchHit(req, etag)) {
+              return { status: 200, source: "db", body: null, etag }
+            }
 
-              const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-              const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
-              const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
-              mark("totals", tTotalsStart)
+            const tTotalsStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
+            const envToken = (process.env.IG_ACCESS_TOKEN ?? "").trim()
+            const totals = await getTotalsCached({ totalsKey, token, envToken, pageId: resolvedPageId, igId: resolvedIgId, days: safeDays })
+            mark("totals", tTotalsStart)
 
-              return {
-                status: 200,
-                source: "db",
-                etag,
-                body: {
-                  build_marker: BUILD_MARKER,
-                  ok: true,
-                  days: safeDays,
-                  rangeDays: safeDays,
-                  rangeStart: start,
-                  rangeEnd: today,
-                  available_days: availableDaysCount,
-                  followers_daily_rows: followersSeries,
-                  followers_available_days: followersSeries.length,
-                  followers_last_write_at: null,
-                  points: pointsPadded,
-                  points_ok: true,
-                  points_source: "legacy_db",
-                  points_end_date: today,
-                  trend_points_v2: buildTrendPointsV2(pointsPadded),
-                  insights_daily: totals.insights_daily,
-                  insights_daily_series: [],
-                  series_ok: true,
-                  __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
-                },
-              }
+            return {
+              status: 200,
+              source: "db",
+              etag,
+              body: {
+                build_marker: BUILD_MARKER,
+                ok: true,
+                days: safeDays,
+                rangeDays: safeDays,
+                rangeStart: start,
+                rangeEnd: today,
+                available_days: availableDaysCount,
+                followers_daily_rows: followersSeries,
+                followers_available_days: followersSeries.length,
+                followers_last_write_at: null,
+                points: pointsPadded,
+                points_ok: true,
+                points_source: "legacy_db",
+                points_end_date: today,
+                trend_points_v2: buildTrendPointsV2(pointsPadded),
+                insights_daily: totals.insights_daily,
+                insights_daily_series: [],
+                series_ok: true,
+                __diag: { db_rows: followersSeries.length, used_source: followersUsedSource, start: rangeStart, end: rangeEnd },
+              },
             }
           }
         }
