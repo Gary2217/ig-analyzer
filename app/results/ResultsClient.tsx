@@ -1332,6 +1332,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     return `${userScopeKeyRef.current}::${metric}:${days}`
   }, [])
 
+  const trendCacheKeyRef = useRef(trendCacheKey)
+  useEffect(() => {
+    trendCacheKeyRef.current = trendCacheKey
+  }, [trendCacheKey])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1416,40 +1421,44 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     }
   }, [])
 
-  const trendSigFor = useCallback((days: 90 | 60 | 30 | 14 | 7, pts: AccountTrendPoint[]) => {
-    const list = Array.isArray(pts) ? pts : []
-    const len = list.length
-    const firstTs = len > 0 && typeof list[0]?.ts === "number" && Number.isFinite(list[0].ts) ? (list[0].ts as number) : 0
-    const lastTs = len > 0 && typeof list[len - 1]?.ts === "number" && Number.isFinite(list[len - 1].ts) ? (list[len - 1].ts as number) : 0
+  const trendSigFor = useCallback(
+    (days: number, pts: AccountTrendPoint[]) => {
+      const ptsLen = Array.isArray(pts) ? pts.length : 0
+      if (ptsLen === 0) return `${days}|empty`
+      const list = Array.isArray(pts) ? pts : []
+      const len = list.length
+      const firstTs = len > 0 && typeof list[0]?.ts === "number" && Number.isFinite(list[0].ts) ? (list[0].ts as number) : 0
+      const lastTs = len > 0 && typeof list[len - 1]?.ts === "number" && Number.isFinite(list[len - 1].ts) ? (list[len - 1].ts as number) : 0
 
-    let sumReach = 0
-    let countReach = 0
-    let sumImpr = 0
-    let countImpr = 0
-    let sumFollowers = 0
-    let countFollowers = 0
-    for (let i = 0; i < list.length; i++) {
-      const p = list[i]
-      const r = p?.reach
-      if (typeof r === "number" && Number.isFinite(r)) {
-        sumReach += r
-        countReach += 1
-      }
-      const im = p?.impressions
-      if (typeof im === "number" && Number.isFinite(im)) {
-        sumImpr += im
-        countImpr += 1
+      let sumReach = 0
+      let countReach = 0
+      let sumImpr = 0
+      let countImpr = 0
+      let sumFollowers = 0
+      let countFollowers = 0
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i]
+        const r = p?.reach
+        if (typeof r === "number" && Number.isFinite(r)) {
+          sumReach += r
+          countReach += 1
+        }
+        const im = p?.impressions
+        if (typeof im === "number" && Number.isFinite(im)) {
+          sumImpr += im
+          countImpr += 1
+        }
+        const f = p?.followerDelta
+        if (typeof f === "number" && Number.isFinite(f)) {
+          sumFollowers += f
+          countFollowers += 1
+        }
       }
 
-      const f = p?.followerDelta
-      if (typeof f === "number" && Number.isFinite(f)) {
-        sumFollowers += f
-        countFollowers += 1
-      }
-    }
-
-    return `${days}|${len}|${firstTs}|${lastTs}|r:${Math.round(sumReach)}:${countReach}|i:${Math.round(sumImpr)}:${countImpr}|f:${Math.round(sumFollowers)}:${countFollowers}`
-  }, [])
+      return `${days}|${len}|${firstTs}|${lastTs}|r:${Math.round(sumReach)}:${countReach}|i:${Math.round(sumImpr)}:${countImpr}|f:${Math.round(sumFollowers)}:${countFollowers}`
+    },
+    [],
+  )
 
   const setTrendPointsDeduped = useCallback(
     (next: AccountTrendPoint[]) => {
@@ -1461,6 +1470,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     },
     [hashTrendPoints],
   )
+
+  const setTrendPointsDedupedRef = useRef(setTrendPointsDeduped)
+  useEffect(() => {
+    setTrendPointsDedupedRef.current = setTrendPointsDeduped
+  }, [setTrendPointsDeduped])
+
+  const trendSigForRef = useRef(trendSigFor)
+  useEffect(() => {
+    trendSigForRef.current = trendSigFor
+  }, [trendSigFor])
 
   const applyTrendSeries = useCallback(
     ({
@@ -1526,11 +1545,115 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     [clearRangeSwitchTimeout, setTrendPoints, setTrendFetchedAt],
   )
 
+  const clearRangeSwitchTimeoutRef = useRef(clearRangeSwitchTimeout)
+  useEffect(() => {
+    clearRangeSwitchTimeoutRef.current = clearRangeSwitchTimeout
+  }, [clearRangeSwitchTimeout])
+
+  const failLatestRangeSwitchRef = useRef(failLatestRangeSwitch)
+  useEffect(() => {
+    failLatestRangeSwitchRef.current = failLatestRangeSwitch
+  }, [failLatestRangeSwitch])
+
   const [hasCachedData, setHasCachedData] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateSlow, setUpdateSlow] = useState(false)
   const [loadTimedOut, setLoadTimedOut] = useState(false)
   const [loadError, setLoadError] = useState(false)
+
+  const fetchSsotTrend = useCallback(
+    async (
+      daysForRequest: 90 | 60 | 30 | 14 | 7,
+      reason: string,
+      mode: "main" | "prefetch",
+      signal?: AbortSignal,
+    ) => {
+      console.log("[SSOT TREND FETCH]", { daysForRequest, reason, mode })
+
+      const ssotUrl = `/api/instagram/ssot-trend?days=${daysForRequest}`
+      const res = await fetch(ssotUrl, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        signal,
+      })
+
+      const ct = (res.headers.get("content-type") ?? "").toLowerCase()
+      if (!ct.includes("application/json")) {
+        throw new Error(`ssot_trend_non_json status=${res.status} url=/api/instagram/ssot-trend?days=${daysForRequest}`)
+      }
+
+      const body = await res.json().catch(() => null)
+      if (!res.ok || !body?.ok) {
+        return { ok: false as const, status: res.status, body }
+      }
+
+      const rangeStart = typeof body?.rangeStart === "string" ? String(body.rangeStart).trim() : ""
+      const rangeEnd = typeof body?.rangeEnd === "string" ? String(body.rangeEnd).trim() : ""
+      const availableDaysFromApi =
+        typeof body?.available_days === "number" && Number.isFinite(body.available_days) ? (body.available_days as number) : null
+
+      const reachSeriesRaw = Array.isArray(body?.reachSeries) ? (body.reachSeries as unknown[]) : []
+      const reachPoints: AccountTrendPoint[] = reachSeriesRaw
+        .map((row: any) => {
+          const day = typeof row?.day === "string" ? String(row.day).trim() : ""
+          const vRaw = row?.value
+          const v = typeof vRaw === "number" ? vRaw : Number(vRaw)
+          if (!day || !Number.isFinite(v)) return null
+          const ts = Date.parse(`${day}T00:00:00.000Z`)
+          if (!Number.isFinite(ts)) return null
+          const label = (() => {
+            try {
+              return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
+            } catch {
+              const d = new Date(ts)
+              const m = String(d.getMonth() + 1).padStart(2, "0")
+              const dd = String(d.getDate()).padStart(2, "0")
+              return `${m}/${dd}`
+            }
+          })()
+          return { t: label, ts, reach: Math.floor(v) } as AccountTrendPoint
+        })
+        .filter(Boolean) as AccountTrendPoint[]
+
+      const followersSeriesRaw = Array.isArray(body?.followersSeries) ? (body.followersSeries as unknown[]) : []
+      const followersRows = followersSeriesRaw
+        .map((row: any) => {
+          const day = typeof row?.day === "string" ? String(row.day).trim() : ""
+          const vRaw = row?.value
+          const v = typeof vRaw === "number" ? vRaw : Number(vRaw)
+          if (!day || !Number.isFinite(v)) return null
+          return { day, followers_count: Math.floor(v) }
+        })
+        .filter(Boolean) as Array<{ day: string; followers_count: number }>
+
+      console.log("[SSOT TREND OK]", {
+        daysForRequest,
+        reachLen: reachPoints.length,
+        followersLen: followersRows.length,
+        rangeStart,
+        rangeEnd,
+        available_days: availableDaysFromApi,
+      })
+
+      return {
+        ok: true as const,
+        status: res.status,
+        rangeStart,
+        rangeEnd,
+        available_days: availableDaysFromApi,
+        reachPoints,
+        followersRows,
+      }
+    },
+    [],
+  )
+
+  const fetchSsotTrendRef = useRef(fetchSsotTrend)
+  useEffect(() => {
+    fetchSsotTrendRef.current = fetchSsotTrend
+  }, [fetchSsotTrend])
 
   const [freePostRemaining, setFreePostRemaining] = useState<number>(2)
   const [freePostLimit, setFreePostLimit] = useState<number>(3)
@@ -1656,7 +1779,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const isMetricFollowers = focusedAccountTrendMetric === "followers"
   const hasCommittedSeriesForSelectedMetric = isMetricFollowers ? hasCommittedFollowers : hasCommittedTrend
   const isLoadingOverlay = Boolean(showRangeOverlay) || Boolean(isChangingRange) || Boolean(trendFetchStatus.loading) || Boolean(manualRefreshOverlay)
-  const shouldShowEmptyState = !isLoadingOverlay && !hasCommittedSeriesForSelectedMetric
+  const shouldShowEmptyState = !isLoadingOverlay && !hasCommittedTrend && !hasCommittedFollowers
 
   useEffect(() => {
     manualRefreshOverlayRef.current = manualRefreshOverlay
@@ -2218,25 +2341,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
         ;(async () => {
           try {
-            const url = new URL(window.location.href)
-            url.pathname = `/api/instagram/daily-snapshot`
-            url.searchParams.set("days", String(days))
+            const r = await fetchSsotTrendRef.current(days, "prefetch_common_ranges", "prefetch")
+            if (!r.ok) return
 
-            console.log("RESULTS FETCH daily-snapshot URL", url.toString())
-
-            const res = await fetch(url.toString(), {
-              method: "POST",
-              cache: "no-store",
-              credentials: "include",
-              headers: {
-                Accept: "application/json",
-              },
+            const sig = trendSigForRef.current(days, r.reachPoints)
+            trendPointsByDaysRef.current.set(trendCacheKeyRef.current("reach", days), {
+              points: r.reachPoints,
+              fetchedAt: Date.now(),
+              sig,
             })
-
-            const ct = (res.headers.get("content-type") ?? "").toLowerCase()
-            if (!res.ok || !ct.includes("application/json")) return
-            const body = await res.json().catch(() => null)
-            if (!body || body.ok !== true) return
           } catch {
             // ignore
           } finally {
@@ -2245,7 +2358,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
         })()
       }
     })
-  }, [isConnectedInstagram, selectedTrendRangeDays, trendCacheKey])
+  }, [isConnectedInstagram, selectedTrendRangeDays])
 
   const hasAnyResultsData = Boolean(effectiveRecentLen > 0 || trendPoints.length > 0 || igMe)
 
@@ -2594,12 +2707,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
     setTrendFetchStatus({ loading: true, error: "", lastDays: daysForRequest })
     setTrendNeedsConnectHint(false)
-    lastDailySnapshotPointsSourceRef.current = ""
 
     const nextReqId = (dailySnapshotRequestSeqRef.current += 1)
     if (dailySnapshotAbortRef.current) {
       try {
-        if (__DEV__) console.debug("[daily-snapshot] abort: replaced_by_new_request", { reqId: nextReqId })
+        if (__DEV__) console.debug("[trend] abort: replaced_by_new_request", { reqId: nextReqId })
         dailySnapshotAbortRef.current.abort()
       } catch {
         // ignore
@@ -2610,117 +2722,66 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
     ;(async () => {
       try {
-        const ssotUrl = `/api/instagram/ssot-trend?days=${daysForRequest}`
-        console.log("RESULTS FETCH ssot-trend URL", ssotUrl)
-        const ssotReq = fetch(ssotUrl, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-          headers: { Accept: "application/json" },
-          signal: ac.signal,
-        })
-
-        const ssotRes = await ssotReq
+        const r = await fetchSsotTrendRef.current(daysForRequest, isRangeSwitching ? "range_switch" : "auto", "main", ac.signal)
 
         if (dailySnapshotRequestSeqRef.current !== nextReqId) return
         if (selectedTrendRangeDays !== daysForRequest) return
 
-        if (ssotRes.status === 401 || ssotRes.status === 403) {
-          setTrendNeedsConnectHint(true)
-          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
-          failLatestRangeSwitch(daysForRequest)
-          return
-        }
-
-        const ct = (ssotRes.headers.get("content-type") ?? "").toLowerCase()
-        if (!ct.includes("application/json")) {
-          throw new Error(`ssot_trend_non_json status=${ssotRes.status} url=/api/instagram/ssot-trend?days=${daysForRequest}`)
-        }
-
-        const json7 = await ssotRes.json().catch(() => null)
-        if (dailySnapshotRequestSeqRef.current !== nextReqId) return
-        if (selectedTrendRangeDays !== daysForRequest) return
-        if (!ssotRes.ok || !json7?.ok) {
-          setSsotTrendMeta(null)
-          setTrendPoints([])
-          setFollowersDailyRows([])
-          setFollowersLastWriteAt(null)
-          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
-          failLatestRangeSwitch(daysForRequest)
-          return
-        }
-
-        const rangeStart = typeof json7?.rangeStart === "string" ? String(json7.rangeStart).trim() : ""
-        const rangeEnd = typeof json7?.rangeEnd === "string" ? String(json7.rangeEnd).trim() : ""
-        const availableDaysFromApi =
-          typeof json7?.available_days === "number" && Number.isFinite(json7.available_days) ? (json7.available_days as number) : null
-
-        if (rangeStart && rangeEnd) {
-          setSsotTrendMeta({ rangeStart, rangeEnd, available_days: availableDaysFromApi })
-        } else {
-          setSsotTrendMeta(null)
-        }
-
-        const reachSeriesRaw = Array.isArray(json7?.reachSeries) ? (json7.reachSeries as unknown[]) : []
-        const reachPoints: AccountTrendPoint[] = reachSeriesRaw
-          .map((row: any) => {
-            const day = typeof row?.day === "string" ? String(row.day).trim() : ""
-            const vRaw = row?.value
-            const v = typeof vRaw === "number" ? vRaw : Number(vRaw)
-            if (!day || !Number.isFinite(v)) return null
-            const ts = Date.parse(`${day}T00:00:00.000Z`)
-            if (!Number.isFinite(ts)) return null
-            const label = (() => {
-              try {
-                return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
-              } catch {
-                const d = new Date(ts)
-                const m = String(d.getMonth() + 1).padStart(2, "0")
-                const dd = String(d.getDate()).padStart(2, "0")
-                return `${m}/${dd}`
-              }
-            })()
-            return { t: label, ts, reach: Math.floor(v) } as AccountTrendPoint
-          })
-          .filter(Boolean) as AccountTrendPoint[]
-
-        const followersSeriesRaw = Array.isArray(json7?.followersSeries) ? (json7.followersSeries as unknown[]) : []
-        const followersRows = followersSeriesRaw
-          .map((row: any) => {
-            const day = typeof row?.day === "string" ? String(row.day).trim() : ""
-            const vRaw = row?.value
-            const v = typeof vRaw === "number" ? vRaw : Number(vRaw)
-            if (!day || !Number.isFinite(v)) return null
-            return { day, followers_count: Math.floor(v) }
-          })
-          .filter(Boolean) as Array<{ day: string; followers_count: number }>
-
-        setTrendPoints(reachPoints)
-        setFollowersDailyRows(followersRows)
-        setFollowersLastWriteAt(null)
-
-        const sig = trendSigFor(daysForRequest, reachPoints)
-        const fetchedAt = Date.now()
-        trendPointsByDaysRef.current.set(trendCacheKey("reach", daysForRequest), { points: reachPoints, fetchedAt, sig })
-        fetchedByDaysRef.current.set(daysForRequest, true)
-        applyTrendSeries({ days: daysForRequest, points: reachPoints, fetchedAt })
-
-        setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
-      } catch (e: unknown) {
-        if (!(isRecord(e) && e.name === "AbortError")) {
-          if (__DEV__) {
-            console.debug("[daily-snapshot] fetch_failed", {
-              message: isRecord(e) && typeof e.message === "string" ? e.message : String(e),
-              days: daysForRequest,
-              reqId: nextReqId,
-            })
+        if (!r.ok) {
+          if (r.status === 401 || r.status === 403) {
+            setTrendNeedsConnectHint(true)
           }
           setSsotTrendMeta(null)
           setTrendPoints([])
           setFollowersDailyRows([])
           setFollowersLastWriteAt(null)
           setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
-          failLatestRangeSwitch(daysForRequest)
+          failLatestRangeSwitchRef.current(daysForRequest)
+          return
+        }
+
+        if (r.rangeStart && r.rangeEnd) {
+          setSsotTrendMeta({ rangeStart: r.rangeStart, rangeEnd: r.rangeEnd, available_days: r.available_days })
+        } else {
+          setSsotTrendMeta(null)
+        }
+
+        setTrendPoints(r.reachPoints)
+        setFollowersDailyRows(r.followersRows)
+        setFollowersLastWriteAt(null)
+
+        const fetchedAt = Date.now()
+        const sig = trendSigForRef.current(daysForRequest, r.reachPoints)
+        trendPointsByDaysRef.current.set(trendCacheKeyRef.current("reach", daysForRequest), { points: r.reachPoints, fetchedAt, sig })
+        fetchedByDaysRef.current.set(daysForRequest, true)
+
+        // Commit metadata + clear range overlay (avoid writing trendPoints twice)
+        const pts = Array.isArray(r.reachPoints) ? r.reachPoints : ([] as AccountTrendPoint[])
+        const nextSig = trendSigForRef.current(daysForRequest, pts)
+        if (nextSig !== displayedTrendSigRef.current) {
+          setTrendFetchedAt(fetchedAt)
+          displayedTrendSigRef.current = nextSig
+          setRenderedTrendRangeDays(daysForRequest)
+        }
+
+        const inflight = rangeOverlayInFlightRef.current
+        if (inflight && inflight.days === daysForRequest && inflight.requestId === rangeChangeRequestIdRef.current) {
+          clearRangeSwitchTimeoutRef.current()
+          setRangeOverlayError(false)
+          setShowRangeOverlay(false)
+          setIsChangingRange(false)
+          rangeOverlayInFlightRef.current = null
+        }
+
+        setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+      } catch (e: unknown) {
+        if (!(isRecord(e) && e.name === "AbortError")) {
+          setSsotTrendMeta(null)
+          setTrendPoints([])
+          setFollowersDailyRows([])
+          setFollowersLastWriteAt(null)
+          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
+          failLatestRangeSwitchRef.current(daysForRequest)
         }
       } finally {
         if (inFlightTrendDaysRef.current === daysForRequest) inFlightTrendDaysRef.current = null
@@ -2732,14 +2793,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       // and would prematurely cancel an in-flight request. Abort is handled only when a
       // new request starts (above) or on component unmount (separate effect).
     }
-  }, [
-    isConnectedInstagram,
-    mergeToContinuousTrendPoints,
-    normalizeTotalsFromInsightsDaily,
-    selectedTrendRangeDays,
-    applyTrendSeries,
-    trendSigFor,
-  ])
+  }, [isConnectedInstagram, selectedTrendRangeDays])
 
   useEffect(() => {
     return () => {
@@ -2893,12 +2947,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     (Array.isArray(trendPoints) && trendPoints.length > 0) ||
     (Array.isArray(accountTrend) && accountTrend.length > 0)
   const shouldShowEmptySeriesHint =
-    lastDailySnapshotPointsSourceRef.current === "empty" &&
     !hasFallback &&
-    !(
-      focusedAccountTrendMetric === "followers" &&
-      followersDailyRows.length >= 1
-    )
+    !hasCommittedTrend &&
+    !hasCommittedFollowers &&
+    typeof ssotTrendMeta?.available_days === "number" &&
+    Number.isFinite(ssotTrendMeta.available_days) &&
+    ssotTrendMeta.available_days >= 1
 
   const trendMeta = useMemo(() => {
     if (!trendPoints || trendPoints.length === 0) return null
@@ -6017,13 +6071,23 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
               <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
                 {trendNeedsConnectHint ? (
                   <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">
-                    {t("results.connect.subtitle")}
+                    {(() => {
+                      const raw = t("results.connect.subtitle")
+                      if (typeof raw === "string" && raw.trim() && raw.trim() !== "results.connect.subtitle") return raw
+                      return isZh
+                        ? "請先連接 Instagram 帳號以查看趨勢資料。"
+                        : "Connect your Instagram account to view trend data."
+                    })()}
                   </div>
                 ) : null}
                 {shouldShowEmptySeriesHint ? (
                   <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere">
-                    <div>資料累積中（目前 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} 天），明天起會逐日形成趨勢曲線。</div>
-                    <div>Collecting data ({typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} days so far). The trend line will form as daily history builds.</div>
+                    <div>
+                      資料累積中（目前 {typeof ssotTrendMeta?.available_days === "number" ? ssotTrendMeta.available_days : "—"} 天），明天起會逐日形成趨勢曲線。
+                    </div>
+                    <div>
+                      Collecting data ({typeof ssotTrendMeta?.available_days === "number" ? ssotTrendMeta.available_days : "—"} days so far). The trend line will form as daily history builds.
+                    </div>
                   </div>
                 ) : null}
                 <div className="mt-2 flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">

@@ -1,5 +1,5 @@
 ﻿diff --git a/app/results/ResultsClient.tsx b/app/results/ResultsClient.tsx
-index f42a651..384520e 100644
+index f42a651..7724310 100644
 --- a/app/results/ResultsClient.tsx
 +++ b/app/results/ResultsClient.tsx
 @@ -1332,6 +1332,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
@@ -234,7 +234,7 @@ index f42a651..384520e 100644
  
    useEffect(() => {
      manualRefreshOverlayRef.current = manualRefreshOverlay
-@@ -2218,25 +2341,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2218,25 +2341,46 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
  
          ;(async () => {
            try {
@@ -260,15 +260,45 @@ index f42a651..384520e 100644
 +              fetchedAt: Date.now(),
 +              sig,
              })
--
+ 
 -            const ct = (res.headers.get("content-type") ?? "").toLowerCase()
 -            if (!res.ok || !ct.includes("application/json")) return
 -            const body = await res.json().catch(() => null)
 -            if (!body || body.ok !== true) return
++            const followersPoints: AccountTrendPoint[] = (Array.isArray(r.followersRows) ? r.followersRows : [])
++              .map((row: any) => {
++                const day = typeof row?.day === "string" ? String(row.day).trim() : ""
++                const vRaw = row?.followers_count
++                const v = typeof vRaw === "number" ? vRaw : Number(vRaw)
++                if (!day || !Number.isFinite(v)) return null
++                const ts = Date.parse(`${day}T00:00:00.000Z`)
++                if (!Number.isFinite(ts)) return null
++                const label = (() => {
++                  try {
++                    return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(new Date(ts))
++                  } catch {
++                    const d = new Date(ts)
++                    const m = String(d.getMonth() + 1).padStart(2, "0")
++                    const dd = String(d.getDate()).padStart(2, "0")
++                    return `${m}/${dd}`
++                  }
++                })()
++                return { t: label, ts, followerDelta: Math.floor(v) } as AccountTrendPoint
++              })
++              .filter(Boolean) as AccountTrendPoint[]
++
++            if (followersPoints.length >= 1) {
++              const fSig = trendSigForRef.current(days, followersPoints)
++              trendPointsByDaysRef.current.set(trendCacheKeyRef.current("followers", days), {
++                points: followersPoints,
++                fetchedAt: Date.now(),
++                sig: fSig,
++              })
++            }
            } catch {
              // ignore
            } finally {
-@@ -2245,7 +2358,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2245,7 +2389,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
          })()
        }
      })
@@ -277,7 +307,7 @@ index f42a651..384520e 100644
  
    const hasAnyResultsData = Boolean(effectiveRecentLen > 0 || trendPoints.length > 0 || igMe)
  
-@@ -2594,12 +2707,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2594,12 +2738,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
  
      setTrendFetchStatus({ loading: true, error: "", lastDays: daysForRequest })
      setTrendNeedsConnectHint(false)
@@ -291,7 +321,7 @@ index f42a651..384520e 100644
          dailySnapshotAbortRef.current.abort()
        } catch {
          // ignore
-@@ -2610,117 +2722,67 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2610,117 +2753,66 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
  
      ;(async () => {
        try {
@@ -402,23 +432,22 @@ index f42a651..384520e 100644
          fetchedByDaysRef.current.set(daysForRequest, true)
 -        applyTrendSeries({ days: daysForRequest, points: reachPoints, fetchedAt })
 +
-+        // Commit series + clear range overlay (inlined to avoid depending on applyTrendSeries in effect deps)
++        // Commit metadata + clear range overlay (avoid writing trendPoints twice)
 +        const pts = Array.isArray(r.reachPoints) ? r.reachPoints : ([] as AccountTrendPoint[])
 +        const nextSig = trendSigForRef.current(daysForRequest, pts)
 +        if (nextSig !== displayedTrendSigRef.current) {
-+          setTrendPointsDedupedRef.current(pts)
 +          setTrendFetchedAt(fetchedAt)
 +          displayedTrendSigRef.current = nextSig
 +          setRenderedTrendRangeDays(daysForRequest)
++        }
 +
-+          const inflight = rangeOverlayInFlightRef.current
-+          if (inflight && inflight.days === daysForRequest && inflight.requestId === rangeChangeRequestIdRef.current) {
-+            clearRangeSwitchTimeoutRef.current()
-+            setRangeOverlayError(false)
-+            setShowRangeOverlay(false)
-+            setIsChangingRange(false)
-+            rangeOverlayInFlightRef.current = null
-+          }
++        const inflight = rangeOverlayInFlightRef.current
++        if (inflight && inflight.days === daysForRequest && inflight.requestId === rangeChangeRequestIdRef.current) {
++          clearRangeSwitchTimeoutRef.current()
++          setRangeOverlayError(false)
++          setShowRangeOverlay(false)
++          setIsChangingRange(false)
++          rangeOverlayInFlightRef.current = null
 +        }
  
          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
@@ -441,7 +470,7 @@ index f42a651..384520e 100644
          }
        } finally {
          if (inFlightTrendDaysRef.current === daysForRequest) inFlightTrendDaysRef.current = null
-@@ -2732,14 +2794,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2732,14 +2824,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
        // and would prematurely cancel an in-flight request. Abort is handled only when a
        // new request starts (above) or on component unmount (separate effect).
      }
@@ -457,7 +486,7 @@ index f42a651..384520e 100644
  
    useEffect(() => {
      return () => {
-@@ -2893,12 +2948,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2893,12 +2978,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
      (Array.isArray(trendPoints) && trendPoints.length > 0) ||
      (Array.isArray(accountTrend) && accountTrend.length > 0)
    const shouldShowEmptySeriesHint =
@@ -475,7 +504,7 @@ index f42a651..384520e 100644
  
    const trendMeta = useMemo(() => {
      if (!trendPoints || trendPoints.length === 0) return null
-@@ -6017,13 +6072,23 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -6017,13 +6102,23 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
                  {trendNeedsConnectHint ? (
                    <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">

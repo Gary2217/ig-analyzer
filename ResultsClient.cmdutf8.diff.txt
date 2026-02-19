@@ -1,5 +1,5 @@
-﻿diff --git a/app/results/ResultsClient.tsx b/app/results/ResultsClient.tsx
-index f42a651..384520e 100644
+diff --git a/app/results/ResultsClient.tsx b/app/results/ResultsClient.tsx
+index f42a651..734fbbc 100644
 --- a/app/results/ResultsClient.tsx
 +++ b/app/results/ResultsClient.tsx
 @@ -1332,6 +1332,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
@@ -291,7 +291,7 @@ index f42a651..384520e 100644
          dailySnapshotAbortRef.current.abort()
        } catch {
          // ignore
-@@ -2610,117 +2722,67 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2610,117 +2722,66 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
  
      ;(async () => {
        try {
@@ -402,23 +402,22 @@ index f42a651..384520e 100644
          fetchedByDaysRef.current.set(daysForRequest, true)
 -        applyTrendSeries({ days: daysForRequest, points: reachPoints, fetchedAt })
 +
-+        // Commit series + clear range overlay (inlined to avoid depending on applyTrendSeries in effect deps)
++        // Commit metadata + clear range overlay (avoid writing trendPoints twice)
 +        const pts = Array.isArray(r.reachPoints) ? r.reachPoints : ([] as AccountTrendPoint[])
 +        const nextSig = trendSigForRef.current(daysForRequest, pts)
 +        if (nextSig !== displayedTrendSigRef.current) {
-+          setTrendPointsDedupedRef.current(pts)
 +          setTrendFetchedAt(fetchedAt)
 +          displayedTrendSigRef.current = nextSig
 +          setRenderedTrendRangeDays(daysForRequest)
++        }
 +
-+          const inflight = rangeOverlayInFlightRef.current
-+          if (inflight && inflight.days === daysForRequest && inflight.requestId === rangeChangeRequestIdRef.current) {
-+            clearRangeSwitchTimeoutRef.current()
-+            setRangeOverlayError(false)
-+            setShowRangeOverlay(false)
-+            setIsChangingRange(false)
-+            rangeOverlayInFlightRef.current = null
-+          }
++        const inflight = rangeOverlayInFlightRef.current
++        if (inflight && inflight.days === daysForRequest && inflight.requestId === rangeChangeRequestIdRef.current) {
++          clearRangeSwitchTimeoutRef.current()
++          setRangeOverlayError(false)
++          setShowRangeOverlay(false)
++          setIsChangingRange(false)
++          rangeOverlayInFlightRef.current = null
 +        }
  
          setTrendFetchStatus({ loading: false, error: "", lastDays: daysForRequest })
@@ -441,7 +440,7 @@ index f42a651..384520e 100644
          }
        } finally {
          if (inFlightTrendDaysRef.current === daysForRequest) inFlightTrendDaysRef.current = null
-@@ -2732,14 +2794,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2732,14 +2793,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
        // and would prematurely cancel an in-flight request. Abort is handled only when a
        // new request starts (above) or on component unmount (separate effect).
      }
@@ -457,7 +456,7 @@ index f42a651..384520e 100644
  
    useEffect(() => {
      return () => {
-@@ -2893,12 +2948,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -2893,12 +2947,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
      (Array.isArray(trendPoints) && trendPoints.length > 0) ||
      (Array.isArray(accountTrend) && accountTrend.length > 0)
    const shouldShowEmptySeriesHint =
@@ -475,7 +474,7 @@ index f42a651..384520e 100644
  
    const trendMeta = useMemo(() => {
      if (!trendPoints || trendPoints.length === 0) return null
-@@ -6017,13 +6072,23 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
+@@ -6017,13 +6071,23 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                <CardContent className="p-4 pt-1 lg:p-6 lg:pt-2">
                  {trendNeedsConnectHint ? (
                    <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0">
@@ -484,19 +483,20 @@ index f42a651..384520e 100644
 +                      const raw = t("results.connect.subtitle")
 +                      if (typeof raw === "string" && raw.trim() && raw.trim() !== "results.connect.subtitle") return raw
 +                      return isZh
-+                        ? "璜嬪厛閫ｆ帴 Instagram 甯宠櫉浠ユ煡鐪嬭定鍕㈣硣鏂欍€?
++                        ? "請先連接 Instagram 帳號以查看趨勢資料。"
 +                        : "Connect your Instagram account to view trend data."
 +                    })()}
                    </div>
                  ) : null}
                  {shouldShowEmptySeriesHint ? (
                    <div className="mt-2 text-[11px] sm:text-xs text-white/55 leading-snug min-w-0 break-words overflow-wrap-anywhere">
--                    <div>璩囨枡绱涓紙鐩墠 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "鈥?} 澶╋級锛屾槑澶╄捣鏈冮€愭棩褰㈡垚瓒ㄥ嫝鏇茬窔銆?/div>
--                    <div>Collecting data ({typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "鈥?} days so far). The trend line will form as daily history builds.</div>
+-                    <div>資料累積中（目前 {typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} 天），明天起會逐日形成趨勢曲線。</div>
+-                    <div>Collecting data ({typeof dailySnapshotAvailableDays === "number" ? dailySnapshotAvailableDays : "—"} days so far). The trend line will form as daily history builds.</div>
 +                    <div>
-+                      璩囨枡绱涓紙鐩墠 {typeof ssotTrendMeta?.available_days === "number" ? ssotTrendMeta.available_days : "鈥?} 澶╋級锛屾槑澶╄捣鏈冮€愭棩褰㈡垚瓒ㄥ嫝鏇茬窔銆?+                    </div>
++                      資料累積中（目前 {typeof ssotTrendMeta?.available_days === "number" ? ssotTrendMeta.available_days : "—"} 天），明天起會逐日形成趨勢曲線。
++                    </div>
 +                    <div>
-+                      Collecting data ({typeof ssotTrendMeta?.available_days === "number" ? ssotTrendMeta.available_days : "鈥?} days so far). The trend line will form as daily history builds.
++                      Collecting data ({typeof ssotTrendMeta?.available_days === "number" ? ssotTrendMeta.available_days : "—"} days so far). The trend line will form as daily history builds.
 +                    </div>
                    </div>
                  ) : null}
