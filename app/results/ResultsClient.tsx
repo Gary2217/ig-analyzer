@@ -6462,14 +6462,35 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     followers: number | null
                   }
 
+                  // forward-fill followers to ensure continuous time series (SSOT remains chartRowsAligned)
+                  let lastKnownFollowers: number | null = null
+
                   const chartRowsAligned: ChartRow[] = dateDomain.map((d) => {
                     const p = pointsByDay.get(d.day)
-                    const reach = typeof (p as any)?.reach === "number" && Number.isFinite((p as any).reach) ? ((p as any).reach as number) : null
-                    const impressions = typeof (p as any)?.impressions === "number" && Number.isFinite((p as any).impressions) ? ((p as any).impressions as number) : null
-                    const interactions = typeof (p as any)?.interactions === "number" && Number.isFinite((p as any).interactions) ? ((p as any).interactions as number) : null
-                    const engaged = typeof (p as any)?.engaged === "number" && Number.isFinite((p as any).engaged) ? ((p as any).engaged as number) : null
+                    const reach =
+                      typeof (p as any)?.reach === "number" && Number.isFinite((p as any).reach)
+                        ? ((p as any).reach as number)
+                        : null
+                    const impressions =
+                      typeof (p as any)?.impressions === "number" && Number.isFinite((p as any).impressions)
+                        ? ((p as any).impressions as number)
+                        : null
+                    const interactions =
+                      typeof (p as any)?.interactions === "number" && Number.isFinite((p as any).interactions)
+                        ? ((p as any).interactions as number)
+                        : null
+                    const engaged =
+                      typeof (p as any)?.engaged === "number" && Number.isFinite((p as any).engaged)
+                        ? ((p as any).engaged as number)
+                        : null
 
-                    const followers = followersByDay.has(d.day) ? (followersByDay.get(d.day) as number) : null
+                    const todaysFollowers = followersByDay.has(d.day) ? (followersByDay.get(d.day) as number) : null
+
+                    if (typeof todaysFollowers === "number" && Number.isFinite(todaysFollowers)) {
+                      lastKnownFollowers = todaysFollowers
+                    }
+
+                    const followers = lastKnownFollowers
 
                     return {
                       t: mkLabel(d.ts),
@@ -6482,6 +6503,17 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       followers,
                     }
                   })
+
+                  // fill leading null followers with first known value (prevents empty left segment)
+                  const firstKnownFollowers =
+                    chartRowsAligned.find((r) => typeof r.followers === "number" && Number.isFinite(r.followers))?.followers ?? null
+
+                  if (typeof firstKnownFollowers === "number" && Number.isFinite(firstKnownFollowers)) {
+                    for (const r of chartRowsAligned) {
+                      if (typeof r.followers === "number" && Number.isFinite(r.followers)) break
+                      r.followers = firstKnownFollowers
+                    }
+                  }
 
                   const computeMA = (values: Array<number | null>, window = 7) => {
                     const w = Math.max(1, Math.floor(window))
