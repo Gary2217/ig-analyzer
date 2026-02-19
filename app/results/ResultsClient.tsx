@@ -6569,19 +6569,25 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                   const latestReachFromAligned = (() => {
                     if (!Array.isArray(chartRowsAligned) || chartRowsAligned.length === 0) {
-                      return { v: null, day: null }
+                      return { v: null as number | null, day: null as string | null }
                     }
+
+                    const lastIdx = chartRowsAligned.length - 1
 
                     for (let i = chartRowsAligned.length - 1; i >= 0; i--) {
                       const r = chartRowsAligned[i]
                       const v = r?.reach
+
+                      // Treat a 0 on the LAST DAY as "missing/placeholder" for Reach (flow metric).
+                      // We only skip 0 for the last day to avoid hiding legitimate 0s on earlier days.
+                      if (i === lastIdx && v === 0) continue
 
                       if (typeof v === "number" && Number.isFinite(v)) {
                         return { v, day: r?.day ?? null }
                       }
                     }
 
-                    return { v: null, day: null }
+                    return { v: null as number | null, day: null as string | null }
                   })()
 
                   const computeMA = (values: Array<number | null>, window = 7) => {
