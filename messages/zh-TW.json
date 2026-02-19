@@ -587,6 +587,27 @@
         "topPost": "最佳貼文（7 天）"
       }
     },
+    "trendBlock": {
+      "title": "趨勢",
+      "subtitle": "SSOT 每日指標（DB 讀取）。",
+      "chartTitle": "每日",
+      "dbOnlyNote": "資料來源：SSOT tables（不讀 cookies；以 DB 活躍帳號做範圍）。",
+      "empty": "這個區間目前還沒有趨勢資料。",
+      "hint": "最近 {days} 天",
+      "error": "載入趨勢失敗（{code}）。",
+      "summaryLabel": "{metric} 總和",
+      "kpis": {
+        "points": "資料點",
+        "last": "最新"
+      },
+      "metrics": {
+        "reach": "觸及",
+        "followers": "追蹤者",
+        "impressions": "曝光",
+        "accountsEngaged": "互動帳號",
+        "totalInteractions": "互動"
+      }
+    },
     "subnav": {
       "ariaLabel": "結果頁區段導覽",
       "items": {

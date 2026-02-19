@@ -24,6 +24,7 @@ import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
 import { useRefreshController } from "./hooks/useRefreshController"
 import { useResultsOrchestrator } from "./hooks/useResultsOrchestrator"
 import { ResultsDebugPanel } from "./components/ResultsDebugPanel"
+import TrendCard from "./components/TrendCard"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
 import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints"
@@ -6090,6 +6091,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                 </div>
               </CardContent>
             </Card>
+
+            <TrendCard />
 
             <Card
               id="latest-posts-section"

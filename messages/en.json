@@ -588,6 +588,27 @@
         "topPost": "Top post (7d)"
       }
     },
+    "trendBlock": {
+      "title": "Trend",
+      "subtitle": "SSOT daily metrics (DB-backed).",
+      "chartTitle": "Daily",
+      "dbOnlyNote": "Data source: SSOT tables (no cookies; DB-scoped active account).",
+      "empty": "No trend data for this range yet.",
+      "hint": "Last {days} days",
+      "error": "Failed to load trend ({code}).",
+      "summaryLabel": "{metric} total",
+      "kpis": {
+        "points": "Points",
+        "last": "Last"
+      },
+      "metrics": {
+        "reach": "Reach",
+        "followers": "Followers",
+        "impressions": "Impressions",
+        "accountsEngaged": "Engaged accounts",
+        "totalInteractions": "Interactions"
+      }
+    },
     "subnav": {
       "ariaLabel": "Results section navigation",
       "items": {
