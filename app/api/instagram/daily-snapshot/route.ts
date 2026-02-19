@@ -1129,6 +1129,25 @@ export async function POST(req: Request) {
     const h = req.headers.get("x-cron-secret")
     const cron = process.env.CRON_SECRET
     const cronMode = Boolean(h && cron && h === cron)
+ 
+    let authed: Awaited<ReturnType<typeof createAuthedClient>> | null = null
+    let userId: string = ""
+
+    if (!cronMode) {
+      try {
+        authed = await createAuthedClient()
+        const userRes = await authed.auth.getUser()
+        const u = userRes?.data?.user ?? null
+        userId = u?.id ? String(u.id) : ""
+      } catch (e) {
+        authed = null
+        userId = ""
+        console.warn("[daily-snapshot] failed to resolve user for active-account upsert", { cronMode: Boolean(cronMode) })
+      }
+    } else {
+      authed = null
+      userId = ""
+    }
     
     if (__DEV__) {
       console.debug("[daily-snapshot][auth]", { 
@@ -1280,6 +1299,42 @@ export async function POST(req: Request) {
         etag,
         branch: "missing_ig_id",
         source: "error",
+      })
+    }
+
+    // Ensure DB-backed active account SSOT record exists (best-effort; do not block API success)
+    try {
+      const igUserId = String(resolvedIgId).trim()
+
+      if (!userId || !igUserId || !authed) {
+        console.warn("[daily-snapshot] skip active user_instagram_accounts upsert", {
+          cronMode: Boolean(cronMode),
+          hasUser: Boolean(userId),
+          hasIg: Boolean(igUserId),
+          hasClient: Boolean(authed),
+        })
+      } else {
+        await authed
+          .from("user_instagram_accounts")
+          .upsert(
+            {
+              user_id: userId,
+              ig_user_id: igUserId,
+              is_active: true,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,ig_user_id" },
+          )
+
+        await authed
+          .from("user_instagram_accounts")
+          .update({ is_active: false })
+          .eq("user_id", userId)
+          .neq("ig_user_id", igUserId)
+      }
+    } catch (e) {
+      console.warn("[daily-snapshot] failed to upsert active user_instagram_accounts", {
+        cronMode: Boolean(cronMode),
       })
     }
 
