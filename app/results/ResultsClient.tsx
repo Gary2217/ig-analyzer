@@ -306,6 +306,32 @@ function LatestReachTileBridge(props: {
   return null
 }
 
+function ReachWindowMetaTileBridge(props: {
+  daysRequested: number
+  availableAlignedDays: number
+  windowDays: number
+  totalSum: number | null
+  setMeta: (m: { daysRequested: number; availableAlignedDays: number; windowDays: number }) => void
+  setTotalSum: (v: number | null) => void
+}) {
+  useEffect(() => {
+    props.setMeta({
+      daysRequested: props.daysRequested,
+      availableAlignedDays: props.availableAlignedDays,
+      windowDays: props.windowDays,
+    })
+    props.setTotalSum(props.totalSum)
+  }, [
+    props.availableAlignedDays,
+    props.daysRequested,
+    props.setMeta,
+    props.setTotalSum,
+    props.totalSum,
+    props.windowDays,
+  ])
+  return null
+}
+
 const RESULTS_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const __resultsCacheMem: Record<string, ResultsCachePayloadV1> = {}
 
@@ -1524,6 +1550,13 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
   const [latestReachForTile, setLatestReachForTile] = useState<number | null>(null)
   const [latestReachDayForTile, setLatestReachDayForTile] = useState<string | null>(null)
+
+  const [totalReachSumForTile, setTotalReachSumForTile] = useState<number | null>(null)
+  const [reachWindowMetaForTile, setReachWindowMetaForTile] = useState<{
+    daysRequested: number
+    availableAlignedDays: number
+    windowDays: number
+  } | null>(null)
 
   const trendRangeSwitchStartRef = useRef<{ at: number; days: 90 | 60 | 30 | 14 | 7 } | null>(null)
 
@@ -6332,19 +6365,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     const subtleLoading = showRangeOverlay ? "opacity-90 animate-pulse" : ""
                                     const formatNumber = (n: number) => Math.round(n).toLocaleString()
 
-                                    const totalReachInWindowForTile = (() => {
-                                      const days = selectedTrendRangeDays
-                                      const windowPts = Array.isArray(trendPoints) ? trendPoints.slice(-days) : []
-                                      let sum = 0
-                                      let countedDays = 0
-                                      for (const p of windowPts as any[]) {
-                                        const v = (p as any)?.reach
-                                        if (typeof v === "number" && Number.isFinite(v)) {
-                                          sum += v
-                                          countedDays += 1
-                                        }
-                                      }
-                                      return { days, sum: countedDays > 0 ? sum : null, countedDays }
+                                    const windowLabel = (() => {
+                                      const m = reachWindowMetaForTile
+                                      if (!m) return ""
+                                      return `可用 ${m.windowDays}/${m.daysRequested} 天`
                                     })()
 
                                     return (
@@ -6355,12 +6379,18 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                             <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">
                                               {latestReachForTile === null ? "N/A" : formatNumber(latestReachForTile)}
                                             </div>
+                                            {windowLabel ? (
+                                              <div className="text-[10px] leading-tight text-white/50 whitespace-nowrap truncate min-w-0">{windowLabel}</div>
+                                            ) : null}
                                           </div>
                                           <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
                                             <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">總觸及數</div>
                                             <div className="text-xs font-semibold text-white tabular-nums leading-tight whitespace-nowrap truncate min-w-0">
-                                              {totalReachInWindowForTile.sum === null ? "N/A" : formatNumber(totalReachInWindowForTile.sum)}
+                                              {totalReachSumForTile === null ? "N/A" : formatNumber(totalReachSumForTile)}
                                             </div>
+                                            {windowLabel ? (
+                                              <div className="text-[10px] leading-tight text-white/50 whitespace-nowrap truncate min-w-0">{windowLabel}</div>
+                                            ) : null}
                                           </div>
                                           <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 min-w-0 min-w-[92px] max-w-full">
                                             <div className="text-[11px] leading-tight text-white/60 min-w-0 truncate whitespace-nowrap">{reachLabels.b}</div>
@@ -6577,19 +6607,39 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     }
                   })
 
+                  const availableAlignedDays = Array.isArray(chartRowsAligned) ? chartRowsAligned.length : 0
+                  const windowDays = Math.min(selectedTrendRangeDays, availableAlignedDays)
+                  const alignedWindow = windowDays > 0 ? chartRowsAligned.slice(-windowDays) : ([] as ChartRow[])
+
                   const totalReachInWindow = (() => {
-                    const days = selectedTrendRangeDays
-                    const windowRows = Array.isArray(chartRowsAligned) ? chartRowsAligned.slice(-days) : []
-                    let sum = 0
+                    let totalSum = 0
                     let countedDays = 0
-                    for (const r of windowRows) {
+                    for (const r of alignedWindow) {
                       const v = (r as any)?.reach
                       if (typeof v === "number" && Number.isFinite(v)) {
-                        sum += v
+                        totalSum += v
                         countedDays += 1
                       }
                     }
-                    return { days, sum: countedDays > 0 ? sum : null, countedDays }
+                    return {
+                      daysRequested: selectedTrendRangeDays,
+                      windowDays,
+                      countedDays,
+                      sum: countedDays > 0 ? totalSum : null,
+                    }
+                  })()
+
+                  const lastPositiveReachInWindow = (() => {
+                    let lastPositive = null as null | { day: string; v: number }
+                    for (let i = alignedWindow.length - 1; i >= 0; i--) {
+                      const r = alignedWindow[i] as any
+                      const v = r?.reach
+                      if (typeof v === "number" && Number.isFinite(v) && v > 0) {
+                        lastPositive = { day: String(r?.day ?? r?.date ?? ""), v }
+                        break
+                      }
+                    }
+                    return lastPositive
                   })()
 
                   // =====================
@@ -6640,7 +6690,13 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                         dailySnapshotTotals,
                         lastFiniteReach,
                         lastPositiveReach,
+                        reachWindowMeta: {
+                          daysRequested: selectedTrendRangeDays,
+                          availableAlignedDays,
+                          windowDays,
+                        },
                         totalReachInWindow,
+                        lastPositiveReachInWindow,
                       }
 
                       console.log("window.__DEBUG_REACH_SSOT__ READY")
@@ -6693,6 +6749,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       }
                     }
 
+                    return { v: null as number | null, day: null as string | null }
+                  })()
+
+                  const lastPositiveReachForTile = (() => {
+                    if (lastPositiveReachInWindow && typeof lastPositiveReachInWindow.v === "number") {
+                      return {
+                        v: lastPositiveReachInWindow.v,
+                        day: lastPositiveReachInWindow.day || null,
+                      }
+                    }
                     return { v: null as number | null, day: null as string | null }
                   })()
 
@@ -7098,10 +7164,18 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   return (
                     <>
                       <LatestReachTileBridge
-                        v={latestReachPositiveFromAligned.v}
-                        day={latestReachPositiveFromAligned.day}
+                        v={lastPositiveReachForTile.v}
+                        day={lastPositiveReachForTile.day}
                         setV={setLatestReachForTile}
                         setDay={setLatestReachDayForTile}
+                      />
+                      <ReachWindowMetaTileBridge
+                        daysRequested={selectedTrendRangeDays}
+                        availableAlignedDays={availableAlignedDays}
+                        windowDays={windowDays}
+                        totalSum={totalReachInWindow.sum}
+                        setMeta={setReachWindowMetaForTile}
+                        setTotalSum={setTotalReachSumForTile}
                       />
                       {shouldShowTotalValuePanel ? (
                         <div className="mt-3 rounded-xl border border-white/8 bg-white/5 p-3 min-w-0">
