@@ -1274,63 +1274,36 @@ export async function POST(req: Request) {
       let followersUsedSource = "none"
 
       try {
-        const authed = await createAuthedClient()
-
-        // resolve authenticated user namespace (CRITICAL for multi-user SaaS SSOT)
-        const {
-          data: { user },
-        } = await authed.auth.getUser()
-
-        let ssotId: string | null = null
-
-        if (user?.id && resolvedIgId) {
-          const {
-            data: ssotAccountResolved,
-            error: ssotResolveError,
-          } = await authed
-            .from("user_instagram_accounts")
-            .select("id, ig_user_id, user_id, is_active, created_at")
-            .eq("user_id", user.id)
-            .eq("ig_user_id", resolvedIgId)
-            .eq("is_active", true)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle()
-
-          ssotId =
-            ssotAccountResolved && typeof ssotAccountResolved.id === "string"
-              ? ssotAccountResolved.id
-              : null
-
-          console.log("[SSOT resolve FINAL CORRECT]", {
-            user_id: user.id,
-            resolvedIgId,
-            ssotId,
-            error: ssotResolveError?.message,
-          })
-        }
+        let followersQuery = supabaseServer
+          .from("ig_daily_followers")
+          .select("day, followers_count")
+          .gte("day", rangeStart)
+          .lte("day", rangeEnd)
+          .order("day", { ascending: true })
 
         if (ssotId) {
-          const { data: followerRows, error } = await authed
-            .from("ig_daily_followers")
-            .select("day, followers_count")
-            .eq("ig_account_id", ssotId)
-            .gte("day", rangeStart)
-            .lte("day", rangeEnd)
-            .order("day", { ascending: true })
+          followersQuery = followersQuery.eq("ig_account_id", ssotId)
+        } else if (ssotIgUserId) {
+          // fallback ONLY for legacy data
+          followersQuery = followersQuery.eq("ig_user_id", ssotIgUserId)
+        } else {
+          // no identity available
+          followersQuery = followersQuery.limit(0)
+        }
 
-          if (!error && Array.isArray(followerRows) && followerRows.length > 0) {
-            followersSeries = followerRows
-              .map((r: any) => {
-                const day = String(r?.day ?? "").trim()
-                const n = Number((r as any)?.followers_count)
-                if (!day || !Number.isFinite(n)) return null
-                return { day, followers_count: Math.floor(n) }
-              })
-              .filter((x: any): x is { day: string; followers_count: number } => x !== null)
+        const { data: followerRows, error } = await followersQuery
 
-            followersUsedSource = "ssot_db"
-          }
+        if (!error && Array.isArray(followerRows) && followerRows.length > 0) {
+          followersSeries = followerRows
+            .map((r: any) => {
+              const day = String(r?.day ?? "").trim()
+              const n = Number((r as any)?.followers_count)
+              if (!day || !Number.isFinite(n)) return null
+              return { day, followers_count: Math.floor(n) }
+            })
+            .filter((x: any): x is { day: string; followers_count: number } => x !== null)
+
+          followersUsedSource = ssotId ? "ssot_db" : "legacy_fallback"
         }
       } catch {
         // fail-safe: do not break daily-snapshot if SSOT read fails
