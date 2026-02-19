@@ -6678,6 +6678,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       ? "#34d399"
                       : k === "followers"
                         ? "#fbbf24"
+                        : k === "followerDelta"
+                          ? "#fde68a"
                         : k === "interactions"
                         ? "#38bdf8"
                         : k === "impressions"
@@ -7469,7 +7471,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                         key={`trend-line-${s.k}`}
                                         d={d}
                                         stroke={s.color}
-                                        strokeWidth={1.5}
+                                        strokeWidth={s.k === "followerDelta" ? 1 : 2}
+                                        strokeOpacity={s.k === "followerDelta" ? 0.35 : 1}
+                                        strokeDasharray={s.k === "followerDelta" ? "4 6" : "none"}
                                         fill="none"
                                         opacity={isFocused ? 0.99 : 0.55}
                                       />
