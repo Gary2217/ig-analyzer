@@ -6697,30 +6697,35 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                   const isSmUp = isSmUpViewport
 
+                  const xDomainRows = chartRowsAligned
+                  const xN = xDomainRows.length
+                  const xLast = xN - 1
+
                   const w = 600
                   const h = 220
                   const padX = 26
                   const padY = 18
-                  const spanX = Math.max(dataForChart.length - 1, 1)
+                  const spanX = Math.max(xN - 1, 1)
                   const spanY = Math.max(yMax - yMin, 1e-6)
                   const sx = (i: number) => padX + (i / spanX) * (w - padX * 2)
                   const sy = (y: number) => h - padY - ((y - yMin) / spanY) * (h - padY * 2)
 
                   const clampedHoverIdx =
                     typeof hoveredAccountTrendIndex === "number"
-                      ? Math.max(0, Math.min(dataForChart.length - 1, hoveredAccountTrendIndex))
+                      ? Math.max(0, Math.min(xLast, hoveredAccountTrendIndex))
                       : null
 
                   const followersTooltipIdx = (() => {
                     if (!focusedIsFollowers) return null
-                    if (dataForChart.length < 1) return null
+                    if (xN < 1) return null
                     if (typeof clampedHoverIdx === "number") return clampedHoverIdx
-                    return Math.max(0, dataForChart.length - 1)
+                    return Math.max(0, xLast)
                   })()
 
-                  const hoverPoint = clampedHoverIdx !== null ? dataForChart[clampedHoverIdx] : null
+                  const hoverPoint =
+                    clampedHoverIdx !== null ? ((xDomainRows[clampedHoverIdx] as unknown) as AccountTrendPoint) : null
                   const followersHoverPoint =
-                    typeof followersTooltipIdx === "number" ? dataForChart[followersTooltipIdx] : null
+                    typeof followersTooltipIdx === "number" ? ((xDomainRows[followersTooltipIdx] as unknown) as AccountTrendPoint) : null
 
                   const reachRawByIndex = focusedIsReach ? chartRowsAligned.map((r) => r.reach) : []
                   const reachMa7ByIndex = focusedIsReach ? computeMA(reachRawByIndex, 7) : []
@@ -6925,11 +6930,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                           })()}
                         </div>
                       ) : null}
-                      {shouldShowTotalValuePanel ? null : focusedIsFollowers && hasValidFollowersCount && followersDailyRows.length < 1 && dataForChart.length < 2 ? (
+                      {shouldShowTotalValuePanel ? null : focusedIsFollowers && hasValidFollowersCount && followersDailyRows.length < 1 && xN < 2 ? (
                         <div className="w-full mt-2 relative min-w-0">
                           <FollowersTrendFallback
                             point={(() => {
-                              const first = dataForChart[0]
+                              const first = xDomainRows[0]
                               const firstTs = isRecord(first) && typeof first.ts === "number" && Number.isFinite(first.ts) ? (first.ts as number) : null
                               const fetchedTs = trendFetchedAt ? new Date(trendFetchedAt).getTime() : null
                               const ts = firstTs !== null ? firstTs : fetchedTs
@@ -7081,8 +7086,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                 const rect = el.getBoundingClientRect()
                                 const x = e.clientX - rect.left
                                 const ratio = rect.width > 0 ? x / rect.width : 0
-                                const idx = Math.round(ratio * (dataForChart.length - 1))
-                                const next = Math.max(0, Math.min(dataForChart.length - 1, idx))
+                                const idx = Math.round(ratio * xLast)
+                                const next = Math.max(0, Math.min(xLast, idx))
                                 if (next === lastHoverIdxRef.current) return
                                 if (hoverRafRef.current !== null) return
                                 hoverRafRef.current = requestAnimationFrame(() => {
@@ -7097,8 +7102,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                 if (!t0) return
                                 const x = t0.clientX - rect.left
                                 const ratio = rect.width > 0 ? x / rect.width : 0
-                                const idx = Math.round(ratio * (dataForChart.length - 1))
-                                const next = Math.max(0, Math.min(dataForChart.length - 1, idx))
+                                const idx = Math.round(ratio * xLast)
+                                const next = Math.max(0, Math.min(xLast, idx))
                                 updateHoveredTrendIndex(next)
                               }}
                               onTouchMove={(e) => {
@@ -7108,8 +7113,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                 if (!t0) return
                                 const x = t0.clientX - rect.left
                                 const ratio = rect.width > 0 ? x / rect.width : 0
-                                const idx = Math.round(ratio * (dataForChart.length - 1))
-                                const next = Math.max(0, Math.min(dataForChart.length - 1, idx))
+                                const idx = Math.round(ratio * xLast)
+                                const next = Math.max(0, Math.min(xLast, idx))
                                 if (next === lastHoverIdxRef.current) return
                                 updateHoveredTrendIndex(next)
                               }}
@@ -7415,7 +7420,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                                 {focusedIsFollowers && clampedHoverIdx === null
                                   ? (() => {
-                                      const lastIdx = dataForChart.length - 1
+                                      const lastIdx = xLast
                                       if (lastIdx < 0) return null
                                       const s0 = drawable.find((s) => s.k === "followers")
                                       if (!s0) return null
@@ -7442,7 +7447,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                                 {trendMeta?.isToday
                                   ? (() => {
-                                      const lastIdx = dataForChart.length - 1
+                                      const lastIdx = xLast
                                       if (lastIdx < 0) return null
                                       const s0 = drawable.find((s) => s.points.some((p) => p.i === lastIdx))
                                       if (!s0) return null
@@ -7483,9 +7488,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   : null}
 
                                 {(() => {
-                                  const n = dataForChart.length
+                                  const n = xN
                                   if (n <= 0) return null
-                                  const last = n - 1
+                                  const last = xLast
 
                                   const desiredTicks = renderedTrendRangeDays <= 14 ? 7 : 8
                                   const maxTicks = isSmUp ? desiredTicks : Math.min(4, desiredTicks)
@@ -7536,7 +7541,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                       {idxs.map((i: number) => {
                                         const x = sx(i)
                                         if (!Number.isFinite(x)) return null
-                                        const labelRaw = dataForChart[i]?.t ?? ""
+                                        const labelRaw = xDomainRows[i]?.t ?? ""
                                         const label = !isSmUp && typeof labelRaw === "string" ? labelRaw.replace(/^0+/, "").replace("/0", "/") : labelRaw
                                         return (
                                           <text
