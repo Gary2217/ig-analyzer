@@ -6611,6 +6611,27 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   const windowDays = Math.min(selectedTrendRangeDays, availableAlignedDays)
                   const alignedWindow = windowDays > 0 ? chartRowsAligned.slice(-windowDays) : ([] as ChartRow[])
 
+                  const reachSeriesForChart = (Array.isArray(chartRowsAligned) ? chartRowsAligned : []).map((r: any) => {
+                    const day = String(r?.day ?? r?.date ?? "")
+                    const tsParsed = day ? Date.parse(`${day}T00:00:00.000Z`) : NaN
+                    const ts =
+                      typeof r?.ts === "number" && Number.isFinite(r.ts)
+                        ? (r.ts as number)
+                        : Number.isFinite(tsParsed)
+                          ? tsParsed
+                          : Date.now()
+                    const raw = r?.reach
+                    const reach = typeof raw === "number" && Number.isFinite(raw) ? raw : 0
+                    return {
+                      ...r,
+                      day,
+                      ts,
+                      reach,
+                    }
+                  })
+
+                  const reachSeriesForChartWindow = windowDays > 0 ? reachSeriesForChart.slice(-windowDays) : reachSeriesForChart
+
                   const totalReachInWindow = (() => {
                     let totalSum = 0
                     let countedDays = 0
@@ -6684,12 +6705,29 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                           }))
                         : []
 
+                      const last10ReachSeriesForChart = reachSeriesForChartWindow.slice(-10).map((p: any) => ({
+                        ts: p?.ts,
+                        day: typeof p?.day === "string" ? p.day : null,
+                        reach: p?.reach,
+                      }))
+
                       ;(window as any).__DEBUG_REACH_SSOT__ = {
                         chartRowsAligned_last10: last10Aligned,
                         trendPoints_last10: last10TrendPoints,
                         dailySnapshotTotals,
                         lastFiniteReach,
                         lastPositiveReach,
+                        reachSeriesForChart_last10: last10ReachSeriesForChart,
+                        reachSeriesForChartWindowMeta: {
+                          daysRequested: selectedTrendRangeDays,
+                          windowDays,
+                          availableAlignedDays,
+                        },
+                        chartDisplayMeta: {
+                          daysRequested: selectedTrendRangeDays,
+                          availableAlignedDays,
+                          windowDays,
+                        },
                         reachWindowMeta: {
                           daysRequested: selectedTrendRangeDays,
                           availableAlignedDays,
@@ -6834,9 +6872,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     ? ([] as AccountTrendPoint[])
                     : focusedIsFollowers
                       ? ((chartRowsAligned.map((r) => ({ t: r.t, ts: r.ts })) as unknown) as AccountTrendPoint[])
-                      : Array.isArray(trendPoints) && trendPoints.length >= 1
-                        ? ((chartRowsAligned.map((r) => ({ t: r.t, ts: r.ts, reach: r.reach ?? undefined, impressions: r.impressions ?? undefined, interactions: r.interactions ?? undefined, engaged: r.engaged ?? undefined })) as unknown) as AccountTrendPoint[])
-                        : accountTrend
+                      : ((reachSeriesForChartWindow.map((p: any) => ({
+                          t: String(p?.t ?? ""),
+                          ts: typeof p?.ts === "number" && Number.isFinite(p.ts) ? (p.ts as number) : undefined,
+                          reach: typeof p?.reach === "number" && Number.isFinite(p.reach) ? (p.reach as number) : 0,
+                          impressions: typeof p?.impressions === "number" && Number.isFinite(p.impressions) ? (p.impressions as number) : undefined,
+                          interactions: typeof p?.interactions === "number" && Number.isFinite(p.interactions) ? (p.interactions as number) : undefined,
+                          engaged: typeof p?.engaged === "number" && Number.isFinite(p.engaged) ? (p.engaged as number) : undefined,
+                        })) as unknown) as AccountTrendPoint[])
 
                   const dataForChart = (() => {
                     if (!focusedIsFollowers) return dataForChartBase
@@ -6955,8 +6998,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                   const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : focusedIsFollowers ? ["followers", "followerDelta"] : []
 
+                  const chartRowsForChart = focusedIsFollowers
+                    ? (chartRowsAligned as any[])
+                    : ((reachSeriesForChartWindow as unknown) as any[])
+
                   const series = seriesKeys.map((k) => {
-                    const raw = chartRowsAligned
+                    const raw = chartRowsForChart
                       .map((r, i) => {
                         const y =
                           k === "reach"
@@ -7002,7 +7049,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
                   const isSmUp = isSmUpViewport
 
-                  const xDomainRows = chartRowsAligned
+                  const xDomainRows = chartRowsForChart
                   const xN = xDomainRows.length
                   const xLast = xN - 1
 
@@ -7032,17 +7079,17 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   const followersHoverPoint =
                     typeof followersTooltipIdx === "number" ? ((xDomainRows[followersTooltipIdx] as unknown) as AccountTrendPoint) : null
 
-                  const reachRawByIndex = focusedIsReach ? chartRowsAligned.map((r) => r.reach) : []
+                  const reachRawByIndex = focusedIsReach ? xDomainRows.map((r: any) => r.reach) : []
                   const reachMa7ByIndex = focusedIsReach ? computeMA(reachRawByIndex, 7) : []
 
                   const tooltipItems = (() => {
                     if (focusedIsFollowers) {
                       const idx = followersTooltipIdx
                       if (typeof idx !== "number") return []
-                      const v = idx >= 0 && idx < chartRowsAligned.length ? chartRowsAligned[idx]?.followers : null
-                      const prev = idx >= 1 && idx - 1 < chartRowsAligned.length ? chartRowsAligned[idx - 1]?.followers : null
-                      const first = chartRowsAligned.length >= 1 ? chartRowsAligned[0]?.followers : null
-                      const deltaValue = idx >= 0 && idx < chartRowsAligned.length ? chartRowsAligned[idx]?.followerDelta : null
+                      const v = idx >= 0 && idx < xDomainRows.length ? (xDomainRows[idx] as any)?.followers : null
+                      const prev = idx >= 1 && idx - 1 < xDomainRows.length ? (xDomainRows[idx - 1] as any)?.followers : null
+                      const first = xDomainRows.length >= 1 ? (xDomainRows[0] as any)?.followers : null
+                      const deltaValue = idx >= 0 && idx < xDomainRows.length ? (xDomainRows[idx] as any)?.followerDelta : null
 
                       const deltaDay =
                         typeof v === "number" &&
