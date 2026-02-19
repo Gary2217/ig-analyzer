@@ -329,6 +329,17 @@ async function writeFollowersBestEffortCached(params: {
             }
             if (params.ssotId) payload.ig_account_id = String(params.ssotId)
             const onConflict = params.ssotId ? "ig_account_id,day" : "ig_user_id,day"
+
+            if (__DEBUG_DAILY_SNAPSHOT__) {
+              console.log("[daily-snapshot][followers_write]", {
+                has_ssot: !!params.ssotId,
+                ssotId: params.ssotId,
+                ig_user_id: params.igId,
+                day: dayStr,
+                followersCount,
+              })
+            }
+
             await supabaseServer.from("ig_daily_followers").upsert(payload, { onConflict })
           } catch (e: any) {
             if (__DEBUG_DAILY_SNAPSHOT__) {
