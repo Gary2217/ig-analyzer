@@ -6366,6 +6366,138 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   const focusedIsFollowers = isFollowersFocused
                   const focusedIsReach = focusedAccountTrendMetric === "reach"
 
+                  const buildDateDomainInclusive = (rangeStart: string, rangeEnd: string) => {
+                    const parseYmd = (s: string) => {
+                      const v = String(s || "").trim()
+                      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
+                      const ms = Date.parse(`${v}T00:00:00.000Z`)
+                      return Number.isFinite(ms) ? (ms as number) : null
+                    }
+                    const fmtYmd = (ms: number) => {
+                      const d = new Date(ms)
+                      const y = d.getUTCFullYear()
+                      const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+                      const dd = String(d.getUTCDate()).padStart(2, "0")
+                      return `${y}-${m}-${dd}`
+                    }
+
+                    const startMs = parseYmd(rangeStart)
+                    const endMs = parseYmd(rangeEnd)
+                    if (startMs === null || endMs === null) return [] as Array<{ day: string; ts: number }>
+
+                    const out: Array<{ day: string; ts: number }> = []
+                    const step = 24 * 60 * 60 * 1000
+                    for (let ms = startMs; ms <= endMs; ms += step) {
+                      out.push({ day: fmtYmd(ms), ts: ms })
+                    }
+                    return out
+                  }
+
+                  const mkLabel = (ts: number) => {
+                    const d = new Date(ts)
+                    try {
+                      return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit" }).format(d)
+                    } catch {
+                      const m = String(d.getMonth() + 1).padStart(2, "0")
+                      const dd = String(d.getDate()).padStart(2, "0")
+                      return `${m}/${dd}`
+                    }
+                  }
+
+                  const rangeFromApi = (() => {
+                    const start = isRecord(dailySnapshotData) && typeof (dailySnapshotData as any).rangeStart === "string" ? String((dailySnapshotData as any).rangeStart).trim() : ""
+                    const end = isRecord(dailySnapshotData) && typeof (dailySnapshotData as any).rangeEnd === "string" ? String((dailySnapshotData as any).rangeEnd).trim() : ""
+                    if (start && end) return { start, end }
+                    const days = renderedTrendRangeDays
+                    const now = new Date()
+                    const endMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
+                    const startMs = endMs - (Math.max(1, Math.floor(days)) - 1) * 24 * 60 * 60 * 1000
+                    const fmt = (ms: number) => {
+                      const d = new Date(ms)
+                      const y = d.getUTCFullYear()
+                      const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+                      const dd = String(d.getUTCDate()).padStart(2, "0")
+                      return `${y}-${m}-${dd}`
+                    }
+                    return { start: fmt(startMs), end: fmt(endMs) }
+                  })()
+
+                  const dateDomain = buildDateDomainInclusive(rangeFromApi.start, rangeFromApi.end)
+
+                  const pointsByDay = (() => {
+                    const map = new Map<string, AccountTrendPoint>()
+                    const list = Array.isArray(trendPoints) ? trendPoints : []
+                    for (const p of list) {
+                      const ts = typeof (p as any)?.ts === "number" && Number.isFinite((p as any).ts) ? ((p as any).ts as number) : null
+                      if (ts === null) continue
+                      const day = new Date(ts).toISOString().slice(0, 10)
+                      if (!day) continue
+                      map.set(day, p)
+                    }
+                    return map
+                  })()
+
+                  const followersByDay = (() => {
+                    const map = new Map<string, number>()
+                    const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
+                    for (const r of list) {
+                      const day = typeof (r as any)?.day === "string" ? String((r as any).day).trim() : ""
+                      if (!day) continue
+                      const nRaw = (r as any)?.followers_count
+                      const n = typeof nRaw === "number" ? nRaw : Number(nRaw)
+                      if (!Number.isFinite(n)) continue
+                      map.set(day, Math.floor(n))
+                    }
+                    return map
+                  })()
+
+                  type ChartRow = {
+                    t: string
+                    ts: number
+                    day: string
+                    reach: number | null
+                    impressions: number | null
+                    interactions: number | null
+                    engaged: number | null
+                    followers: number | null
+                  }
+
+                  const chartRowsAligned: ChartRow[] = dateDomain.map((d) => {
+                    const p = pointsByDay.get(d.day)
+                    const reach = typeof (p as any)?.reach === "number" && Number.isFinite((p as any).reach) ? ((p as any).reach as number) : null
+                    const impressions = typeof (p as any)?.impressions === "number" && Number.isFinite((p as any).impressions) ? ((p as any).impressions as number) : null
+                    const interactions = typeof (p as any)?.interactions === "number" && Number.isFinite((p as any).interactions) ? ((p as any).interactions as number) : null
+                    const engaged = typeof (p as any)?.engaged === "number" && Number.isFinite((p as any).engaged) ? ((p as any).engaged as number) : null
+
+                    const followers = followersByDay.has(d.day) ? (followersByDay.get(d.day) as number) : null
+
+                    return {
+                      t: mkLabel(d.ts),
+                      ts: d.ts,
+                      day: d.day,
+                      reach,
+                      impressions,
+                      interactions,
+                      engaged,
+                      followers,
+                    }
+                  })
+
+                  const computeMA = (values: Array<number | null>, window = 7) => {
+                    const w = Math.max(1, Math.floor(window))
+                    return values.map((cur, i) => {
+                      if (i < w - 1) return null
+                      if (typeof cur !== "number" || !Number.isFinite(cur)) return null
+                      let sum = 0
+                      for (let j = i - (w - 1); j <= i; j++) {
+                        const v = values[j]
+                        if (typeof v !== "number" || !Number.isFinite(v)) return null
+                        sum += v
+                      }
+                      return sum / w
+                    })
+                  }
+
                   const followersDailyPoints: AccountTrendPoint[] = (() => {
                     const list = Array.isArray(followersDailyRows) ? followersDailyRows : []
                     const pts = list
@@ -6406,9 +6538,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   const dataForChartBase = shouldShowEmptySeriesHint
                     ? ([] as AccountTrendPoint[])
                     : focusedIsFollowers
-                      ? followersDailyPoints
+                      ? ((chartRowsAligned.map((r) => ({ t: r.t, ts: r.ts })) as unknown) as AccountTrendPoint[])
                       : Array.isArray(trendPoints) && trendPoints.length >= 1
-                        ? trendPoints
+                        ? ((chartRowsAligned.map((r) => ({ t: r.t, ts: r.ts, reach: r.reach ?? undefined, impressions: r.impressions ?? undefined, interactions: r.interactions ?? undefined, engaged: r.engaged ?? undefined })) as unknown) as AccountTrendPoint[])
                         : accountTrend
 
                   const dataForChart = (() => {
@@ -6482,8 +6614,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       .filter((x): x is number => typeof x === "number")
 
                     if (k === "followers") {
-                      const list = followersSeriesValues
-                      return Array.isArray(list) ? list.filter((x) => typeof x === "number" && Number.isFinite(x)) : []
+                      return chartRowsAligned
+                        .map((r) => r.followers)
+                        .filter((x): x is number => typeof x === "number" && Number.isFinite(x))
                     }
 
                     return vals
@@ -6520,20 +6653,20 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   const seriesKeys: AccountTrendMetricKey[] = focusedIsReach ? ["reach"] : focusedIsFollowers ? ["followers"] : []
 
                   const series = seriesKeys.map((k) => {
-                    const raw = dataForChart
-                      .map((p, i) => {
+                    const raw = chartRowsAligned
+                      .map((r, i) => {
                         const y =
                           k === "reach"
-                            ? p.reach
+                            ? r.reach
                             : k === "followers"
-                              ? (typeof followersSeriesValues[i] === "number" && Number.isFinite(followersSeriesValues[i]) ? followersSeriesValues[i] : null)
-                            : k === "interactions"
-                              ? p.interactions
-                              : k === "impressions"
-                                ? p.impressions
-                                : k === "engaged"
-                                  ? p.engaged
-                                  : p.followerDelta
+                              ? r.followers
+                              : k === "interactions"
+                                ? r.interactions
+                                : k === "impressions"
+                                  ? r.impressions
+                                  : k === "engaged"
+                                    ? r.engaged
+                                    : null
                         if (typeof y !== "number" || !Number.isFinite(y)) return null
                         return { i, y }
                       })
@@ -6589,37 +6722,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                   const followersHoverPoint =
                     typeof followersTooltipIdx === "number" ? dataForChart[followersTooltipIdx] : null
 
-                  const reachRawByIndex = focusedIsReach
-                    ? dataForChart.map((p) => {
-                        const v = p.reach
-                        return typeof v === "number" && Number.isFinite(v) ? v : null
-                      })
-                    : []
-
-                  const reachMa7ByIndex = focusedIsReach
-                    ? reachRawByIndex.map((_, i) => {
-                        const end = i
-                        const start = Math.max(0, i - 6)
-                        let sum = 0
-                        let count = 0
-                        for (let j = start; j <= end; j++) {
-                          const v = reachRawByIndex[j]
-                          if (typeof v !== "number" || !Number.isFinite(v)) return null
-                          sum += v
-                          count += 1
-                        }
-                        if (count < 1) return null
-                        return sum / count
-                      })
-                    : []
+                  const reachRawByIndex = focusedIsReach ? chartRowsAligned.map((r) => r.reach) : []
+                  const reachMa7ByIndex = focusedIsReach ? computeMA(reachRawByIndex, 7) : []
 
                   const tooltipItems = (() => {
                     if (focusedIsFollowers) {
                       const idx = followersTooltipIdx
                       if (typeof idx !== "number") return []
-                      const v = idx >= 0 && idx < followersSeriesValues.length ? followersSeriesValues[idx] : null
-                      const prev = idx >= 1 && idx - 1 < followersSeriesValues.length ? followersSeriesValues[idx - 1] : null
-                      const first = followersSeriesValues.length >= 1 ? followersSeriesValues[0] : null
+                      const v = idx >= 0 && idx < chartRowsAligned.length ? chartRowsAligned[idx]?.followers : null
+                      const prev = idx >= 1 && idx - 1 < chartRowsAligned.length ? chartRowsAligned[idx - 1]?.followers : null
+                      const first = chartRowsAligned.length >= 1 ? chartRowsAligned[0]?.followers : null
 
                       const deltaDay =
                         typeof v === "number" &&
@@ -6637,11 +6749,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                           : null
 
                       const fmt = (n: number | null) =>
-                        typeof n === "number" && Number.isFinite(n) ? Math.round(n).toLocaleString() : "—"
+                        typeof n === "number" && Number.isFinite(n) ? Math.round(n).toLocaleString() : (isZh ? "無資料" : "No data")
                       const fmtDelta = (n: number | null) =>
                         typeof n === "number" && Number.isFinite(n)
                           ? `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString()}`
-                          : "—"
+                          : (isZh ? "無資料" : "No data")
 
                       return [
                         {
@@ -6667,9 +6779,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                     if (focusedIsReach) {
                       const raw = hoverPoint.reach
                       const rawText =
-                        typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw).toLocaleString() : "—"
+                        typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw).toLocaleString() : (isZh ? "無資料" : "No data")
                       const ma7 = typeof clampedHoverIdx === "number" ? reachMa7ByIndex[clampedHoverIdx] : null
-                      const ma7Text = typeof ma7 === "number" && Number.isFinite(ma7) ? Math.round(ma7).toLocaleString() : "—"
+                      const ma7Text = typeof ma7 === "number" && Number.isFinite(ma7) ? Math.round(ma7).toLocaleString() : (isZh ? "無資料" : "No data")
 
                       return [
                         {
@@ -7014,6 +7126,21 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                   return ordered.map((s) => {
                                     const isFocused = s.k === focusedAccountTrendMetric
 
+                                    const toSegments = (pts: Array<{ x: number; y: number } | null>) => {
+                                      const out: Array<Array<{ x: number; y: number }>> = []
+                                      let cur: Array<{ x: number; y: number }> = []
+                                      for (const p of pts) {
+                                        if (!p) {
+                                          if (cur.length >= 2) out.push(cur)
+                                          cur = []
+                                          continue
+                                        }
+                                        cur.push(p)
+                                      }
+                                      if (cur.length >= 2) out.push(cur)
+                                      return out
+                                    }
+
                                     const buildSmoothPath = (pts: Array<{ x: number; y: number }>) => {
                                       if (pts.length < 2) return ""
                                       if (pts.length === 2) {
@@ -7051,16 +7178,18 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                     }
 
                                     if (focusedIsReach && s.k === "reach") {
-                                      const reachPts = s.points
-                                        .map((p) => {
-                                          const x = sx(p.i)
-                                          const y = sy(p.yNorm)
-                                          if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-                                          return { x, y }
-                                        })
-                                        .filter(Boolean) as Array<{ x: number; y: number }>
+                                      const span = Math.max(s.max - s.min, 0)
+                                      const reachPtsWithGaps = chartRowsAligned.map((r, i) => {
+                                        const raw = r.reach
+                                        if (typeof raw !== "number" || !Number.isFinite(raw)) return null
+                                        const norm = span > 0 ? ((raw - s.min) / span) * 100 : 50
+                                        const x = sx(i)
+                                        const y = sy(Number.isFinite(norm) ? norm : 50)
+                                        if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                        return { x, y }
+                                      })
 
-                                      const reachPath = buildSmoothPath(reachPts)
+                                      const reachSegments = toSegments(reachPtsWithGaps)
 
                                       const comparePath = (() => {
                                         if (!compareEnabled) return ""
@@ -7106,23 +7235,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                           return sum / count
                                         })
 
-                                        const pts = compareMa7ByIndex
-                                          .map((v, i) => {
-                                            if (typeof v !== "number" || !Number.isFinite(v)) return null
-                                            const norm = span > 0 ? ((v - s.min) / span) * 100 : 50
-                                            const x = sx(i)
-                                            const y = sy(Number.isFinite(norm) ? norm : 50)
-                                            if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-                                            return { x, y }
-                                          })
-                                          .filter(Boolean) as Array<{ x: number; y: number }>
-
-                                        return buildSmoothPath(pts)
-                                      })()
-
-                                      const span = Math.max(s.max - s.min, 0)
-                                      const maPts = reachMa7ByIndex
-                                        .map((v, i) => {
+                                        const ptsWithGaps = compareMa7ByIndex.map((v, i) => {
                                           if (typeof v !== "number" || !Number.isFinite(v)) return null
                                           const norm = span > 0 ? ((v - s.min) / span) * 100 : 50
                                           const x = sx(i)
@@ -7130,14 +7243,44 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                           if (!Number.isFinite(x) || !Number.isFinite(y)) return null
                                           return { x, y }
                                         })
-                                        .filter(Boolean) as Array<{ x: number; y: number }>
 
-                                      const maPath = buildSmoothPath(maPts)
+                                        const segs = toSegments(ptsWithGaps)
+                                        return segs.length ? buildSmoothPath(segs[0]) : ""
+                                      })()
+
+                                      const maPtsWithGaps = reachMa7ByIndex.map((v, i) => {
+                                        if (typeof v !== "number" || !Number.isFinite(v)) return null
+                                        const norm = span > 0 ? ((v - s.min) / span) * 100 : 50
+                                        const x = sx(i)
+                                        const y = sy(Number.isFinite(norm) ? norm : 50)
+                                        if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                        return { x, y }
+                                      })
+
+                                      const maSegments = toSegments(maPtsWithGaps)
 
                                       return (
                                         <g key={`trend-line-${s.k}`}>
-                                          <path d={reachPath} stroke={s.color} strokeWidth={isSmUp ? 2 : 1.4} fill="none" opacity={0.42} />
-                                          <path d={maPath} stroke={s.color} strokeWidth={isSmUp ? 2.2 : 1.6} fill="none" opacity={0.92} />
+                                          {reachSegments.map((seg, idx) => (
+                                            <path
+                                              key={`trend-line-${s.k}-raw-${idx}`}
+                                              d={buildSmoothPath(seg)}
+                                              stroke={s.color}
+                                              strokeWidth={isSmUp ? 2 : 1.4}
+                                              fill="none"
+                                              opacity={0.42}
+                                            />
+                                          ))}
+                                          {maSegments.map((seg, idx) => (
+                                            <path
+                                              key={`trend-line-${s.k}-ma7-${idx}`}
+                                              d={buildSmoothPath(seg)}
+                                              stroke={s.color}
+                                              strokeWidth={isSmUp ? 2.2 : 1.6}
+                                              fill="none"
+                                              opacity={0.92}
+                                            />
+                                          ))}
                                           {comparePath ? (
                                             <path
                                               d={comparePath}
@@ -7185,26 +7328,31 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                                         return buildStepAfterPath(pts)
                                       })()
 
-                                      const mainPts = s.points
-                                        .map((p) => {
-                                          const x = sx(p.i)
-                                          const y = sy(p.yNorm)
-                                          if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-                                          return { x, y }
-                                        })
-                                        .filter(Boolean) as Array<{ x: number; y: number }>
+                                      const span = Math.max(s.max - s.min, 0)
+                                      const mainPtsWithGaps = chartRowsAligned.map((r, i) => {
+                                        const raw = r.followers
+                                        if (typeof raw !== "number" || !Number.isFinite(raw)) return null
+                                        const norm = span > 0 ? ((raw - s.min) / span) * 100 : 50
+                                        const x = sx(i)
+                                        const y = sy(Number.isFinite(norm) ? norm : 50)
+                                        if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+                                        return { x, y }
+                                      })
 
-                                      const d = buildStepAfterPath(mainPts)
+                                      const mainSegments = toSegments(mainPtsWithGaps)
 
                                       return (
                                         <g key={`trend-line-${s.k}`}>
-                                          <path
-                                            d={d}
-                                            stroke={s.color}
-                                            strokeWidth={2}
-                                            fill="none"
-                                            opacity={isFocused ? 0.99 : 0.55}
-                                          />
+                                          {mainSegments.map((seg, idx) => (
+                                            <path
+                                              key={`trend-line-${s.k}-main-${idx}`}
+                                              d={buildStepAfterPath(seg)}
+                                              stroke={s.color}
+                                              strokeWidth={2}
+                                              fill="none"
+                                              opacity={isFocused ? 0.99 : 0.55}
+                                            />
+                                          ))}
                                           {comparePath ? (
                                             <path
                                               key={`trend-line-compare-${s.k}`}
