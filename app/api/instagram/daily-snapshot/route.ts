@@ -439,7 +439,7 @@ async function upsertAccountDailySnapshots(params: {
   pageId: string
   rows: Array<{
     day: string
-    reach: number
+    reach: number | null
     impressions: number
     total_interactions: number
     accounts_engaged: number
@@ -504,13 +504,24 @@ async function backfillMissingSnapshotsFromGraph(params: {
   const points = buildPointsFromGraphInsightsTimeSeries(series.data, daysToBackfill)
   const rows = points
     .filter((p) => p?.date && p.date !== params.today)
-    .map((p) => ({
-      day: p.date,
-      reach: toSafeInt(p.reach),
-      impressions: 0,
-      total_interactions: toSafeInt(p.interactions),
-      accounts_engaged: 0,
-    }))
+    .map((p) => {
+      const day = p.date
+      const reachRaw = p.reach
+      const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
+      console.log("SSOT SNAPSHOT WRITE", {
+        day,
+        reachRaw,
+        reachStored: reach,
+      })
+
+      return {
+        day,
+        reach,
+        impressions: 0,
+        total_interactions: toSafeInt(p.interactions),
+        accounts_engaged: 0,
+      }
+    })
 
   if (rows.length > 0) {
     const upsertRes = await upsertAccountDailySnapshots({
@@ -582,7 +593,7 @@ function countCollectedDaysFromRows(rows: any[]): number {
 function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days: number) {
   const byDate = new Map<
     string,
-    { reach: number; impressions: number; interactions: number; engaged_accounts: number }
+    { reach: number | null; impressions: number; interactions: number; engaged_accounts: number }
   >()
 
   const list = Array.isArray(insightsDailySeries) ? insightsDailySeries : []
@@ -602,7 +613,7 @@ function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days
 
       const ex =
         byDate.get(dateStr) ?? {
-          reach: 0,
+          reach: null,
           impressions: 0,
           interactions: 0,
           engaged_accounts: 0,
@@ -610,8 +621,11 @@ function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days
 
       const num = toSafeInt(v?.value)
 
-      if (name === "reach") ex.reach = num
-      else if (name === "total_interactions") ex.interactions = num
+      if (name === "reach") {
+        const reachRaw = v?.value
+        const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
+        ex.reach = reach
+      } else if (name === "total_interactions") ex.interactions = num
       else if (name === "views" || name === "content_views") ex.impressions = num
       // v24 note: impressions not supported here; keep 0
       // v24 note: accounts_engaged requires metric_type=total_value; no time-series here; keep 0
@@ -1762,13 +1776,24 @@ export async function POST(req: Request) {
         try {
           const candidate = points
             .filter((p) => p?.date && p.date !== today)
-            .map((p) => ({
-              day: p.date,
-              reach: toSafeInt(p.reach),
-              impressions: 0,
-              total_interactions: toSafeInt(p.interactions),
-              accounts_engaged: 0,
-            }))
+            .map((p) => {
+              const day = p.date
+              const reachRaw = p.reach
+              const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
+              console.log("SSOT SNAPSHOT WRITE", {
+                day,
+                reachRaw,
+                reachStored: reach,
+              })
+
+              return {
+                day,
+                reach,
+                impressions: 0,
+                total_interactions: toSafeInt(p.interactions),
+                accounts_engaged: 0,
+              }
+            })
 
           const skipDays = new Set<string>()
           try {
