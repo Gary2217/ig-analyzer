@@ -1256,8 +1256,29 @@ export async function POST(req: Request) {
 
     const run = (async (): Promise<DsResponsePayload> => {
       const ssotAccount = cronMode ? null : await resolveActiveIgAccountForRequest()
-      const ssotId = ssotAccount?.id ?? null
+ 
+      let ssotId: string | null = ssotAccount?.id ?? null
       const ssotIgUserId = ssotAccount?.ig_user_id ?? null
+
+      // FORCE SSOT resolve when missing (production-safe)
+      if (!ssotId && resolvedIgId) {
+        try {
+          const { data: ssotAccountResolved } = await supabaseServer
+            .from("user_instagram_accounts")
+            .select("id")
+            .eq("ig_user_id", resolvedIgId)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (ssotAccountResolved?.id) {
+            ssotId = ssotAccountResolved.id
+          }
+        } catch (e) {
+          console.error("[daily-snapshot] ssot resolve failed", e)
+        }
+      }
       const followersIgId = resolvedIgId || ssotIgUserId || ""
 
       // Best-effort: write today's followers_count snapshot (do not affect API success)
