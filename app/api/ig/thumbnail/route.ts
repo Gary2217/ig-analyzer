@@ -1,14 +1,128 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createHash } from "crypto"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import { __thumbCache, THUMB_TTL_MS, THUMB_CACHE_MAX, THUMB_BUCKET, THUMB_TABLE, type ThumbCacheEntry } from "./_lib/cache"
 
 export const runtime = "nodejs"
 
 // ---------------------------------------------------------------------------
+// Supabase admin client (service role, server-only, lazy init)
+// ---------------------------------------------------------------------------
+const STORE_TTL_DAYS = 7
+const STORE_TTL_FAIL_MINUTES = 30
+
+let __supabaseAdmin: SupabaseClient | null = null
+let __supabaseAdminMissing = false
+
+function getSupabaseAdmin(): SupabaseClient | null {
+  if (__supabaseAdminMissing) return null
+  if (__supabaseAdmin) return __supabaseAdmin
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()
+  if (!url || !key) {
+    __supabaseAdminMissing = true
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[ig-thumb] Supabase env missing — persistent cache disabled")
+    }
+    return null
+  }
+  __supabaseAdmin = createClient(url, key, { auth: { persistSession: false } })
+  return __supabaseAdmin
+}
+
+function urlHash(originalUrl: string): string {
+  return createHash("sha256").update(originalUrl).digest("hex")
+}
+
+function storagePath(hash: string): string {
+  return `${hash}.bin`
+}
+
+// Read from DB (inline bytes preferred) or Storage. Returns ArrayBuffer + contentType, or null on miss/error.
+async function readStoreCache(hash: string): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+  const sb = getSupabaseAdmin()
+  if (!sb) return null
+  try {
+    const { data: row, error: dbErr } = await sb
+      .from(THUMB_TABLE)
+      .select("storage_path, content_type, expires_at, inline_bytes")
+      .eq("url_hash", hash)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle()
+    if (dbErr || !row) return null
+
+    // Fire-and-forget: update last_accessed_at
+    sb.from(THUMB_TABLE)
+      .update({ last_accessed_at: new Date().toISOString() })
+      .eq("url_hash", hash)
+      .then(() => {})
+
+    // Fast path: inline bytes stored in DB row (no Storage round-trip)
+    if (row.inline_bytes) {
+      const body = Buffer.from(row.inline_bytes as string, "base64").buffer as ArrayBuffer
+      return { body, contentType: row.content_type as string }
+    }
+
+    // Slow path: download from Storage
+    const { data: blob, error: storErr } = await sb.storage
+      .from(THUMB_BUCKET)
+      .download(row.storage_path)
+    if (storErr || !blob) return null
+
+    const body = await blob.arrayBuffer()
+    return { body, contentType: row.content_type as string }
+  } catch {
+    return null
+  }
+}
+
+// Write bytes to Supabase Storage + upsert DB row. Fire-and-forget safe.
+async function writeStoreCache(params: {
+  hash: string
+  originalUrl: string
+  path: string
+  contentType: string
+  body: ArrayBuffer
+  upstreamStatus: number
+  ttlDays?: number
+}): Promise<void> {
+  const sb = getSupabaseAdmin()
+  if (!sb) return
+  const { hash, originalUrl, path, contentType, body, upstreamStatus, ttlDays = STORE_TTL_DAYS } = params
+  try {
+    const { error: upErr } = await sb.storage
+      .from(THUMB_BUCKET)
+      .upload(path, body, { contentType, upsert: true })
+    if (upErr) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[ig-thumb] storage upload failed", upErr.message)
+      }
+      return
+    }
+    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString()
+    const INLINE_MAX_BYTES = 512 * 1024
+    const inlineBytes = body.byteLength <= INLINE_MAX_BYTES
+      ? Buffer.from(body).toString("base64")
+      : null
+    await sb.from(THUMB_TABLE).upsert({
+      url_hash: hash,
+      original_url: originalUrl,
+      storage_path: path,
+      content_type: contentType,
+      bytes_size: body.byteLength,
+      upstream_status: upstreamStatus,
+      expires_at: expiresAt,
+      last_accessed_at: new Date().toISOString(),
+      inline_bytes: inlineBytes,
+    }, { onConflict: "url_hash" })
+  } catch {
+    // best-effort; never throw
+  }
+}
+
+// ---------------------------------------------------------------------------
 // TTL cache (serverless best-effort; survives within the same warm instance)
 // ---------------------------------------------------------------------------
-type ThumbCacheEntry = { ts: number; status: number; contentType: string; body: ArrayBuffer }
-const __thumbCache = new Map<string, ThumbCacheEntry>()
-const THUMB_TTL_MS = 60_000
-const THUMB_CACHE_MAX = 200
 
 function thumbCacheKey(url: string): string {
   return `thumb|${url}`
@@ -256,8 +370,10 @@ export async function GET(request: NextRequest) {
 
     const normalizedUrlKey = initialUrlObj.toString()
     const cacheKey = thumbCacheKey(normalizedUrlKey)
+    const hash = urlHash(normalizedUrlKey)
+    const sPath = storagePath(hash)
 
-    // --- TTL cache HIT ---
+    // --- L1: memory cache HIT ---
     const cached = readThumbCache(cacheKey)
     if (cached) {
       return new Response(cached.body, {
@@ -266,6 +382,7 @@ export async function GET(request: NextRequest) {
           "content-type": cached.contentType,
           "cache-control": "public, max-age=60, s-maxage=60",
           "x-thumb-cache": "HIT",
+          "x-thumb-store": "L1",
           "x-thumb-attempts": "0",
         },
       })
@@ -278,9 +395,26 @@ export async function GET(request: NextRequest) {
       return shared.clone()
     }
 
-    // --- Fetch with retry ---
+    // --- Fetch with retry (with L2 store check inside) ---
     const run = (async (): Promise<Response> => {
       try {
+        // L2: Supabase persistent cache
+        const stored = await readStoreCache(hash)
+        if (stored) {
+          writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType: stored.contentType, body: stored.body })
+          return new Response(stored.body, {
+            status: 200,
+            headers: {
+              "content-type": stored.contentType,
+              "cache-control": "public, max-age=60, s-maxage=60",
+              "x-thumb-cache": "MISS",
+              "x-thumb-store": "HIT",
+              "x-thumb-attempts": "0",
+            },
+          })
+        }
+
+        // L3: upstream fetch with retry
         let imageResponse: Response
         let attempts: number
         try {
@@ -342,14 +476,29 @@ export async function GET(request: NextRequest) {
           return placeholderResponse({ "x-thumb-reason": "non_image" })
         }
 
-        // Success — read bytes, write cache, return image
+        // Success — read bytes, write L1 + L2 (awaited; failure does not fail request)
         const imageBuffer = await imageResponse.arrayBuffer()
         writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType, body: imageBuffer })
+
+        let storeWriteFailed = false
+        try {
+          await writeStoreCache({
+            hash, originalUrl: normalizedUrlKey, path: sPath,
+            contentType, body: imageBuffer, upstreamStatus: 200,
+          })
+        } catch {
+          storeWriteFailed = true
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[ig-thumb] store write failed for", stripUrlQueryAndHash(normalizedUrlKey))
+          }
+        }
 
         const respHeaders: Record<string, string> = {
           "content-type": contentType,
           "cache-control": "public, max-age=60, s-maxage=60",
           "x-thumb-cache": "MISS",
+          "x-thumb-store": storeWriteFailed ? "MISS_WRITE_FAILED" : "MISS_WRITE",
+          "x-thumb-store-write": storeWriteFailed ? "FAILED" : "OK",
           "x-thumb-attempts": String(attempts),
         }
         const contentLength = imageResponse.headers.get("content-length")

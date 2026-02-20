@@ -4154,6 +4154,31 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   }, [])
 
   useEffect(() => {
+    if (!userScopeKey || userScopeKey === "session") return
+    if (summaryScopeKeyRef.current === userScopeKey) return
+    summaryScopeKeyRef.current = userScopeKey
+    const controller = new AbortController()
+    const scopeKey = `summary|${userScopeKey}`
+    ;(async () => {
+      try {
+        const json = await fetchSummaryDedup(scopeKey, controller.signal)
+        if (controller.signal.aborted) return
+        const cached = __summaryCache.get(scopeKey)
+        if (cached?.etag) setDashSummaryEtag(cached.etag)
+        if (isRecord(json) && json.ok) setDashSummary(json)
+      } catch (e) {
+        if (controller.signal.aborted) return
+        if (isAbortError(e)) return
+      } finally {
+        if (!controller.signal.aborted) setDashSummaryLoading(false)
+      }
+    })()
+    return () => {
+      controller.abort()
+    }
+  }, [userScopeKey])
+
+  useEffect(() => {
     if (!isConnectedInstagram) return
     if (hasFetchedMeRef.current && lastMeFetchTickRef.current === tick) return
     lastMeFetchTickRef.current = tick
