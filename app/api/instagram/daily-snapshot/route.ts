@@ -369,7 +369,6 @@ async function writeFollowersBestEffortCached(params: {
                   ig_user_id: String(params.igId),
                   day: today,
                   followers_count: Math.floor(followersCount),
-                  updated_at: new Date().toISOString(),
                 },
                 { onConflict: "ig_user_id,day" }
               )
