@@ -299,11 +299,16 @@ async function writeFollowersBestEffortCached(params: {
   token: string
   igId: string
   ssotId?: string | null
+  authed?: any
+  authedUserId?: string
 }) {
   // Best-effort: never throw, never fail the request.
   try {
     // SSOT-only: once ig_account_id exists, do not write followers snapshots without a stable ssotId.
     if (!params.ssotId) return
+
+    // Enforce auth.uid() user_id for all SSOT writes
+    if (!params.authed || !params.authedUserId) return
 
     const existing = readCache(__dsFollowersCache, params.followersKey)
     if (existing) return
@@ -334,6 +339,7 @@ async function writeFollowersBestEffortCached(params: {
           const dayStr = todayUtcDateString()
           try {
             const payload: any = {
+              user_id: String(params.authedUserId),
               day: dayStr,
               followers_count: Math.floor(followersCount),
               captured_at: capturedAt,
@@ -352,7 +358,7 @@ async function writeFollowersBestEffortCached(params: {
               })
             }
 
-            await supabaseServer.from("ig_daily_followers").upsert(payload, { onConflict })
+            await params.authed.from("ig_daily_followers").upsert(payload, { onConflict })
           } catch (e: any) {
             if (__DEBUG_DAILY_SNAPSHOT__) {
               console.log("[daily-snapshot] followers_upsert_failed", { message: e?.message ?? String(e) })
@@ -446,7 +452,8 @@ async function readAccountDailySnapshots(params: {
 }
 
 async function upsertAccountDailySnapshots(params: {
-  userScopeKey: string
+  authed: any
+  authedUserId: string
   igId: string
   pageId: string
   ssotId: string
@@ -474,11 +481,11 @@ async function upsertAccountDailySnapshots(params: {
       })
     }
 
-    const { error } = await supabaseServer.from("account_daily_snapshot").upsert(
+    const { error } = await params.authed.from("account_daily_snapshot").upsert(
       params.rows.map((r) => ({
         // SSOT-only: reach rows must be keyed by (ig_account_id, day)
         ig_account_id: String(params.ssotId),
-        user_id: params.userScopeKey,
+        user_id: String(params.authedUserId),
         ig_user_id: Number(params.igId),
         page_id: Number(params.pageId),
         day: r.day,
@@ -505,7 +512,8 @@ async function upsertAccountDailySnapshots(params: {
 }
 
 async function backfillMissingSnapshotsFromGraph(params: {
-  userScopeKey: string
+  authed: any
+  authedUserId: string
   token: string
   envToken: string
   igId: string
@@ -564,7 +572,8 @@ async function backfillMissingSnapshotsFromGraph(params: {
 
   if (rows.length > 0) {
     const upsertRes = await upsertAccountDailySnapshots({
-      userScopeKey: params.userScopeKey,
+      authed: params.authed,
+      authedUserId: params.authedUserId,
       igId: params.igId,
       pageId: params.pageId,
       ssotId: params.ssotId,
@@ -1132,6 +1141,7 @@ export async function POST(req: Request) {
  
     let authed: Awaited<ReturnType<typeof createAuthedClient>> | null = null
     let userId: string = ""
+    let authedUser: any = null
 
     if (!cronMode) {
       try {
@@ -1140,15 +1150,18 @@ export async function POST(req: Request) {
 
         const userRes = await supabase.auth.getUser()
         const u = userRes?.data?.user ?? null
+        authedUser = u
         userId = u?.id ? String(u.id) : ""
       } catch (e) {
         authed = null
         userId = ""
+        authedUser = null
         console.warn("[daily-snapshot] failed to resolve user for active-account upsert", { cronMode: Boolean(cronMode) })
       }
     } else {
       authed = null
       userId = ""
+      authedUser = null
     }
     
     if (__DEV__) {
@@ -1490,7 +1503,7 @@ export async function POST(req: Request) {
                   const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
                   return {
                     ig_account_id: String(reachWriteSsotId),
-                    user_id: userScopeKey,
+                    user_id: String(userId),
                     ig_user_id: Number(resolvedIgId),
                     page_id: Number(resolvedPageId),
                     day,
@@ -1503,10 +1516,14 @@ export async function POST(req: Request) {
               console.log("REACH SYNC UPSERT COUNT", { rows: rows.length })
 
               if (rows.length > 0) {
-                await supabaseServer.from("account_daily_snapshot").upsert(rows as any, {
-                  onConflict: "ig_account_id,day",
-                })
-                __dsReachSyncAt.set(reachSyncKey, nowMs())
+                if (!authed || !userId) {
+                  console.warn("[daily-snapshot] skip account_daily_snapshot upsert (missing authed user)", { cronMode: Boolean(cronMode) })
+                } else {
+                  await authed.from("account_daily_snapshot").upsert(rows as any, {
+                    onConflict: "ig_account_id,day",
+                  })
+                  __dsReachSyncAt.set(reachSyncKey, nowMs())
+                }
               }
 
               console.log("REACH SYNC DONE", { rows: rows.length })
@@ -1577,7 +1594,14 @@ export async function POST(req: Request) {
 
       // Best-effort: write today's followers_count snapshot (do not affect API success)
       if (followersIgId) {
-        void writeFollowersBestEffortCached({ followersKey, token, igId: followersIgId, ssotId })
+        void writeFollowersBestEffortCached({
+          followersKey,
+          token,
+          igId: followersIgId,
+          ssotId,
+          authed,
+          authedUserId: userId,
+        })
       }
 
       const availableDays: number | null = null
@@ -1994,11 +2018,12 @@ export async function POST(req: Request) {
         const insights_daily = totals.insights_daily
 
         // Backfill snapshots on-demand (last 120d) if we hit Graph path
-        if (ssotAccountId) {
+        if (ssotAccountId && authed && userId) {
           try {
             const tBackfillStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
             const backfill = await backfillMissingSnapshotsFromGraph({
-              userScopeKey,
+              authed,
+              authedUserId: userId,
               token,
               envToken,
               igId: resolvedIgId,
