@@ -2,6 +2,104 @@ import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
+// ---------------------------------------------------------------------------
+// TTL cache (serverless best-effort; survives within the same warm instance)
+// ---------------------------------------------------------------------------
+type ThumbCacheEntry = { ts: number; status: number; contentType: string; body: ArrayBuffer }
+const __thumbCache = new Map<string, ThumbCacheEntry>()
+const THUMB_TTL_MS = 60_000
+const THUMB_CACHE_MAX = 200
+
+function thumbCacheKey(url: string): string {
+  return `thumb|${url}`
+}
+
+function readThumbCache(key: string): ThumbCacheEntry | null {
+  const e = __thumbCache.get(key)
+  if (!e) return null
+  if (Date.now() - e.ts > THUMB_TTL_MS) {
+    __thumbCache.delete(key)
+    return null
+  }
+  return e
+}
+
+function writeThumbCache(key: string, entry: ThumbCacheEntry) {
+  __thumbCache.set(key, entry)
+  if (__thumbCache.size > THUMB_CACHE_MAX) {
+    const items = Array.from(__thumbCache.entries()).sort((a, b) => a[1].ts - b[1].ts)
+    const removeN = Math.max(1, __thumbCache.size - THUMB_CACHE_MAX)
+    for (let i = 0; i < removeN; i++) {
+      const k = items[i]?.[0]
+      if (k) __thumbCache.delete(k)
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Retry helpers
+// ---------------------------------------------------------------------------
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+function backoffMs(attempt: number): number {
+  const base = Math.min(200 * Math.pow(2, attempt), 1200)
+  const jitter = Math.random() * 150
+  return Math.floor(base + jitter)
+}
+
+function shouldRetry(status: number): boolean {
+  if (status === 403 || status === 404) return false
+  return status === 429 || status >= 500
+}
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  maxAttempts: number,
+): Promise<{ res: Response; attempts: number }> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await sleep(backoffMs(attempt - 1))
+    const ac = new AbortController()
+    const tid = setTimeout(() => ac.abort(), timeoutMs)
+    try {
+      const res = await fetch(url, { ...init, signal: ac.signal })
+      clearTimeout(tid)
+      if (res.ok || !shouldRetry(res.status)) {
+        return { res, attempts: attempt + 1 }
+      }
+      lastErr = new Error(`upstream ${res.status}`)
+    } catch (e) {
+      clearTimeout(tid)
+      lastErr = e
+      // Don't retry on abort (timeout) if it's the last attempt
+      if (attempt === maxAttempts - 1) throw e
+    }
+  }
+  throw lastErr
+}
+
+// ---------------------------------------------------------------------------
+// SVG placeholder (returned as image/svg+xml on all failure paths)
+// ---------------------------------------------------------------------------
+const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"><rect width="1" height="1" fill="#1a1a1a"/></svg>`
+const PLACEHOLDER_BYTES = new TextEncoder().encode(PLACEHOLDER_SVG)
+
+function placeholderResponse(extraHeaders?: Record<string, string>): Response {
+  return new Response(PLACEHOLDER_BYTES, {
+    status: 200,
+    headers: {
+      "content-type": "image/svg+xml",
+      "cache-control": "no-store",
+      "x-thumb-fallback": "1",
+      ...extraHeaders,
+    },
+  })
+}
+
 const __thumbInflight = new Map<string, Promise<Response>>()
 
 const __thumbDebugLogSet = new Set<string>()
@@ -113,15 +211,20 @@ function isCDNHostname(hostname: string): boolean {
   )
 }
 
-function withDevThumbCacheHeader(resp: Response, value: "miss" | "inflight") {
-  if (process.env.NODE_ENV === "production") return resp
-  try {
-    const h = new Headers(resp.headers)
-    h.set("X-IG-THUMB-CACHE", value)
-    return new NextResponse(resp.body, { status: resp.status, headers: h })
-  } catch {
-    return resp
-  }
+
+const FETCH_INIT: RequestInit = {
+  headers: {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.instagram.com/",
+    "Origin": "https://www.instagram.com",
+    "Sec-Fetch-Dest": "image",
+    "Sec-Fetch-Mode": "no-cors",
+    "Sec-Fetch-Site": "cross-site",
+  },
+  cache: "no-store",
+  redirect: "follow",
 }
 
 export async function GET(request: NextRequest) {
@@ -129,24 +232,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const thumbnailUrl = searchParams.get("url")
     const debugThumbEnabled = searchParams.get("debugThumb") === "1"
-    
+
     if (!thumbnailUrl) {
-      return NextResponse.json(
-        { error: "Missing url parameter" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Missing url parameter" }, { status: 400 })
     }
 
     let initialUrlObj: URL
     try {
       initialUrlObj = new URL(thumbnailUrl)
     } catch {
-      return NextResponse.json(
-        { error: "Invalid url parameter" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Invalid url parameter" }, { status: 400 })
     }
-    
+
     // Validate URL is from allowed Instagram/FB CDN
     if (!isAllowedImageUrl(thumbnailUrl)) {
       logThumbDebugOnce(debugThumbEnabled, `blocked:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}`, {
@@ -154,60 +251,51 @@ export async function GET(request: NextRequest) {
         inputUrlHost: initialUrlObj.hostname,
         inputUrlPath: initialUrlObj.pathname,
       })
-      const errorPayload: Record<string, unknown> = {
-        error: "URL not from allowed Instagram CDN",
-      }
-      const headers: Record<string, string> = {}
-      if (process.env.NODE_ENV !== "production") {
-        errorPayload.errorReason = "not_https_or_hostname_blocked"
-        errorPayload.initialHostname = initialUrlObj.hostname
-        headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
-          errorReason: "not_https_or_hostname_blocked",
-          initialHostname: initialUrlObj.hostname,
-        })
-      }
-      return NextResponse.json(errorPayload, { status: 403, headers })
+      return placeholderResponse({ "x-thumb-reason": "blocked" })
     }
 
     const normalizedUrlKey = initialUrlObj.toString()
+    const cacheKey = thumbCacheKey(normalizedUrlKey)
+
+    // --- TTL cache HIT ---
+    const cached = readThumbCache(cacheKey)
+    if (cached) {
+      return new Response(cached.body, {
+        status: 200,
+        headers: {
+          "content-type": cached.contentType,
+          "cache-control": "public, max-age=60, s-maxage=60",
+          "x-thumb-cache": "HIT",
+          "x-thumb-attempts": "0",
+        },
+      })
+    }
+
+    // --- Inflight dedup ---
     const existing = __thumbInflight.get(normalizedUrlKey)
     if (existing) {
       const shared = await existing
-      const cloned = shared.clone()
-      // Do NOT modify error JSON responses (keep identical).
-      if (cloned.status === 200) return withDevThumbCacheHeader(cloned, "inflight")
-      return cloned
+      return shared.clone()
     }
-    
-    // Fetch the image from Instagram CDN with timeout
-    const run = (async () => {
-      const abortController = new AbortController()
-      const timeoutId = setTimeout(() => abortController.abort(), 8000)
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.debug("[ig-thumb] start", {
-          inputUrlHost: initialUrlObj.hostname,
-          inputUrlPath: initialUrlObj.pathname,
-        })
-      }
 
+    // --- Fetch with retry ---
+    const run = (async (): Promise<Response> => {
       try {
-        const imageResponse = await fetch(thumbnailUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.instagram.com/",
-            "Origin": "https://www.instagram.com",
-            "Sec-Fetch-Dest": "image",
-            "Sec-Fetch-Mode": "no-cors",
-            "Sec-Fetch-Site": "cross-site",
-          },
-          cache: "no-store",
-          signal: abortController.signal,
-        })
-
-        clearTimeout(timeoutId)
+        let imageResponse: Response
+        let attempts: number
+        try {
+          const result = await fetchWithRetry(thumbnailUrl, FETCH_INIT, 6_000, 3)
+          imageResponse = result.res
+          attempts = result.attempts
+        } catch (fetchError) {
+          const isTimeout = fetchError instanceof Error && fetchError.name === "AbortError"
+          logThumbDebugOnce(
+            debugThumbEnabled,
+            `fetch_error:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${isTimeout ? "timeout" : "network"}`,
+            { kind: "fetch_error", inputUrlHost: initialUrlObj.hostname, errorReason: isTimeout ? "timeout" : "network_error" },
+          )
+          return placeholderResponse({ "x-thumb-reason": isTimeout ? "timeout" : "network_error" })
+        }
 
         // Verify final response URL (after redirects)
         const finalUrl = imageResponse.url
@@ -218,28 +306,7 @@ export async function GET(request: NextRequest) {
           finalHostname = finalParsed.hostname.toLowerCase()
           finalPathname = finalParsed.pathname || ""
         } catch {
-          console.error("Failed to parse final response URL")
-          const errorPayload: Record<string, unknown> = {
-            error: "Invalid final response URL",
-          }
-          const headers: Record<string, string> = {
-            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-          }
-          if (process.env.NODE_ENV !== "production") {
-            errorPayload.errorReason = "invalid_final_url"
-            errorPayload.initialHostname = initialUrlObj.hostname
-            headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
-              errorReason: "invalid_final_url",
-              initialHostname: initialUrlObj.hostname,
-            })
-          }
-          return NextResponse.json(
-            errorPayload,
-            {
-              status: 502,
-              headers,
-            },
-          )
+          return placeholderResponse({ "x-thumb-reason": "invalid_final_url" })
         }
 
         const contentType = imageResponse.headers.get("content-type") || ""
@@ -248,229 +315,56 @@ export async function GET(request: NextRequest) {
           INSTAGRAM_MEDIA_PATH_REGEX.test(finalPathname) &&
           contentType.startsWith("image/")
 
-        // Final URL must be from CDN domains (not arbitrary instagram.com pages)
         if (!isCDNHostname(finalHostname) && !isFinalInstagramMediaImage) {
-          console.error(`Final URL not from allowed CDN: ${finalHostname}`)
-
           logThumbDebugOnce(
             debugThumbEnabled,
             `final_host_blocked:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${finalHostname}`,
-            {
-              kind: "final_hostname_blocked",
-              inputUrlHost: initialUrlObj.hostname,
-              inputUrlPath: initialUrlObj.pathname,
-              finalHostname,
-              finalUrl: stripUrlQueryAndHash(finalUrl) || null,
-              upstreamStatus: imageResponse.status,
-              upstreamContentType: contentType,
-            }
+            { kind: "final_hostname_blocked", inputUrlHost: initialUrlObj.hostname, finalHostname },
           )
-
-          const errorPayload: Record<string, unknown> = {
-            error: "Final redirect URL not from allowed CDN",
-          }
-
-          const headers: Record<string, string> = {
-            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-          }
-
-          // Add DEV-only diagnostics
-          if (process.env.NODE_ENV !== "production") {
-            errorPayload.errorReason = "final_hostname_blocked"
-            errorPayload.initialHostname = initialUrlObj.hostname
-            errorPayload.finalHostname = finalHostname
-            errorPayload.finalUrl = finalUrl
-            errorPayload.allowedList = ALLOWED_CDN_HOSTNAMES
-            headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
-              errorReason: "final_hostname_blocked",
-              initialHostname: initialUrlObj.hostname,
-              finalHostname: finalHostname,
-            })
-          }
-
-          return NextResponse.json(
-            errorPayload,
-            {
-              status: 502,
-              headers,
-            },
-          )
-        }
-
-        if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
-          console.debug("[ig-thumb] final", {
-            finalHostname,
-            status: imageResponse.status,
-            contentType,
-          })
+          return placeholderResponse({ "x-thumb-reason": "final_hostname_blocked" })
         }
 
         if (!imageResponse.ok) {
-          console.error(`Failed to fetch thumbnail: ${imageResponse.status} ${imageResponse.statusText}`)
-
           logThumbDebugOnce(
             debugThumbEnabled,
             `upstream_error:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${imageResponse.status}`,
-            {
-              kind: "upstream_error",
-              inputUrlHost: initialUrlObj.hostname,
-              inputUrlPath: initialUrlObj.pathname,
-              finalHostname,
-              finalUrl: stripUrlQueryAndHash(finalUrl) || null,
-              upstreamStatus: imageResponse.status,
-              upstreamContentType: contentType,
-            }
+            { kind: "upstream_error", inputUrlHost: initialUrlObj.hostname, upstreamStatus: imageResponse.status },
           )
-
-          const errorPayload: Record<string, unknown> = {
-            error: "Failed to fetch thumbnail from Instagram",
-          }
-          const headers: Record<string, string> = {
-            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-          }
-          if (process.env.NODE_ENV !== "production") {
-            errorPayload.errorReason = "upstream_error"
-            errorPayload.finalStatus = imageResponse.status
-            errorPayload.finalHostname = finalHostname
-            headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
-              errorReason: "upstream_error",
-              initialHostname: initialUrlObj.hostname,
-              finalHostname: finalHostname,
-            })
-          }
-          return NextResponse.json(
-            errorPayload,
-            {
-              status: 502,
-              headers,
-            },
-          )
+          return placeholderResponse({ "x-thumb-reason": `upstream_${imageResponse.status}` })
         }
 
-        // Validate Content-Type is an image
         if (!contentType.startsWith("image/")) {
-          console.error(`Invalid content type: ${contentType}`)
-
           logThumbDebugOnce(
             debugThumbEnabled,
             `non_image:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${contentType.slice(0, 64)}`,
-            {
-              kind: "non_image",
-              inputUrlHost: initialUrlObj.hostname,
-              inputUrlPath: initialUrlObj.pathname,
-              finalHostname,
-              finalUrl: stripUrlQueryAndHash(finalUrl) || null,
-              upstreamStatus: imageResponse.status,
-              upstreamContentType: contentType,
-            }
+            { kind: "non_image", inputUrlHost: initialUrlObj.hostname, finalContentType: contentType },
           )
-
-          const errorPayload: Record<string, unknown> = {
-            error: "Resource is not an image",
-            code: "NON_IMAGE_UPSTREAM",
-          }
-          const headers: Record<string, string> = {
-            "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-          }
-          if (process.env.NODE_ENV !== "production") {
-            errorPayload.errorReason = "non_image_content_type"
-            errorPayload.finalContentType = contentType
-            errorPayload.finalHostname = finalHostname
-            headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
-              errorReason: "non_image_content_type",
-              initialHostname: initialUrlObj.hostname,
-              finalHostname: finalHostname,
-              finalContentType: contentType,
-            })
-          }
-          return NextResponse.json(
-            errorPayload,
-            {
-              status: 415,
-              headers,
-            },
-          )
+          return placeholderResponse({ "x-thumb-reason": "non_image" })
         }
 
-        // Stream the image bytes
+        // Success — read bytes, write cache, return image
         const imageBuffer = await imageResponse.arrayBuffer()
+        writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType, body: imageBuffer })
 
-        const headers: Record<string, string> = {
-          "Content-Type": contentType,
-          "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+        const respHeaders: Record<string, string> = {
+          "content-type": contentType,
+          "cache-control": "public, max-age=60, s-maxage=60",
+          "x-thumb-cache": "MISS",
+          "x-thumb-attempts": String(attempts),
         }
         const contentLength = imageResponse.headers.get("content-length")
-        if (contentLength) headers["Content-Length"] = contentLength
+        if (contentLength) respHeaders["content-length"] = contentLength
 
-        return new NextResponse(imageBuffer, {
-          status: 200,
-          headers,
-        })
-      } catch (fetchError) {
-        clearTimeout(timeoutId)
-
-        let errorMsg = "Failed to fetch thumbnail"
-        let errorReason = "upstream_error"
-        if (fetchError instanceof Error && fetchError.name === "AbortError") {
-          errorMsg = "Request timeout"
-          errorReason = "timeout"
-        }
-
-        console.error(`Thumbnail fetch error: ${errorMsg}`, fetchError)
-
-        logThumbDebugOnce(
-          debugThumbEnabled,
-          `fetch_error:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}:${errorReason}`,
-          {
-            kind: "fetch_error",
-            inputUrlHost: initialUrlObj.hostname,
-            inputUrlPath: initialUrlObj.pathname,
-            errorReason,
-          }
-        )
-        const errorPayload: Record<string, unknown> = {
-          error: errorMsg,
-        }
-        const headers: Record<string, string> = {
-          "Cache-Control": "s-maxage=300, stale-while-revalidate=600",
-        }
-        if (process.env.NODE_ENV !== "production") {
-          errorPayload.errorReason = errorReason
-          errorPayload.initialHostname = initialUrlObj.hostname
-          headers["X-IG-THUMB-DEBUG"] = JSON.stringify({
-            errorReason: errorReason,
-            initialHostname: initialUrlObj.hostname,
-          })
-        }
-        return NextResponse.json(
-          errorPayload,
-          {
-            status: 502,
-            headers,
-          },
-        )
+        return new Response(imageBuffer, { status: 200, headers: respHeaders })
+      } finally {
+        __thumbInflight.delete(normalizedUrlKey)
       }
     })()
 
     __thumbInflight.set(normalizedUrlKey, run)
-    try {
-      const resp = await run
-      if (resp.status === 200) return withDevThumbCacheHeader(resp, "miss")
-      return resp
-    } finally {
-      __thumbInflight.delete(normalizedUrlKey)
-    }
+    return run
   } catch (error) {
     console.error("Thumbnail proxy error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { 
-        status: 500,
-        headers: {
-          "Cache-Control": "no-cache",
-        },
-      }
-    )
+    return placeholderResponse({ "x-thumb-reason": "internal_error" })
   }
 }
