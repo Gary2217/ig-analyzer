@@ -106,6 +106,7 @@ async function writeStoreCache(params: {
       : null
     const { error: dbErr } = await sb.from(THUMB_TABLE).upsert({
       url_hash: hash,
+      url: originalUrl,
       original_url: originalUrl,
       storage_path: path,
       content_type: contentType,
