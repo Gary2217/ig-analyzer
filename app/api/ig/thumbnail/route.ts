@@ -100,14 +100,15 @@ async function writeStoreCache(params: {
       return { storageError: upErr.message }
     }
     const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString()
+    const cleanUrl = (() => { try { const u = new URL(originalUrl); u.search = ""; u.hash = ""; return u.toString() } catch { return originalUrl } })()
     const INLINE_MAX_BYTES = 512 * 1024
     const inlineBytes = body.byteLength <= INLINE_MAX_BYTES
       ? Buffer.from(body).toString("base64")
       : null
     const { error: dbErr } = await sb.from(THUMB_TABLE).upsert({
       url_hash: hash,
-      url: originalUrl,
-      original_url: originalUrl,
+      url: cleanUrl,
+      original_url: cleanUrl,
       storage_path: path,
       content_type: contentType,
       bytes_size: body.byteLength,
@@ -382,8 +383,10 @@ export async function GET(request: NextRequest) {
     }
 
     const normalizedUrlKey = initialUrlObj.toString()
-    const cacheKey = thumbCacheKey(normalizedUrlKey)
-    const hash = urlHash(normalizedUrlKey)
+    // Strip query params for stable cache key (CDN tokens rotate ~24h)
+    const cleanUrlKey = (() => { try { const u = new URL(normalizedUrlKey); u.search = ""; u.hash = ""; return u.toString() } catch { return normalizedUrlKey } })()
+    const cacheKey = thumbCacheKey(cleanUrlKey)
+    const hash = urlHash(cleanUrlKey)
     const sPath = storagePath(hash)
 
     // --- L1: memory cache HIT ---
@@ -498,7 +501,7 @@ export async function GET(request: NextRequest) {
         writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType, body: imageBuffer })
 
         const writeResult = await writeStoreCache({
-          hash, originalUrl: normalizedUrlKey, path: sPath,
+          hash, originalUrl: cleanUrlKey, path: sPath,
           contentType, body: imageBuffer, upstreamStatus: 200,
         })
         const storeWriteFailed = !!(writeResult.storageError || writeResult.dbError)
