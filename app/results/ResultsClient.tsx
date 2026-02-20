@@ -1142,6 +1142,34 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     console.log("[DEPLOY]", "c4885e6")
   }, [])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    void (async () => {
+      try {
+        const TTL_MS = 5 * 60 * 1000
+        // Resolve active account server-side (avoids HttpOnly cookie parsing)
+        const acctRes = await fetch("/api/ig/active-account", { cache: "no-store" }).catch(() => null)
+        const acctJson = acctRes?.ok ? await acctRes.json().catch(() => null) : null
+        const igAccountId: string | null =
+          acctJson && typeof acctJson.ig_account_id === "string" ? acctJson.ig_account_id : null
+        const key = `prewarm_done_${igAccountId ?? "default"}`
+        const storedAt = Number(sessionStorage.getItem(key) ?? "0")
+        if (storedAt && Date.now() - storedAt < TTL_MS) return
+        const res = await fetch("/api/prewarm", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(igAccountId ? { ig_account_id: igAccountId } : {}),
+        }).catch(() => null)
+        // Only mark done after a successful response
+        if (res?.ok) {
+          try { sessionStorage.setItem(key, String(Date.now())) } catch { /* ignore */ }
+        }
+      } catch {
+        // best-effort; never block rendering
+      }
+    })()
+  }, [])
+
   const router = useRouter()
   const pathname = usePathname() || "/"
   const searchParams = useSearchParams()

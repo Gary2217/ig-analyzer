@@ -1,0 +1,409 @@
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+import { NextResponse, type NextRequest } from "next/server"
+import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
+import { cookies } from "next/headers"
+import { createHash } from "crypto"
+
+// ---------------------------------------------------------------------------
+// POST /api/prewarm
+// Best-effort session prewarm: today's snapshot + cards payload + thumbnails.
+// Auth required. Per-user per-account token only — no global env fallback.
+// Returns quickly (~800ms); all heavy work is fire-and-forget.
+// ---------------------------------------------------------------------------
+
+const GRAPH_BASE = "https://graph.facebook.com/v24.0"
+const THROTTLE_COOKIE = "prewarm_at"
+const THROTTLE_MS = 60_000 // 60s
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function todayUtc(): string {
+  const d = new Date()
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+}
+
+function urlHash(url: string): string {
+  return createHash("sha256").update(url).digest("hex")
+}
+
+async function safeJson(res: Response): Promise<unknown> {
+  try { return await res.json() } catch { return null }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ])
+}
+
+// ---------------------------------------------------------------------------
+// T1: Ensure today's account_daily_snapshot row exists (upsert if missing)
+// ---------------------------------------------------------------------------
+async function t1EnsureTodaySnapshot(params: {
+  igAccountId: string
+  igUserId: string
+  pageId: string
+  userId: string
+  token: string
+}): Promise<{ did: boolean; reason?: string }> {
+  const { igAccountId, igUserId, pageId, userId, token } = params
+  const today = todayUtc()
+
+  // Check if today already has a non-null reach row
+  const { data: existing } = await supabaseServer
+    .from("account_daily_snapshot")
+    .select("id, reach")
+    .eq("ig_account_id", igAccountId)
+    .eq("day", today)
+    .limit(1)
+    .maybeSingle()
+
+  if (existing && (existing as any).reach !== null) {
+    return { did: false, reason: "already_exists" }
+  }
+
+  // Resolve page access token
+  let pageToken = token
+  if (pageId) {
+    try {
+      const ptRes = await fetch(
+        `${GRAPH_BASE}/${encodeURIComponent(pageId)}?fields=access_token&access_token=${token}`,
+        { cache: "no-store" }
+      )
+      const ptBody = await safeJson(ptRes) as any
+      if (ptBody?.access_token) pageToken = String(ptBody.access_token)
+    } catch { /* use user token */ }
+  }
+
+  // Fetch today's insights from Graph (yesterday + today window)
+  const yesterday = (() => {
+    const ms = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) - 86400_000
+    const d = new Date(ms)
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+  })()
+
+  const insightsRes = await fetch(
+    `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+      `?metric=reach,total_interactions&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`,
+    { cache: "no-store" }
+  )
+  if (!insightsRes.ok) return { did: false, reason: `graph_${insightsRes.status}` }
+
+  const insightsJson = await safeJson(insightsRes) as any
+  const reachValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
+  const intValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
+
+  const byDay = new Map<string, { reach: number | null; total_interactions: number }>()
+  for (const v of reachValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
+    ex.reach = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
+    byDay.set(d, ex)
+  }
+  for (const v of intValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
+    ex.total_interactions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+    byDay.set(d, ex)
+  }
+
+  const todayData = byDay.get(today)
+  if (!todayData) return { did: false, reason: "no_graph_data_for_today" }
+
+  await supabaseServer
+    .from("account_daily_snapshot")
+    .upsert({
+      ig_account_id: igAccountId,
+      user_id: userId,
+      ig_user_id: Number(igUserId),
+      page_id: pageId ? Number(pageId) : 0,
+      day: today,
+      reach: todayData.reach,
+      total_interactions: todayData.total_interactions,
+      impressions: 0,
+      accounts_engaged: 0,
+      source_used: "prewarm",
+      wrote_at: nowIso(),
+    } as any, { onConflict: "ig_account_id,day" })
+
+  return { did: true }
+}
+
+// ---------------------------------------------------------------------------
+// T2: Warm creator cards payload (DB read only)
+// ---------------------------------------------------------------------------
+async function t2WarmCards(params: { userId: string }): Promise<{ did: boolean }> {
+  await supabaseServer
+    .from("creator_cards")
+    .select("id, avatar_url, is_owner_card, updated_at")
+    .eq("user_id", params.userId)
+    .order("is_owner_card", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(5)
+  return { did: true }
+}
+
+// ---------------------------------------------------------------------------
+// T3: Warm thumbnails — fire-and-forget fetch to /api/ig/thumbnail for recent posts
+// ---------------------------------------------------------------------------
+async function t3WarmThumbnails(params: {
+  userId: string
+  baseUrl: string
+}): Promise<{ did: boolean; count: number }> {
+  // Get the user's card_id first
+  const { data: cardRow } = await supabaseServer
+    .from("creator_cards")
+    .select("id")
+    .eq("user_id", params.userId)
+    .order("is_owner_card", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const cardId = cardRow && typeof (cardRow as any).id === "string" ? String((cardRow as any).id) : null
+  if (!cardId) return { did: false, count: 0 }
+
+  const { data: postsRow } = await supabaseServer
+    .from("creator_card_ig_posts")
+    .select("posts")
+    .eq("user_id", params.userId)
+    .eq("card_id", cardId)
+    .limit(1)
+    .maybeSingle()
+
+  const posts: unknown[] = Array.isArray((postsRow as any)?.posts) ? (postsRow as any).posts : []
+  if (posts.length === 0) return { did: false, count: 0 }
+
+  // Extract up to 16 thumbnail URLs
+  const thumbUrls: string[] = []
+  for (const p of posts.slice(0, 24)) {
+    if (!p || typeof p !== "object") continue
+    const pr = p as Record<string, unknown>
+    const candidates = [
+      pr.thumbnail_url, (pr as any).thumbnailUrl,
+      pr.media_url, (pr as any).mediaUrl,
+      pr.image_url, (pr as any).imageUrl,
+    ]
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim() && !/\.mp4(\?|$)/i.test(c)) {
+        thumbUrls.push(c.trim())
+        break
+      }
+    }
+    if (thumbUrls.length >= 16) break
+  }
+
+  if (thumbUrls.length === 0) return { did: false, count: 0 }
+
+  // Check which hashes are already in DB cache (skip those)
+  const hashes = thumbUrls.map(urlHash)
+  const { data: cachedRows } = await supabaseServer
+    .from("ig_thumbnail_cache")
+    .select("url_hash")
+    .in("url_hash", hashes)
+    .gt("hard_expires_at", nowIso())
+
+  const cachedSet = new Set<string>(
+    (Array.isArray(cachedRows) ? cachedRows : []).map((r: any) => String(r?.url_hash ?? ""))
+  )
+
+  const toFetch = thumbUrls.filter((u) => !cachedSet.has(urlHash(u)))
+  if (toFetch.length === 0) return { did: true, count: 0 }
+
+  // Fire-and-forget with concurrency=4, no await
+  const CONCURRENCY = 4
+  void (async () => {
+    for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
+      const batch = toFetch.slice(i, i + CONCURRENCY)
+      await Promise.allSettled(
+        batch.map((u) =>
+          fetch(`${params.baseUrl}/api/ig/thumbnail?url=${encodeURIComponent(u)}`, {
+            cache: "no-store",
+            signal: AbortSignal.timeout(5_000),
+          }).catch(() => null)
+        )
+      )
+    }
+  })()
+
+  return { did: true, count: toFetch.length }
+}
+
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
+export async function POST(req: NextRequest) {
+  const t0 = Date.now()
+
+  try {
+    // --- Cookie-based throttle (60s) ---
+    const cookieStore = await cookies()
+    const lastAt = Number(cookieStore.get(THROTTLE_COOKIE)?.value ?? "0")
+    if (lastAt && Date.now() - lastAt < THROTTLE_MS) {
+      return NextResponse.json({ ok: true, skipped: "throttled", took_ms: Date.now() - t0 })
+    }
+
+    // --- Auth ---
+    const authed = await createAuthedClient()
+    const userRes = await authed.auth.getUser()
+    const user = userRes?.data?.user ?? null
+    if (!user?.id) {
+      return NextResponse.json({ ok: false, error: "not_logged_in" }, { status: 401 })
+    }
+
+    // --- Parse body ---
+    let body: Record<string, unknown> = {}
+    try { body = (await req.json()) ?? {} } catch { /* empty body ok */ }
+    const requestedAccountId = typeof body.ig_account_id === "string" ? body.ig_account_id.trim() : ""
+    const debugMode = body.debug === true
+
+    // --- Resolve ig_account (SSOT, per-user) ---
+    let igAccountId = ""
+    let igUserId = ""
+    let pageId = ""
+
+    if (requestedAccountId) {
+      const { data: acct } = await authed
+        .from("user_ig_accounts")
+        .select("id, ig_user_id, page_id")
+        .eq("id", requestedAccountId)
+        .eq("user_id", user.id)
+        .eq("provider", "instagram")
+        .limit(1)
+        .maybeSingle()
+      igAccountId = acct && typeof (acct as any).id === "string" ? String((acct as any).id) : ""
+      igUserId = acct && (acct as any).ig_user_id != null ? String((acct as any).ig_user_id) : ""
+      pageId = acct && (acct as any).page_id != null ? String((acct as any).page_id) : ""
+    }
+
+    if (!igAccountId) {
+      // Try cookie hint first (same pattern as ssot-trend route)
+      let cookieAccountId = ""
+      try {
+        cookieAccountId =
+          cookieStore.get("ig_account_id")?.value?.trim() ||
+          cookieStore.get("ig_active_account_id")?.value?.trim() ||
+          ""
+      } catch { /* ignore */ }
+
+      if (cookieAccountId) {
+        const { data: acct } = await authed
+          .from("user_ig_accounts")
+          .select("id, ig_user_id, page_id")
+          .eq("id", cookieAccountId)
+          .eq("user_id", user.id)
+          .eq("provider", "instagram")
+          .limit(1)
+          .maybeSingle()
+        igAccountId = acct && typeof (acct as any).id === "string" ? String((acct as any).id) : ""
+        igUserId = acct && (acct as any).ig_user_id != null ? String((acct as any).ig_user_id) : ""
+        pageId = acct && (acct as any).page_id != null ? String((acct as any).page_id) : ""
+      }
+    }
+
+    if (!igAccountId) {
+      const { data: latest } = await authed
+        .from("user_ig_accounts")
+        .select("id, ig_user_id, page_id")
+        .eq("user_id", user.id)
+        .eq("provider", "instagram")
+        .is("revoked_at", null)
+        .order("connected_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      igAccountId = latest && typeof (latest as any).id === "string" ? String((latest as any).id) : ""
+      igUserId = latest && (latest as any).ig_user_id != null ? String((latest as any).ig_user_id) : ""
+      pageId = latest && (latest as any).page_id != null ? String((latest as any).page_id) : ""
+    }
+
+    if (!igAccountId) {
+      return NextResponse.json({ ok: true, skipped: "no_ig_account", took_ms: Date.now() - t0 })
+    }
+
+    // --- Resolve per-account token (no global fallback) ---
+    const { data: tokenRow } = await supabaseServer
+      .from("user_ig_account_tokens")
+      .select("access_token")
+      .eq("ig_account_id", igAccountId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const token = tokenRow && typeof (tokenRow as any).access_token === "string"
+      ? String((tokenRow as any).access_token).trim()
+      : ""
+
+    // --- Resolve base URL for internal thumbnail fetch ---
+    const baseUrl = (() => {
+      const appBase = (process.env.NEXT_PUBLIC_APP_BASE_URL ?? "").trim()
+      if (appBase) return appBase.replace(/\/$/, "")
+      const host = req.headers.get("host") ?? "localhost:3000"
+      const proto = req.headers.get("x-forwarded-proto") ?? "https"
+      return `${proto}://${host}`
+    })()
+
+    // --- Set throttle cookie immediately ---
+    const response = NextResponse.json({ ok: true }) // placeholder, replaced below
+    void response
+
+    // --- Run tasks in parallel, each with individual timeout ---
+    const TASK_TIMEOUT = 700
+
+    const [t1Result, t2Result, t3Result] = await Promise.allSettled([
+      // T1: only if we have a token
+      token
+        ? withTimeout(
+            t1EnsureTodaySnapshot({ igAccountId, igUserId, pageId, userId: user.id, token }),
+            TASK_TIMEOUT
+          )
+        : Promise.resolve({ did: false, reason: "no_token" }),
+
+      // T2: always (DB read only)
+      withTimeout(t2WarmCards({ userId: user.id }), TASK_TIMEOUT),
+
+      // T3: always (fire-and-forget inside, so this resolves quickly)
+      withTimeout(t3WarmThumbnails({ userId: user.id, baseUrl }), TASK_TIMEOUT),
+    ])
+
+    const took_ms = Date.now() - t0
+
+    const did = {
+      snapshot: t1Result.status === "fulfilled" ? t1Result.value : null,
+      cards: t2Result.status === "fulfilled" ? t2Result.value : null,
+      thumbnails: t3Result.status === "fulfilled" ? t3Result.value : null,
+    }
+
+    const res = NextResponse.json({
+      ok: true,
+      did,
+      took_ms,
+      ...(debugMode ? {
+        debug: {
+          igAccountId,
+          igUserId,
+          pageId,
+          hasToken: Boolean(token),
+          baseUrl,
+        },
+      } : {}),
+    })
+
+    // Set throttle cookie on the response
+    res.cookies.set(THROTTLE_COOKIE, String(Date.now()), {
+      httpOnly: true,
+      path: "/",
+      maxAge: Math.ceil(THROTTLE_MS / 1000),
+      sameSite: "lax",
+    })
+
+    return res
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ ok: false, error: "unexpected_error", message: msg.slice(0, 400) }, { status: 500 })
+  }
+}
