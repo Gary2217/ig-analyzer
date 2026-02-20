@@ -14,8 +14,13 @@ import { createHash } from "crypto"
 // ---------------------------------------------------------------------------
 
 const GRAPH_BASE = "https://graph.facebook.com/v24.0"
-const THROTTLE_COOKIE = "prewarm_at"
-const THROTTLE_MS = 60_000 // 60s
+const THROTTLE_COOKIE_FULL = "prewarm_at"
+const THROTTLE_COOKIE_THUMBS = "prewarm_thumbs_at"
+const THROTTLE_MS_FULL = 60_000 // 60s
+const THROTTLE_MS_THUMBS = 20_000 // 20s
+
+type PrewarmMode = "full" | "thumbs" | "snapshots"
+type PrewarmReason = "login" | "account_switch" | "new_posts" | "manual"
 
 function nowIso() {
   return new Date().toISOString()
@@ -242,11 +247,28 @@ export async function POST(req: NextRequest) {
   const t0 = Date.now()
 
   try {
-    // --- Cookie-based throttle (60s) ---
+    // --- Parse body first (needed for mode before throttle check) ---
+    let body: Record<string, unknown> = {}
+    try { body = (await req.json()) ?? {} } catch { /* empty body ok */ }
+    const requestedAccountId = typeof body.ig_account_id === "string" ? body.ig_account_id.trim() : ""
+    const debugMode = body.debug === true
+    const mode: PrewarmMode =
+      body.mode === "thumbs" ? "thumbs" :
+      body.mode === "snapshots" ? "snapshots" :
+      "full"
+    const _reason: PrewarmReason =
+      body.reason === "login" ? "login" :
+      body.reason === "account_switch" ? "account_switch" :
+      body.reason === "new_posts" ? "new_posts" :
+      "manual"
+
+    // --- Cookie-based throttle (per-mode) ---
     const cookieStore = await cookies()
-    const lastAt = Number(cookieStore.get(THROTTLE_COOKIE)?.value ?? "0")
-    if (lastAt && Date.now() - lastAt < THROTTLE_MS) {
-      return NextResponse.json({ ok: true, skipped: "throttled", took_ms: Date.now() - t0 })
+    const throttleCookie = mode === "thumbs" ? THROTTLE_COOKIE_THUMBS : THROTTLE_COOKIE_FULL
+    const throttleMs = mode === "thumbs" ? THROTTLE_MS_THUMBS : THROTTLE_MS_FULL
+    const lastAt = Number(cookieStore.get(throttleCookie)?.value ?? "0")
+    if (lastAt && Date.now() - lastAt < throttleMs) {
+      return NextResponse.json({ ok: true, skipped: "throttled", mode, took_ms: Date.now() - t0 })
     }
 
     // --- Auth ---
@@ -256,12 +278,6 @@ export async function POST(req: NextRequest) {
     if (!user?.id) {
       return NextResponse.json({ ok: false, error: "not_logged_in" }, { status: 401 })
     }
-
-    // --- Parse body ---
-    let body: Record<string, unknown> = {}
-    try { body = (await req.json()) ?? {} } catch { /* empty body ok */ }
-    const requestedAccountId = typeof body.ig_account_id === "string" ? body.ig_account_id.trim() : ""
-    const debugMode = body.debug === true
 
     // --- Resolve ig_account (SSOT, per-user) ---
     let igAccountId = ""
@@ -347,27 +363,33 @@ export async function POST(req: NextRequest) {
       return `${proto}://${host}`
     })()
 
-    // --- Set throttle cookie immediately ---
-    const response = NextResponse.json({ ok: true }) // placeholder, replaced below
-    void response
-
-    // --- Run tasks in parallel, each with individual timeout ---
+    // --- Run tasks in parallel, gated by mode ---
     const TASK_TIMEOUT = 700
 
+    const runT1 = mode === "full" || mode === "snapshots"
+    const runT2 = mode === "full"
+    const runT3 = mode === "full" || mode === "thumbs"
+
     const [t1Result, t2Result, t3Result] = await Promise.allSettled([
-      // T1: only if we have a token
-      token
-        ? withTimeout(
-            t1EnsureTodaySnapshot({ igAccountId, igUserId, pageId, userId: user.id, token }),
-            TASK_TIMEOUT
-          )
-        : Promise.resolve({ did: false, reason: "no_token" }),
+      // T1: snapshots or full, only if we have a token
+      runT1
+        ? (token
+            ? withTimeout(
+                t1EnsureTodaySnapshot({ igAccountId, igUserId, pageId, userId: user.id, token }),
+                TASK_TIMEOUT
+              )
+            : Promise.resolve({ did: false, reason: "no_token" }))
+        : Promise.resolve(null),
 
-      // T2: always (DB read only)
-      withTimeout(t2WarmCards({ userId: user.id }), TASK_TIMEOUT),
+      // T2: full only (DB read, warms connection pool)
+      runT2
+        ? withTimeout(t2WarmCards({ userId: user.id }), TASK_TIMEOUT)
+        : Promise.resolve(null),
 
-      // T3: always (fire-and-forget inside, so this resolves quickly)
-      withTimeout(t3WarmThumbnails({ userId: user.id, baseUrl }), TASK_TIMEOUT),
+      // T3: full or thumbs (fire-and-forget inside, resolves quickly)
+      runT3
+        ? withTimeout(t3WarmThumbnails({ userId: user.id, baseUrl }), TASK_TIMEOUT)
+        : Promise.resolve(null),
     ])
 
     const took_ms = Date.now() - t0
@@ -380,6 +402,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
       ok: true,
+      mode,
       did,
       took_ms,
       ...(debugMode ? {
@@ -393,11 +416,11 @@ export async function POST(req: NextRequest) {
       } : {}),
     })
 
-    // Set throttle cookie on the response
-    res.cookies.set(THROTTLE_COOKIE, String(Date.now()), {
+    // Set per-mode throttle cookie on the response
+    res.cookies.set(throttleCookie, String(Date.now()), {
       httpOnly: true,
       path: "/",
-      maxAge: Math.ceil(THROTTLE_MS / 1000),
+      maxAge: Math.ceil(throttleMs / 1000),
       sameSite: "lax",
     })
 

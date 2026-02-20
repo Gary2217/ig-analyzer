@@ -32,6 +32,7 @@ import { PostsDebugPanel } from "./PostsDebugPanel"
 import { CreatorCardShowcase } from "./CreatorCardShowcase"
 import { toIgDirectMediaUrl } from "@/app/lib/ig/toIgDirectMediaUrl"
 import { useCreatorCardPreviewData } from "../components/creator-card/useCreatorCardPreviewData"
+import { usePredictivePrewarm } from "../hooks/usePredictivePrewarm"
 
 // Dev StrictMode can mount/unmount/mount causing useRef to reset.
 // Module-scope flag survives remount in the same session and prevents duplicate fetch.
@@ -1142,33 +1143,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     console.log("[DEPLOY]", "c4885e6")
   }, [])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    void (async () => {
-      try {
-        const TTL_MS = 5 * 60 * 1000
-        // Resolve active account server-side (avoids HttpOnly cookie parsing)
-        const acctRes = await fetch("/api/ig/active-account", { cache: "no-store" }).catch(() => null)
-        const acctJson = acctRes?.ok ? await acctRes.json().catch(() => null) : null
-        const igAccountId: string | null =
-          acctJson && typeof acctJson.ig_account_id === "string" ? acctJson.ig_account_id : null
-        const key = `prewarm_done_${igAccountId ?? "default"}`
-        const storedAt = Number(sessionStorage.getItem(key) ?? "0")
-        if (storedAt && Date.now() - storedAt < TTL_MS) return
-        const res = await fetch("/api/prewarm", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(igAccountId ? { ig_account_id: igAccountId } : {}),
-        }).catch(() => null)
-        // Only mark done after a successful response
-        if (res?.ok) {
-          try { sessionStorage.setItem(key, String(Date.now())) } catch { /* ignore */ }
-        }
-      } catch {
-        // best-effort; never block rendering
-      }
-    })()
-  }, [])
+  // Login prewarm: once per session (30-min TTL), full mode
+  usePredictivePrewarm()
 
   const router = useRouter()
   const pathname = usePathname() || "/"
@@ -2251,6 +2227,127 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   })()
 
   const hasAnyResultsData = Boolean(effectiveRecentLen > 0 || trendPoints.length > 0 || igMe)
+
+  // -------------------------------------------------------------------------
+  // B2: Account-switch watcher
+  // Only runs when isConnectedInstagram === true + tab visible.
+  // Uses a self-scheduling setTimeout loop (30s) so we never schedule when hidden.
+  // Stops entirely after 5 min of stable account id (no switch detected).
+  // Never blocks rendering; all throttles preserved.
+  // -------------------------------------------------------------------------
+  const lastSeenAccountIdRef = useRef<string | null>(null)
+  const stableAccountSinceRef = useRef<number>(0)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!isConnectedInstagram) return
+
+    let cancelled = false
+    let timerId: ReturnType<typeof setTimeout> | null = null
+    const POLL_MS = 30_000
+    const SWITCH_TTL_MS = 5 * 60 * 1000
+    const STABLE_STOP_MS = 5 * 60 * 1000 // stop after 5 min of no switch
+
+    async function tick() {
+      if (cancelled) return
+
+      if (document.hidden) {
+        // Tab hidden — skip fetch, reschedule
+        timerId = setTimeout(() => { void tick() }, POLL_MS)
+        return
+      }
+
+      // Stop polling if account has been stable for STABLE_STOP_MS
+      const stableSince = stableAccountSinceRef.current
+      if (stableSince > 0 && Date.now() - stableSince >= STABLE_STOP_MS) return
+
+      try {
+        const acctRes = await fetch("/api/ig/active-account", { cache: "no-store" }).catch(() => null)
+        const acctJson = acctRes?.ok ? await acctRes.json().catch(() => null) : null
+        const newId: string | null =
+          acctJson && typeof acctJson.ig_account_id === "string" ? acctJson.ig_account_id : null
+
+        if (newId) {
+          const prev = lastSeenAccountIdRef.current
+          if (prev !== null && prev !== newId) {
+            // Account switched — reset stability clock
+            stableAccountSinceRef.current = 0
+            const key = `prewarm_switch_${newId}`
+            const storedAt = Number(sessionStorage.getItem(key) ?? "0")
+            if (!storedAt || Date.now() - storedAt >= SWITCH_TTL_MS) {
+              const res = await fetch("/api/prewarm", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ ig_account_id: newId, mode: "full", reason: "account_switch" }),
+              }).catch(() => null)
+              if (res?.ok) {
+                try { sessionStorage.setItem(key, String(Date.now())) } catch { /* ignore */ }
+              }
+            }
+          } else if (prev === newId && stableAccountSinceRef.current === 0) {
+            // First stable confirmation — start stability clock
+            stableAccountSinceRef.current = Date.now()
+          }
+          lastSeenAccountIdRef.current = newId
+        }
+      } catch { /* best-effort */ }
+
+      if (!cancelled) {
+        timerId = setTimeout(() => { void tick() }, POLL_MS)
+      }
+    }
+
+    function onVisibility() {
+      // Tab became visible — run a tick immediately (it will reschedule itself)
+      if (!document.hidden && !cancelled) void tick()
+    }
+
+    document.addEventListener("visibilitychange", onVisibility)
+    // Seed lastSeenAccountIdRef on first tick without triggering a switch
+    timerId = setTimeout(() => { void tick() }, POLL_MS)
+
+    return () => {
+      cancelled = true
+      if (timerId !== null) clearTimeout(timerId)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [isConnectedInstagram])
+
+  // -------------------------------------------------------------------------
+  // B3: New-posts signature trigger (thumbs-only prewarm)
+  // Fires when post count or latest post id changes (not on first render).
+  // Uses sessionStorage key per account+sig with 10-min TTL.
+  // -------------------------------------------------------------------------
+  const postsSig = `${effectiveRecentLen}-${topPostsFirstId}`
+  const prevPostsSigRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (effectiveRecentLen === 0) return
+    const prev = prevPostsSigRef.current
+    prevPostsSigRef.current = postsSig
+    if (prev === null) return // first render — skip
+    if (prev === postsSig) return // no change
+    void (async () => {
+      try {
+        const acctRes = await fetch("/api/ig/active-account", { cache: "no-store" }).catch(() => null)
+        const acctJson = acctRes?.ok ? await acctRes.json().catch(() => null) : null
+        const igAccountId: string | null =
+          acctJson && typeof acctJson.ig_account_id === "string" ? acctJson.ig_account_id : null
+        if (!igAccountId) return
+        const key = `prewarm_newposts_${igAccountId}_${postsSig}`
+        const storedAt = Number(sessionStorage.getItem(key) ?? "0")
+        const NEWPOSTS_TTL_MS = 10 * 60 * 1000
+        if (storedAt && Date.now() - storedAt < NEWPOSTS_TTL_MS) return
+        const res = await fetch("/api/prewarm", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ig_account_id: igAccountId, mode: "thumbs", reason: "new_posts" }),
+        }).catch(() => null)
+        if (res?.ok) {
+          try { sessionStorage.setItem(key, String(Date.now())) } catch { /* ignore */ }
+        }
+      } catch { /* best-effort */ }
+    })()
+  }, [postsSig, effectiveRecentLen, topPostsFirstId])
 
   const refetchTick = useRefetchTick({ enabled: isConnectedInstagram, throttleMs: 900 })
 
