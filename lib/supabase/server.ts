@@ -2,19 +2,25 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
-const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim()
-const anonKey = (
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  ""
-).trim()
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || ""
-
-if (!url || !anonKey) {
-  throw new Error(
-    "Missing Supabase env: SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL and SUPABASE_ANON_KEY / NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  )
+function getUrl() {
+  return (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim()
 }
+
+function getAnonKey() {
+  return (
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    ""
+  ).trim()
+}
+
+function getServiceRoleKey() {
+  return (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim()
+}
+
+const _url = getUrl()
+const _anonKey = getAnonKey()
+const _serviceRoleKey = getServiceRoleKey()
 
 /**
  * Legacy singleton Supabase server client.
@@ -22,13 +28,15 @@ if (!url || !anonKey) {
  * - createPublicClient() for public reads
  * - createServiceClient() for admin operations
  * - createAuthedClient() for user-session operations
- * 
+ *
  * This export uses service role key if available, otherwise anon key.
  * Kept for backward compatibility with existing routes.
  */
-export const supabaseServer = serviceRoleKey
-  ? createSupabaseClient(url, serviceRoleKey, { auth: { persistSession: false } })
-  : createSupabaseClient(url, anonKey, { auth: { persistSession: false } })
+export const supabaseServer = (_url && _anonKey)
+  ? (_serviceRoleKey
+      ? createSupabaseClient(_url, _serviceRoleKey, { auth: { persistSession: false } })
+      : createSupabaseClient(_url, _anonKey, { auth: { persistSession: false } }))
+  : (null as unknown as ReturnType<typeof createSupabaseClient>)
 
 /**
  * Public, no-session Supabase client using anon key.
@@ -41,7 +49,7 @@ export const supabaseServer = serviceRoleKey
  * - Any data with RLS policy: to anon, authenticated using (true)
  */
 export function createPublicClient() {
-  return createSupabaseClient(url, anonKey, {
+  return createSupabaseClient(getUrl(), getAnonKey(), {
     auth: { persistSession: false },
   })
 }
@@ -59,13 +67,14 @@ export function createPublicClient() {
  * @throws Error if SUPABASE_SERVICE_ROLE_KEY is not set
  */
 export function createServiceClient() {
+  const serviceRoleKey = getServiceRoleKey()
   if (!serviceRoleKey) {
     throw new Error(
       "SUPABASE_SERVICE_ROLE_KEY is required for service client. " +
       "This client bypasses RLS and should only be used in secure server contexts."
     )
   }
-  return createSupabaseClient(url, serviceRoleKey, {
+  return createSupabaseClient(getUrl(), serviceRoleKey, {
     auth: { persistSession: false },
   })
 }
@@ -83,7 +92,7 @@ export function createServiceClient() {
  */
 export function createClient() {
   // Prefer service role if available (backward compat for existing server routes)
-  if (serviceRoleKey) {
+  if (getServiceRoleKey()) {
     return createServiceClient()
   }
   // Fallback to public client
@@ -105,7 +114,7 @@ export function createClient() {
 export async function createAuthedClient() {
   const cookieStore = await cookies()
   
-  return createServerClient(url, anonKey, {
+  return createServerClient(getUrl(), getAnonKey(), {
     cookies: {
       getAll() {
         return cookieStore.getAll()

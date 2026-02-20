@@ -5,13 +5,6 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createClient } from "@supabase/supabase-js"
 
-// Service Role client (REQUIRED for Storage write)
-const supabaseService = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-)
-
 const BUCKET = "creator-card"
 
 export async function POST(req: Request) {
@@ -67,6 +60,16 @@ export async function POST(req: Request) {
   const storagePath = `creator-card/portfolio/${igUserId}/${filename}` 
 
   const buffer = Buffer.from(await file.arrayBuffer())
+
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim()
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()
+  if (!supabaseUrl || !serviceKey) {
+    return NextResponse.json(
+      { ok: false, error: "missing_env:SUPABASE_SERVICE_ROLE_KEY", build: BUILD },
+      { status: 500 }
+    )
+  }
+  const supabaseService = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
 
   console.log("[upload] using bucket:", BUCKET)
   const { error } = await supabaseService.storage
