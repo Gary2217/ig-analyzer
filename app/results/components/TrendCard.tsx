@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState, useId } from "react"
 
 import { useI18n } from "../../../components/locale-provider"
 
@@ -30,30 +30,31 @@ const METRIC_OPTIONS: MetricOption[] = [
 ]
 
 const __trendCardCache = new Map<string, { at: number; value: TrendApiResponse }>()
+const __trendCardInflight = new Map<string, Promise<TrendApiResponse | null>>()
+const TREND_TTL_MS = 45_000
 
-function cacheKey(metric: TrendMetric, days: number) {
-  return `${metric}:${days}`
+function cacheKey(metric: TrendMetric, days: number, scope: string) {
+  return `trend|${scope}|${metric}|${days}`
 }
 
-function readCache(metric: TrendMetric, days: number): TrendApiResponse | null {
-  const k = cacheKey(metric, days)
+function readCache(metric: TrendMetric, days: number, scope: string): TrendApiResponse | null {
+  const k = cacheKey(metric, days, scope)
   const e = __trendCardCache.get(k)
   if (!e) return null
-  // tiny client cache to avoid toggle refetch storms; keep it short
-  if (Date.now() - e.at > 20_000) {
+  if (Date.now() - e.at > TREND_TTL_MS) {
     __trendCardCache.delete(k)
     return null
   }
   return e.value
 }
 
-function writeCache(metric: TrendMetric, days: number, value: TrendApiResponse) {
-  const k = cacheKey(metric, days)
+function writeCache(metric: TrendMetric, days: number, scope: string, value: TrendApiResponse) {
+  const k = cacheKey(metric, days, scope)
   __trendCardCache.set(k, { at: Date.now(), value })
-  if (__trendCardCache.size > 12) {
+  if (__trendCardCache.size > 20) {
     const items = Array.from(__trendCardCache.entries())
     items.sort((a, b) => a[1].at - b[1].at)
-    const removeN = Math.max(1, __trendCardCache.size - 12)
+    const removeN = Math.max(1, __trendCardCache.size - 20)
     for (let i = 0; i < removeN; i++) {
       const key = items[i]?.[0]
       if (key) __trendCardCache.delete(key)
@@ -99,10 +100,14 @@ export default function TrendCard() {
   const [errorCode, setErrorCode] = useState<string>("")
   const [points, setPoints] = useState<TrendPoint[]>([])
 
-  const abortRef = useRef<AbortController | null>(null)
+  // Per-session stable id used as fallback scope when ig_account_id is not yet known.
+  const sessionScopeId = useId()
+  const scopeRef = useRef<string>(sessionScopeId)
+  const lastRunKeyRef = useRef<string>("")
 
-  const fetchTrend = useCallback(async (metric2: TrendMetric, days2: number) => {
-    const cached = readCache(metric2, days2)
+  const fetchTrend = useCallback(async (metric2: TrendMetric, days2: number, signal: AbortSignal) => {
+    const scope = scopeRef.current
+    const cached = readCache(metric2, days2, scope)
     if (cached) {
       const pts = Array.isArray(cached.points) ? cached.points : []
       setPoints(pts)
@@ -111,38 +116,65 @@ export default function TrendCard() {
       return
     }
 
-    if (abortRef.current) abortRef.current.abort()
-    const ac = new AbortController()
-    abortRef.current = ac
+    const k = cacheKey(metric2, days2, scope)
+    const existing = __trendCardInflight.get(k)
+    if (existing) {
+      const parsed = await existing
+      if (signal.aborted) return
+      const pts = Array.isArray(parsed?.points) ? (parsed!.points as TrendPoint[]) : []
+      setPoints(pts)
+      setStatus(pts.length ? "ready" : "empty")
+      setErrorCode("")
+      return
+    }
 
     setStatus("loading")
     setErrorCode("")
 
-    try {
-      const url = `/api/instagram/trend?metric=${encodeURIComponent(metric2)}&days=${encodeURIComponent(String(days2))}`
-      const res = await fetch(url, { method: "GET", cache: "no-store", signal: ac.signal })
-      const body = await res.json().catch(() => null)
+    const p: Promise<TrendApiResponse | null> = (async () => {
+      try {
+        const url = `/api/instagram/trend?metric=${encodeURIComponent(metric2)}&days=${encodeURIComponent(String(days2))}`
+        const res = await fetch(url, { method: "GET", cache: "no-store", signal })
+        const body = await res.json().catch(() => null)
 
-      if (!res.ok) {
-        const code = String(body?.error || "ERROR")
+        if (!res.ok) return null
+
+        const parsed: TrendApiResponse | null = body && typeof body === "object" ? (body as any) : null
+        if (parsed && parsed.metric && typeof parsed.days === "number") {
+          const prevScope = scopeRef.current
+          const nextScope = parsed.ig_account_id ? String(parsed.ig_account_id) : prevScope
+
+          // write BOTH keys so switching scope doesn't cause a cache miss refetch
+          writeCache(metric2, days2, prevScope, parsed)
+          writeCache(metric2, days2, nextScope, parsed)
+
+          scopeRef.current = nextScope
+        }
+        return parsed
+      } finally {
+        __trendCardInflight.delete(k)
+      }
+    })()
+
+    __trendCardInflight.set(k, p)
+
+    try {
+      const parsed = await p
+      if (signal.aborted) return
+
+      if (!parsed) {
         setStatus("error")
-        setErrorCode(code)
+        setErrorCode("ERROR")
         setPoints([])
         return
       }
 
-      const parsed: TrendApiResponse | null = body && typeof body === "object" ? (body as any) : null
-      const pts = Array.isArray(parsed?.points) ? (parsed!.points as TrendPoint[]) : []
-
-      if (parsed && parsed.metric && typeof parsed.days === "number") {
-        writeCache(metric2, days2, parsed)
-      }
-
+      const pts = Array.isArray(parsed.points) ? (parsed.points as TrendPoint[]) : []
       setPoints(pts)
       setStatus(pts.length ? "ready" : "empty")
       setErrorCode("")
     } catch (e: any) {
-      if (e?.name === "AbortError") return
+      if (e?.name === "AbortError" || signal.aborted) return
       setStatus("error")
       setErrorCode("NETWORK_ERROR")
       setPoints([])
@@ -150,9 +182,14 @@ export default function TrendCard() {
   }, [])
 
   useEffect(() => {
-    fetchTrend(metric, days)
+    const runKey = `${metric}|${days}`
+    if (lastRunKeyRef.current === runKey) return
+    lastRunKeyRef.current = runKey
+
+    const controller = new AbortController()
+    fetchTrend(metric, days, controller.signal)
     return () => {
-      if (abortRef.current) abortRef.current.abort()
+      controller.abort()
     }
   }, [metric, days, fetchTrend])
 

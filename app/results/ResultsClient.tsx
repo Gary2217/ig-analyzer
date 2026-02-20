@@ -5540,6 +5540,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             <div className="flex flex-col items-stretch gap-2 w-full sm:w-auto sm:min-w-[240px] justify-end">
               <Link
                 href={`/${activeLocale}/pricing`}
+                prefetch={false}
                 className="w-full inline-flex items-center justify-center px-4 py-2 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 shadow-[0_6px_18px_rgba(168,85,247,0.28)] hover:brightness-110 active:translate-y-[1px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60"
               >
                 <span className="inline-flex items-center gap-2">
@@ -5552,6 +5553,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
               <Link
                 href={`/${activeLocale}/post-analysis`}
+                prefetch={false}
                 className="w-full inline-flex items-center justify-center px-4 py-2 rounded-full text-xs font-semibold text-white bg-gradient-to-r from-emerald-400 to-sky-500 shadow-[0_10px_24px_rgba(16,185,129,0.22)] hover:brightness-110 active:translate-y-[1px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60"
               >
                 {t("results.actions.analyzePost")}
