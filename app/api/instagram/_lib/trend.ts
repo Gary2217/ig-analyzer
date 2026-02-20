@@ -83,12 +83,12 @@ export async function fetchTrendPoints(
 
   if (metric === "followers") {
     const r = await supabaseServer
-      .from("ig_daily_followers")
-      .select("day,followers_count")
-      .eq("ig_account_id", ig_account_id as any)
-      .gte("day", rangeStart)
-      .lte("day", rangeEnd)
-      .order("day", { ascending: true })
+  .from("account_daily_snapshot")
+  .select(`day,${col}`)
+  .eq("user_id_text", ig_account_id as any)
+  .gte("day", rangeStart)
+  .lte("day", rangeEnd)
+  .order("day", { ascending: true })
 
     if (r.error) {
       return { ok: false, error: "QUERY_FAILED", message: (r.error as any)?.message ?? String(r.error) }
