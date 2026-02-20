@@ -45,6 +45,48 @@ const __resultsInflight = new Map<string, Promise<any>>()
 const __resultsCache = new Map<string, DedupCacheEntry>()
 const __resultsReqCount = new Map<string, number>()
 
+type SummaryCacheEntry = { ts: number; etag: string | null; data: any }
+const __summaryInflight = new Map<string, Promise<any>>()
+const __summaryCache = new Map<string, SummaryCacheEntry>()
+const SUMMARY_TTL_MS = 45_000
+
+async function fetchSummaryDedup(scopeKey: string, signal?: AbortSignal): Promise<any> {
+  const cached = __summaryCache.get(scopeKey)
+  if (cached && Date.now() - cached.ts < SUMMARY_TTL_MS) return cached.data
+
+  const existing = __summaryInflight.get(scopeKey)
+  if (existing) return existing
+
+  const p = (async () => {
+    try {
+      const headers: Record<string, string> = { accept: "application/json" }
+      const c = __summaryCache.get(scopeKey)
+      if (c?.etag) headers["if-none-match"] = c.etag
+      const res = await fetch("/api/dashboard/summary", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+        headers,
+        signal,
+      })
+      if (res.status === 304 && c) return c.data
+      const ct = (res.headers.get("content-type") ?? "").toLowerCase()
+      if (!ct.includes("application/json")) return null
+      const json = await res.json().catch(() => null)
+      if (res.ok && json) {
+        __summaryCache.set(scopeKey, { ts: Date.now(), etag: res.headers.get("etag"), data: json })
+      }
+      if (!res.ok) throw { status: res.status, body: json }
+      return json
+    } finally {
+      __summaryInflight.delete(scopeKey)
+    }
+  })()
+
+  __summaryInflight.set(scopeKey, p)
+  return p
+}
+
 function bumpReqCount(key: string) {
   const next = (__resultsReqCount.get(key) ?? 0) + 1
   __resultsReqCount.set(key, next)
@@ -4084,53 +4126,25 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   }, [computedMetrics, finiteNumOrNull, igProfile, isConnectedInstagram, resolvedCreatorId])
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
+    const scopeKey = `summary|${userScopeKeyRef.current || "session"}`
     ;(async () => {
       try {
-        const url = new URL("/api/dashboard/summary", window.location.origin)
-
-        const headers: Record<string, string> = { accept: "application/json" }
-        if (dashSummaryEtag) headers["if-none-match"] = dashSummaryEtag
-
-        const res = await fetch(url.toString(), {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-          headers,
-        })
-
-        if (cancelled) return
-
-        if (res.status === 304) {
-          setDashSummaryLoading(false)
-          return
-        }
-
-        const ct = (res.headers.get("content-type") ?? "").toLowerCase()
-        if (!ct.includes("application/json")) {
-          setDashSummaryLoading(false)
-          return
-        }
-
-        const etag = res.headers.get("etag")
-        if (etag) setDashSummaryEtag(etag)
-
-        const json = await res.json().catch(() => null)
-        if (cancelled) return
-        if (res.ok && isRecord(json) && json.ok) {
-          setDashSummary(json)
-        }
+        const json = await fetchSummaryDedup(scopeKey, controller.signal)
+        if (controller.signal.aborted) return
+        const cached = __summaryCache.get(scopeKey)
+        if (cached?.etag) setDashSummaryEtag(cached.etag)
+        if (isRecord(json) && json.ok) setDashSummary(json)
       } catch (e) {
-        if (cancelled) return
+        if (controller.signal.aborted) return
         if (isAbortError(e)) return
       } finally {
-        if (cancelled) return
-        setDashSummaryLoading(false)
+        if (!controller.signal.aborted) setDashSummaryLoading(false)
       }
     })()
 
     return () => {
-      cancelled = true
+      controller.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
