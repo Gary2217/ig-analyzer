@@ -359,6 +359,20 @@ async function writeFollowersBestEffortCached(params: {
             }
 
             await params.authed.from("ig_daily_followers").upsert(payload, { onConflict })
+
+            // Also upsert keyed by ig_user_id,day so the ig_user_id-scoped read always finds today's row
+            const today = new Date().toISOString().slice(0, 10)
+            await params.authed
+              .from("ig_daily_followers")
+              .upsert(
+                {
+                  ig_user_id: String(params.igId),
+                  day: today,
+                  followers_count: Math.floor(followersCount),
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: "ig_user_id,day" }
+              )
           } catch (e: any) {
             if (__DEBUG_DAILY_SNAPSHOT__) {
               console.log("[daily-snapshot] followers_upsert_failed", { message: e?.message ?? String(e) })
