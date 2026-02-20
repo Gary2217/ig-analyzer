@@ -1,7 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useOptionalInstagramConnection } from "@/app/components/InstagramConnectionProvider"
+
+type DedupEntry = { ts: number; data: any }
+const __ccPreviewInflight = new Map<string, Promise<any>>()
+const __ccPreviewCache = new Map<string, DedupEntry>()
 
 type IgProfile = {
   followers_count?: number
@@ -226,6 +230,15 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
   } | null>(null)
 
   const igConn = useOptionalInstagramConnection()
+  const sessionScopeRef = useRef<string>(
+    (() => {
+      try {
+        return `s_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+      } catch {
+        return "session"
+      }
+    })(),
+  )
   const igMeOk = (() => {
     const ctxMe = igConn?.igMe as unknown
     const ctxMeObj = isRecord(ctxMe) ? (ctxMe as Record<string, unknown>) : null
@@ -236,6 +249,22 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
     if (!enabled) return
     if (creatorCard) return
 
+    // tenant-safe best-effort scope
+    const scope = (() => {
+      try {
+        const ctxMe = igConn?.igMe as unknown
+        const ctxMeObj = isRecord(ctxMe) ? (ctxMe as Record<string, unknown>) : null
+        const profile = ctxMeObj && isRecord((ctxMeObj as any).profile) ? ((ctxMeObj as any).profile as any) : ctxMeObj
+        const igId = profile && (profile as any).id != null ? String((profile as any).id).trim() : ""
+        const username = profile && typeof (profile as any).username === "string" ? String((profile as any).username).trim() : ""
+        return igId || username || sessionScopeRef.current
+      } catch {
+        return sessionScopeRef.current
+      }
+    })()
+
+    const reqKey = `creator-card-preview|${scope}`
+
     const controller = new AbortController()
     let cancelled = false
 
@@ -245,55 +274,106 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
 
         // Prefer aggregated preview endpoint (single request) for speed + tenant safety.
         // Fallback to legacy multi-fetch if needed.
+        let previewApplied = false
         try {
-          const res = await fetch("/api/creator-card/preview", {
-            method: "GET",
-            cache: "no-store",
-            credentials: "include",
-            signal: controller.signal,
-            headers: { accept: "application/json" },
-          })
-          if (!cancelled && res.ok) {
-            const json = await res.json().catch(() => null)
+          const TTL_MS = 45_000
+          const cached = __ccPreviewCache.get(reqKey)
+
+          const applyPreview = (json: unknown) => {
             const obj = isRecord(json) ? (json as Record<string, unknown>) : null
-            if (obj?.ok === true) {
-              const normalized = normalizeCreatorCardPayload(obj)
-              const statsObj = isRecord(obj.stats) ? (obj.stats as Record<string, unknown>) : null
+            if (obj?.ok !== true) return false
 
-              const pct = finiteNumOrNull(statsObj?.engagementRatePct) ?? finiteNumOrNull(statsObj?.engagement_rate_pct)
-              const followersFromStats = finiteNumOrNull(statsObj?.followers)
-              const followingFromStats = finiteNumOrNull(statsObj?.following)
-              const postsFromStats = finiteNumOrNull(statsObj?.posts)
-              const avgLikesFromStats = finiteNumOrNull(statsObj?.avgLikes) ?? finiteNumOrNull(statsObj?.avg_likes)
-              const avgCommentsFromStats = finiteNumOrNull(statsObj?.avgComments) ?? finiteNumOrNull(statsObj?.avg_comments)
+            const normalized = normalizeCreatorCardPayload(obj)
+            const statsObj = isRecord(obj.stats) ? (obj.stats as Record<string, unknown>) : null
 
-              if (!cancelled) {
-                setCreatorCard(normalized)
-                setEngagementRatePct(pct)
+            const pct = finiteNumOrNull(statsObj?.engagementRatePct) ?? finiteNumOrNull(statsObj?.engagement_rate_pct)
+            const followersFromStats = finiteNumOrNull(statsObj?.followers)
+            const followingFromStats = finiteNumOrNull(statsObj?.following)
+            const postsFromStats = finiteNumOrNull(statsObj?.posts)
+            const avgLikesFromStats = finiteNumOrNull(statsObj?.avgLikes) ?? finiteNumOrNull(statsObj?.avg_likes)
+            const avgCommentsFromStats = finiteNumOrNull(statsObj?.avgComments) ?? finiteNumOrNull(statsObj?.avg_comments)
 
-                setPreviewStats(
-                  statsObj
-                    ? {
-                        followers: followersFromStats ?? undefined,
-                        following: followingFromStats ?? undefined,
-                        posts: postsFromStats ?? undefined,
-                        avgLikes: avgLikesFromStats ?? undefined,
-                        avgComments: avgCommentsFromStats ?? undefined,
-                        engagementRatePct: pct ?? undefined,
-                      }
-                    : null,
-                )
+            if (!cancelled) {
+              setCreatorCard(normalized)
+              setEngagementRatePct(pct)
 
-                // Best-effort: allow stats to fill followers if IG profile isn't available yet.
-                // (Keep current return shape: followers/following/posts still primarily from igProfile.)
-                void followersFromStats
-              }
+              setPreviewStats(
+                statsObj
+                  ? {
+                      followers: followersFromStats ?? undefined,
+                      following: followingFromStats ?? undefined,
+                      posts: postsFromStats ?? undefined,
+                      avgLikes: avgLikesFromStats ?? undefined,
+                      avgComments: avgCommentsFromStats ?? undefined,
+                      engagementRatePct: pct ?? undefined,
+                    }
+                  : null,
+              )
 
+              void followersFromStats
+            }
+
+            return true
+          }
+
+          if (cached && Date.now() - cached.ts < TTL_MS) {
+            const ok = applyPreview(cached.data)
+            if (ok) {
+              previewApplied = true
               return
             }
+            throw new Error("preview_unusable")
+          } else {
+            const inflight = __ccPreviewInflight.get(reqKey)
+            if (inflight) {
+              const out: any = await inflight
+              if (!cancelled && out?.ok) {
+                const ok = applyPreview(out.json)
+                if (ok) {
+                  previewApplied = true
+                  return
+                }
+              }
+              throw new Error("preview_unusable")
+            } else {
+              const p = (async () => {
+                const res = await fetch("/api/creator-card/preview", {
+                  method: "GET",
+                  cache: "no-store",
+                  credentials: "include",
+                  signal: controller.signal,
+                  headers: { accept: "application/json" },
+                })
+                const json = await res.json().catch(() => null)
+                if (res.ok) {
+                  __ccPreviewCache.set(reqKey, { ts: Date.now(), data: json })
+                }
+                return { ok: res.ok, json }
+              })()
+
+              __ccPreviewInflight.set(reqKey, p)
+              try {
+                const out: any = await p
+                if (!cancelled && out?.ok) {
+                  const ok = applyPreview(out.json)
+                  if (ok) {
+                    previewApplied = true
+                    return
+                  }
+                }
+                throw new Error("preview_unusable")
+              } finally {
+                __ccPreviewInflight.delete(reqKey)
+              }
+            }
           }
-        } catch {
-          // fall back below
+        } catch (previewErr) {
+          if ((previewErr as any)?.name === "AbortError") throw previewErr
+          if (!previewApplied) {
+            // fall back to legacy multi-fetch below
+          } else {
+            throw previewErr
+          }
         }
 
         // First fetch creator card to get creatorId
@@ -394,17 +474,13 @@ export function useCreatorCardPreviewData({ enabled }: { enabled: boolean }) {
       }
     }
 
-    fetchData()
+    void fetchData()
 
     return () => {
       cancelled = true
       controller.abort()
     }
-  }, [creatorCard, enabled, igMeOk])
-
-  const followers = igProfile?.followers_count ?? null
-  const following = igProfile?.follows_count ?? null
-  const posts = igProfile?.media_count ?? null
+  }, [enabled, creatorCard, igConn?.igMe])
 
   return {
     isLoading,

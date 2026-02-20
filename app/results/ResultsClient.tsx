@@ -38,6 +38,58 @@ import { useCreatorCardPreviewData } from "../components/creator-card/useCreator
 let __resultsMediaFetchedOnce = false
 let __resultsMeFetchedOnce = false
 
+const __DEBUG_RESULTS_REQUESTS__ = process.env.NEXT_PUBLIC_DEBUG_RESULTS_REQUESTS === "1"
+
+type DedupCacheEntry = { ts: number; data: any }
+const __resultsInflight = new Map<string, Promise<any>>()
+const __resultsCache = new Map<string, DedupCacheEntry>()
+const __resultsReqCount = new Map<string, number>()
+
+function bumpReqCount(key: string) {
+  const next = (__resultsReqCount.get(key) ?? 0) + 1
+  __resultsReqCount.set(key, next)
+  if (__DEBUG_RESULTS_REQUESTS__ && process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.debug("[results][req]", { key, count: next, ts: new Date().toISOString() })
+  }
+}
+
+async function fetchJsonDedup(params: {
+  key: string
+  url: string
+  init?: RequestInit
+  ttlMs?: number
+  signal?: AbortSignal
+}) {
+  const { key, url, init, ttlMs = 45_000, signal } = params
+
+  const cached = __resultsCache.get(key)
+  if (cached && Date.now() - cached.ts < ttlMs) {
+    return cached.data
+  }
+
+  const existing = __resultsInflight.get(key)
+  if (existing) return existing
+
+  const p = (async () => {
+    bumpReqCount(key)
+    const res = await fetch(url, { ...(init ?? {}), signal })
+    const json = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw { status: res.status, body: json }
+    }
+    __resultsCache.set(key, { ts: Date.now(), data: json })
+    return json
+  })()
+
+  __resultsInflight.set(key, p)
+  p.finally(() => {
+    __resultsInflight.delete(key)
+  })
+
+  return p
+}
+
 // Debug helper for Creator Card Preview refresh flow (dev-only)
 const debugCreatorCard = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") {
@@ -495,7 +547,11 @@ function TopPostThumb({ src, alt, mediaType }: { src?: string; alt: string; medi
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={handleError}
+      onError={(e) => {
+        // prevent infinite loop
+        if (broken) return
+        handleError()
+      }}
     />
   )
 }
@@ -2714,30 +2770,25 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       return
     }
 
-    const nextKey = `${String(forceReloadTick)}:${String(mediaRevalidateSeq)}`
-    if (lastMediaFetchTickRef.current === nextKey) return
-    lastMediaFetchTickRef.current = nextKey
-
     let cancelled = false
+    const controller = new AbortController()
     mediaReqIdRef.current += 1
     const reqId = mediaReqIdRef.current
 
+    const scope = userScopeKeyRef.current || "no-ssot"
+    const key = `ig-media|${scope}`
+    const runKey = `${key}|${String(forceReloadTick)}|${String(mediaRevalidateSeq)}`
+    if (lastMediaFetchTickRef.current === runKey) return
+    lastMediaFetchTickRef.current = runKey
+
     dlog("[media] fetch (from ConnectedGate)")
-    fetch("/api/instagram/media", { cache: "no-store", credentials: "include" })
-      .then(async (res) => {
-        let body: unknown = null
-        try {
-          body = await res.json()
-        } catch {
-          body = null
-        }
-
-        if (!res.ok) {
-          throw { status: res.status, body }
-        }
-
-        return body
-      })
+    fetchJsonDedup({
+      key,
+      url: "/api/instagram/media",
+      ttlMs: 45_000,
+      init: { cache: "no-store", credentials: "include" },
+      signal: controller.signal,
+    })
       .then((json) => {
         if (cancelled) return
         if (reqId !== mediaReqIdRef.current) return
@@ -2851,6 +2902,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
     return () => {
       cancelled = true
+      controller.abort()
       // Do not reset hasFetchedMediaRef here; cleanup can run during dev re-renders.
     }
   }, [forceReloadTick, mediaLen, mediaRevalidateSeq])
@@ -3589,18 +3641,23 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     setIsCreatorCardLoading(true)
     try {
       const timestamp = refreshKey || Date.now().toString()
-      const res = await fetch(`/api/creator-card/me?t=${timestamp}`, {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-        headers: {
-          "cache-control": "no-cache",
-          pragma: "no-cache",
+      const url = `/api/creator-card/me?t=${timestamp}`
+      const scope = userScopeKeyRef.current || "no-ssot"
+      const key = `creator-card-me|${scope}`
+      const json = await fetchJsonDedup({
+        key,
+        url,
+        ttlMs: 30_000,
+        init: {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+          headers: {
+            "cache-control": "no-cache",
+            pragma: "no-cache",
+          },
         },
       })
-
-      if (!res.ok) throw new Error("failed to load creator card")
-      const json = await res.json()
 
       // Support multiple response shapes
       const card = json?.card ?? json?.data?.card ?? json?.creatorCard ?? null
@@ -5502,7 +5559,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             </div>
           </div>
 
-          <div className="max-w-6xl mx-auto px-4 md:px-6 pb-4">
+          <div className="max-w-6xl mx-auto px-4 md:px-6 pb-10">
             <div className="mb-4">
               <h2 className="text-sm font-medium text-muted-foreground">
                 {t("results.preview.heading")}
@@ -6359,7 +6416,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
 
             <div id="kpis-section" className="mt-4 scroll-mt-40">
-              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm sm:hidden overflow-hidden">
+              <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm sm:hidden">
                 <CardHeader
                   className={
                     isMobile
