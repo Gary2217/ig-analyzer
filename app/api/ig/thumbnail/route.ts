@@ -4,6 +4,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { __thumbCache, THUMB_TTL_MS, THUMB_CACHE_MAX, THUMB_BUCKET, THUMB_TABLE, type ThumbCacheEntry } from "./_lib/cache"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 // ---------------------------------------------------------------------------
 // Supabase admin client (service role, server-only, lazy init)
@@ -283,37 +285,37 @@ function logThumbDebugOnce(enabled: boolean, key: string, payload: Record<string
   console.debug("[ig-thumb:debug]", payload)
 }
 
-function isAllowedImageUrl(url: string): boolean {
+function isAllowedImageUrl(url: string): { allowed: boolean; host: string; reason: string } {
   try {
     const parsed = new URL(url)
-    
-    // Must be HTTPS
-    if (parsed.protocol !== "https:") {
-      return false
-    }
-    
-    const hostname = parsed.hostname.toLowerCase()
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "")
 
-    if (isPrivateOrLocalHostname(hostname)) return false
-    
-    // Allow CDN domains (cdninstagram.com, fbcdn.net and subdomains)
-    const isCDN = ALLOWED_CDN_HOSTNAMES.some(allowed => 
-      hostname === allowed || hostname.endsWith(`.${allowed}`)
-    )
-    
-    if (isCDN) {
-      return true
+    // Must be http or https
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return { allowed: false, host: hostname, reason: "bad_protocol" }
     }
-    
+
+    if (isPrivateOrLocalHostname(hostname)) {
+      return { allowed: false, host: hostname, reason: "private_host" }
+    }
+
+    // Allow CDN domains (cdninstagram.com, fbcdn.net and subdomains)
+    const isCDN = ALLOWED_CDN_HOSTNAMES.some(
+      (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`)
+    )
+    if (isCDN) {
+      return { allowed: true, host: hostname, reason: "cdn" }
+    }
+
     // Allow instagram.com domain variants ONLY for /media/ paths
     if (isInstagramHostname(hostname)) {
-      const pathname = parsed.pathname
-      return INSTAGRAM_MEDIA_PATH_REGEX.test(pathname)
+      const ok = INSTAGRAM_MEDIA_PATH_REGEX.test(parsed.pathname)
+      return { allowed: ok, host: hostname, reason: ok ? "ig_media" : "ig_non_media_path" }
     }
-    
-    return false
+
+    return { allowed: false, host: hostname, reason: "not_allowlisted" }
   } catch {
-    return false
+    return { allowed: false, host: "", reason: "parse_error" }
   }
 }
 
@@ -359,13 +361,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate URL is from allowed Instagram/FB CDN
-    if (!isAllowedImageUrl(thumbnailUrl)) {
-      logThumbDebugOnce(debugThumbEnabled, `blocked:${String(initialUrlObj.hostname)}:${String(initialUrlObj.pathname)}`, {
+    const allowCheck = isAllowedImageUrl(thumbnailUrl)
+    if (!allowCheck.allowed) {
+      logThumbDebugOnce(debugThumbEnabled, `blocked:${allowCheck.host}:${allowCheck.reason}`, {
         kind: "blocked",
-        inputUrlHost: initialUrlObj.hostname,
-        inputUrlPath: initialUrlObj.pathname,
+        inputUrlHost: allowCheck.host,
+        reason: allowCheck.reason,
       })
-      return placeholderResponse({ "x-thumb-reason": "blocked" })
+      return placeholderResponse({
+        "x-thumb-reason": `blocked_${allowCheck.reason}`,
+        "x-thumb-host": allowCheck.host,
+        "x-thumb-allowed": "0",
+      })
     }
 
     const normalizedUrlKey = initialUrlObj.toString()
@@ -380,10 +387,12 @@ export async function GET(request: NextRequest) {
         status: 200,
         headers: {
           "content-type": cached.contentType,
-          "cache-control": "public, max-age=60, s-maxage=60",
+          "cache-control": "no-store",
           "x-thumb-cache": "HIT",
           "x-thumb-store": "L1",
           "x-thumb-attempts": "0",
+          "x-thumb-host": allowCheck.host,
+          "x-thumb-allowed": "1",
         },
       })
     }
@@ -406,10 +415,12 @@ export async function GET(request: NextRequest) {
             status: 200,
             headers: {
               "content-type": stored.contentType,
-              "cache-control": "public, max-age=60, s-maxage=60",
+              "cache-control": "no-store",
               "x-thumb-cache": "MISS",
               "x-thumb-store": "HIT",
               "x-thumb-attempts": "0",
+              "x-thumb-host": allowCheck.host,
+              "x-thumb-allowed": "1",
             },
           })
         }
@@ -495,11 +506,13 @@ export async function GET(request: NextRequest) {
 
         const respHeaders: Record<string, string> = {
           "content-type": contentType,
-          "cache-control": "public, max-age=60, s-maxage=60",
+          "cache-control": "no-store",
           "x-thumb-cache": "MISS",
           "x-thumb-store": storeWriteFailed ? "MISS_WRITE_FAILED" : "MISS_WRITE",
           "x-thumb-store-write": storeWriteFailed ? "FAILED" : "OK",
           "x-thumb-attempts": String(attempts),
+          "x-thumb-host": allowCheck.host,
+          "x-thumb-allowed": "1",
         }
         const contentLength = imageResponse.headers.get("content-length")
         if (contentLength) respHeaders["content-length"] = contentLength
