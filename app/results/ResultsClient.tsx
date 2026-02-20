@@ -1310,6 +1310,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const rangeOverlayErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rangeSwitchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const userScopeKeyRef = useRef<string>("session")
+  const summaryScopeKeyRef = useRef<string>("")
   const prefetchCleanupRef = useRef<(() => void) | null>(null)
   const isMountedRef = useRef(true)
   
@@ -4127,7 +4128,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
   useEffect(() => {
     const controller = new AbortController()
-    const scopeKey = `summary|${userScopeKeyRef.current || "session"}`
+    if (!summaryScopeKeyRef.current) {
+      summaryScopeKeyRef.current = userScopeKeyRef.current || "session"
+    }
+    const scopeKey = `summary|${summaryScopeKeyRef.current}`
     ;(async () => {
       try {
         const json = await fetchSummaryDedup(scopeKey, controller.signal)
