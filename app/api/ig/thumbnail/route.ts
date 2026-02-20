@@ -87,26 +87,24 @@ async function writeStoreCache(params: {
   body: ArrayBuffer
   upstreamStatus: number
   ttlDays?: number
-}): Promise<void> {
+}): Promise<{ storageError?: string; dbError?: string }> {
   const sb = getSupabaseAdmin()
-  if (!sb) return
+  if (!sb) return { storageError: "no_client" }
   const { hash, originalUrl, path, contentType, body, upstreamStatus, ttlDays = STORE_TTL_DAYS } = params
   try {
     const { error: upErr } = await sb.storage
       .from(THUMB_BUCKET)
       .upload(path, body, { contentType, upsert: true })
     if (upErr) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[ig-thumb] storage upload failed", upErr.message)
-      }
-      return
+      console.warn("[ig-thumb] storage upload failed", upErr.message)
+      return { storageError: upErr.message }
     }
     const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString()
     const INLINE_MAX_BYTES = 512 * 1024
     const inlineBytes = body.byteLength <= INLINE_MAX_BYTES
       ? Buffer.from(body).toString("base64")
       : null
-    await sb.from(THUMB_TABLE).upsert({
+    const { error: dbErr } = await sb.from(THUMB_TABLE).upsert({
       url_hash: hash,
       original_url: originalUrl,
       storage_path: path,
@@ -117,8 +115,15 @@ async function writeStoreCache(params: {
       last_accessed_at: new Date().toISOString(),
       inline_bytes: inlineBytes,
     }, { onConflict: "url_hash" })
-  } catch {
-    // best-effort; never throw
+    if (dbErr) {
+      console.warn("[ig-thumb] db upsert failed", dbErr.message, dbErr.code)
+      return { dbError: dbErr.message }
+    }
+    return {}
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.warn("[ig-thumb] writeStoreCache threw", msg)
+    return { storageError: msg }
   }
 }
 
@@ -491,18 +496,11 @@ export async function GET(request: NextRequest) {
         const imageBuffer = await imageResponse.arrayBuffer()
         writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType, body: imageBuffer })
 
-        let storeWriteFailed = false
-        try {
-          await writeStoreCache({
-            hash, originalUrl: normalizedUrlKey, path: sPath,
-            contentType, body: imageBuffer, upstreamStatus: 200,
-          })
-        } catch {
-          storeWriteFailed = true
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[ig-thumb] store write failed for", stripUrlQueryAndHash(normalizedUrlKey))
-          }
-        }
+        const writeResult = await writeStoreCache({
+          hash, originalUrl: normalizedUrlKey, path: sPath,
+          contentType, body: imageBuffer, upstreamStatus: 200,
+        })
+        const storeWriteFailed = !!(writeResult.storageError || writeResult.dbError)
 
         const respHeaders: Record<string, string> = {
           "content-type": contentType,
@@ -514,6 +512,8 @@ export async function GET(request: NextRequest) {
           "x-thumb-host": allowCheck.host,
           "x-thumb-allowed": "1",
         }
+        if (writeResult.storageError) respHeaders["x-thumb-storage-error"] = writeResult.storageError.slice(0, 120)
+        if (writeResult.dbError) respHeaders["x-thumb-db-error"] = writeResult.dbError.slice(0, 120)
         const contentLength = imageResponse.headers.get("content-length")
         if (contentLength) respHeaders["content-length"] = contentLength
 
