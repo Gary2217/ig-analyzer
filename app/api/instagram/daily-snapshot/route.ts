@@ -301,11 +301,12 @@ async function writeFollowersBestEffortCached(params: {
   ssotId?: string | null
   authed?: any
   authedUserId?: string
+  diag?: Record<string, unknown>
 }) {
   // Best-effort: never throw, never fail the request.
   try {
-    // Require at minimum an authed client to write anything
-    if (!params.authed) return
+    // Require authed client and authenticated user_id (needed for RLS)
+    if (!params.authed || !params.authedUserId) return
 
     const existing = readCache(__dsFollowersCache, params.followersKey)
     if (existing) return
@@ -346,18 +347,23 @@ async function writeFollowersBestEffortCached(params: {
           }
 
           // Always upsert keyed by ig_user_id,day — runs regardless of ssotId
+          if (params.diag) params.diag.followers_write_attempted = true
           try {
             await params.authed
               .from("ig_daily_followers")
               .upsert(
                 {
+                  user_id: String(params.authedUserId),
                   ig_user_id: String(params.igId),
                   day: dayStr,
                   followers_count: Math.floor(followersCount),
+                  captured_at: capturedAt,
                 },
                 { onConflict: "ig_user_id,day" }
               )
+            if (params.diag) params.diag.followers_write_error = null
           } catch (e: any) {
+            if (params.diag) params.diag.followers_write_error = e?.message ?? String(e)
             if (__DEBUG_DAILY_SNAPSHOT__) {
               console.log("[daily-snapshot] followers_upsert_ig_user_id_failed", { message: e?.message ?? String(e) })
             }
@@ -1610,6 +1616,7 @@ async function handle(req: Request) {
       const followersIgId = resolvedIgId || ssotIgUserId || ""
 
       // Best-effort: write today's followers_count snapshot (do not affect API success)
+      const followersDiag: Record<string, unknown> = { followers_write_attempted: false, followers_write_error: null }
       if (followersIgId) {
         void writeFollowersBestEffortCached({
           followersKey,
@@ -1618,6 +1625,7 @@ async function handle(req: Request) {
           ssotId,
           authed,
           authedUserId: userId,
+          diag: followersDiag,
         })
       }
 
@@ -1768,6 +1776,7 @@ async function handle(req: Request) {
                 start: rangeStart,
                 end: rangeEnd,
                 followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                ...followersDiag,
               },
             },
           }
@@ -1859,6 +1868,7 @@ async function handle(req: Request) {
                   start: rangeStart,
                   end: rangeEnd,
                   followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                  ...followersDiag,
                 },
               },
             }
@@ -1946,6 +1956,7 @@ async function handle(req: Request) {
                 start: rangeStart,
                 end: rangeEnd,
                 followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                ...followersDiag,
               },
             },
           }
@@ -2089,6 +2100,7 @@ async function handle(req: Request) {
                 start: rangeStart,
                 end: rangeEnd,
                 followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                ...followersDiag,
               },
             },
           }
@@ -2212,6 +2224,7 @@ async function handle(req: Request) {
               start: rangeStart,
               end: rangeEnd,
               followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+              ...followersDiag,
             },
           },
         }
@@ -2263,6 +2276,7 @@ async function handle(req: Request) {
           start: rangeStart,
           end: rangeEnd,
           followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+          ...followersDiag,
         },
       },
     }
