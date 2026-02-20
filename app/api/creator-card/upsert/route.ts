@@ -522,6 +522,8 @@ export async function POST(req: Request) {
       ig_user_id: igUserIdStr,
       ig_username: igUsername,
       updated_at: new Date().toISOString(),
+      // Mark as owner card on first insert; never overwrite on update (handled below)
+      ...(!existingRow ? { is_owner_card: true } : {}),
     }
 
     const setIfPresent = (key: string, value: unknown, opts?: { allowNull?: boolean }) => {
@@ -690,6 +692,17 @@ export async function POST(req: Request) {
       const insertRes = await supabaseServer.from("creator_cards").insert(dbWrite).select("*").maybeSingle()
       if (!(insertRes as any).error) {
         data = (insertRes as any).data
+        // Best-effort: ensure only one owner card per user after insert
+        const insertedId = typeof (data as any)?.id === "string" ? String((data as any).id) : null
+        if (insertedId && (dbWrite as any).is_owner_card === true) {
+          void Promise.resolve(
+            supabaseServer
+              .from("creator_cards")
+              .update({ is_owner_card: false })
+              .eq("user_id", user.id)
+              .neq("id", insertedId)
+          ).catch(() => {})
+        }
       } else if (isUniqueViolation((insertRes as any).error)) {
         const after = await supabaseServer
           .from("creator_cards")
