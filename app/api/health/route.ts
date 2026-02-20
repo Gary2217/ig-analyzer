@@ -263,16 +263,37 @@ export async function GET(_req: NextRequest) {
       getPrewarmEvents(user.id, igAccountId),
     ])
 
+    const snapshot = snapRes.status === "fulfilled" ? snapRes.value : { error: "query_failed" }
+    const thumbnails = thumbRes.status === "fulfilled" ? thumbRes.value : { error: "query_failed" }
+    const cards = cardsRes.status === "fulfilled" ? cardsRes.value : { error: "query_failed" }
+    const prewarm = prewarmRes.status === "fulfilled" ? prewarmRes.value : { recent: [] }
+
+    // Derive warnings from health metrics
+    const warnings: string[] = []
+    if ("fresh_today" in snapshot && snapshot.fresh_today === false) {
+      warnings.push("snapshot_stale")
+    }
+    if ("refreshing_count" in thumbnails && typeof thumbnails.refreshing_count === "number" && thumbnails.refreshing_count > 0) {
+      warnings.push("thumbs_refreshing")
+    }
+    if ("due_next_refresh_count" in thumbnails && typeof thumbnails.due_next_refresh_count === "number" && thumbnails.due_next_refresh_count > 20) {
+      warnings.push("thumbs_due_many")
+    }
+    if ("cards_count" in cards && "owner_true_count" in cards && typeof cards.cards_count === "number" && cards.cards_count > 0 && cards.owner_true_count !== 1) {
+      warnings.push("owner_card_inconsistent")
+    }
+
     return NextResponse.json(
       {
         ok: true,
         now: nowIso(),
         took_ms: Date.now() - t0,
         active_ig_account_id: igAccountId,
-        snapshot: snapRes.status === "fulfilled" ? snapRes.value : { error: "query_failed" },
-        thumbnails: thumbRes.status === "fulfilled" ? thumbRes.value : { error: "query_failed" },
-        cards: cardsRes.status === "fulfilled" ? cardsRes.value : { error: "query_failed" },
-        prewarm: prewarmRes.status === "fulfilled" ? prewarmRes.value : { recent: [] },
+        warnings,
+        snapshot,
+        thumbnails,
+        cards,
+        prewarm,
       },
       { headers: { "Cache-Control": "no-store" } }
     )
