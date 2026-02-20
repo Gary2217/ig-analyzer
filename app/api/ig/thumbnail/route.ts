@@ -12,6 +12,8 @@ export const revalidate = 0
 // ---------------------------------------------------------------------------
 const STORE_TTL_DAYS = 7
 const STORE_TTL_FAIL_MINUTES = 30
+const SOFT_TTL_DAYS = 30
+const HARD_TTL_DAYS = 180
 
 let __supabaseAdmin: SupabaseClient | null = null
 let __supabaseAdminMissing = false
@@ -40,18 +42,33 @@ function storagePath(hash: string): string {
   return `${hash}.bin`
 }
 
-// Read from DB (inline bytes preferred) or Storage. Returns ArrayBuffer + contentType, or null on miss/error.
-async function readStoreCache(hash: string): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+type StoreCacheResult = {
+  body: ArrayBuffer
+  contentType: string
+  softExpiresAt: string | null
+  hardExpiresAt: string | null
+  refreshing: boolean
+  refreshFailures: number
+  nextRefreshAt: string | null
+}
+
+// Read from DB (inline bytes preferred) or Storage. Returns bytes + SWR metadata, or null on miss/error.
+// Does NOT filter by expires_at — caller decides freshness via soft/hard TTL.
+async function readStoreCache(hash: string): Promise<StoreCacheResult | null> {
   const sb = getSupabaseAdmin()
   if (!sb) return null
   try {
     const { data: row, error: dbErr } = await sb
       .from(THUMB_TABLE)
-      .select("storage_path, content_type, expires_at, inline_bytes")
+      .select("storage_path, content_type, inline_bytes, soft_expires_at, hard_expires_at, refreshing, refresh_failures, next_refresh_at")
       .eq("url_hash", hash)
-      .gt("expires_at", new Date().toISOString())
       .maybeSingle()
     if (dbErr || !row) return null
+
+    // Hard-expired: treat as miss
+    const now = Date.now()
+    const hardExp = row.hard_expires_at ? new Date(row.hard_expires_at as string).getTime() : 0
+    if (hardExp && now >= hardExp) return null
 
     // Fire-and-forget: update last_accessed_at
     sb.from(THUMB_TABLE)
@@ -59,23 +76,99 @@ async function readStoreCache(hash: string): Promise<{ body: ArrayBuffer; conten
       .eq("url_hash", hash)
       .then(() => {})
 
+    let body: ArrayBuffer
     // Fast path: inline bytes stored in DB row (no Storage round-trip)
     if (row.inline_bytes) {
-      const body = Buffer.from(row.inline_bytes as string, "base64").buffer as ArrayBuffer
-      return { body, contentType: row.content_type as string }
+      body = Buffer.from(row.inline_bytes as string, "base64").buffer as ArrayBuffer
+    } else {
+      // Slow path: download from Storage
+      const { data: blob, error: storErr } = await sb.storage
+        .from(THUMB_BUCKET)
+        .download(row.storage_path)
+      if (storErr || !blob) return null
+      body = await blob.arrayBuffer()
     }
 
-    // Slow path: download from Storage
-    const { data: blob, error: storErr } = await sb.storage
-      .from(THUMB_BUCKET)
-      .download(row.storage_path)
-    if (storErr || !blob) return null
-
-    const body = await blob.arrayBuffer()
-    return { body, contentType: row.content_type as string }
+    return {
+      body,
+      contentType: row.content_type as string,
+      softExpiresAt: (row.soft_expires_at as string | null) ?? null,
+      hardExpiresAt: (row.hard_expires_at as string | null) ?? null,
+      refreshing: !!(row.refreshing),
+      refreshFailures: (row.refresh_failures as number) ?? 0,
+      nextRefreshAt: (row.next_refresh_at as string | null) ?? null,
+    }
   } catch {
     return null
   }
+}
+
+// Attempt to acquire DB refresh lock and run background refresh. Never throws.
+async function backgroundRefresh(params: {
+  hash: string
+  cleanUrlKey: string
+  fetchUrl: string
+  sPath: string
+}): Promise<"STARTED" | "SKIPPED"> {
+  const sb = getSupabaseAdmin()
+  if (!sb) return "SKIPPED"
+  const { hash, cleanUrlKey, fetchUrl, sPath } = params
+  try {
+    // Acquire lock: only update if refreshing=false and next_refresh_at is not in the future
+    const { data: locked } = await sb
+      .from(THUMB_TABLE)
+      .update({ refreshing: true })
+      .eq("url_hash", hash)
+      .eq("refreshing", false)
+      .or(`next_refresh_at.is.null,next_refresh_at.lte.${new Date().toISOString()}`)
+      .select("url_hash")
+    if (!locked || locked.length < 1) return "SKIPPED"
+  } catch {
+    return "SKIPPED"
+  }
+
+  // Run refresh in background — do not await from caller
+  ;(async () => {
+    let succeeded = false
+    try {
+      const result = await fetchWithRetry(fetchUrl, FETCH_INIT, 8_000, 2)
+      if (!result.res.ok) throw new Error(`upstream ${result.res.status}`)
+      const ct = result.res.headers.get("content-type") || ""
+      if (!ct.startsWith("image/")) throw new Error(`non_image ${ct}`)
+      const buf = await result.res.arrayBuffer()
+      const etag = result.res.headers.get("etag") ?? undefined
+      const lastModified = result.res.headers.get("last-modified") ?? undefined
+      const now = new Date().toISOString()
+      const softExp = new Date(Date.now() + SOFT_TTL_DAYS * 86400_000).toISOString()
+      const hardExp = new Date(Date.now() + HARD_TTL_DAYS * 86400_000).toISOString()
+      // Write new bytes to storage + DB
+      await writeStoreCache({ hash, originalUrl: cleanUrlKey, path: sPath, contentType: ct, body: buf, upstreamStatus: 200 })
+      // Update SWR metadata (single atomic write)
+      const patch: Record<string, unknown> = {
+        refreshing: false, refresh_failures: 0, next_refresh_at: null,
+        refreshed_at: now, soft_expires_at: softExp, hard_expires_at: hardExp,
+      }
+      if (etag) patch.etag = etag
+      if (lastModified) patch.last_modified = lastModified
+      await sb.from(THUMB_TABLE).update(patch).eq("url_hash", hash)
+      succeeded = true
+    } catch (e) {
+      throw e
+    } finally {
+      if (!succeeded) {
+        // Atomic RPC: increments refresh_failures, sets refreshing=false, computes backoff
+        try {
+          await sb.rpc("thumb_refresh_fail", { p_url_hash: hash })
+        } catch {
+          // ignore; safety net below will still run
+        }
+      }
+      // SAFETY NET: always attempt to release lock even on success
+      try { await sb.from(THUMB_TABLE).update({ refreshing: false }).eq("url_hash", hash) } catch {}
+    }
+  })()
+
+  return "STARTED"
 }
 
 // Write bytes to Supabase Storage + upsert DB row. Fire-and-forget safe.
@@ -99,7 +192,10 @@ async function writeStoreCache(params: {
       console.warn("[ig-thumb] storage upload failed", upErr.message)
       return { storageError: upErr.message }
     }
-    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString()
+    const now = Date.now()
+    const expiresAt = new Date(now + ttlDays * 86400_000).toISOString()
+    const softExpiresAt = new Date(now + SOFT_TTL_DAYS * 86400_000).toISOString()
+    const hardExpiresAt = new Date(now + HARD_TTL_DAYS * 86400_000).toISOString()
     const cleanUrl = (() => { try { const u = new URL(originalUrl); u.search = ""; u.hash = ""; return u.toString() } catch { return originalUrl } })()
     const INLINE_MAX_BYTES = 512 * 1024
     const inlineBytes = body.byteLength <= INLINE_MAX_BYTES
@@ -114,7 +210,13 @@ async function writeStoreCache(params: {
       bytes_size: body.byteLength,
       upstream_status: upstreamStatus,
       expires_at: expiresAt,
-      last_accessed_at: new Date().toISOString(),
+      soft_expires_at: softExpiresAt,
+      hard_expires_at: hardExpiresAt,
+      refreshed_at: new Date(now).toISOString(),
+      refreshing: false,
+      refresh_failures: 0,
+      next_refresh_at: null,
+      last_accessed_at: new Date(now).toISOString(),
       inline_bytes: inlineBytes,
     }, { onConflict: "url_hash" })
     if (dbErr) {
@@ -416,10 +518,23 @@ export async function GET(request: NextRequest) {
     // --- Fetch with retry (with L2 store check inside) ---
     const run = (async (): Promise<Response> => {
       try {
-        // L2: Supabase persistent cache
+        // L2: Supabase persistent cache (SWR: soft/hard TTL)
         const stored = await readStoreCache(hash)
         if (stored) {
-          writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType: stored.contentType, body: stored.body })
+          const nowMs = Date.now()
+          const softExp = stored.softExpiresAt ? new Date(stored.softExpiresAt).getTime() : 0
+          const isStale = softExp > 0 && nowMs >= softExp
+
+          writeThumbCache(cacheKey, { ts: nowMs, status: 200, contentType: stored.contentType, body: stored.body })
+
+          let refreshStatus: "STARTED" | "SKIPPED" | "FRESH" = "FRESH"
+          if (isStale) {
+            // Kick off background refresh without awaiting
+            backgroundRefresh({
+              hash, cleanUrlKey, fetchUrl: thumbnailUrl, sPath,
+            }).then((s) => { refreshStatus = s }).catch(() => {})
+          }
+
           return new Response(stored.body, {
             status: 200,
             headers: {
@@ -430,6 +545,7 @@ export async function GET(request: NextRequest) {
               "x-thumb-attempts": "0",
               "x-thumb-host": allowCheck.host,
               "x-thumb-allowed": "1",
+              ...(isStale ? { "x-thumb-stale": "1", "x-thumb-refresh": refreshStatus } : {}),
             },
           })
         }
