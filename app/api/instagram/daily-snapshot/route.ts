@@ -304,11 +304,8 @@ async function writeFollowersBestEffortCached(params: {
 }) {
   // Best-effort: never throw, never fail the request.
   try {
-    // SSOT-only: once ig_account_id exists, do not write followers snapshots without a stable ssotId.
-    if (!params.ssotId) return
-
-    // Enforce auth.uid() user_id for all SSOT writes
-    if (!params.authed || !params.authedUserId) return
+    // Require at minimum an authed client to write anything
+    if (!params.authed) return
 
     const existing = readCache(__dsFollowersCache, params.followersKey)
     if (existing) return
@@ -337,44 +334,51 @@ async function writeFollowersBestEffortCached(params: {
 
         if (followersCount !== null) {
           const dayStr = todayUtcDateString()
-          try {
-            const payload: any = {
-              user_id: String(params.authedUserId),
+
+          if (__DEBUG_DAILY_SNAPSHOT__) {
+            console.log("[daily-snapshot][followers_write]", {
+              has_ssot: !!params.ssotId,
+              ssotId: params.ssotId,
+              ig_user_id: params.igId,
               day: dayStr,
-              followers_count: Math.floor(followersCount),
-              captured_at: capturedAt,
-              ig_user_id: String(params.igId),
-            }
-            payload.ig_account_id = String(params.ssotId)
-            const onConflict = "ig_account_id,day"
+              followersCount,
+            })
+          }
 
-            if (__DEBUG_DAILY_SNAPSHOT__) {
-              console.log("[daily-snapshot][followers_write]", {
-                has_ssot: !!params.ssotId,
-                ssotId: params.ssotId,
-                ig_user_id: params.igId,
-                day: dayStr,
-                followersCount,
-              })
-            }
-
-            await params.authed.from("ig_daily_followers").upsert(payload, { onConflict })
-
-            // Also upsert keyed by ig_user_id,day so the ig_user_id-scoped read always finds today's row
-            const today = new Date().toISOString().slice(0, 10)
+          // Always upsert keyed by ig_user_id,day — runs regardless of ssotId
+          try {
             await params.authed
               .from("ig_daily_followers")
               .upsert(
                 {
                   ig_user_id: String(params.igId),
-                  day: today,
+                  day: dayStr,
                   followers_count: Math.floor(followersCount),
                 },
                 { onConflict: "ig_user_id,day" }
               )
           } catch (e: any) {
             if (__DEBUG_DAILY_SNAPSHOT__) {
-              console.log("[daily-snapshot] followers_upsert_failed", { message: e?.message ?? String(e) })
+              console.log("[daily-snapshot] followers_upsert_ig_user_id_failed", { message: e?.message ?? String(e) })
+            }
+          }
+
+          // Additionally upsert keyed by ig_account_id,day when ssotId is available
+          if (params.ssotId && params.authedUserId) {
+            try {
+              const payload: any = {
+                user_id: String(params.authedUserId),
+                day: dayStr,
+                followers_count: Math.floor(followersCount),
+                captured_at: capturedAt,
+                ig_user_id: String(params.igId),
+                ig_account_id: String(params.ssotId),
+              }
+              await params.authed.from("ig_daily_followers").upsert(payload, { onConflict: "ig_account_id,day" })
+            } catch (e: any) {
+              if (__DEBUG_DAILY_SNAPSHOT__) {
+                console.log("[daily-snapshot] followers_upsert_ssot_failed", { message: e?.message ?? String(e) })
+              }
             }
           }
         }
