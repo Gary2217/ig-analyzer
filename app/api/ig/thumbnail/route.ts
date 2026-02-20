@@ -4,8 +4,6 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { __thumbCache, THUMB_TTL_MS, THUMB_CACHE_MAX, THUMB_BUCKET, THUMB_TABLE, type ThumbCacheEntry } from "./_lib/cache"
 
 export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
-export const revalidate = 0
 
 // ---------------------------------------------------------------------------
 // Supabase admin client (service role, server-only, lazy init)
@@ -42,6 +40,9 @@ function storagePath(hash: string): string {
   return `${hash}.bin`
 }
 
+// SWR HTTP cache headers: 1 day fresh at edge, 7 days stale-while-revalidate
+const SWR_CACHE_CONTROL = "public, s-maxage=86400, stale-while-revalidate=604800"
+
 type StoreCacheResult = {
   body: ArrayBuffer
   contentType: string
@@ -50,6 +51,9 @@ type StoreCacheResult = {
   refreshing: boolean
   refreshFailures: number
   nextRefreshAt: string | null
+  etag: string | null
+  updatedAt: string | null
+  bytesSize: number | null
 }
 
 // Read from DB (inline bytes preferred) or Storage. Returns bytes + SWR metadata, or null on miss/error.
@@ -60,7 +64,7 @@ async function readStoreCache(hash: string): Promise<StoreCacheResult | null> {
   try {
     const { data: row, error: dbErr } = await sb
       .from(THUMB_TABLE)
-      .select("storage_path, content_type, inline_bytes, soft_expires_at, hard_expires_at, refreshing, refresh_failures, next_refresh_at")
+      .select("storage_path, content_type, inline_bytes, soft_expires_at, hard_expires_at, refreshing, refresh_failures, next_refresh_at, etag, updated_at, bytes_size")
       .eq("url_hash", hash)
       .maybeSingle()
     if (dbErr || !row) return null
@@ -97,6 +101,9 @@ async function readStoreCache(hash: string): Promise<StoreCacheResult | null> {
       refreshing: !!(row.refreshing),
       refreshFailures: (row.refresh_failures as number) ?? 0,
       nextRefreshAt: (row.next_refresh_at as string | null) ?? null,
+      etag: (row.etag as string | null) ?? null,
+      updatedAt: (row.updated_at as string | null) ?? null,
+      bytesSize: (row.bytes_size as number | null) ?? null,
     }
   } catch {
     return null
@@ -494,11 +501,16 @@ export async function GET(request: NextRequest) {
     // --- L1: memory cache HIT ---
     const cached = readThumbCache(cacheKey)
     if (cached) {
+      const etag = cached.etag ?? `W/"m${cached.ts}-b${cached.body.byteLength}"`
+      if (request.headers.get("if-none-match") === etag) {
+        return new Response(null, { status: 304, headers: { "cache-control": SWR_CACHE_CONTROL, "etag": etag } })
+      }
       return new Response(cached.body, {
         status: 200,
         headers: {
           "content-type": cached.contentType,
-          "cache-control": "no-store",
+          "cache-control": SWR_CACHE_CONTROL,
+          "etag": etag,
           "x-thumb-cache": "HIT",
           "x-thumb-store": "L1",
           "x-thumb-attempts": "0",
@@ -523,29 +535,39 @@ export async function GET(request: NextRequest) {
         if (stored) {
           const nowMs = Date.now()
           const softExp = stored.softExpiresAt ? new Date(stored.softExpiresAt).getTime() : 0
-          const isStale = softExp > 0 && nowMs >= softExp
+          const nextRefMs = stored.nextRefreshAt ? new Date(stored.nextRefreshAt).getTime() : 0
+          // Stale if: past soft_expires_at OR next_refresh_at is due and not currently locked
+          const isStale = (softExp > 0 && nowMs >= softExp) ||
+            (nextRefMs > 0 && nowMs >= nextRefMs && !stored.refreshing)
 
-          writeThumbCache(cacheKey, { ts: nowMs, status: 200, contentType: stored.contentType, body: stored.body })
+          // Compute content-version weak ETag: changes when thumbnail is refreshed
+          const updatedMs = stored.updatedAt ? new Date(stored.updatedAt).getTime() : 0
+          const etag: string | undefined = stored.etag
+            ?? (updatedMs && stored.bytesSize != null ? `W/"${updatedMs}-${stored.bytesSize}"` : undefined)
 
-          let refreshStatus: "STARTED" | "SKIPPED" | "FRESH" = "FRESH"
+          writeThumbCache(cacheKey, { ts: nowMs, status: 200, contentType: stored.contentType, body: stored.body, etag })
+
           if (isStale) {
-            // Kick off background refresh without awaiting
-            backgroundRefresh({
-              hash, cleanUrlKey, fetchUrl: thumbnailUrl, sPath,
-            }).then((s) => { refreshStatus = s }).catch(() => {})
+            // Fire-and-forget — never blocks response
+            backgroundRefresh({ hash, cleanUrlKey, fetchUrl: thumbnailUrl, sPath }).catch(() => {})
+          }
+
+          if (etag && request.headers.get("if-none-match") === etag) {
+            return new Response(null, { status: 304, headers: { "cache-control": SWR_CACHE_CONTROL, "etag": etag } })
           }
 
           return new Response(stored.body, {
             status: 200,
             headers: {
               "content-type": stored.contentType,
-              "cache-control": "no-store",
+              "cache-control": SWR_CACHE_CONTROL,
+              ...(etag ? { "etag": etag } : {}),
               "x-thumb-cache": "MISS",
               "x-thumb-store": "HIT",
               "x-thumb-attempts": "0",
               "x-thumb-host": allowCheck.host,
               "x-thumb-allowed": "1",
-              ...(isStale ? { "x-thumb-stale": "1", "x-thumb-refresh": refreshStatus } : {}),
+              ...(isStale ? { "x-thumb-stale": "1" } : {}),
             },
           })
         }
@@ -614,7 +636,9 @@ export async function GET(request: NextRequest) {
 
         // Success — read bytes, write L1 + L2 (awaited; failure does not fail request)
         const imageBuffer = await imageResponse.arrayBuffer()
-        writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType, body: imageBuffer })
+        const upstreamEtag = imageResponse.headers.get("etag") ?? undefined
+        const missEtag = upstreamEtag ?? `W/"m${Date.now()}-b${imageBuffer.byteLength}"`
+        writeThumbCache(cacheKey, { ts: Date.now(), status: 200, contentType, body: imageBuffer, etag: missEtag })
 
         const writeResult = await writeStoreCache({
           hash, originalUrl: cleanUrlKey, path: sPath,
@@ -624,7 +648,8 @@ export async function GET(request: NextRequest) {
 
         const respHeaders: Record<string, string> = {
           "content-type": contentType,
-          "cache-control": "no-store",
+          "cache-control": SWR_CACHE_CONTROL,
+          "etag": missEtag,
           "x-thumb-cache": "MISS",
           "x-thumb-store": storeWriteFailed ? "MISS_WRITE_FAILED" : "MISS_WRITE",
           "x-thumb-store-write": storeWriteFailed ? "FAILED" : "OK",
