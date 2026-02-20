@@ -2,7 +2,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 import { NextResponse, type NextRequest } from "next/server"
-import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
+import { createAuthedClient, supabaseServer, createServiceClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 import { createHash } from "crypto"
 
@@ -241,6 +241,34 @@ async function t3WarmThumbnails(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Best-effort event logging (service role, never blocks response)
+// ---------------------------------------------------------------------------
+async function logPrewarmEvent(params: {
+  userId: string
+  igAccountId: string | null
+  mode: PrewarmMode
+  reason: PrewarmReason
+  ok: boolean
+  skipped: string | null
+  tookMs: number
+}): Promise<void> {
+  try {
+    const svc = createServiceClient()
+    await svc.from("user_prewarm_events").insert({
+      user_id: params.userId,
+      ig_account_id: params.igAccountId,
+      mode: params.mode,
+      reason: params.reason,
+      ok: params.ok,
+      skipped: params.skipped,
+      took_ms: params.tookMs,
+    })
+  } catch {
+    // best-effort — ignore all errors
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
@@ -268,6 +296,7 @@ export async function POST(req: NextRequest) {
     const throttleMs = mode === "thumbs" ? THROTTLE_MS_THUMBS : THROTTLE_MS_FULL
     const lastAt = Number(cookieStore.get(throttleCookie)?.value ?? "0")
     if (lastAt && Date.now() - lastAt < throttleMs) {
+      // Log throttled event best-effort (auth needed; skip if not yet resolved)
       return NextResponse.json({ ok: true, skipped: "throttled", mode, took_ms: Date.now() - t0 })
     }
 
@@ -339,6 +368,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!igAccountId) {
+      void logPrewarmEvent({ userId: user.id, igAccountId: null, mode, reason: _reason, ok: true, skipped: "no_ig_account", tookMs: Date.now() - t0 })
       return NextResponse.json({ ok: true, skipped: "no_ig_account", took_ms: Date.now() - t0 })
     }
 
@@ -423,6 +453,9 @@ export async function POST(req: NextRequest) {
       maxAge: Math.ceil(throttleMs / 1000),
       sameSite: "lax",
     })
+
+    // Log event best-effort (fire-and-forget, never blocks response)
+    void logPrewarmEvent({ userId: user.id, igAccountId, mode, reason: _reason, ok: true, skipped: null, tookMs: took_ms })
 
     return res
   } catch (e: unknown) {
