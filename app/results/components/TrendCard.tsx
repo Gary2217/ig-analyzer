@@ -33,6 +33,36 @@ const __trendCardCache = new Map<string, { at: number; value: TrendApiResponse }
 const __trendCardInflight = new Map<string, Promise<TrendApiResponse | null>>()
 const TREND_TTL_MS = 45_000
 
+// Batch cache: keyed by `trend-batch|${scope}|${days}`
+type BatchResponse = { ig_account_id: string; days: number; pointsByMetric: Record<string, TrendPoint[]> }
+const __trendBatchCache = new Map<string, { at: number; value: BatchResponse }>()
+const __trendBatchInflight = new Map<string, Promise<BatchResponse | null>>()
+
+function batchCacheKey(days: number, scope: string) {
+  return `trend-batch|${scope}|${days}`
+}
+
+function readBatchCache(days: number, scope: string): BatchResponse | null {
+  const k = batchCacheKey(days, scope)
+  const e = __trendBatchCache.get(k)
+  if (!e) return null
+  if (Date.now() - e.at > TREND_TTL_MS) {
+    __trendBatchCache.delete(k)
+    return null
+  }
+  return e.value
+}
+
+function writeBatchCache(days: number, scope: string, value: BatchResponse) {
+  __trendBatchCache.set(batchCacheKey(days, scope), { at: Date.now(), value })
+  // Also populate per-metric cache so readCache hits immediately
+  for (const [metric, pts] of Object.entries(value.pointsByMetric)) {
+    const synth: TrendApiResponse = { metric: metric as TrendMetric, days: value.days, ig_account_id: value.ig_account_id, points: pts as TrendPoint[] }
+    writeCache(metric as TrendMetric, days, scope, synth)
+    if (value.ig_account_id) writeCache(metric as TrendMetric, days, value.ig_account_id, synth)
+  }
+}
+
 function cacheKey(metric: TrendMetric, days: number, scope: string) {
   return `trend|${scope}|${metric}|${days}`
 }
@@ -104,7 +134,44 @@ export default function TrendCard() {
   const sessionScopeId = useId()
   const scopeRef = useRef<string>(sessionScopeId)
   const lastRunKeyRef = useRef<string>("")
+  const lastBatchKeyRef = useRef<string>("")
+  const batchPromiseRef = useRef<Promise<void> | null>(null)
 
+  // --- Batch fetch (fires once per days window) ---
+  const fetchBatch = useCallback(async (days2: number, signal: AbortSignal) => {
+    const scope = scopeRef.current
+    if (readBatchCache(days2, scope)) return // already warm
+
+    const bk = batchCacheKey(days2, scope)
+    const existingBatch = __trendBatchInflight.get(bk)
+    if (existingBatch) {
+      await existingBatch
+      return
+    }
+
+    const p: Promise<BatchResponse | null> = (async () => {
+      try {
+        const url = `/api/instagram/trend-batch?days=${encodeURIComponent(String(days2))}`
+        const res = await fetch(url, { method: "GET", cache: "no-store", signal })
+        const body = await res.json().catch(() => null)
+        if (!res.ok || !body?.ok) return null
+        const batch = body as BatchResponse
+        const prevScope = scopeRef.current
+        const nextScope = batch.ig_account_id ? String(batch.ig_account_id) : prevScope
+        writeBatchCache(days2, prevScope, batch)
+        if (nextScope !== prevScope) writeBatchCache(days2, nextScope, batch)
+        scopeRef.current = nextScope
+        return batch
+      } finally {
+        __trendBatchInflight.delete(bk)
+      }
+    })()
+
+    __trendBatchInflight.set(bk, p)
+    await p
+  }, [])
+
+  // --- Per-metric fetch (fallback if batch missed) ---
   const fetchTrend = useCallback(async (metric2: TrendMetric, days2: number, signal: AbortSignal) => {
     const scope = scopeRef.current
     const cached = readCache(metric2, days2, scope)
@@ -143,11 +210,8 @@ export default function TrendCard() {
         if (parsed && parsed.metric && typeof parsed.days === "number") {
           const prevScope = scopeRef.current
           const nextScope = parsed.ig_account_id ? String(parsed.ig_account_id) : prevScope
-
-          // write BOTH keys so switching scope doesn't cause a cache miss refetch
           writeCache(metric2, days2, prevScope, parsed)
           writeCache(metric2, days2, nextScope, parsed)
-
           scopeRef.current = nextScope
         }
         return parsed
@@ -181,16 +245,33 @@ export default function TrendCard() {
     }
   }, [])
 
+  // Batch effect: fires once per days window to warm all metrics
+  useEffect(() => {
+    const batchKey = String(days)
+    if (lastBatchKeyRef.current === batchKey) return
+    lastBatchKeyRef.current = batchKey
+
+    const controller = new AbortController()
+    batchPromiseRef.current = fetchBatch(days, controller.signal).catch(() => {})
+    return () => { controller.abort() }
+  }, [days, fetchBatch])
+
+  // Per-metric effect: reads from batch cache if warm, else falls back to single fetch
   useEffect(() => {
     const runKey = `${metric}|${days}`
     if (lastRunKeyRef.current === runKey) return
     lastRunKeyRef.current = runKey
 
     const controller = new AbortController()
-    fetchTrend(metric, days, controller.signal)
-    return () => {
-      controller.abort()
+
+    const run = async () => {
+      if (batchPromiseRef.current) await batchPromiseRef.current
+      if (controller.signal.aborted) return
+      await fetchTrend(metric, days, controller.signal)
     }
+
+    run()
+    return () => { controller.abort() }
   }, [metric, days, fetchTrend])
 
   const title = t("results.trendBlock.title")
