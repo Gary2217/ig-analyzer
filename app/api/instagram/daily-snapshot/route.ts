@@ -1104,7 +1104,7 @@ async function fetchTotalsBestEffort(params: {
   return { ok: totalsResp.ok as boolean, insights_daily }
 }
 
-export async function POST(req: Request) {
+async function handle(req: Request) {
   console.log("=== DAILY SNAPSHOT ROUTE HIT ===", {
     ts: new Date().toISOString(),
     url: req?.url ?? null,
@@ -2318,3 +2318,6 @@ export async function POST(req: Request) {
 }
 
 }
+
+export async function GET(req: Request) { return handle(req) }
+export async function POST(req: Request) { return handle(req) }
