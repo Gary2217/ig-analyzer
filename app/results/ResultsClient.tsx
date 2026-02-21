@@ -5820,85 +5820,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             </Card>
 
             <div className="mt-4">
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-2 xl:grid-cols-3">
-                {(() => {
-                  const ring1Val = isConnected
-                    ? engagementRate
-                    : numOrNull(Math.round((mockAnalysis.metrics.engagementRate ?? 0) * 100))
-
-                  const ring2Val = isConnected
-                    ? computedMetrics?.avgLikes === null
-                      ? null
-                      : numOrNull(Math.min(100, Math.round(((computedMetrics?.avgLikes ?? 0) / 1000) * 100)))
-                    : numOrNull(Math.min(100, Math.round(((mockAnalysis.metrics.avgLikes ?? 0) / 1000) * 100)))
-
-                  const ring3Val = isConnected
-                    ? computedMetrics?.avgComments === null
-                      ? null
-                      : numOrNull(Math.min(100, Math.round(((computedMetrics?.avgComments ?? 0) / 100) * 100)))
-                    : numOrNull(Math.min(100, Math.round(((mockAnalysis.metrics.avgComments ?? 0) / 100) * 100)))
-
-                  const previewBadge = (
-                    <span className="ml-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-white/70">
-                      {t("results.common.preview")}
-                    </span>
-                  )
-
-                  return (
-                    <>
-                      <ProgressRing
-                        value={safePercent(ring1Val)}
-                        label={t("results.rings.engagementRate.label")}
-                        centerText={isConnected ? engagementRatePctFormatted : undefined}
-                        subLabel={
-                          isConnected ? (
-                            <>
-                              {computedMetrics?.engagementRatePct === null
-                                ? "—"
-                                : formatPct2(computedMetrics?.engagementRatePct ?? null)}
-                              {isPreview(ring1Val) ? previewBadge : null}
-                            </>
-                          ) : (
-                            t("results.rings.engagementRate.description")
-                          )
-                        }
-                      />
-                      <ProgressRing
-                        value={safePercent(ring2Val)}
-                        label={uiCopy.avgLikesLabel}
-                        centerText={isConnected ? avgLikesFormatted : undefined}
-                        subLabel={
-                          isConnected ? (
-                            <>
-                              {uiCopy.perPostLast25}
-                              {isPreview(ring2Val) ? previewBadge : null}
-                            </>
-                          ) : (
-                            t("results.rings.likeStrength.description")
-                          )
-                        }
-                      />
-                      <div className="col-span-2 sm:col-span-1">
-                        <ProgressRing
-                          value={safePercent(ring3Val)}
-                          label={uiCopy.avgCommentsLabel}
-                          centerText={isConnected ? avgCommentsFormatted : undefined}
-                          subLabel={
-                            isConnected ? (
-                              <>
-                                {uiCopy.perPostLast25}
-                                {isPreview(ring3Val) ? previewBadge : null}
-                              </>
-                            ) : (
-                              t("results.rings.commentStrength.description")
-                            )
-                          }
-                        />
-                      </div>
-                    </>
-                  )
-                })()}
+              <div className="mb-2 text-sm text-white/70">
+                {activeLocale?.startsWith("zh") ? "趨勢" : "Trends"}
               </div>
+              <TrendChartModule
+                trendPoints={trendPoints ?? []}
+                followersDailyRows={followersDailyRows ?? []}
+                locale={activeLocale}
+              />
             </div>
 
             <div className="mt-4 flex justify-center">
