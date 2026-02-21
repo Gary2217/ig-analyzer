@@ -190,73 +190,66 @@ export async function POST(req: NextRequest) {
     }
 
     // Build day -> values map (populated across all chunks)
-    const byDay = new Map<string, { reach: number | null; total_interactions: number }>()
+    const byDay = new Map<string, { reach: number | null; total_interactions: number; impressions: number; accounts_engaged: number }>()
 
     for (const { chunkSince, chunkUntil } of chunks) {
-      // Call A: reach (period=day, no metric_type required)
-      const reachRes = await fetch(
+      // Call A: reach + total_interactions + accounts_engaged + views (all support period=day time-series)
+      const primaryMetrics = "reach,total_interactions,accounts_engaged,views"
+      const fallbackMetrics = "reach,total_interactions"
+      let multiRes = await fetch(
         `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-          `?metric=reach` +
+          `?metric=${primaryMetrics}` +
           `&period=day` +
           `&since=${chunkSince}` +
           `&until=${chunkUntil}` +
           `&access_token=${pageAccessToken}`,
         { cache: "no-store" }
       )
+      let multiJson = await safeJson(multiRes) as any
+      // Fallback: if primary metric list rejected, retry with minimal set
+      if (!multiRes.ok) {
+        const graphCode = multiJson?.error?.code
+        const graphMsg = String(multiJson?.error?.message ?? "")
+        const isUnsupported = graphCode === 100 || graphMsg.includes("metric_type") || graphMsg.includes("unsupported") || graphMsg.includes("invalid")
+        if (isUnsupported) {
+          multiRes = await fetch(
+            `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+              `?metric=${fallbackMetrics}` +
+              `&period=day` +
+              `&since=${chunkSince}` +
+              `&until=${chunkUntil}` +
+              `&access_token=${pageAccessToken}`,
+            { cache: "no-store" }
+          )
+          multiJson = await safeJson(multiRes) as any
+        }
+      }
 
-      if (!reachRes.ok) {
-        const errBody = await safeJson(reachRes) as any
-        const graphCode = errBody?.error?.code
-        const graphMsg = errBody?.error?.message ?? "graph_error"
-        const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
+      if (!multiRes.ok) {
+        const graphMsg = multiJson?.error?.message ?? "graph_error"
         return NextResponse.json({
           ok: false,
           error: "graph_fetch_failed",
-          status: reachRes.status,
+          status: multiRes.status,
           message: graphMsg,
-          ...(isMetricTypeError ? { hint: "metric=reach requires no metric_type; check Graph API version" } : {}),
           missing: missingDays,
           ...(debugMode ? { debug: { chunkSince, chunkUntil } } : {}),
-        }, { status: isMetricTypeError ? 400 : 502 })
+        }, { status: 502 })
       }
 
-      // Call B: total_interactions requires metric_type=total_value
-      const interactionsRes = await fetch(
-        `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-          `?metric=total_interactions` +
-          `&period=day` +
-          `&metric_type=total_value` +
-          `&since=${chunkSince}` +
-          `&until=${chunkUntil}` +
-          `&access_token=${pageAccessToken}`,
-        { cache: "no-store" }
-      )
+      const multiData: any[] = Array.isArray(multiJson?.data) ? multiJson.data : []
+      const extractBackfillSeries = (name: string): any[] =>
+        multiData.find((m: any) => m?.name === name)?.values ?? []
 
-      if (!interactionsRes.ok) {
-        const errBody = await safeJson(interactionsRes) as any
-        const graphCode = errBody?.error?.code
-        const graphMsg = errBody?.error?.message ?? "graph_error"
-        const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
-        return NextResponse.json({
-          ok: false,
-          error: "graph_fetch_failed",
-          status: interactionsRes.status,
-          message: graphMsg,
-          ...(isMetricTypeError ? { hint: "metric=total_interactions requires metric_type=total_value" } : {}),
-          missing: missingDays,
-          ...(debugMode ? { debug: { chunkSince, chunkUntil } } : {}),
-        }, { status: isMetricTypeError ? 400 : 502 })
-      }
-
-      const reachJson = await safeJson(reachRes) as any
-      const interactionsJson = await safeJson(interactionsRes) as any
-      const reachSeries: any[] = reachJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
-      const interactionsSeries: any[] = interactionsJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
+      const reachSeries: any[] = extractBackfillSeries("reach")
+      const interactionsSeries: any[] = extractBackfillSeries("total_interactions")
+      const engagedSeries: any[] = extractBackfillSeries("accounts_engaged")
+      const viewsSeries: any[] = extractBackfillSeries("views")
 
       for (const v of reachSeries) {
         const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
         if (!d) continue
-        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
+        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
         const n = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
         ex.reach = n
         byDay.set(d, ex)
@@ -264,9 +257,22 @@ export async function POST(req: NextRequest) {
       for (const v of interactionsSeries) {
         const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
         if (!d) continue
-        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
-        const n = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
-        ex.total_interactions = n
+        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
+        ex.total_interactions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+        byDay.set(d, ex)
+      }
+      for (const v of engagedSeries) {
+        const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+        if (!d) continue
+        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
+        ex.accounts_engaged = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+        byDay.set(d, ex)
+      }
+      for (const v of viewsSeries) {
+        const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+        if (!d) continue
+        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
+        ex.impressions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
         byDay.set(d, ex)
       }
     } // end chunk loop
@@ -286,8 +292,8 @@ export async function POST(req: NextRequest) {
           day: d,
           reach: v.reach,
           total_interactions: v.total_interactions,
-          impressions: 0,
-          accounts_engaged: 0,
+          impressions: v.impressions,
+          accounts_engaged: v.accounts_engaged,
           source_used: "backfill_graph",
           wrote_at: wroteAt,
         }

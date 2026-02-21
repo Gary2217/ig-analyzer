@@ -587,9 +587,9 @@ async function backfillMissingSnapshotsFromGraph(params: {
       return {
         day,
         reach,
-        impressions: 0,
+        impressions: toSafeInt(p.impressions),
         total_interactions: toSafeInt(p.interactions),
-        accounts_engaged: 0,
+        accounts_engaged: toSafeInt(p.engaged_accounts),
       }
     })
 
@@ -732,9 +732,9 @@ function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days
         const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
         ex.reach = reach
       } else if (name === "total_interactions") ex.interactions = num
+      else if (name === "accounts_engaged") ex.engaged_accounts = num
       else if (name === "views" || name === "content_views") ex.impressions = num
-      // v24 note: impressions not supported here; keep 0
-      // v24 note: accounts_engaged requires metric_type=total_value; no time-series here; keep 0
+      // v24 note: impressions not supported here; keep 0 unless views/content_views returned
 
       byDate.set(dateStr, ex)
     }
@@ -998,9 +998,10 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
   const DAY_MS = 24 * 60 * 60 * 1000
   const MAX_DAYS_PER_CALL = 30
 
-  // v24 verified: reach time-series works; best-effort impressions-like curve via views
-  const metricListPrimary = ["reach", "views"]
-  const metricListFallback = ["reach"]
+  // v24 verified: reach time-series works; best-effort impressions-like curve via views.
+  // total_interactions and accounts_engaged also work with period=day (no metric_type needed for time-series).
+  const metricListPrimary = ["reach", "views", "total_interactions", "accounts_engaged"]
+  const metricListFallback = ["reach", "total_interactions"]
 
   let remainingDays = Math.max(1, params.days)
   let currentUntilMs = Date.now()
@@ -1526,49 +1527,99 @@ async function handle(req: Request) {
           const sinceDay = fetchStartDay < rangeStart ? rangeStart : fetchStartDay
           const untilDay = rangeEnd
 
-          const insightsRes = await fetch(
+          // Fetch reach + interactions + engaged + views in one call (all support period=day time-series)
+          const syncMetricsPrimary = "reach,total_interactions,accounts_engaged,views"
+          const syncMetricsFallback = "reach,total_interactions"
+          let insightsRes = await fetch(
             `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
-              `?metric=reach` +
+              `?metric=${syncMetricsPrimary}` +
               `&period=day` +
               `&since=${sinceDay}` +
               `&until=${untilDay}` +
               `&access_token=${accessToken}`
           )
-
-          const insightsJson = await safeJson(insightsRes)
+          let insightsJson = await safeJson(insightsRes)
+          // Fallback: if primary metric list rejected, retry with minimal set
+          if (!insightsRes.ok && isUnsupportedMetricBody(insightsJson)) {
+            insightsRes = await fetch(
+              `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
+                `?metric=${syncMetricsFallback}` +
+                `&period=day` +
+                `&since=${sinceDay}` +
+                `&until=${untilDay}` +
+                `&access_token=${accessToken}`
+            )
+            insightsJson = await safeJson(insightsRes)
+          }
 
           if (!insightsRes.ok) {
             console.log("REACH SYNC DONE", { rows: 0, reason: "graph_not_ok", status: insightsRes.status })
           } else {
-            console.log("IG REACH SERIES RAW", {
-              count: insightsJson?.data?.[0]?.values?.length ?? 0,
-              sample: insightsJson?.data?.[0]?.values?.slice(-5) ?? null,
-            })
+            const insightsData: any[] = Array.isArray(insightsJson?.data) ? insightsJson.data : []
+            const extractSyncSeries = (name: string): any[] =>
+              insightsData.find((m: any) => m?.name === name)?.values ?? []
 
-            const reachSeries = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
+            const reachSeries = extractSyncSeries("reach")
+            const interactionsSeries = extractSyncSeries("total_interactions")
+            const engagedSeries = extractSyncSeries("accounts_engaged")
+            const viewsSeries = extractSyncSeries("views")
+
+            console.log("IG REACH SERIES PARSED", { count: reachSeries.length })
 
             if (!Array.isArray(reachSeries) || reachSeries.length === 0) {
-              console.log("IG REACH SERIES PARSED", { count: 0 })
               console.log("REACH SYNC DONE", { rows: 0, reason: "empty_series" })
             } else {
-              console.log("IG REACH SERIES PARSED", { count: reachSeries.length })
+              // Build per-day map aligned across all series
+              const syncByDay = new Map<string, {
+                reach: number | null
+                total_interactions: number
+                accounts_engaged: number
+                impressions: number
+              }>()
+              const ensureSync = (day: string) => {
+                const ex = syncByDay.get(day)
+                if (ex) return ex
+                const init = { reach: null, total_interactions: 0, accounts_engaged: 0, impressions: 0 }
+                syncByDay.set(day, init)
+                return init
+              }
+              for (const v of reachSeries) {
+                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+                if (!day || day.length !== 10) continue
+                const rec = ensureSync(day)
+                const n = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
+                rec.reach = n
+              }
+              for (const v of interactionsSeries) {
+                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+                if (!day || day.length !== 10) continue
+                ensureSync(day).total_interactions = toSafeInt(v?.value)
+              }
+              for (const v of engagedSeries) {
+                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+                if (!day || day.length !== 10) continue
+                ensureSync(day).accounts_engaged = toSafeInt(v?.value)
+              }
+              for (const v of viewsSeries) {
+                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+                if (!day || day.length !== 10) continue
+                ensureSync(day).impressions = toSafeInt(v?.value)
+              }
 
-              const rows = reachSeries
-                .map((v: any) => {
-                  const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
-                  const reachRaw = v?.value
-                  const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
-                  return {
-                    ig_account_id: String(reachWriteSsotId),
-                    user_id: String(userId),
-                    ig_user_id: Number(resolvedIgId),
-                    page_id: Number(resolvedPageId),
-                    day,
-                    reach,
-                  }
-                })
-                .filter((r: any) => typeof r?.day === "string" && r.day.length === 10)
-                .filter((r: any) => typeof r?.reach === "number" && Number.isFinite(r.reach))
+              const rows = Array.from(syncByDay.entries())
+                .filter(([, rec]) => typeof rec.reach === "number" && Number.isFinite(rec.reach))
+                .map(([day, rec]) => ({
+                  ig_account_id: String(reachWriteSsotId),
+                  user_id: String(userId),
+                  user_id_text: String(userId),
+                  ig_user_id: Number(resolvedIgId),
+                  page_id: Number(resolvedPageId),
+                  day,
+                  reach: rec.reach,
+                  total_interactions: rec.total_interactions,
+                  accounts_engaged: rec.accounts_engaged,
+                  impressions: rec.impressions,
+                }))
 
               console.log("REACH SYNC UPSERT COUNT", { rows: rows.length })
 
