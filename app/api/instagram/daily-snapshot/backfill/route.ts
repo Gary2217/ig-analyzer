@@ -286,7 +286,7 @@ export async function POST(req: NextRequest) {
     const skippedNoData = missingDays.filter((d) => !byDay.has(d))
 
     if (rows.length > 0) {
-      const { error: upsertErr } = await authed
+      const { error: upsertErr } = await supabaseServer
         .from("account_daily_snapshot")
         .upsert(rows as any, { onConflict: "user_id,ig_user_id,page_id,day" })
       if (upsertErr) {
