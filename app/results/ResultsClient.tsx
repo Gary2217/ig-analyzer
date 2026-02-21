@@ -1875,7 +1875,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const lastSnapshotRevalidateSeqRef = useRef<number>(0)
   const lastRevalidateAtRef = useRef(0)
   const lastDailySnapshotFetchAtRef = useRef(0)
-  const hasFetchedDailySnapshotRef = useRef(false)
+  const hasFetchedDailySnapshotRef = useRef<string>("")
   const hasAppliedDailySnapshotTrendRef = useRef(false)
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
   const dailySnapshotRequestSeqRef = useRef(0)
@@ -3970,6 +3970,33 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       console.debug("[trend][scope] reset client caches", { prev, next: userScopeKey })
     }
   }, [clearRangeSwitchTimeout, userScopeKey])
+
+  // Guaranteed page-load fetch: runs once per account scope key.
+  // Does NOT rely on orchestrator snapshotRevalidateSeq.
+  useEffect(() => {
+    if (!isConnectedInstagram) return
+    if (!userScopeKey || userScopeKey === "session|") return
+    if (hasFetchedDailySnapshotRef.current === userScopeKey) return
+
+    hasFetchedDailySnapshotRef.current = userScopeKey
+    const controller = new AbortController()
+
+    ;(async () => {
+      try {
+        const res = await fetch("/api/instagram/daily-snapshot?days=90", {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const json = await res.json()
+        if (json && json.ok) setDailySnapshotData(json)
+      } catch {
+        // best-effort; AbortError on unmount is expected
+      }
+    })()
+
+    return () => { controller.abort() }
+  }, [isConnectedInstagram, userScopeKey])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
