@@ -624,6 +624,40 @@ function toFiniteNonNegIntOrNull(v: unknown): number | null {
   return Math.max(0, Math.floor(n))
 }
 
+// Sanitize: null/undefined/NaN/non-finite/negative -> 0 for all numeric metric fields.
+// Ensures response never contains null for reach/impressions/interactions/engaged_accounts.
+function sanitizePoints(points: DailySnapshotPoint[]): DailySnapshotPoint[] {
+  return points.map((p) => ({
+    ...p,
+    reach: toSafeInt(p.reach),
+    impressions: toSafeInt(p.impressions),
+    interactions: toSafeInt(p.interactions),
+    engaged_accounts: toSafeInt(p.engaged_accounts),
+  }))
+}
+
+// Sanitize trend_points_v2: null -> 0 for metrics, recompute reach_ma7 on sanitized reach.
+function sanitizeTrendPointsV2(pts: ReturnType<typeof buildTrendPointsV2>): ReturnType<typeof buildTrendPointsV2> {
+  const sanitized = pts.map((p) => ({
+    ...p,
+    reach: toSafeInt(p.reach),
+    impressions: toSafeInt(p.impressions),
+    interactions: toSafeInt(p.interactions),
+    engaged: toSafeInt(p.engaged),
+  }))
+  // Recompute reach_ma7 on sanitized reach values
+  return sanitized.map((p, i) => {
+    const start = Math.max(0, i - 6)
+    let sum = 0
+    let count = 0
+    for (let j = start; j <= i; j++) {
+      const v = sanitized[j].reach
+      if (typeof v === "number" && Number.isFinite(v)) { sum += v; count++ }
+    }
+    return { ...p, reach_ma7: count > 0 ? Math.round(sum / count) : 0 }
+  })
+}
+
 type DailySnapshotPoint = {
   date: string
   reach: number | null
@@ -1762,11 +1796,11 @@ async function handle(req: Request) {
               followers_daily_rows: followersSeries,
               followers_available_days: followersSeries.length,
               followers_last_write_at: null,
-              points: pointsPadded,
+              points: sanitizePoints(pointsPadded),
               points_ok: true,
               points_source: "snap",
               points_end_date: today,
-              trend_points_v2: buildTrendPointsV2(pointsPadded),
+              trend_points_v2: sanitizeTrendPointsV2(buildTrendPointsV2(pointsPadded)),
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
@@ -1854,11 +1888,11 @@ async function handle(req: Request) {
                 followers_daily_rows: followersSeries,
                 followers_available_days: followersSeries.length,
                 followers_last_write_at: null,
-                points: pointsPadded,
+                points: sanitizePoints(pointsPadded),
                 points_ok: true,
                 points_source: "legacy_db",
                 points_end_date: today,
-                trend_points_v2: buildTrendPointsV2(pointsPadded),
+                trend_points_v2: sanitizeTrendPointsV2(buildTrendPointsV2(pointsPadded)),
                 insights_daily: totals.insights_daily,
                 insights_daily_series: [],
                 series_ok: true,
@@ -1942,11 +1976,11 @@ async function handle(req: Request) {
               followers_daily_rows: followersSeries,
               followers_available_days: followersSeries.length,
               followers_last_write_at: null,
-              points: pointsPadded,
+              points: sanitizePoints(pointsPadded),
               points_ok: true,
               points_source: "legacy_db",
               points_end_date: today,
-              trend_points_v2: buildTrendPointsV2(pointsPadded),
+              trend_points_v2: sanitizeTrendPointsV2(buildTrendPointsV2(pointsPadded)),
               insights_daily: totals.insights_daily,
               insights_daily_series: [],
               series_ok: true,
@@ -2210,11 +2244,11 @@ async function handle(req: Request) {
             followers_daily_rows: followersSeries,
             followers_available_days: followersSeries.length,
             followers_last_write_at: null,
-            points,
+            points: sanitizePoints(points),
             points_ok: true,
             points_source: "graph_series_v24",
             points_end_date: today,
-            trend_points_v2: buildTrendPointsV2(points),
+            trend_points_v2: sanitizeTrendPointsV2(buildTrendPointsV2(points)),
             insights_daily,
             insights_daily_series: series.data,
             series_ok: true,

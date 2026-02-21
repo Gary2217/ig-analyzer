@@ -106,16 +106,18 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
   const hasData = chartData.some((d) => typeof d.value === "number" && d.value > 0)
   const allEmpty = trendPoints.length === 0 && followersDailyRows.length === 0
 
+  const emptyLabel = isZh ? "暫無資料" : "No data"
+
   return (
     <div className="mt-4">
       <div className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm p-3 sm:p-4">
       {allEmpty ? (
-        <div className="flex h-[260px] items-center justify-center text-sm text-white/35">
+        <div className="flex h-[200px] items-center justify-center text-sm text-white/35">
           {isZh ? "暫無資料 / No data available" : "No data available"}
         </div>
       ) : (<>
-      {/* Metric selector */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      {/* Metric selector — wraps on mobile */}
+      <div className="flex flex-wrap gap-1.5 pb-1">
         {METRIC_CONFIG.map((m) => {
           const active = selectedMetric === m.key
           return (
@@ -124,7 +126,7 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
               type="button"
               onClick={() => setSelectedMetric(m.key)}
               className={
-                "shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap " +
+                "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap " +
                 (active
                   ? "bg-white/15 text-white border border-white/20"
                   : "text-white/55 hover:text-white/80 hover:bg-white/8 border border-transparent")
@@ -137,15 +139,15 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
         })}
       </div>
 
-      {/* Chart */}
-      <div className="mt-3 w-full" style={{ height: 260 }}>
+      {/* Chart — responsive height: shorter on mobile */}
+      <div className="mt-3 w-full h-[200px] sm:h-[260px]">
         {!hasData ? (
           <div className="flex h-full items-center justify-center text-sm text-white/35">
-            {isZh ? "暫無資料" : "No data available"}
+            {emptyLabel}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
               <XAxis
                 dataKey="t"
@@ -158,7 +160,7 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
                 tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
-                width={42}
+                width={38}
                 tickFormatter={formatCompact}
               />
               <Tooltip
@@ -186,8 +188,8 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
         )}
       </div>
 
-      {/* Range selector */}
-      <div className="mt-3 flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+      {/* Range selector — scrollable on mobile */}
+      <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
         {RANGE_OPTIONS.map((r) => {
           const active = selectedDays === r.days
           return (
@@ -196,7 +198,7 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
               type="button"
               onClick={() => setSelectedDays(r.days)}
               className={
-                "shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap " +
+                "shrink-0 rounded-md px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap " +
                 (active
                   ? "bg-white/15 text-white border border-white/20"
                   : "text-white/45 hover:text-white/70 hover:bg-white/8 border border-transparent")
