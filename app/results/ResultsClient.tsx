@@ -24,10 +24,8 @@ import { useFollowersMetrics } from "./hooks/useFollowersMetrics"
 import { useRefreshController } from "./hooks/useRefreshController"
 import { useResultsOrchestrator } from "./hooks/useResultsOrchestrator"
 import { ResultsDebugPanel } from "./components/ResultsDebugPanel"
-import TrendCard from "./components/TrendCard"
 import ConnectedGateBase from "../[locale]/results/ConnectedGate"
 import { mockAnalysis } from "../[locale]/results/mockData"
-import { mergeToContinuousTrendPoints } from "./lib/mergeToContinuousTrendPoints"
 import { PostsDebugPanel } from "./PostsDebugPanel"
 import { CreatorCardShowcase } from "./CreatorCardShowcase"
 import { toIgDirectMediaUrl } from "@/app/lib/ig/toIgDirectMediaUrl"
@@ -1874,7 +1872,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const hasSuccessfulMePayloadRef = useRef(false)
   const lastMeFetchTickRef = useRef<number | null>(null)
   const lastSnapshotRevalidateSeqRef = useRef<number>(0)
-  const lastTrendRevalidateSeqRef = useRef<number>(0)
   const lastRevalidateAtRef = useRef(0)
   const lastDailySnapshotFetchAtRef = useRef(0)
   const hasFetchedDailySnapshotRef = useRef(false)
@@ -2407,25 +2404,24 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     )
   }, [mediaError, retryMediaFetch, showMediaErrorDetails, t])
 
-  const { orchestratorDebug, mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq } = useResultsOrchestrator({
+  const { orchestratorDebug, mediaRevalidateSeq, snapshotRevalidateSeq } = useResultsOrchestrator({
     isConnectedInstagram,
     refreshSeq,
     fetchMedia: async () => {},
     fetchTrend: async () => {},
     fetchSnapshot: async () => {},
-    enableTrend: true,
+    enableTrend: false,
     enableSnapshot: true,
   })
 
   useEffect(() => {
     if (!__DEV__) return
-    if (mediaRevalidateSeq <= 0 && trendRevalidateSeq <= 0 && snapshotRevalidateSeq <= 0) return
+    if (mediaRevalidateSeq <= 0 && snapshotRevalidateSeq <= 0) return
     dlog("[orchestrator] revalidate_seq", {
       mediaRevalidateSeq,
-      trendRevalidateSeq,
       snapshotRevalidateSeq,
     })
-  }, [__DEV__, dlog, mediaRevalidateSeq, snapshotRevalidateSeq, trendRevalidateSeq])
+  }, [__DEV__, dlog, mediaRevalidateSeq, snapshotRevalidateSeq])
 
   useEffect(() => {
     if (!cookieConnected) return
@@ -5186,7 +5182,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
         refreshDebug={refreshDebug}
         orchestratorDebug={{
           ...(isRecord(orchestratorDebug) ? orchestratorDebug : {}),
-          revalidateSeq: { mediaRevalidateSeq, trendRevalidateSeq, snapshotRevalidateSeq },
+          revalidateSeq: { mediaRevalidateSeq, snapshotRevalidateSeq },
         }}
       />
 
@@ -5907,8 +5903,6 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             )}
 
             {renderMediaErrorBanner()}
-
-            <TrendCard />
 
             <Card
               id="top-posts-section"
