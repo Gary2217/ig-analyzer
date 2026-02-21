@@ -3971,23 +3971,32 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     }
   }, [clearRangeSwitchTimeout, userScopeKey])
 
-  // Guaranteed page-load fetch: runs once per account scope key.
+  // Guaranteed page-load fetch: runs once per account identity (igCacheId).
   // Does NOT rely on orchestrator snapshotRevalidateSeq.
   useEffect(() => {
-    if (__DEBUG_RESULTS__) {
+    // Debug: reads localStorage directly so it works in production without a build flag.
+    const debugOn = typeof window !== "undefined" && window.localStorage?.getItem("__debug_results__") === "1"
+    if (debugOn) {
       console.debug("[DEBUG][daily-snapshot] isConnectedInstagram:", isConnectedInstagram)
+      console.debug("[DEBUG][daily-snapshot] igCacheId:", igCacheId)
       console.debug("[DEBUG][daily-snapshot] userScopeKey:", userScopeKey)
       console.debug("[DEBUG][daily-snapshot] hasFetchedDailySnapshotRef.current:", hasFetchedDailySnapshotRef.current)
     }
 
     if (!isConnectedInstagram) return
-    // Gate: require a non-empty base segment (the part before "|")
-    const scopeBase = (userScopeKey || "").split("|")[0].trim()
-    if (!scopeBase || scopeBase === "session") return
-    if (hasFetchedDailySnapshotRef.current === userScopeKey) return
+    // Gate: require a real account identity (igCacheId defaults to "me" when igMe is null)
+    const fetchKey = (typeof igCacheId === "string" && igCacheId.trim() && igCacheId !== "me")
+      ? igCacheId.trim()
+      : ""
+    if (!fetchKey) return
+    if (hasFetchedDailySnapshotRef.current === fetchKey) return
 
-    hasFetchedDailySnapshotRef.current = userScopeKey
+    hasFetchedDailySnapshotRef.current = fetchKey
     const controller = new AbortController()
+
+    if (debugOn) {
+      console.debug("[DEBUG][daily-snapshot] firing fetch for fetchKey:", fetchKey)
+    }
 
     ;(async () => {
       try {
@@ -3997,6 +4006,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
         })
         if (!res.ok) return
         const json = await res.json()
+        if (debugOn) console.debug("[DEBUG][daily-snapshot] response ok:", json?.ok, "points:", json?.points?.length)
         if (json && json.ok) setDailySnapshotData(json)
       } catch {
         // best-effort; AbortError on unmount is expected
@@ -4004,7 +4014,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     })()
 
     return () => { controller.abort() }
-  }, [isConnectedInstagram, userScopeKey])
+  }, [isConnectedInstagram, igCacheId, userScopeKey])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
