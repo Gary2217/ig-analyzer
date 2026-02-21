@@ -159,16 +159,23 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Fetch from IG Graph ---
-    const sinceDay = missingDays[missingDays.length - 1] // oldest
-    const untilDay = missingDays[0]                      // newest
+    // Sort deterministically — do NOT assume missingDays order.
+    const daysSorted = [...missingDays].sort() // YYYY-MM-DD lexical sort is correct
+    const sinceDay = daysSorted[0]                          // oldest
+    const untilDay = daysSorted[daysSorted.length - 1]      // newest
+
+    // Graph API: use unix timestamps (seconds), UTC midnight.
+    // until is made inclusive by adding 1 day (86400 s).
+    const sinceTs = Math.floor(Date.parse(`${sinceDay}T00:00:00.000Z`) / 1000)
+    const untilTs = Math.floor(Date.parse(`${untilDay}T00:00:00.000Z`) / 1000) + 86400
 
     // Call 1: reach (period=day, no metric_type required)
     const reachRes = await fetch(
       `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
         `?metric=reach` +
         `&period=day` +
-        `&since=${sinceDay}` +
-        `&until=${untilDay}` +
+        `&since=${sinceTs}` +
+        `&until=${untilTs}` +
         `&access_token=${pageAccessToken}`,
       { cache: "no-store" }
     )
@@ -194,8 +201,8 @@ export async function POST(req: NextRequest) {
         `?metric=total_interactions` +
         `&period=day` +
         `&metric_type=total_value` +
-        `&since=${sinceDay}` +
-        `&until=${untilDay}` +
+        `&since=${sinceTs}` +
+        `&until=${untilTs}` +
         `&access_token=${pageAccessToken}`,
       { cache: "no-store" }
     )
@@ -286,6 +293,8 @@ export async function POST(req: NextRequest) {
         debug: {
           igAccountId, igUserId, pageId, days,
           rangeStart, today,
+          sinceDay, untilDay, sinceTs, untilTs,
+          missingCount: missingDays.length,
           missingRequested: missingDays.length,
           graphReturned: byDay.size,
           upsertedDays: rows.map((r) => r.day),
