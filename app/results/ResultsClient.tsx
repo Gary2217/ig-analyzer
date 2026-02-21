@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 // Density pass: tighten common headings/blocks inside Results page (UI-only)
 
@@ -31,6 +31,7 @@ import { CreatorCardShowcase } from "./CreatorCardShowcase"
 import { toIgDirectMediaUrl } from "@/app/lib/ig/toIgDirectMediaUrl"
 import { useCreatorCardPreviewData } from "../components/creator-card/useCreatorCardPreviewData"
 import { usePredictivePrewarm } from "../hooks/usePredictivePrewarm"
+import TrendChartModule from "./components/TrendChartModule"
 
 // Dev StrictMode can mount/unmount/mount causing useRef to reset.
 // Module-scope flag survives remount in the same session and prevents duplicate fetch.
@@ -5580,6 +5581,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
               </CardContent>
             </Card>
 
+            <TrendChartModule
+              trendPoints={trendPoints}
+              followersDailyRows={followersDailyRows}
+              locale={activeLocale}
+            />
+
             {false && (
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl">
                 <CardHeader className="border-b border-white/10 px-3 pt-3 pb-3 sm:px-4 sm:pt-4 lg:px-6 lg:pt-6">
@@ -6588,9 +6595,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                 </div>
               </CardContent>
             </Card>
-            <div className="my-6 h-px w-full bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-
-            <div id="kpis-section" className="mt-4 scroll-mt-40">
+            <div id="kpis-section" className="mt-4 scroll-mt-40 hidden">
               <Card className="rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm sm:hidden">
                 <CardHeader
                   className={
