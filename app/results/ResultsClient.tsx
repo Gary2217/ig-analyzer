@@ -4004,11 +4004,20 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     setFollowersLastWriteAt(lastWriteAt)
 
     // Populate trendPoints from snapshot points (reach/impressions/interactions/engaged)
-    const pointsRaw = Array.isArray((dailySnapshotData as any).points)
+    const pointsRaw = isRecord(dailySnapshotData) && Array.isArray((dailySnapshotData as any).points)
       ? ((dailySnapshotData as any).points as unknown[])
-      : []
-    if (pointsRaw.length > 0 && !hasAppliedDailySnapshotTrendRef.current) {
-      const pts = normalizeDailySnapshotPointsToTrendPoints(pointsRaw)
+      : ([] as unknown[])
+
+    // API field is `date`, not `day` — backfill `day` so normalize can parse dates correctly
+    const pointsRawNormalized = pointsRaw.map((p: any) => {
+      if (p && typeof p === "object") {
+        return { ...p, day: p.day ?? p.date }
+      }
+      return p
+    })
+
+    if (pointsRawNormalized.length > 0 && !hasAppliedDailySnapshotTrendRef.current) {
+      const pts = normalizeDailySnapshotPointsToTrendPoints(pointsRawNormalized)
       if (pts.length > 0) {
         setTrendPointsDeduped(pts)
         hasAppliedDailySnapshotTrendRef.current = true
