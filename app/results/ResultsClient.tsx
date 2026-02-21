@@ -3301,9 +3301,14 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
   // KPI numbers should accept numeric strings from API responses.
   const dashKpis = isRecord(dashSummary) && isRecord(dashSummary.kpis) ? (dashSummary.kpis as Record<string, unknown>) : null
-  void dashKpis
 
-  const kpiFollowers = typeof creatorCardPreviewData?.followers === "number" && Number.isFinite(creatorCardPreviewData.followers) ? creatorCardPreviewData.followers : null
+  const kpiFollowers = (() => {
+    const fromSummary = dashKpis?.followers_count
+    const n = typeof fromSummary === "number" ? fromSummary : typeof fromSummary === "string" ? Number(fromSummary) : NaN
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+    const fromCard = creatorCardPreviewData?.followers
+    return typeof fromCard === "number" && Number.isFinite(fromCard) ? fromCard : null
+  })()
   const kpiFollowing = null as number | null
   const kpiPosts = null as number | null
 
