@@ -1291,6 +1291,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   } | null>(null)
   const [dailySnapshotData, setDailySnapshotData] = useState<unknown>(initialDailySnapshot ?? null)
   const [dailySnapshotAvailableDays, setDailySnapshotAvailableDays] = useState<number | null>(null)
+  const [trendRangeDays, setTrendRangeDays] = useState<number>(90)
 
   // SSOT (DB) trend payload for the currently selected range.
   // Primary data sources (after SSOT migration):
@@ -3989,18 +3990,19 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       ? igCacheId.trim()
       : ""
     if (!fetchKey) return
-    if (hasFetchedDailySnapshotRef.current === fetchKey) return
+    const fetchKeyWithDays = `${fetchKey}:${trendRangeDays}`
+    if (hasFetchedDailySnapshotRef.current === fetchKeyWithDays) return
 
-    hasFetchedDailySnapshotRef.current = fetchKey
+    hasFetchedDailySnapshotRef.current = fetchKeyWithDays
     const controller = new AbortController()
 
     if (debugOn) {
-      console.debug("[DEBUG][daily-snapshot] firing fetch for fetchKey:", fetchKey)
+      console.debug("[DEBUG][daily-snapshot] firing fetch for fetchKeyWithDays:", fetchKeyWithDays)
     }
 
     ;(async () => {
       try {
-        const res = await fetch("/api/instagram/daily-snapshot?days=90", {
+        const res = await fetch(`/api/instagram/daily-snapshot?days=${trendRangeDays}`, {
           cache: "no-store",
           signal: controller.signal,
         })
@@ -4014,7 +4016,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     })()
 
     return () => { controller.abort() }
-  }, [isConnectedInstagram, igCacheId, userScopeKey])
+  }, [isConnectedInstagram, igCacheId, userScopeKey, trendRangeDays])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
@@ -5662,6 +5664,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             </Card>
 
             <TrendChartModule
+              trendPointsV2={(dailySnapshotData as any)?.trend_points_v2 ?? []}
+              points={(dailySnapshotData as any)?.points ?? []}
+              followersRows={followersDailyRows ?? []}
+              rangeDays={trendRangeDays}
+              onChangeRangeDays={(days) => { setTrendRangeDays(days) }}
               trendPoints={trendPoints ?? []}
               followersDailyRows={followersDailyRows ?? []}
               locale={activeLocale}
@@ -5909,6 +5916,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                 </div>
               )}
               <TrendChartModule
+                trendPointsV2={(dailySnapshotData as any)?.trend_points_v2 ?? []}
+                points={(dailySnapshotData as any)?.points ?? []}
+                followersRows={followersDailyRows ?? []}
+                rangeDays={trendRangeDays}
+                onChangeRangeDays={(days) => { setTrendRangeDays(days) }}
                 trendPoints={trendPoints ?? []}
                 followersDailyRows={followersDailyRows ?? []}
                 locale={activeLocale}
