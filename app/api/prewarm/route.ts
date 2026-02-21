@@ -375,7 +375,9 @@ export async function POST(req: NextRequest) {
     const { data: tokenRow } = await supabaseServer
       .from("user_ig_account_tokens")
       .select("access_token")
-      .eq("ig_account_id", igAccountId)
+      .eq("user_id", user.id)
+      .eq("provider", "instagram")
+      .eq("ig_user_id", igUserId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()

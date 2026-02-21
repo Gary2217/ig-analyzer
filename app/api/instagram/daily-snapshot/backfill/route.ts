@@ -261,9 +261,19 @@ export async function POST(req: NextRequest) {
           const extractTv = (name: string): any[] => tvData.find((m: any) => m?.name === name)?.values ?? []
           interactionsSeries = extractTv("total_interactions")
           engagedSeries = extractTv("accounts_engaged")
+        } else {
+          const tvErrBody = await safeJson(tvRes) as any
+          console.warn("[account-daily-snapshot] backfill Call B non-ok", {
+            status: tvRes.status,
+            code: tvErrBody?.error?.code,
+            message: tvErrBody?.error?.message,
+            ig_user_id: igUserId,
+            chunkSince,
+            chunkUntil,
+          })
         }
-      } catch {
-        // best-effort: leave interactions/engaged as 0
+      } catch (tvErr) {
+        console.warn("[account-daily-snapshot] backfill Call B threw", { err: String(tvErr) })
       }
 
       for (const v of reachSeries) {
