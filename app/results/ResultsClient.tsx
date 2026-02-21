@@ -3974,8 +3974,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   // Guaranteed page-load fetch: runs once per account scope key.
   // Does NOT rely on orchestrator snapshotRevalidateSeq.
   useEffect(() => {
+    if (__DEBUG_RESULTS__) {
+      console.debug("[DEBUG][daily-snapshot] isConnectedInstagram:", isConnectedInstagram)
+      console.debug("[DEBUG][daily-snapshot] userScopeKey:", userScopeKey)
+      console.debug("[DEBUG][daily-snapshot] hasFetchedDailySnapshotRef.current:", hasFetchedDailySnapshotRef.current)
+    }
+
     if (!isConnectedInstagram) return
-    if (!userScopeKey || userScopeKey === "session|") return
+    // Gate: require a non-empty base segment (the part before "|")
+    const scopeBase = (userScopeKey || "").split("|")[0].trim()
+    if (!scopeBase || scopeBase === "session") return
     if (hasFetchedDailySnapshotRef.current === userScopeKey) return
 
     hasFetchedDailySnapshotRef.current = userScopeKey
