@@ -2410,7 +2410,16 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     refreshSeq,
     fetchMedia: async () => {},
     fetchTrend: async () => {},
-    fetchSnapshot: async () => {},
+    fetchSnapshot: async () => {
+      try {
+        const res = await fetch("/api/instagram/daily-snapshot?days=90", { cache: "no-store" })
+        if (!res.ok) return
+        const json = await res.json()
+        if (json && json.ok) setDailySnapshotData(json)
+      } catch {
+        // best-effort; ignore errors
+      }
+    },
     enableTrend: false,
     enableSnapshot: true,
   })
@@ -3969,16 +3978,8 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       return
     }
 
-    // SSOT-first: do not allow dailySnapshot payloads to overwrite SSOT display series.
-    // dailySnapshot remains a backfill/diag payload, not the primary display writer.
-    return
-
     const ok = isRecord(dailySnapshotData) && (dailySnapshotData as any).ok === true
-    if (!ok) {
-      // SSOT-first: keep SSOT-derived `followersDailyRows` when dailySnapshotData is absent/invalid.
-      // dailySnapshot remains a backfill/diag payload, not the primary display series.
-      return
-    }
+    if (!ok) return
 
     const rowsRaw = isRecord(dailySnapshotData) && Array.isArray((dailySnapshotData as any).followers_daily_rows)
       ? ((dailySnapshotData as any).followers_daily_rows as unknown[])
@@ -4002,6 +4003,18 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     setFollowersDailyRows(rows)
     setFollowersLastWriteAt(lastWriteAt)
 
+    // Populate trendPoints from snapshot points (reach/impressions/interactions/engaged)
+    const pointsRaw = Array.isArray((dailySnapshotData as any).points)
+      ? ((dailySnapshotData as any).points as unknown[])
+      : []
+    if (pointsRaw.length > 0 && !hasAppliedDailySnapshotTrendRef.current) {
+      const pts = normalizeDailySnapshotPointsToTrendPoints(pointsRaw)
+      if (pts.length > 0) {
+        setTrendPointsDeduped(pts)
+        hasAppliedDailySnapshotTrendRef.current = true
+      }
+    }
+
     if (__DEBUG_RESULTS__) {
       const firstDay = rows[0]?.day ?? ""
       const lastDay = rows[rows.length - 1]?.day ?? ""
@@ -4013,7 +4026,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
         fetchedAt: new Date().toISOString(),
       })
     }
-  }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram])
+  }, [__DEBUG_RESULTS__, dailySnapshotData, dlog, isConnectedInstagram, normalizeDailySnapshotPointsToTrendPoints, setTrendPointsDeduped])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -5822,6 +5835,9 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
             <div className="mt-4">
               <div className="mb-2 text-sm text-white/70">
                 {activeLocale?.startsWith("zh") ? "趨勢" : "Trends"}
+              </div>
+              <div className="text-xs text-white/40 mb-1">
+                trend points: {(trendPoints ?? []).length} | follower rows: {(followersDailyRows ?? []).length}
               </div>
               <TrendChartModule
                 trendPoints={trendPoints ?? []}
