@@ -504,11 +504,33 @@ async function upsertAccountDailySnapshots(params: {
       })
     }
 
+    // HARD GUARD — prevent invalid FK writes
+    function isValidUuid(v: unknown): v is string {
+      return typeof v === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+    }
+
+    if (!isValidUuid(params.ssotId)) {
+      console.warn("[daily-snapshot] skip upsert — invalid ssotId", {
+        ssotId: params.ssotId,
+        authedUserId: params.authedUserId,
+        igId: params.igId,
+        pageId: params.pageId,
+      })
+
+      return {
+        ok: true,
+        skipped: true,
+        reason: "invalid_ssotId"
+      }
+    }
+
     const { error } = await params.authed.from("account_daily_snapshot").upsert(
       params.rows.map((r) => ({
         // SSOT-only: reach rows must be keyed by (ig_account_id, day)
         ig_account_id: String(params.ssotId),
         user_id: String(params.authedUserId),
+        user_id_text: String(params.authedUserId),
         ig_user_id: Number(params.igId),
         page_id: Number(params.pageId),
         day: r.day,
