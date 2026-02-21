@@ -725,16 +725,18 @@ function buildPointsFromGraphInsightsTimeSeries(insightsDailySeries: any[], days
           engaged_accounts: 0,
         }
 
-      const num = toSafeInt(v?.value)
+      // Support both response shapes:
+      // - time-series: { end_time, value }
+      // - total_value: { end_time, total_value: { value } }
+      const rawValue = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+      const num = toSafeInt(rawValue)
 
       if (name === "reach") {
-        const reachRaw = v?.value
-        const reach = typeof reachRaw === "number" && Number.isFinite(reachRaw) ? reachRaw : null
+        const reach = typeof rawValue === "number" && Number.isFinite(rawValue) ? rawValue : null
         ex.reach = reach
       } else if (name === "total_interactions") ex.interactions = num
       else if (name === "accounts_engaged") ex.engaged_accounts = num
       else if (name === "views" || name === "content_views") ex.impressions = num
-      // v24 note: impressions not supported here; keep 0 unless views/content_views returned
 
       byDate.set(dateStr, ex)
     }
@@ -998,10 +1000,12 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
   const DAY_MS = 24 * 60 * 60 * 1000
   const MAX_DAYS_PER_CALL = 30
 
-  // v24 verified: reach time-series works; best-effort impressions-like curve via views.
-  // total_interactions and accounts_engaged also work with period=day (no metric_type needed for time-series).
-  const metricListPrimary = ["reach", "views", "total_interactions", "accounts_engaged"]
-  const metricListFallback = ["reach", "total_interactions"]
+  // Call A: time-series metrics (reach + views). These do NOT accept metric_type=total_value.
+  // Call B (per chunk, best-effort): total_interactions + accounts_engaged with metric_type=total_value.
+  //   If B fails, continue with zeros — do NOT fail the whole request.
+  const metricListTimeSeries = ["reach", "views"]
+  const metricListTimeFallback = ["reach"]
+  const metricListTotalValue = ["total_interactions", "accounts_engaged"]
 
   let remainingDays = Math.max(1, params.days)
   let currentUntilMs = Date.now()
@@ -1018,7 +1022,8 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
     const since = toUnixSeconds(sinceMs)
     const until = toUnixSeconds(currentUntilMs)
 
-    const run = async (metricList: string[]) => {
+    // --- Call A: time-series (reach, views) ---
+    const runTimeSeries = async (metricList: string[]) => {
       const u = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
       u.searchParams.set("metric", metricList.join(","))
       u.searchParams.set("period", "day")
@@ -1033,9 +1038,9 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
 
     let r: Response
     let body: any
-    ;({ r, body } = await run(metricListPrimary))
+    ;({ r, body } = await runTimeSeries(metricListTimeSeries))
     if (!r.ok && isUnsupportedMetricBody(body)) {
-      ;({ r, body } = await run(metricListFallback))
+      ;({ r, body } = await runTimeSeries(metricListTimeFallback))
     }
 
     lastStatus = r.status
@@ -1045,8 +1050,27 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
       return { ok: false, status: lastStatus, body: lastBody, data: [], url: lastUrl }
     }
 
-    const data = Array.isArray(body?.data) ? body.data : []
-    mergedData.push(...data)
+    const tsData = Array.isArray(body?.data) ? body.data : []
+    mergedData.push(...tsData)
+
+    // --- Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort ---
+    try {
+      const uTv = new URL(`${GRAPH_BASE}/${encodeURIComponent(params.igId)}/insights`)
+      uTv.searchParams.set("metric", metricListTotalValue.join(","))
+      uTv.searchParams.set("period", "day")
+      uTv.searchParams.set("metric_type", "total_value")
+      uTv.searchParams.set("since", String(since))
+      uTv.searchParams.set("until", String(until))
+      uTv.searchParams.set("access_token", params.pageAccessToken)
+      const tvRes = await fetch(uTv.toString(), { method: "GET", cache: "no-store" })
+      if (tvRes.ok) {
+        const tvBody = await safeJson(tvRes)
+        const tvData = Array.isArray(tvBody?.data) ? tvBody.data : []
+        mergedData.push(...tvData)
+      }
+    } catch {
+      // best-effort: total_value call failure leaves interactions/engaged as 0
+    }
 
     remainingDays -= chunkDays
     currentUntilMs = sinceMs - DAY_MS
@@ -1527,30 +1551,30 @@ async function handle(req: Request) {
           const sinceDay = fetchStartDay < rangeStart ? rangeStart : fetchStartDay
           const untilDay = rangeEnd
 
-          // Fetch reach + interactions + engaged + views in one call (all support period=day time-series)
-          const syncMetricsPrimary = "reach,total_interactions,accounts_engaged,views"
-          const syncMetricsFallback = "reach,total_interactions"
+          // Call A: time-series metrics (reach + views) — no metric_type
           let insightsRes = await fetch(
             `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
-              `?metric=${syncMetricsPrimary}` +
+              `?metric=reach,views` +
               `&period=day` +
               `&since=${sinceDay}` +
               `&until=${untilDay}` +
               `&access_token=${accessToken}`
           )
-          let insightsJson = await safeJson(insightsRes)
-          // Fallback: if primary metric list rejected, retry with minimal set
-          if (!insightsRes.ok && isUnsupportedMetricBody(insightsJson)) {
-            insightsRes = await fetch(
-              `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
-                `?metric=${syncMetricsFallback}` +
-                `&period=day` +
-                `&since=${sinceDay}` +
-                `&until=${untilDay}` +
-                `&access_token=${accessToken}`
-            )
-            insightsJson = await safeJson(insightsRes)
+          // Fallback to reach-only if views rejected
+          if (!insightsRes.ok) {
+            const errBody = await safeJson(insightsRes)
+            if (isUnsupportedMetricBody(errBody)) {
+              insightsRes = await fetch(
+                `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
+                  `?metric=reach` +
+                  `&period=day` +
+                  `&since=${sinceDay}` +
+                  `&until=${untilDay}` +
+                  `&access_token=${accessToken}`
+              )
+            }
           }
+          const insightsJson = await safeJson(insightsRes)
 
           if (!insightsRes.ok) {
             console.log("REACH SYNC DONE", { rows: 0, reason: "graph_not_ok", status: insightsRes.status })
@@ -1560,9 +1584,32 @@ async function handle(req: Request) {
               insightsData.find((m: any) => m?.name === name)?.values ?? []
 
             const reachSeries = extractSyncSeries("reach")
-            const interactionsSeries = extractSyncSeries("total_interactions")
-            const engagedSeries = extractSyncSeries("accounts_engaged")
             const viewsSeries = extractSyncSeries("views")
+
+            // Call B: total_value metrics — best-effort, do NOT fail reach-sync if this fails
+            let interactionsSeries: any[] = []
+            let engagedSeries: any[] = []
+            try {
+              const tvRes = await fetch(
+                `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
+                  `?metric=total_interactions,accounts_engaged` +
+                  `&period=day` +
+                  `&metric_type=total_value` +
+                  `&since=${sinceDay}` +
+                  `&until=${untilDay}` +
+                  `&access_token=${accessToken}`
+              )
+              if (tvRes.ok) {
+                const tvJson = await safeJson(tvRes)
+                const tvData: any[] = Array.isArray(tvJson?.data) ? tvJson.data : []
+                const extractTv = (name: string): any[] =>
+                  tvData.find((m: any) => m?.name === name)?.values ?? []
+                interactionsSeries = extractTv("total_interactions")
+                engagedSeries = extractTv("accounts_engaged")
+              }
+            } catch {
+              // best-effort: leave interactions/engaged as 0
+            }
 
             console.log("IG REACH SERIES PARSED", { count: reachSeries.length })
 
@@ -1590,20 +1637,23 @@ async function handle(req: Request) {
                 const n = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
                 rec.reach = n
               }
-              for (const v of interactionsSeries) {
-                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
-                if (!day || day.length !== 10) continue
-                ensureSync(day).total_interactions = toSafeInt(v?.value)
-              }
-              for (const v of engagedSeries) {
-                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
-                if (!day || day.length !== 10) continue
-                ensureSync(day).accounts_engaged = toSafeInt(v?.value)
-              }
               for (const v of viewsSeries) {
                 const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
                 if (!day || day.length !== 10) continue
                 ensureSync(day).impressions = toSafeInt(v?.value)
+              }
+              for (const v of interactionsSeries) {
+                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+                if (!day || day.length !== 10) continue
+                // total_value shape: { end_time, total_value: { value } } or { end_time, value }
+                const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+                ensureSync(day).total_interactions = toSafeInt(raw)
+              }
+              for (const v of engagedSeries) {
+                const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+                if (!day || day.length !== 10) continue
+                const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+                ensureSync(day).accounts_engaged = toSafeInt(raw)
               }
 
               const rows = Array.from(syncByDay.entries())

@@ -193,58 +193,77 @@ export async function POST(req: NextRequest) {
     const byDay = new Map<string, { reach: number | null; total_interactions: number; impressions: number; accounts_engaged: number }>()
 
     for (const { chunkSince, chunkUntil } of chunks) {
-      // Call A: reach + total_interactions + accounts_engaged + views (all support period=day time-series)
-      const primaryMetrics = "reach,total_interactions,accounts_engaged,views"
-      const fallbackMetrics = "reach,total_interactions"
-      let multiRes = await fetch(
+      // --- Call A: time-series metrics (reach + views) — no metric_type ---
+      let tsRes = await fetch(
         `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-          `?metric=${primaryMetrics}` +
+          `?metric=reach,views` +
           `&period=day` +
           `&since=${chunkSince}` +
           `&until=${chunkUntil}` +
           `&access_token=${pageAccessToken}`,
         { cache: "no-store" }
       )
-      let multiJson = await safeJson(multiRes) as any
-      // Fallback: if primary metric list rejected, retry with minimal set
-      if (!multiRes.ok) {
-        const graphCode = multiJson?.error?.code
-        const graphMsg = String(multiJson?.error?.message ?? "")
+      let tsJson = await safeJson(tsRes) as any
+      // Fallback to reach-only if views rejected
+      if (!tsRes.ok) {
+        const graphCode = tsJson?.error?.code
+        const graphMsg = String(tsJson?.error?.message ?? "")
         const isUnsupported = graphCode === 100 || graphMsg.includes("metric_type") || graphMsg.includes("unsupported") || graphMsg.includes("invalid")
         if (isUnsupported) {
-          multiRes = await fetch(
+          tsRes = await fetch(
             `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-              `?metric=${fallbackMetrics}` +
+              `?metric=reach` +
               `&period=day` +
               `&since=${chunkSince}` +
               `&until=${chunkUntil}` +
               `&access_token=${pageAccessToken}`,
             { cache: "no-store" }
           )
-          multiJson = await safeJson(multiRes) as any
+          tsJson = await safeJson(tsRes) as any
         }
       }
 
-      if (!multiRes.ok) {
-        const graphMsg = multiJson?.error?.message ?? "graph_error"
+      if (!tsRes.ok) {
+        const graphMsg = tsJson?.error?.message ?? "graph_error"
         return NextResponse.json({
           ok: false,
           error: "graph_fetch_failed",
-          status: multiRes.status,
+          status: tsRes.status,
           message: graphMsg,
           missing: missingDays,
           ...(debugMode ? { debug: { chunkSince, chunkUntil } } : {}),
         }, { status: 502 })
       }
 
-      const multiData: any[] = Array.isArray(multiJson?.data) ? multiJson.data : []
-      const extractBackfillSeries = (name: string): any[] =>
-        multiData.find((m: any) => m?.name === name)?.values ?? []
+      const tsData: any[] = Array.isArray(tsJson?.data) ? tsJson.data : []
+      const extractTs = (name: string): any[] => tsData.find((m: any) => m?.name === name)?.values ?? []
+      const reachSeries: any[] = extractTs("reach")
+      const viewsSeries: any[] = extractTs("views")
 
-      const reachSeries: any[] = extractBackfillSeries("reach")
-      const interactionsSeries: any[] = extractBackfillSeries("total_interactions")
-      const engagedSeries: any[] = extractBackfillSeries("accounts_engaged")
-      const viewsSeries: any[] = extractBackfillSeries("views")
+      // --- Call B: total_value metrics — best-effort, do NOT fail backfill if this fails ---
+      let interactionsSeries: any[] = []
+      let engagedSeries: any[] = []
+      try {
+        const tvRes = await fetch(
+          `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+            `?metric=total_interactions,accounts_engaged` +
+            `&period=day` +
+            `&metric_type=total_value` +
+            `&since=${chunkSince}` +
+            `&until=${chunkUntil}` +
+            `&access_token=${pageAccessToken}`,
+          { cache: "no-store" }
+        )
+        if (tvRes.ok) {
+          const tvJson = await safeJson(tvRes) as any
+          const tvData: any[] = Array.isArray(tvJson?.data) ? tvJson.data : []
+          const extractTv = (name: string): any[] => tvData.find((m: any) => m?.name === name)?.values ?? []
+          interactionsSeries = extractTv("total_interactions")
+          engagedSeries = extractTv("accounts_engaged")
+        }
+      } catch {
+        // best-effort: leave interactions/engaged as 0
+      }
 
       for (const v of reachSeries) {
         const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
@@ -254,25 +273,28 @@ export async function POST(req: NextRequest) {
         ex.reach = n
         byDay.set(d, ex)
       }
+      for (const v of viewsSeries) {
+        const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+        if (!d) continue
+        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
+        ex.impressions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+        byDay.set(d, ex)
+      }
       for (const v of interactionsSeries) {
         const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
         if (!d) continue
         const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
-        ex.total_interactions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+        // total_value shape: { end_time, total_value: { value } } or { end_time, value }
+        const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+        ex.total_interactions = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
         byDay.set(d, ex)
       }
       for (const v of engagedSeries) {
         const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
         if (!d) continue
         const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
-        ex.accounts_engaged = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
-        byDay.set(d, ex)
-      }
-      for (const v of viewsSeries) {
-        const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
-        if (!d) continue
-        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0, impressions: 0, accounts_engaged: 0 }
-        ex.impressions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+        const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+        ex.accounts_engaged = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
         byDay.set(d, ex)
       }
     } // end chunk loop
