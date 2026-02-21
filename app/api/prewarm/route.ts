@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createAuthedClient, supabaseServer, createServiceClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 import { createHash } from "crypto"
+import { upsertDailySnapshot } from "@/app/api/_lib/upsertDailySnapshot"
 
 // ---------------------------------------------------------------------------
 // POST /api/prewarm
@@ -122,21 +123,19 @@ async function t1EnsureTodaySnapshot(params: {
   const todayData = byDay.get(today)
   if (!todayData) return { did: false, reason: "no_graph_data_for_today" }
 
-  await supabaseServer
-    .from("account_daily_snapshot")
-    .upsert({
-      ig_account_id: igAccountId,
-      user_id: userId,
-      ig_user_id: Number(igUserId),
-      page_id: pageId ? Number(pageId) : 0,
-      day: today,
-      reach: todayData.reach,
-      total_interactions: todayData.total_interactions,
-      impressions: 0,
-      accounts_engaged: 0,
-      source_used: "prewarm",
-      wrote_at: nowIso(),
-    } as any, { onConflict: "ig_account_id,day" })
+  await upsertDailySnapshot(supabaseServer, {
+    ig_account_id: igAccountId,
+    user_id: userId,
+    ig_user_id: Number(igUserId),
+    page_id: pageId ? Number(pageId) : 0,
+    day: today,
+    reach: todayData.reach,
+    total_interactions: todayData.total_interactions,
+    impressions: 0,
+    accounts_engaged: 0,
+    source_used: "prewarm",
+    wrote_at: nowIso(),
+  })
 
   return { did: true }
 }

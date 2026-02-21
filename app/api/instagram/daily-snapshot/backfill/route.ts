@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
+import { upsertDailySnapshot } from "@/app/api/_lib/upsertDailySnapshot"
 
 // ---------------------------------------------------------------------------
 // POST /api/instagram/daily-snapshot/backfill
@@ -324,14 +325,17 @@ export async function POST(req: NextRequest) {
     const skippedNoData = missingDays.filter((d) => !byDay.has(d))
 
     if (rows.length > 0) {
-      const { error: upsertErr } = await service
-        .from("account_daily_snapshot")
-        .upsert(rows as any, { onConflict: "user_id_text,ig_user_id,page_id,day" })
-      if (upsertErr) {
+      const upsertResult = await upsertDailySnapshot(service, rows)
+      if (!upsertResult.ok) {
+        const errMsg = upsertResult.error instanceof Error
+          ? upsertResult.error.message
+          : typeof (upsertResult.error as any)?.message === "string"
+            ? (upsertResult.error as any).message
+            : "db_error"
         return NextResponse.json({
           ok: false,
           error: "upsert_failed",
-          message: typeof upsertErr.message === "string" ? upsertErr.message : "db_error",
+          message: errMsg,
           inserted: 0,
           missing: missingDays,
         }, { status: 500 })

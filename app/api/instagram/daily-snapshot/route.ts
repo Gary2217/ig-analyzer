@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 import { createHash } from "crypto"
+import { upsertDailySnapshot } from "@/app/api/_lib/upsertDailySnapshot"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -504,33 +505,11 @@ async function upsertAccountDailySnapshots(params: {
       })
     }
 
-    // HARD GUARD — prevent invalid FK writes
-    function isValidUuid(v: unknown): v is string {
-      return typeof v === "string" &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
-    }
-
-    if (!isValidUuid(params.ssotId)) {
-      console.warn("[daily-snapshot] skip upsert — invalid ssotId", {
-        ssotId: params.ssotId,
-        authedUserId: params.authedUserId,
-        igId: params.igId,
-        pageId: params.pageId,
-      })
-
-      return {
-        ok: true,
-        skipped: true,
-        reason: "invalid_ssotId"
-      }
-    }
-
-    const { error } = await params.authed.from("account_daily_snapshot").upsert(
+    const result = await upsertDailySnapshot(
+      params.authed,
       params.rows.map((r) => ({
-        // SSOT-only: reach rows must be keyed by (ig_account_id, day)
-        ig_account_id: String(params.ssotId),
-        user_id: String(params.authedUserId),
-        user_id_text: String(params.authedUserId),
+        ig_account_id: params.ssotId,
+        user_id: params.authedUserId,
         ig_user_id: Number(params.igId),
         page_id: Number(params.pageId),
         day: r.day,
@@ -538,16 +517,17 @@ async function upsertAccountDailySnapshots(params: {
         impressions: r.impressions,
         total_interactions: r.total_interactions,
         accounts_engaged: r.accounts_engaged,
-      })),
-      { onConflict: "ig_account_id,day" }
+      }))
     )
 
-    if (!error) {
+    if (result.ok && !result.skipped) {
       for (const r of params.rows) {
         console.log("SSOT SNAPSHOT WRITE OK", { day: r.day, reachStored: r.reach })
       }
     }
-    return { ok: !error, error }
+    return result.ok
+      ? { ok: true as const, error: null }
+      : { ok: false as const, error: (result as any).error }
   } catch (err: any) {
     for (const r of params.rows) {
       console.error("SSOT SNAPSHOT WRITE FAIL", { day: r.day, err: String(err) })
@@ -1683,7 +1663,6 @@ async function handle(req: Request) {
                 .map(([day, rec]) => ({
                   ig_account_id: String(reachWriteSsotId),
                   user_id: String(userId),
-                  user_id_text: String(userId),
                   ig_user_id: Number(resolvedIgId),
                   page_id: Number(resolvedPageId),
                   day,
@@ -1699,9 +1678,7 @@ async function handle(req: Request) {
                 if (!authed || !userId) {
                   console.warn("[daily-snapshot] skip account_daily_snapshot upsert (missing authed user)", { cronMode: Boolean(cronMode) })
                 } else {
-                  await authed.from("account_daily_snapshot").upsert(rows as any, {
-                    onConflict: "ig_account_id,day",
-                  })
+                  await upsertDailySnapshot(authed, rows)
                   __dsReachSyncAt.set(reachSyncKey, nowMs())
                 }
               }
