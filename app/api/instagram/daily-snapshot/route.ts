@@ -487,6 +487,8 @@ async function upsertAccountDailySnapshots(params: {
     impressions: number
     total_interactions: number
     accounts_engaged: number
+    source_used?: string
+    wrote_at?: string
   }>
 }) {
   if (params.rows.length === 0) return { ok: true as const, error: null }
@@ -517,6 +519,8 @@ async function upsertAccountDailySnapshots(params: {
         impressions: r.impressions,
         total_interactions: r.total_interactions,
         accounts_engaged: r.accounts_engaged,
+        source_used: r.source_used,
+        wrote_at: r.wrote_at,
       }))
     )
 
@@ -592,6 +596,8 @@ async function backfillMissingSnapshotsFromGraph(params: {
         impressions: toSafeInt(p.impressions),
         total_interactions: toSafeInt(p.interactions),
         accounts_engaged: toSafeInt(p.engaged_accounts),
+        source_used: "graph_backfill",
+        wrote_at: new Date().toISOString(),
       }
     })
 
@@ -1658,6 +1664,7 @@ async function handle(req: Request) {
                 ensureSync(day).accounts_engaged = toSafeInt(raw)
               }
 
+              const reachSyncWroteAt = new Date().toISOString()
               const rows = Array.from(syncByDay.entries())
                 .filter(([, rec]) => typeof rec.reach === "number" && Number.isFinite(rec.reach))
                 .map(([day, rec]) => ({
@@ -1670,6 +1677,8 @@ async function handle(req: Request) {
                   total_interactions: rec.total_interactions,
                   accounts_engaged: rec.accounts_engaged,
                   impressions: rec.impressions,
+                  source_used: "reach_sync",
+                  wrote_at: reachSyncWroteAt,
                 }))
 
               console.log("REACH SYNC UPSERT COUNT", { rows: rows.length })
