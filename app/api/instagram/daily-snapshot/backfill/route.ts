@@ -2,6 +2,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 import { NextResponse, type NextRequest } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 
 // ---------------------------------------------------------------------------
@@ -32,6 +33,14 @@ async function safeJson(res: Response): Promise<unknown> {
 
 export async function POST(req: NextRequest) {
   try {
+    // --- Service client (runtime env, bypasses RLS for writes) ---
+    const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim()
+    const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim()
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json({ ok: false, error: "missing_service_role_key" }, { status: 500 })
+    }
+    const service = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
+
     // --- Auth ---
     const authed = await createAuthedClient()
     const userRes = await authed.auth.getUser()
@@ -286,7 +295,7 @@ export async function POST(req: NextRequest) {
     const skippedNoData = missingDays.filter((d) => !byDay.has(d))
 
     if (rows.length > 0) {
-      const { error: upsertErr } = await supabaseServer
+      const { error: upsertErr } = await service
         .from("account_daily_snapshot")
         .upsert(rows as any, { onConflict: "user_id,ig_user_id,page_id,day" })
       if (upsertErr) {
