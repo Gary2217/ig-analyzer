@@ -4024,9 +4024,10 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       .map((r) => {
         if (!isRecord(r)) return null
         const day = typeof r.day === "string" ? r.day : ""
-        const n = typeof r.followers_count === "number" ? r.followers_count : Number((r as any).followers_count)
-        if (!day || !Number.isFinite(n)) return null
-        return { day, followers_count: Math.floor(n) }
+        const raw = typeof r.followers_count === "number" ? r.followers_count : Number((r as any).followers_count)
+        // Skip rows where followers_count is missing, NaN, or negative
+        if (!day || !Number.isFinite(raw) || raw < 0) return null
+        return { day, followers_count: Math.floor(raw) }
       })
       .filter((x): x is { day: string; followers_count: number } => x !== null)
 
@@ -4043,10 +4044,22 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       ? ((dailySnapshotData as any).points as unknown[])
       : ([] as unknown[])
 
-    // API field is `date`, not `day` — backfill `day` so normalize can parse dates correctly
+    // API field is `date`, not `day` — backfill `day` so normalize can parse dates correctly.
+    // Also sanitize numeric fields: null/undefined/NaN/negative -> 0.
+    const safeNum = (v: unknown): number => {
+      const n = typeof v === "number" ? v : Number(v)
+      return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0
+    }
     const pointsRawNormalized = pointsRaw.map((p: any) => {
       if (p && typeof p === "object") {
-        return { ...p, day: p.day ?? p.date }
+        return {
+          ...p,
+          day: p.day ?? p.date,
+          reach: safeNum(p.reach),
+          impressions: safeNum(p.impressions),
+          interactions: safeNum(p.interactions ?? p.total_interactions),
+          engaged_accounts: safeNum(p.engaged_accounts ?? p.accounts_engaged),
+        }
       }
       return p
     })
@@ -5880,9 +5893,11 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
               <div className="mb-2 text-sm text-white/70">
                 {activeLocale?.startsWith("zh") ? "趨勢" : "Trends"}
               </div>
-              <div className="text-xs text-white/40 mb-1">
-                trend points: {(trendPoints ?? []).length} | follower rows: {(followersDailyRows ?? []).length}
-              </div>
+              {__DEBUG_RESULTS__ && (
+                <div className="text-xs text-white/40 mb-1">
+                  trend points: {(trendPoints ?? []).length} | follower rows: {(followersDailyRows ?? []).length}
+                </div>
+              )}
               <TrendChartModule
                 trendPoints={trendPoints ?? []}
                 followersDailyRows={followersDailyRows ?? []}
