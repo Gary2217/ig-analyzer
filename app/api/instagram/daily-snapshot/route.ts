@@ -1075,9 +1075,19 @@ async function fetchInsightsTimeSeries(params: { igId: string; pageAccessToken: 
         const tvBody = await safeJson(tvRes)
         const tvData = Array.isArray(tvBody?.data) ? tvBody.data : []
         mergedData.push(...tvData)
+      } else {
+        const tvErrBody = await safeJson(tvRes) as any
+        console.warn("[account-daily-snapshot] fetchInsightsTimeSeries Call B non-ok", {
+          status: tvRes.status,
+          code: tvErrBody?.error?.code,
+          message: tvErrBody?.error?.message,
+          ig_user_id: params.igId,
+          since,
+          until,
+        })
       }
-    } catch {
-      // best-effort: total_value call failure leaves interactions/engaged as 0
+    } catch (tvErr) {
+      console.warn("[account-daily-snapshot] fetchInsightsTimeSeries Call B threw", { err: String(tvErr) })
     }
 
     remainingDays -= chunkDays
@@ -1561,7 +1571,7 @@ async function handle(req: Request) {
 
           // Call A: time-series metrics (reach + views) — no metric_type
           let insightsRes = await fetch(
-            `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
+            `${GRAPH_BASE}/${resolvedIgId}/insights` +
               `?metric=reach,views` +
               `&period=day` +
               `&since=${sinceDay}` +
@@ -1573,7 +1583,7 @@ async function handle(req: Request) {
             const errBody = await safeJson(insightsRes)
             if (isUnsupportedMetricBody(errBody)) {
               insightsRes = await fetch(
-                `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
+                `${GRAPH_BASE}/${resolvedIgId}/insights` +
                   `?metric=reach` +
                   `&period=day` +
                   `&since=${sinceDay}` +
@@ -1599,7 +1609,7 @@ async function handle(req: Request) {
             let engagedSeries: any[] = []
             try {
               const tvRes = await fetch(
-                `https://graph.facebook.com/v21.0/${resolvedIgId}/insights` +
+                `${GRAPH_BASE}/${resolvedIgId}/insights` +
                   `?metric=total_interactions,accounts_engaged` +
                   `&period=day` +
                   `&metric_type=total_value` +
@@ -1614,9 +1624,17 @@ async function handle(req: Request) {
                   tvData.find((m: any) => m?.name === name)?.values ?? []
                 interactionsSeries = extractTv("total_interactions")
                 engagedSeries = extractTv("accounts_engaged")
+              } else {
+                const tvErrBody = await safeJson(tvRes) as any
+                console.warn("[account-daily-snapshot] reach-sync Call B non-ok", {
+                  status: tvRes.status,
+                  code: tvErrBody?.error?.code,
+                  message: tvErrBody?.error?.message,
+                  ig_user_id: resolvedIgId,
+                })
               }
-            } catch {
-              // best-effort: leave interactions/engaged as 0
+            } catch (tvErr) {
+              console.warn("[account-daily-snapshot] reach-sync Call B threw", { err: String(tvErr) })
             }
 
             console.log("IG REACH SERIES PARSED", { count: reachSeries.length })
