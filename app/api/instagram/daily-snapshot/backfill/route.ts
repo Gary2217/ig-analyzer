@@ -288,7 +288,7 @@ export async function POST(req: NextRequest) {
     if (rows.length > 0) {
       const { error: upsertErr } = await authed
         .from("account_daily_snapshot")
-        .upsert(rows as any, { onConflict: "ig_account_id,day" })
+        .upsert(rows as any, { onConflict: "user_id,ig_user_id,page_id,day" })
       if (upsertErr) {
         return NextResponse.json({
           ok: false,
