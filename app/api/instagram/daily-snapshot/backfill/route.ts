@@ -280,6 +280,7 @@ export async function POST(req: NextRequest) {
         return {
           ig_account_id: igAccountId,
           user_id: user.id,
+          user_id_text: user.id,
           ig_user_id: Number(igUserId),
           page_id: pageId ? Number(pageId) : 0,
           day: d,
@@ -297,7 +298,7 @@ export async function POST(req: NextRequest) {
     if (rows.length > 0) {
       const { error: upsertErr } = await service
         .from("account_daily_snapshot")
-        .upsert(rows as any, { onConflict: "user_id,ig_user_id,page_id,day" })
+        .upsert(rows as any, { onConflict: "user_id_text,ig_user_id,page_id,day" })
       if (upsertErr) {
         return NextResponse.json({
           ok: false,
