@@ -3309,6 +3309,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     const n = Number(raw)
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : null
   })()
+  const followersForDisplay: number | undefined =
+    kpiFollowers != null && kpiFollowers > 0
+      ? kpiFollowers
+      : Number.isFinite(followersCount as any) && (followersCount as any) > 0
+      ? Math.floor(followersCount as any)
+      : undefined
   const kpiFollowing = null as number | null
   const kpiPosts = null as number | null
 
@@ -5783,7 +5789,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
                       <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-center transition-transform duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/20 min-w-0">
                         <div className="text-[10px] leading-tight text-white/60 whitespace-nowrap truncate min-w-0">{t("results.profile.followers")}</div>
                         <div className="mt-0.5 text-[clamp(14px,4vw,16px)] font-semibold tabular-nums whitespace-nowrap truncate min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                          {formatCompact(followersCount) ?? "—"}
+                          {formatCompact(followersForDisplay) ?? "—"}
                         </div>
                       </div>
 
