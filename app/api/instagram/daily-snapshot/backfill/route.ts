@@ -162,9 +162,10 @@ export async function POST(req: NextRequest) {
     const sinceDay = missingDays[missingDays.length - 1] // oldest
     const untilDay = missingDays[0]                      // newest
 
-    const insightsRes = await fetch(
+    // Call 1: reach (period=day, no metric_type required)
+    const reachRes = await fetch(
       `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-        `?metric=reach,total_interactions` +
+        `?metric=reach` +
         `&period=day` +
         `&since=${sinceDay}` +
         `&until=${untilDay}` +
@@ -172,20 +173,52 @@ export async function POST(req: NextRequest) {
       { cache: "no-store" }
     )
 
-    if (!insightsRes.ok) {
-      const errBody = await safeJson(insightsRes) as any
+    if (!reachRes.ok) {
+      const errBody = await safeJson(reachRes) as any
+      const graphCode = errBody?.error?.code
+      const graphMsg = errBody?.error?.message ?? "graph_error"
+      const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
       return NextResponse.json({
         ok: false,
         error: "graph_fetch_failed",
-        status: insightsRes.status,
-        message: errBody?.error?.message ?? "graph_error",
+        status: reachRes.status,
+        message: graphMsg,
+        ...(isMetricTypeError ? { hint: "metric=reach requires no metric_type; check Graph API version" } : {}),
         missing: missingDays,
-      }, { status: 502 })
+      }, { status: isMetricTypeError ? 400 : 502 })
     }
 
-    const insightsJson = await safeJson(insightsRes) as any
-    const reachSeries: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
-    const interactionsSeries: any[] = insightsJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
+    // Call 2: total_interactions requires metric_type=total_value
+    const interactionsRes = await fetch(
+      `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+        `?metric=total_interactions` +
+        `&period=day` +
+        `&metric_type=total_value` +
+        `&since=${sinceDay}` +
+        `&until=${untilDay}` +
+        `&access_token=${pageAccessToken}`,
+      { cache: "no-store" }
+    )
+
+    if (!interactionsRes.ok) {
+      const errBody = await safeJson(interactionsRes) as any
+      const graphCode = errBody?.error?.code
+      const graphMsg = errBody?.error?.message ?? "graph_error"
+      const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
+      return NextResponse.json({
+        ok: false,
+        error: "graph_fetch_failed",
+        status: interactionsRes.status,
+        message: graphMsg,
+        ...(isMetricTypeError ? { hint: "metric=total_interactions requires metric_type=total_value" } : {}),
+        missing: missingDays,
+      }, { status: isMetricTypeError ? 400 : 502 })
+    }
+
+    const reachJson = await safeJson(reachRes) as any
+    const interactionsJson = await safeJson(interactionsRes) as any
+    const reachSeries: any[] = reachJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
+    const interactionsSeries: any[] = interactionsJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
 
     // Build day -> values map
     const byDay = new Map<string, { reach: number | null; total_interactions: number }>()
