@@ -3303,11 +3303,12 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const dashKpis = isRecord(dashSummary) && isRecord(dashSummary.kpis) ? (dashSummary.kpis as Record<string, unknown>) : null
 
   const kpiFollowers = (() => {
-    const fromSummary = dashKpis?.followers_count
-    const n = typeof fromSummary === "number" ? fromSummary : typeof fromSummary === "string" ? Number(fromSummary) : NaN
-    if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+    const fromSummary = (dashSummary as any)?.kpis?.followers_count
+    const n = typeof fromSummary === "string" ? Number(fromSummary) : fromSummary
+    if (Number.isFinite(n) && n > 0) return Math.floor(n)
     const fromCard = creatorCardPreviewData?.followers
-    return typeof fromCard === "number" && Number.isFinite(fromCard) ? fromCard : null
+    if (Number.isFinite(fromCard) && (fromCard as number) > 0) return Math.floor(fromCard as number)
+    return null
   })()
   const kpiFollowing = null as number | null
   const kpiPosts = null as number | null
