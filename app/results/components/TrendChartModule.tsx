@@ -106,7 +106,9 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
   const hasData = chartData.some((d) => typeof d.value === "number" && d.value > 0)
 
   return (
-    <div className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm p-3 sm:p-4">
+    <div data-trend-chart-module="1" className="mt-4">
+      <div className="mb-2 text-sm text-white/70">TrendChartModule mounted</div>
+      <div className="mt-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm p-3 sm:p-4">
       {/* Metric selector */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {METRIC_CONFIG.map((m) => {
@@ -200,6 +202,7 @@ export default function TrendChartModule({ trendPoints, followersDailyRows, loca
           )
         })}
       </div>
+    </div>
     </div>
   )
 }

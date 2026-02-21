@@ -5581,9 +5581,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
               </CardContent>
             </Card>
 
+            <div
+              data-trend-insert-marker="1"
+              className="mt-4 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70"
+            >
+              TrendChartModule insert marker (should be visible)
+            </div>
             <TrendChartModule
-              trendPoints={trendPoints}
-              followersDailyRows={followersDailyRows}
+              trendPoints={trendPoints ?? []}
+              followersDailyRows={followersDailyRows ?? []}
               locale={activeLocale}
             />
 
