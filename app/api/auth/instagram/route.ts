@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   const state = crypto.randomBytes(32).toString("hex")
 
-  const res = NextResponse.redirect(new URL("https://www.facebook.com/v21.0/dialog/oauth"))
+  const res = NextResponse.redirect(new URL("https://www.facebook.com/v24.0/dialog/oauth"))
 
   const origin = getRequestOrigin(req)
   const redirectUri = `${origin}/api/auth/instagram/callback`
@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const oauthUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth")
+  const oauthUrl = new URL("https://www.facebook.com/v24.0/dialog/oauth")
   oauthUrl.searchParams.set("client_id", META_APP_ID)
   oauthUrl.searchParams.set("redirect_uri", redirectUri)
   oauthUrl.searchParams.set("state", state)

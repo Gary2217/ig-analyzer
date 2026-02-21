@@ -43,7 +43,7 @@ async function fetchIgAccountsFromPages(accessToken: string): Promise<
   if (!token) return []
 
   try {
-    const graphUrl = new URL("https://graph.facebook.com/v21.0/me/accounts")
+    const graphUrl = new URL("https://graph.facebook.com/v24.0/me/accounts")
     graphUrl.searchParams.set("fields", "id,name,instagram_business_account{id,username,profile_picture_url}")
     graphUrl.searchParams.set("limit", "50")
     graphUrl.searchParams.set("access_token", token)
@@ -88,7 +88,7 @@ async function tryFetchIgUserId(accessToken: string): Promise<string> {
   if (!token) return ""
 
   try {
-    const graphUrl = new URL("https://graph.facebook.com/v21.0/me/accounts")
+    const graphUrl = new URL("https://graph.facebook.com/v24.0/me/accounts")
     graphUrl.searchParams.set("fields", "name,instagram_business_account")
     graphUrl.searchParams.set("access_token", token)
 
@@ -200,7 +200,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const tokenUrl = new URL("https://graph.facebook.com/v21.0/oauth/access_token")
+    // Step 1: Exchange code for short-lived token
+    const tokenUrl = new URL("https://graph.facebook.com/v24.0/oauth/access_token")
     tokenUrl.searchParams.set("client_id", META_APP_ID)
     tokenUrl.searchParams.set("client_secret", META_APP_SECRET)
     tokenUrl.searchParams.set("redirect_uri", redirectUri)
@@ -209,24 +210,52 @@ export async function GET(req: NextRequest) {
     const tokenRes = await fetch(tokenUrl.toString(), { method: "GET", cache: "no-store" })
     const tokenJson: any = await safeJson(tokenRes)
 
-    const accessToken = typeof tokenJson?.access_token === "string" ? tokenJson.access_token.trim() : ""
-    const expiresInSec =
-      typeof tokenJson?.expires_in === "number"
-        ? tokenJson.expires_in
-        : typeof tokenJson?.expires_in === "string"
-          ? Number(tokenJson.expires_in)
-          : NaN
-    const expiresAt = Number.isFinite(expiresInSec) && expiresInSec > 0 ? new Date(Date.now() + expiresInSec * 1000).toISOString() : null
+    const shortLivedToken = typeof tokenJson?.access_token === "string" ? tokenJson.access_token.trim() : ""
 
-    if (!tokenRes.ok || !accessToken) {
+    if (!tokenRes.ok || !shortLivedToken) {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[ig-oauth] token exchange failed", {
           status: tokenRes.status,
-          hasToken: Boolean(accessToken),
+          hasToken: Boolean(shortLivedToken),
           error: tokenJson?.error ? tokenJson.error : null,
         })
       }
       return redirectWithError("exchange_failed")
+    }
+
+    // Step 2: Exchange short-lived token for long-lived token (60 days)
+    let accessToken = shortLivedToken
+    let expiresAt: string | null = null
+    try {
+      const llUrl = new URL("https://graph.facebook.com/v24.0/oauth/access_token")
+      llUrl.searchParams.set("grant_type", "fb_exchange_token")
+      llUrl.searchParams.set("client_id", META_APP_ID)
+      llUrl.searchParams.set("client_secret", META_APP_SECRET)
+      llUrl.searchParams.set("fb_exchange_token", shortLivedToken)
+      const llRes = await fetch(llUrl.toString(), { method: "GET", cache: "no-store" })
+      const llJson: any = await safeJson(llRes)
+      const llToken = typeof llJson?.access_token === "string" ? llJson.access_token.trim() : ""
+      if (llRes.ok && llToken) {
+        accessToken = llToken
+        const llExpires = typeof llJson?.expires_in === "number" ? llJson.expires_in : NaN
+        expiresAt = Number.isFinite(llExpires) && llExpires > 0 ? new Date(Date.now() + llExpires * 1000).toISOString() : null
+      } else {
+        // Fallback: use short-lived token expiry
+        const slExpires =
+          typeof tokenJson?.expires_in === "number"
+            ? tokenJson.expires_in
+            : typeof tokenJson?.expires_in === "string"
+              ? Number(tokenJson.expires_in)
+              : NaN
+        expiresAt = Number.isFinite(slExpires) && slExpires > 0 ? new Date(Date.now() + slExpires * 1000).toISOString() : null
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[ig-oauth] long-lived token exchange failed, using short-lived", { status: llRes.status })
+        }
+      }
+    } catch (llErr) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[ig-oauth] long-lived token exchange threw", { err: String(llErr) })
+      }
     }
 
     let accountsFromPages: Array<{ page_id: string; ig_user_id: string; username: string | null; profile_picture_url: string | null }> = []
@@ -327,6 +356,25 @@ export async function GET(req: NextRequest) {
                 await authed
                   .from("user_instagram_accounts")
                   .upsert(payload, { onConflict: "user_id,ig_user_id" })
+
+                // Upsert into user_ig_accounts (SSOT table used by ssotId resolution)
+                try {
+                  await authed
+                    .from("user_ig_accounts")
+                    .upsert(
+                      {
+                        user_id: user.id,
+                        provider: "instagram",
+                        ig_user_id: a.ig_user_id,
+                        page_id: a.page_id,
+                        connected_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                      },
+                      { onConflict: "user_id,provider,ig_user_id" },
+                    )
+                } catch {
+                  // swallow
+                }
               }
 
               // Multi-account succeeded; keep existing single-account logic below for tokens only.
