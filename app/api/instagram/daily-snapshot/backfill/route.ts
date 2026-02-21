@@ -86,14 +86,17 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Resolve access token ---
-    const { data: tokenRow } = await supabaseServer
+    // user_ig_account_tokens is keyed by (user_id, provider, ig_user_id) — no ig_account_id column.
+    const { data: tokenRow } = await authed
       .from("user_ig_account_tokens")
       .select("access_token")
-      .eq("ig_account_id", igAccountId)
+      .eq("user_id", user.id)
+      .eq("provider", "instagram")
+      .eq("ig_user_id", igUserId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
-    // Per-account token only — no global fallback (multi-user SaaS safety)
+    // Per-user/account token only — no global fallback (multi-user SaaS safety)
     const token = tokenRow && typeof (tokenRow as any).access_token === "string"
       ? String((tokenRow as any).access_token).trim()
       : ""
@@ -101,9 +104,9 @@ export async function POST(req: NextRequest) {
     if (!token) {
       return NextResponse.json({
         ok: false,
-        error: "missing_token",
+        error: "missing_cookie:ig_access_token",
         message: "No Instagram token found for this account. Reconnect Instagram.",
-      }, { status: 400 })
+      }, { status: 401 })
     }
 
     // --- Resolve page access token ---
