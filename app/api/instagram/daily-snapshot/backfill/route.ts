@@ -169,82 +169,98 @@ export async function POST(req: NextRequest) {
     const sinceTs = Math.floor(Date.parse(`${sinceDay}T00:00:00.000Z`) / 1000)
     const untilTs = Math.floor(Date.parse(`${untilDay}T00:00:00.000Z`) / 1000) + 86400
 
-    // Call 1: reach (period=day, no metric_type required)
-    const reachRes = await fetch(
-      `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-        `?metric=reach` +
-        `&period=day` +
-        `&since=${sinceTs}` +
-        `&until=${untilTs}` +
-        `&access_token=${pageAccessToken}`,
-      { cache: "no-store" }
-    )
-
-    if (!reachRes.ok) {
-      const errBody = await safeJson(reachRes) as any
-      const graphCode = errBody?.error?.code
-      const graphMsg = errBody?.error?.message ?? "graph_error"
-      const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
-      return NextResponse.json({
-        ok: false,
-        error: "graph_fetch_failed",
-        status: reachRes.status,
-        message: graphMsg,
-        ...(isMetricTypeError ? { hint: "metric=reach requires no metric_type; check Graph API version" } : {}),
-        missing: missingDays,
-      }, { status: isMetricTypeError ? 400 : 502 })
+    // Graph API rejects requests where (until - since) > 30 days.
+    // Chunk the range into windows of at most 30 days (2 592 000 s).
+    const MAX_SPAN_SECONDS = 30 * 86400
+    const chunks: Array<{ chunkSince: number; chunkUntil: number }> = []
+    let cur = sinceTs
+    while (cur < untilTs) {
+      const chunkUntil = Math.min(cur + MAX_SPAN_SECONDS, untilTs)
+      chunks.push({ chunkSince: cur, chunkUntil })
+      cur = chunkUntil
     }
 
-    // Call 2: total_interactions requires metric_type=total_value
-    const interactionsRes = await fetch(
-      `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-        `?metric=total_interactions` +
-        `&period=day` +
-        `&metric_type=total_value` +
-        `&since=${sinceTs}` +
-        `&until=${untilTs}` +
-        `&access_token=${pageAccessToken}`,
-      { cache: "no-store" }
-    )
-
-    if (!interactionsRes.ok) {
-      const errBody = await safeJson(interactionsRes) as any
-      const graphCode = errBody?.error?.code
-      const graphMsg = errBody?.error?.message ?? "graph_error"
-      const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
-      return NextResponse.json({
-        ok: false,
-        error: "graph_fetch_failed",
-        status: interactionsRes.status,
-        message: graphMsg,
-        ...(isMetricTypeError ? { hint: "metric=total_interactions requires metric_type=total_value" } : {}),
-        missing: missingDays,
-      }, { status: isMetricTypeError ? 400 : 502 })
-    }
-
-    const reachJson = await safeJson(reachRes) as any
-    const interactionsJson = await safeJson(interactionsRes) as any
-    const reachSeries: any[] = reachJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
-    const interactionsSeries: any[] = interactionsJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
-
-    // Build day -> values map
+    // Build day -> values map (populated across all chunks)
     const byDay = new Map<string, { reach: number | null; total_interactions: number }>()
-    for (const v of reachSeries) {
-      const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
-      if (!d) continue
-      const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
-      const n = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
-      ex.reach = n
-      byDay.set(d, ex)
-    }
-    for (const v of interactionsSeries) {
-      const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
-      if (!d) continue
-      const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
-      const n = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
-      ex.total_interactions = n
-      byDay.set(d, ex)
-    }
+
+    for (const { chunkSince, chunkUntil } of chunks) {
+      // Call A: reach (period=day, no metric_type required)
+      const reachRes = await fetch(
+        `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+          `?metric=reach` +
+          `&period=day` +
+          `&since=${chunkSince}` +
+          `&until=${chunkUntil}` +
+          `&access_token=${pageAccessToken}`,
+        { cache: "no-store" }
+      )
+
+      if (!reachRes.ok) {
+        const errBody = await safeJson(reachRes) as any
+        const graphCode = errBody?.error?.code
+        const graphMsg = errBody?.error?.message ?? "graph_error"
+        const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
+        return NextResponse.json({
+          ok: false,
+          error: "graph_fetch_failed",
+          status: reachRes.status,
+          message: graphMsg,
+          ...(isMetricTypeError ? { hint: "metric=reach requires no metric_type; check Graph API version" } : {}),
+          missing: missingDays,
+          ...(debugMode ? { debug: { chunkSince, chunkUntil } } : {}),
+        }, { status: isMetricTypeError ? 400 : 502 })
+      }
+
+      // Call B: total_interactions requires metric_type=total_value
+      const interactionsRes = await fetch(
+        `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+          `?metric=total_interactions` +
+          `&period=day` +
+          `&metric_type=total_value` +
+          `&since=${chunkSince}` +
+          `&until=${chunkUntil}` +
+          `&access_token=${pageAccessToken}`,
+        { cache: "no-store" }
+      )
+
+      if (!interactionsRes.ok) {
+        const errBody = await safeJson(interactionsRes) as any
+        const graphCode = errBody?.error?.code
+        const graphMsg = errBody?.error?.message ?? "graph_error"
+        const isMetricTypeError = graphCode === 100 || (typeof graphMsg === "string" && graphMsg.includes("metric_type"))
+        return NextResponse.json({
+          ok: false,
+          error: "graph_fetch_failed",
+          status: interactionsRes.status,
+          message: graphMsg,
+          ...(isMetricTypeError ? { hint: "metric=total_interactions requires metric_type=total_value" } : {}),
+          missing: missingDays,
+          ...(debugMode ? { debug: { chunkSince, chunkUntil } } : {}),
+        }, { status: isMetricTypeError ? 400 : 502 })
+      }
+
+      const reachJson = await safeJson(reachRes) as any
+      const interactionsJson = await safeJson(interactionsRes) as any
+      const reachSeries: any[] = reachJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
+      const interactionsSeries: any[] = interactionsJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
+
+      for (const v of reachSeries) {
+        const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+        if (!d) continue
+        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
+        const n = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
+        ex.reach = n
+        byDay.set(d, ex)
+      }
+      for (const v of interactionsSeries) {
+        const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+        if (!d) continue
+        const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
+        const n = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+        ex.total_interactions = n
+        byDay.set(d, ex)
+      }
+    } // end chunk loop
 
     // Only upsert days that have data from Graph
     const wroteAt = new Date().toISOString()
@@ -296,6 +312,8 @@ export async function POST(req: NextRequest) {
           sinceDay, untilDay, sinceTs, untilTs,
           missingCount: missingDays.length,
           missingRequested: missingDays.length,
+          chunkCount: chunks.length,
+          chunks,
           graphReturned: byDay.size,
           upsertedDays: rows.map((r) => r.day),
           noDataFromGraph: skippedNoData,
