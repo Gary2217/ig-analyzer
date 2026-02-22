@@ -27,6 +27,10 @@ function isVercelCron(req: Request) {
   return req.headers.has("x-vercel-cron")
 }
 
+function redactToken(url: string): string {
+  return url.replace(/([?&]access_token=)[^&]*/g, "$1REDACTED")
+}
+
 function todayUtc(): string {
   const d = new Date()
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
@@ -50,7 +54,7 @@ async function ensureTodaySnapshotForAccount(params: {
   pageId: string
   userId: string
   token: string
-}): Promise<{ did: boolean; reason?: string }> {
+}): Promise<{ did: boolean; reason?: string; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
   const { igAccountId, igUserId, pageId, userId, token } = params
   const today = todayUtc()
 
@@ -87,12 +91,18 @@ async function ensureTodaySnapshotForAccount(params: {
   })()
 
   // Call A: time-series reach + views (period=day, no metric_type)
-  const insightsRes = await fetch(
-    `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-      `?metric=reach,views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`,
-    { cache: "no-store" }
-  )
-  if (!insightsRes.ok) return { did: false, reason: `graph_call_a_${insightsRes.status}` }
+  const callAUrl = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+    `?metric=reach,views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`
+  const insightsRes = await fetch(callAUrl, { cache: "no-store" })
+  if (!insightsRes.ok) {
+    let errorBody: unknown = null
+    try { errorBody = await insightsRes.json() } catch { try { errorBody = await insightsRes.text() } catch { /* ignore */ } }
+    return {
+      did: false,
+      reason: `graph_call_a_${insightsRes.status}`,
+      graph: { call: "A", status: insightsRes.status, error_body: errorBody, url: redactToken(callAUrl) },
+    }
+  }
 
   const insightsJson = await safeJson(insightsRes) as any
   const reachValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
@@ -101,16 +111,19 @@ async function ensureTodaySnapshotForAccount(params: {
   // Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort
   let intValues: any[] = []
   let engagedValues: any[] = []
+  let callBDiag: { call: "B"; status: number; error_body: unknown; url: string } | null = null
   try {
-    const tvRes = await fetch(
-      `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-        `?metric=total_interactions,accounts_engaged&period=day&metric_type=total_value&since=${yesterday}&until=${today}&access_token=${pageToken}`,
-      { cache: "no-store" }
-    )
+    const callBUrl = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+      `?metric=total_interactions,accounts_engaged&period=day&metric_type=total_value&since=${yesterday}&until=${today}&access_token=${pageToken}`
+    const tvRes = await fetch(callBUrl, { cache: "no-store" })
     if (tvRes.ok) {
       const tvJson = await safeJson(tvRes) as any
       intValues = tvJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
       engagedValues = tvJson?.data?.find((m: any) => m?.name === "accounts_engaged")?.values ?? []
+    } else {
+      let errorBody: unknown = null
+      try { errorBody = await tvRes.json() } catch { try { errorBody = await tvRes.text() } catch { /* ignore */ } }
+      callBDiag = { call: "B", status: tvRes.status, error_body: errorBody, url: redactToken(callBUrl) }
     }
   } catch { /* best-effort; continue with zeros */ }
 
@@ -162,7 +175,7 @@ async function ensureTodaySnapshotForAccount(params: {
     wrote_at: nowIso(),
   })
 
-  return { did: true }
+  return { did: true, ...(callBDiag ? { graph_call_b: callBDiag } : {}) }
 }
 
 // ---------------------------------------------------------------------------
