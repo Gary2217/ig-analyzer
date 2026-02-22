@@ -242,10 +242,10 @@ export async function POST(req: NextRequest) {
     const byDay = new Map<string, { reach: number | null; total_interactions: number; impressions: number; accounts_engaged: number }>()
 
     for (const { chunkSince, chunkUntil } of chunks) {
-      // --- Call A: time-series metrics (reach + impressions) — no metric_type ---
+      // --- Call A: time-series metrics (reach + views) — no metric_type ---
       let tsRes = await fetch(
         `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-          `?metric=reach,impressions` +
+          `?metric=reach,views` +
           `&period=day` +
           `&since=${chunkSince}` +
           `&until=${chunkUntil}` +
@@ -287,7 +287,7 @@ export async function POST(req: NextRequest) {
       const tsData: any[] = Array.isArray(tsJson?.data) ? tsJson.data : []
       const extractTs = (name: string): any[] => tsData.find((m: any) => m?.name === name)?.values ?? []
       const reachSeries: any[] = extractTs("reach")
-      const viewsSeries: any[] = extractTs("impressions")
+      const viewsSeries: any[] = extractTs("views")
 
       // --- Call B: total_value metrics — best-effort, do NOT fail backfill if this fails ---
       let interactionsSeries: any[] = []

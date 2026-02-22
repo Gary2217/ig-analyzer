@@ -90,9 +90,9 @@ async function ensureTodaySnapshotForAccount(params: {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
   })()
 
-  // Call A: time-series reach + impressions (period=day, no metric_type)
+  // Call A: time-series reach + views (period=day, no metric_type)
   const callAUrl = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-    `?metric=reach,impressions&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`
+    `?metric=reach,views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`
   const insightsRes = await fetch(callAUrl, { cache: "no-store" })
   if (!insightsRes.ok) {
     let errorBody: unknown = null
@@ -106,7 +106,7 @@ async function ensureTodaySnapshotForAccount(params: {
 
   const insightsJson = await safeJson(insightsRes) as any
   const reachValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
-  const viewsValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "impressions")?.values ?? []
+  const viewsValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
 
   // Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort
   let intValues: any[] = []
