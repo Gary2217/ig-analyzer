@@ -1877,6 +1877,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const lastRevalidateAtRef = useRef(0)
   const lastDailySnapshotFetchAtRef = useRef(0)
   const hasFetchedDailySnapshotRef = useRef<string>("")
+  const hasFetchedTrendDbRef = useRef<string>("")
   const hasAppliedDailySnapshotTrendRef = useRef(false)
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
   const dailySnapshotRequestSeqRef = useRef(0)
@@ -4017,6 +4018,89 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
 
     return () => { controller.abort() }
   }, [isConnectedInstagram, igCacheId, userScopeKey, trendRangeDays])
+
+  // ── DB-backed trend fetch (SSOT) ──────────────────────────────────────────
+  // Reads ig_daily_followers + media_daily_aggregate + account_daily_snapshot.
+  // Runs in parallel with the live daily-snapshot fetch.
+  // Populates followersDailyRows and trendPoints directly from DB.
+  useEffect(() => {
+    if (!isConnectedInstagram) return
+    const fetchKey = (typeof igCacheId === "string" && igCacheId.trim() && igCacheId !== "me")
+      ? igCacheId.trim()
+      : ""
+    if (!fetchKey) return
+    const key = `${fetchKey}:${trendRangeDays}`
+    if (hasFetchedTrendDbRef.current === key) return
+    hasFetchedTrendDbRef.current = key
+
+    const controller = new AbortController()
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/instagram/trend-db?days=${trendRangeDays}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const json = await res.json()
+        if (!json || !json.ok) return
+
+        // Populate followers rows — prefer DB if it has more data
+        const dbFollowers: Array<{ day: string; followers_count: number }> = Array.isArray(json.followers_daily_rows)
+          ? json.followers_daily_rows
+          : []
+        if (dbFollowers.length > 0) {
+          setFollowersDailyRows(dbFollowers)
+          if (typeof json.followers_last_write_at === "string" && json.followers_last_write_at) {
+            setFollowersLastWriteAt(json.followers_last_write_at)
+          }
+        }
+
+        // Populate trendPoints from DB points (reach + interactions)
+        const dbPoints: Array<{
+          date: string
+          reach: number | null
+          impressions: number | null
+          interactions: number | null
+          engaged_accounts: number | null
+        }> = Array.isArray(json.points) ? json.points : []
+
+        if (dbPoints.length > 0) {
+          const now = Date.now()
+          const dayMs = 86_400_000
+          const pts: AccountTrendPoint[] = dbPoints
+            .filter((p) => typeof p.date === "string" && p.date.length === 10)
+            .map((p, idx) => {
+              const ms = Date.parse(`${p.date}T00:00:00.000Z`)
+              const ts = Number.isFinite(ms) ? ms : now - (dbPoints.length - 1 - idx) * dayMs
+              const d = new Date(ts)
+              const mm = String(d.getUTCMonth() + 1).padStart(2, "0")
+              const dd = String(d.getUTCDate()).padStart(2, "0")
+              return {
+                t: `${mm}/${dd}`,
+                ts,
+                reach: typeof p.reach === "number" ? p.reach : undefined,
+                impressions: typeof p.impressions === "number" ? p.impressions : undefined,
+                interactions: typeof p.interactions === "number" ? p.interactions : undefined,
+                engaged: typeof p.engaged_accounts === "number" ? p.engaged_accounts : undefined,
+              }
+            })
+
+          // Only apply if we have reach or interactions data
+          const hasUsefulData = pts.some((p) => typeof p.reach === "number" || typeof p.interactions === "number")
+          if (hasUsefulData) {
+            setTrendPointsDeduped(pts)
+            if (!hasAppliedDailySnapshotTrendRef.current) {
+              hasAppliedDailySnapshotTrendRef.current = true
+            }
+          }
+        }
+      } catch {
+        // best-effort; AbortError on unmount is expected
+      }
+    })()
+
+    return () => { controller.abort() }
+  }, [isConnectedInstagram, igCacheId, trendRangeDays, setTrendPointsDeduped])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
