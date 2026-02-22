@@ -169,6 +169,73 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
   return null
 }
 
+type SsotResolution = {
+  ig_account_id: string | null
+  strategy: "snapshot_rows" | "created_at_fallback" | "none"
+  snapshot_rows: number
+  candidate_count: number
+}
+
+async function resolveSsotBySnapshotRows(params: {
+  sb: { from: (t: string) => any }
+  igUserId: string | number
+  userId: string
+}): Promise<SsotResolution> {
+  const igUserIdNum = typeof params.igUserId === "string" ? Number(params.igUserId) : params.igUserId
+  if (!igUserIdNum || !Number.isFinite(igUserIdNum)) {
+    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
+  }
+  if (!params.userId) {
+    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
+  }
+
+  try {
+    // Fetch all candidate user_instagram_accounts rows for this ig_user_id, scoped to this user (multi-tenant safety)
+    const { data: candidates } = await params.sb
+      .from("user_instagram_accounts")
+      .select("id,created_at")
+      .eq("user_id", params.userId)
+      .eq("ig_user_id", igUserIdNum)
+      .order("created_at", { ascending: false })
+      .limit(20)
+
+    const rows: Array<{ id: string; created_at: string }> = Array.isArray(candidates) ? candidates : []
+    if (rows.length === 0) return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
+
+    // For each candidate, count snapshot rows
+    const counted: Array<{ id: string; created_at: string; snap_count: number }> = await Promise.all(
+      rows.map(async (r) => {
+        try {
+          const { count } = await params.sb
+            .from("account_daily_snapshot")
+            .select("id", { count: "exact", head: true })
+            .eq("ig_account_id", r.id)
+          return { ...r, snap_count: typeof count === "number" ? count : 0 }
+        } catch {
+          return { ...r, snap_count: 0 }
+        }
+      })
+    )
+
+    // Sort: most snapshot rows first, then newest created_at
+    counted.sort((a, b) => {
+      if (b.snap_count !== a.snap_count) return b.snap_count - a.snap_count
+      return b.created_at.localeCompare(a.created_at)
+    })
+
+    const best = counted[0]
+    const strategy: SsotResolution["strategy"] = best.snap_count > 0 ? "snapshot_rows" : "created_at_fallback"
+    return {
+      ig_account_id: best.id,
+      strategy,
+      snapshot_rows: best.snap_count,
+      candidate_count: rows.length,
+    }
+  } catch {
+    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
+  }
+}
+
 async function readFollowersDailyRows(params: { igId: string; start: string; today: string; ssotId?: string | null }) {
   try {
     type FollowersDailyRow = { day: string; followers_count: number | null; captured_at: string | null }
@@ -1762,23 +1829,27 @@ async function handle(req: Request) {
       let ssotId: string | null = ssotAccount?.id ?? null
       const ssotIgUserId = ssotAccount?.ig_user_id ?? null
 
-      // FORCE SSOT resolve when missing (production-safe)
+      // FORCE SSOT resolve when missing — prefer candidate with most snapshot rows
+      let ssotDiag: SsotResolution = { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
       if (!ssotId && resolvedIgId) {
-        try {
-          const { data: ssotAccountResolved } = await supabaseServer
-            .from("user_instagram_accounts")
-            .select("id")
-            .eq("ig_user_id", resolvedIgId)
-            .eq("is_active", true)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle()
-
-          if (ssotAccountResolved?.id) {
-            ssotId = ssotAccountResolved.id
-          }
-        } catch (e) {
-          console.error("[daily-snapshot] ssot resolve failed", e)
+        ssotDiag = await resolveSsotBySnapshotRows({
+          sb: supabaseServer,
+          igUserId: resolvedIgId,
+          userId: userId || "",
+        })
+        if (ssotDiag.ig_account_id) {
+          ssotId = ssotDiag.ig_account_id
+        }
+      } else if (ssotId && resolvedIgId) {
+        // Already resolved from cookie/active — still count rows for diag
+        ssotDiag = await resolveSsotBySnapshotRows({
+          sb: supabaseServer,
+          igUserId: resolvedIgId,
+          userId: userId || "",
+        })
+        // Prefer the snapshot-rows winner over the cookie value
+        if (ssotDiag.ig_account_id && ssotDiag.snapshot_rows > 0) {
+          ssotId = ssotDiag.ig_account_id
         }
       }
       const followersIgId = resolvedIgId || ssotIgUserId || ""
@@ -1944,6 +2015,10 @@ async function handle(req: Request) {
                 start: rangeStart,
                 end: rangeEnd,
                 followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                resolved_ig_account_id: ssotDiag.ig_account_id,
+                resolved_strategy: ssotDiag.strategy,
+                resolved_snapshot_rows: ssotDiag.snapshot_rows,
+                candidate_count: ssotDiag.candidate_count,
                 ...followersDiag,
               },
             },
@@ -1957,30 +2032,14 @@ async function handle(req: Request) {
       // Minimal READ-ONLY patch: do not write-back/upsert in this step.
       try {
         const tSsotStart = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now()
-        let ssotId: string | null = null
+        // Use already-resolved ssotId (snapshot-rows-aware) from above
+        const ssotIdForRead = ssotId
 
-        if (resolvedIgId) {
-          const { data: ssotAccountResolved } = await supabaseServer
-            .from("user_instagram_accounts")
-            .select("id")
-            .eq("ig_user_id", resolvedIgId)
-            .eq("is_active", true)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle()
-
-          ssotId =
-            ssotAccountResolved &&
-            typeof (ssotAccountResolved as any).id === "string"
-              ? String((ssotAccountResolved as any).id)
-              : null
-        }
-
-        if (ssotId) {
+        if (ssotIdForRead) {
           const { data: ssotRows, error: ssotErr } = await supabaseServer
             .from("ig_daily_insights")
             .select("day,reach,impressions,total_interactions,accounts_engaged,captured_at")
-            .eq("ig_account_id", ssotId)
+            .eq("ig_account_id", ssotIdForRead)
             .gte("day", start)
             .lte("day", today)
             .order("day", { ascending: true })
@@ -2036,6 +2095,10 @@ async function handle(req: Request) {
                   start: rangeStart,
                   end: rangeEnd,
                   followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                  resolved_ig_account_id: ssotDiag.ig_account_id,
+                  resolved_strategy: ssotDiag.strategy,
+                  resolved_snapshot_rows: ssotDiag.snapshot_rows,
+                  candidate_count: ssotDiag.candidate_count,
                   ...followersDiag,
                 },
               },
@@ -2124,6 +2187,10 @@ async function handle(req: Request) {
                 start: rangeStart,
                 end: rangeEnd,
                 followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                resolved_ig_account_id: ssotDiag.ig_account_id,
+                resolved_strategy: ssotDiag.strategy,
+                resolved_snapshot_rows: ssotDiag.snapshot_rows,
+                candidate_count: ssotDiag.candidate_count,
                 ...followersDiag,
               },
             },
@@ -2392,6 +2459,10 @@ async function handle(req: Request) {
               start: rangeStart,
               end: rangeEnd,
               followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+              resolved_ig_account_id: ssotDiag.ig_account_id,
+              resolved_strategy: ssotDiag.strategy,
+              resolved_snapshot_rows: ssotDiag.snapshot_rows,
+              candidate_count: ssotDiag.candidate_count,
               ...followersDiag,
             },
           },
@@ -2444,6 +2515,10 @@ async function handle(req: Request) {
           start: rangeStart,
           end: rangeEnd,
           followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+          resolved_ig_account_id: ssotDiag.ig_account_id,
+          resolved_strategy: ssotDiag.strategy,
+          resolved_snapshot_rows: ssotDiag.snapshot_rows,
+          candidate_count: ssotDiag.candidate_count,
           ...followersDiag,
         },
       },
