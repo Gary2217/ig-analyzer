@@ -1900,6 +1900,12 @@ async function handle(req: Request) {
     }
 
     const run = (async (): Promise<DsResponsePayload> => {
+      // Metric diagnostic collectors — populated in Graph path, null elsewhere.
+      const requestedMetrics: string[] = []
+      const returnedMetricNames = new Set<string>()
+      let diagMetrics: Record<string, unknown> | null = null
+      let snapshotWriteDiag: Record<string, unknown> | null = null
+
       const ssotAccount = cronMode ? null : await resolveActiveIgAccountForRequest()
 
       let ssotId: string | null = ssotAccount?.id ?? null
@@ -2094,6 +2100,9 @@ async function handle(req: Request) {
                 resolved_ig_user_id: resolvedIgId || null,
                 resolved_page_id: resolvedPageId || null,
                 ...cronUserDiag,
+                requested_metrics: null,
+                returned_metric_names: null,
+                diag_metrics: null,
                 snapshot_write_diag: (() => {
                   const latest = snapRows.length > 0 ? snapRows[snapRows.length - 1] as any : null
                   if (!latest) return null
@@ -2189,6 +2198,10 @@ async function handle(req: Request) {
                   resolved_snapshot_rows: ssotDiag.snapshot_rows,
                   candidate_count: ssotDiag.candidate_count,
                   ...cronUserDiag,
+                  requested_metrics: null,
+                  returned_metric_names: null,
+                  diag_metrics: null,
+                  snapshot_write_diag: null,
                   ...followersDiag,
                 },
               },
@@ -2282,6 +2295,10 @@ async function handle(req: Request) {
                 resolved_snapshot_rows: ssotDiag.snapshot_rows,
                 candidate_count: ssotDiag.candidate_count,
                 ...cronUserDiag,
+                requested_metrics: null,
+                returned_metric_names: null,
+                diag_metrics: null,
+                snapshot_write_diag: null,
                 ...followersDiag,
               },
             },
@@ -2326,6 +2343,9 @@ async function handle(req: Request) {
           }
         }
 
+        // Capture requested metric names (safe — no tokens/URLs)
+        requestedMetrics.push("reach", "views", "total_interactions", "accounts_engaged")
+
         const series = await fetchInsightsTimeSeries({
           igId: resolvedIgId,
           pageAccessToken: pageToken.pageAccessToken,
@@ -2333,6 +2353,14 @@ async function handle(req: Request) {
         })
 
         mark("graph", tGraphStart)
+
+        // Capture returned metric names from Graph response
+        if (Array.isArray(series.data)) {
+          for (const item of series.data) {
+            const n = String(item?.name ?? "").trim()
+            if (n) returnedMetricNames.add(n)
+          }
+        }
 
         if (!series.ok) {
           const etag = weakEtagFromParts(["ds", "graph_err", resolvedIgId, resolvedPageId, safeDays, today, series.status])
@@ -2356,6 +2384,26 @@ async function handle(req: Request) {
         }
 
         const points = buildPointsFromGraphInsightsTimeSeries(series.data, safeDays)
+
+        // Build diagMetrics from already-computed points (no new queries)
+        {
+          const pts = Array.isArray(points) ? points : []
+          const last = pts.length > 0 ? pts[pts.length - 1] : null
+          diagMetrics = {
+            last_point: last ? {
+              date: last.date ?? null,
+              reach: last.reach ?? null,
+              impressions: (last as any).impressions ?? null,
+              interactions: (last as any).interactions ?? null,
+              engaged_accounts: (last as any).engaged_accounts ?? null,
+            } : null,
+            points_total: pts.length,
+            points_with_reach: pts.filter((p: any) => p?.reach != null).length,
+            points_with_impressions: pts.filter((p: any) => (p as any)?.impressions != null).length,
+            points_with_interactions: pts.filter((p: any) => (p as any)?.interactions != null).length,
+            points_with_engaged_accounts: pts.filter((p: any) => (p as any)?.engaged_accounts != null).length,
+          }
+        }
         const etag = weakEtagFromParts(["ds", "graph", resolvedIgId, resolvedPageId, safeDays, today, points.length])
         if (isIfNoneMatchHit(req, etag)) {
           return { status: 200, source: "graph", body: null, etag }
@@ -2427,6 +2475,10 @@ async function handle(req: Request) {
                 end: rangeEnd,
                 followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
                 ...cronUserDiag,
+                requested_metrics: requestedMetrics.length ? requestedMetrics : null,
+                returned_metric_names: Array.from(returnedMetricNames).filter(Boolean),
+                diag_metrics: diagMetrics,
+                snapshot_write_diag: snapshotWriteDiag,
                 ...followersDiag,
               },
             },
@@ -2556,6 +2608,10 @@ async function handle(req: Request) {
               resolved_snapshot_rows: ssotDiag.snapshot_rows,
               candidate_count: ssotDiag.candidate_count,
               ...cronUserDiag,
+              requested_metrics: requestedMetrics.length ? requestedMetrics : null,
+              returned_metric_names: Array.from(returnedMetricNames).filter(Boolean),
+              diag_metrics: diagMetrics,
+              snapshot_write_diag: snapshotWriteDiag,
               ...followersDiag,
             },
           },
@@ -2613,6 +2669,10 @@ async function handle(req: Request) {
           resolved_snapshot_rows: ssotDiag.snapshot_rows,
           candidate_count: ssotDiag.candidate_count,
           ...cronUserDiag,
+          requested_metrics: requestedMetrics.length ? requestedMetrics : null,
+          returned_metric_names: Array.from(returnedMetricNames).filter(Boolean),
+          diag_metrics: diagMetrics,
+          snapshot_write_diag: snapshotWriteDiag,
           ...followersDiag,
         },
       },
