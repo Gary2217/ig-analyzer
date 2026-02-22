@@ -106,13 +106,13 @@ async function ensureTodaySnapshotForAccount(params: {
   const reachJson = await safeJson(reachRes) as any
   const reachValues: any[] = reachJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
 
-  // Call A2: profile_views (period=day, no metric_type) — best-effort, written into impressions column
+  // Call A2: profile_views (period=day, metric_type=total_value) — best-effort, written into impressions column
   let viewsValues: any[] = []
   let callA2Ok = false
   let callA2Diag: { call: "A2"; status: number; error_body: unknown; url: string } | null = null
   try {
     const callA2Url = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-      `?metric=profile_views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`
+      `?metric=profile_views&period=day&metric_type=total_value&since=${yesterday}&until=${today}&access_token=${pageToken}`
     const viewsRes = await fetch(callA2Url, { cache: "no-store" })
     if (viewsRes.ok) {
       const viewsJson = await safeJson(viewsRes) as any
