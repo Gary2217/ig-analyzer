@@ -50,7 +50,24 @@ async function runCron(req: Request) {
   console.log("[cron/daily-snapshot] invoking", { targetUrl, cronIgUserId })
 
   let downstreamStatus = 0
-  let downstreamSnippet = ""
+
+  // Safe fields to extract from downstream JSON (never include tokens/secrets)
+  const SAFE_FIELDS = [
+    "build_marker", "ok", "days", "rangeStart", "rangeEnd", "available_days",
+    "__diag", "snapshot_write_diag", "diag_metrics", "requested_metrics",
+    "returned_metric_names", "points_source", "points_ok",
+  ] as const
+
+  function extractSafeDiag(parsed: unknown): Record<string, unknown> | null {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null
+    const out: Record<string, unknown> = {}
+    for (const key of SAFE_FIELDS) {
+      if (key in (parsed as Record<string, unknown>)) {
+        out[key] = (parsed as Record<string, unknown>)[key]
+      }
+    }
+    return out
+  }
 
   try {
     const res = await fetch(targetUrl, {
@@ -65,16 +82,34 @@ async function runCron(req: Request) {
 
     downstreamStatus = res.status
     const text = await res.text().catch(() => "")
-    downstreamSnippet = text.slice(0, 500)
+    const bodyLen = text.length
+    const bodyTruncated = bodyLen > 0 && !text.trimEnd().endsWith("}")
 
-    console.log("[cron/daily-snapshot] done", { downstreamStatus, snippet: downstreamSnippet.slice(0, 200) })
+    let downstreamJsonDiag: Record<string, unknown> | null = null
+    let parseError: string | null = null
+    try {
+      const parsed = JSON.parse(text)
+      downstreamJsonDiag = extractSafeDiag(parsed)
+    } catch (pe: any) {
+      parseError = pe?.message ? String(pe.message).slice(0, 120) : "json_parse_failed"
+    }
+
+    console.log("[cron/daily-snapshot] done", {
+      downstreamStatus,
+      bodyLen,
+      bodyTruncated,
+      parseOk: downstreamJsonDiag !== null,
+    })
 
     return NextResponse.json(
       {
         ok: res.ok,
         build_marker: BUILD_MARKER,
         downstream_status: downstreamStatus,
-        downstream_body: downstreamSnippet,
+        downstream_body_len: bodyLen,
+        downstream_body_truncated: bodyTruncated,
+        downstream_json_diag: downstreamJsonDiag,
+        ...(parseError !== null ? { downstream_parse_error: parseError } : {}),
       },
       { status: res.ok ? 200 : 502, headers: baseHeaders }
     )
@@ -87,7 +122,6 @@ async function runCron(req: Request) {
         message: e?.message ?? String(e),
         build_marker: BUILD_MARKER,
         downstream_status: downstreamStatus,
-        downstream_body: downstreamSnippet,
       },
       { status: 502, headers: baseHeaders }
     )
