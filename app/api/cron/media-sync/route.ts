@@ -325,7 +325,7 @@ async function runMediaSync(params: {
       lookback_days: lookbackDays,
       media_fetched: mediaFetched,
       media_upserted: mediaUpserted,
-      days_recomputed: daysRecomputedCount,
+      days_recomputed: sortedDays.length,
       rows_aggregated: rowsAggregated,
     },
     __diag: {
