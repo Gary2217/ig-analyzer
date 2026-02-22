@@ -1643,16 +1643,16 @@ async function handle(req: Request) {
           const sinceDay = fetchStartDay < rangeStart ? rangeStart : fetchStartDay
           const untilDay = rangeEnd
 
-          // Call A: time-series metrics (reach + views) — no metric_type
+          // Call A: time-series metrics (reach + impressions) — no metric_type
           let insightsRes = await fetch(
             `${GRAPH_BASE}/${resolvedIgId}/insights` +
-              `?metric=reach,views` +
+              `?metric=reach,impressions` +
               `&period=day` +
               `&since=${sinceDay}` +
               `&until=${untilDay}` +
               `&access_token=${accessToken}`
           )
-          // Fallback to reach-only if views rejected
+          // Fallback to reach-only if impressions rejected
           if (!insightsRes.ok) {
             const errBody = await safeJson(insightsRes)
             if (isUnsupportedMetricBody(errBody)) {
@@ -1676,7 +1676,7 @@ async function handle(req: Request) {
               insightsData.find((m: any) => m?.name === name)?.values ?? []
 
             const reachSeries = extractSyncSeries("reach")
-            const viewsSeries = extractSyncSeries("views")
+            const viewsSeries = extractSyncSeries("impressions")
 
             // Call B: total_value metrics — best-effort, do NOT fail reach-sync if this fails
             let interactionsSeries: any[] = []
