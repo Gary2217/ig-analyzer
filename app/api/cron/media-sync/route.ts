@@ -50,7 +50,9 @@ function dateFromTimestamp(ts: string): string {
 function taipeiDayFromTimestamp(ts: string): string {
   const d = new Date(ts)
   if (isNaN(d.getTime())) return ts.slice(0, 10)
-  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" })
+  const taipeiMs = d.getTime() + 8 * 3600_000
+  const t = new Date(taipeiMs)
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}-${String(t.getUTCDate()).padStart(2, "0")}`
 }
 
 function taipeiDayUtcRange(day: string): { gte: string; lt: string } {
@@ -221,7 +223,7 @@ async function runMediaSync(params: {
 
     if (ts) {
       const day = taipeiDayFromTimestamp(ts)
-      if (day >= cutoffDay) affectedDays.add(day)
+      affectedDays.add(day)
     }
 
     // Per-media insights (best-effort)
@@ -261,12 +263,17 @@ async function runMediaSync(params: {
     else console.warn("[cron/media-sync] media_raw upsert error", { message: upsertErr.message })
   }
 
-  // 4) Recompute daily aggregates for affected days
-  const daysRecomputed: string[] = []
+  // 4) Recompute daily aggregates for all affected days
+  const sortedDays = Array.from(affectedDays).sort()
+  let daysRecomputedCount = 0
   let rowsAggregated = 0
+  const recomputeRanges: { day: string; gte: string; lt: string }[] = []
+  const aggQueryCountByDay: { day: string; count: number }[] = []
 
-  for (const day of Array.from(affectedDays).sort()) {
+  for (const day of sortedDays) {
     const { gte: rangeGte, lt: rangeLt } = taipeiDayUtcRange(day)
+    recomputeRanges.push({ day, gte: rangeGte, lt: rangeLt })
+
     const { data: dayRows, error: dayErr } = await supabaseServer
       .from("media_raw")
       .select("like_count, comments_count, save_count, share_count")
@@ -277,10 +284,14 @@ async function runMediaSync(params: {
 
     if (dayErr) {
       console.warn("[cron/media-sync] aggregate query error", { day, message: dayErr.message })
+      aggQueryCountByDay.push({ day, count: -1 })
       continue
     }
 
     const dayData = Array.isArray(dayRows) ? dayRows : []
+    aggQueryCountByDay.push({ day, count: dayData.length })
+    rowsAggregated += dayData.length
+
     const totalLikes = dayData.reduce((s, r: any) => s + (r.like_count ?? 0), 0)
     const totalComments = dayData.reduce((s, r: any) => s + (r.comments_count ?? 0), 0)
     const totalSaves = dayData.reduce((s, r: any) => s + (r.save_count ?? 0), 0)
@@ -302,8 +313,7 @@ async function runMediaSync(params: {
       }, { onConflict: "user_id_text,ig_account_id,day" })
 
     if (!aggErr) {
-      daysRecomputed.push(day)
-      rowsAggregated += dayData.length
+      daysRecomputedCount++
     } else {
       console.warn("[cron/media-sync] aggregate upsert error", { day, message: aggErr.message })
     }
@@ -315,13 +325,16 @@ async function runMediaSync(params: {
       lookback_days: lookbackDays,
       media_fetched: mediaFetched,
       media_upserted: mediaUpserted,
-      days_recomputed: daysRecomputed.length,
+      days_recomputed: daysRecomputedCount,
       rows_aggregated: rowsAggregated,
     },
     __diag: {
       token_found: true,
       paging_pages: pagingPages,
       per_media_insights_failures: insightFailures,
+      affected_days: sortedDays,
+      recompute_ranges: recomputeRanges,
+      agg_query_count_by_day: aggQueryCountByDay,
       ...(firstError ? { first_error: firstError } : {}),
     },
   }
