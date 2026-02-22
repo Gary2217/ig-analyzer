@@ -174,6 +174,8 @@ type SsotResolution = {
   strategy: "snapshot_rows" | "created_at_fallback" | "none"
   snapshot_rows: number
   candidate_count: number
+  ig_user_id_str?: string
+  candidate_sources?: { user_instagram_accounts: number; user_ig_accounts: number }
 }
 
 async function resolveSsotBySnapshotRows(params: {
@@ -181,40 +183,52 @@ async function resolveSsotBySnapshotRows(params: {
   igUserId: string | number
   userId: string
 }): Promise<SsotResolution> {
-  const igUserIdNum = typeof params.igUserId === "string" ? Number(params.igUserId) : params.igUserId
-  if (!igUserIdNum || !Number.isFinite(igUserIdNum)) {
-    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
+  // IMPORTANT: treat ig_user_id as a string end-to-end to avoid 64-bit precision loss.
+  // Never convert to Number for DB queries or JS comparisons.
+  const igUserIdStr = String(params.igUserId ?? "").trim()
+  if (!igUserIdStr || igUserIdStr === "0") {
+    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0, ig_user_id_str: igUserIdStr }
   }
   if (!params.userId) {
-    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
+    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0, ig_user_id_str: igUserIdStr }
   }
 
+  let countUia = 0
+  let countUiga = 0
+
   try {
-    // Fetch all candidate user_instagram_accounts rows for this ig_user_id, scoped to this user (multi-tenant safety)
-    const { data: candidates } = await params.sb
+    // A) user_instagram_accounts: query by user_id only (limit 50), then filter ig_user_id in JS as string.
+    // This avoids bigint precision loss regardless of the column's numeric type.
+    const { data: uiaCandidates } = await params.sb
       .from("user_instagram_accounts")
-      .select("id,created_at")
+      .select("id,ig_user_id,created_at")
       .eq("user_id", params.userId)
-      .eq("ig_user_id", igUserIdNum)
       .order("created_at", { ascending: false })
-      .limit(20)
+      .limit(50)
 
-    let rows: Array<{ id: string; created_at: string }> = Array.isArray(candidates) ? candidates : []
+    const uiaAll = Array.isArray(uiaCandidates) ? uiaCandidates : []
+    const uiaMatched = uiaAll.filter((r: any) => String(r.ig_user_id ?? "") === igUserIdStr)
+    countUia = uiaMatched.length
 
-    // Fallback: if user_instagram_accounts has no rows, try user_ig_accounts (SSOT table).
-    // user_ig_accounts.ig_user_id is TEXT — compare as string.
+    let rows: Array<{ id: string; created_at: string }> = uiaMatched.map((r: any) => ({
+      id: String(r.id ?? ""),
+      created_at: String(r.created_at ?? ""),
+    })).filter((r) => r.id)
+
+    // B) Fallback: user_ig_accounts (SSOT table). ig_user_id is TEXT — safe to compare directly.
     if (rows.length === 0) {
       try {
         const { data: igAcctCandidates } = await params.sb
           .from("user_ig_accounts")
           .select("id,connected_at")
           .eq("user_id", params.userId)
-          .eq("ig_user_id", String(igUserIdNum))
+          .eq("ig_user_id", igUserIdStr)
           .is("revoked_at", null)
           .order("connected_at", { ascending: false })
           .limit(20)
 
         const igAcctRows = Array.isArray(igAcctCandidates) ? igAcctCandidates : []
+        countUiga = igAcctRows.length
         // Normalize connected_at -> created_at so the rest of the function is unchanged
         rows = igAcctRows.map((r: any) => ({
           id: String(r.id ?? ""),
@@ -225,7 +239,9 @@ async function resolveSsotBySnapshotRows(params: {
       }
     }
 
-    if (rows.length === 0) return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
+    if (rows.length === 0) {
+      return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0, ig_user_id_str: igUserIdStr, candidate_sources: { user_instagram_accounts: countUia, user_ig_accounts: countUiga } }
+    }
 
     // For each candidate, count snapshot rows
     const counted: Array<{ id: string; created_at: string; snap_count: number }> = await Promise.all(
@@ -255,6 +271,8 @@ async function resolveSsotBySnapshotRows(params: {
       strategy,
       snapshot_rows: best.snap_count,
       candidate_count: rows.length,
+      ig_user_id_str: igUserIdStr,
+      candidate_sources: { user_instagram_accounts: countUia, user_ig_accounts: countUiga },
     }
   } catch {
     return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
@@ -2060,6 +2078,8 @@ async function handle(req: Request) {
                 resolved_strategy: ssotDiag.strategy,
                 resolved_snapshot_rows: ssotDiag.snapshot_rows,
                 candidate_count: ssotDiag.candidate_count,
+                ig_user_id_str: ssotDiag.ig_user_id_str ?? resolvedIgId ?? null,
+                candidate_sources: ssotDiag.candidate_sources ?? null,
                 resolved_ig_user_id: resolvedIgId || null,
                 resolved_page_id: resolvedPageId || null,
                 snapshot_write_diag: (() => {
