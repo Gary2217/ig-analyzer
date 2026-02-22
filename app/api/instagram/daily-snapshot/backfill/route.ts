@@ -382,10 +382,15 @@ export async function POST(req: NextRequest) {
 
     const skippedNoData = missingDays.filter((d) => !byDay.has(d))
 
+    let upsertOk = true
+    let upsertError: string | null = null
+
     if (rows.length > 0) {
+      console.log("[backfill] upsert rows:", rows.length)
       const upsertResult = await upsertDailySnapshot(service, rows)
+      upsertOk = upsertResult.ok
       if (!upsertResult.ok) {
-        const errMsg = upsertResult.error instanceof Error
+        upsertError = upsertResult.error instanceof Error
           ? upsertResult.error.message
           : typeof (upsertResult.error as any)?.message === "string"
             ? (upsertResult.error as any).message
@@ -393,8 +398,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           ok: false,
           error: "upsert_failed",
-          message: errMsg,
+          message: upsertError,
           inserted: 0,
+          wrote_rows: rows.length,
+          upsert_ok: false,
+          upsert_error: upsertError,
           missing: missingDays,
         }, { status: 500 })
       }
@@ -405,6 +413,9 @@ export async function POST(req: NextRequest) {
       inserted: rows.length,
       skipped: existingByDay.size,
       missing: skippedNoData,
+      wrote_rows: rows.length,
+      upsert_ok: upsertOk,
+      upsert_error: upsertError,
       ...(debugMode ? {
         debug: {
           ig_account_id, igUserId, pageId, days,

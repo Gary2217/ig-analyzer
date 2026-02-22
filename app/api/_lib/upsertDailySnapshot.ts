@@ -79,7 +79,7 @@ export async function upsertDailySnapshot(
 
     const { error } = await client
       .from("account_daily_snapshot")
-      .upsert(payload, { onConflict: "ig_account_id,day" })
+      .upsert(payload, { onConflict: "user_id_text,ig_user_id,page_id,day" })
 
     if (error) {
       console.warn("[account-daily-snapshot] upsert error", {
