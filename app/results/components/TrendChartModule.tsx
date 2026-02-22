@@ -61,9 +61,8 @@ const METRIC_CONFIG: Array<{
   { key: "reach",          labelZh: "觸及",       labelEn: "Reach",            color: "#38bdf8" },
   { key: "impressions",    labelZh: "曝光",       labelEn: "Impressions",      color: "#34d399" },
   { key: "interactions",   labelZh: "互動",       labelEn: "Interactions",     color: "#fb923c" },
-  { key: "engaged",        labelZh: "帳號互動",   labelEn: "Engaged",          color: "#f472b6" },
-  { key: "followers",      labelZh: "粉絲數",     labelEn: "Followers",        color: "#a78bfa" },
   { key: "engagementRate", labelZh: "互動率",     labelEn: "Engagement Rate",  color: "#facc15" },
+  { key: "followers",      labelZh: "粉絲數",     labelEn: "Followers",        color: "#a78bfa" },
 ]
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -221,6 +220,19 @@ export default function TrendChartModule({
     })
   }, [selectedMetric, smoothing, slicedV2, effectiveFollowers, effectiveRangeDays])
 
+  // KPI: sum interactions + avg engagement rate over sliced range
+  const kpiTotalInteractions = useMemo(
+    () => slicedV2.reduce((s, p) => s + (p.interactions ?? 0), 0),
+    [slicedV2]
+  )
+  const kpiTotalImpressions = useMemo(
+    () => slicedV2.reduce((s, p) => s + (p.impressions ?? 0), 0),
+    [slicedV2]
+  )
+  const kpiEngagementRate: number | null = kpiTotalImpressions > 0
+    ? (kpiTotalInteractions / kpiTotalImpressions) * 100
+    : null
+
   const metricConfig = METRIC_CONFIG.find((m) => m.key === selectedMetric) ?? METRIC_CONFIG[0]
   const hasData = chartData.some((d) => typeof d.value === "number" && d.value > 0)
   const allEmpty = v2Points.length === 0 && effectiveFollowers.length === 0
@@ -253,42 +265,74 @@ export default function TrendChartModule({
           </div>
         ) : (
           <>
-            {/* Metric tabs — wrap on mobile */}
-            <div className="flex flex-wrap gap-1.5 pb-1">
-              {METRIC_CONFIG.map((m) => {
-                const active = selectedMetric === m.key
-                return (
-                  <button
-                    key={m.key}
-                    type="button"
-                    onClick={() => setSelectedMetric(m.key)}
-                    className={
-                      "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap " +
-                      (active
-                        ? "bg-white/15 text-white border border-white/20"
-                        : "text-white/55 hover:text-white/80 border border-transparent")
-                    }
-                    style={active ? { borderColor: m.color + "55", color: m.color } : undefined}
-                  >
-                    {isZh ? m.labelZh : m.labelEn}
-                  </button>
-                )
-              })}
+            {/* Tabs row: left=tabs, center=KPI pills, right=MA7 checkbox */}
+            {/* PC: flex-row; mobile: flex-col */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pb-1">
 
-              {/* MA7 toggle — only visible for Reach */}
-              {selectedMetric === "reach" && (
-                <label className="ml-auto flex items-center gap-1 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={smoothing}
-                    onChange={(e) => setSmoothing(e.target.checked)}
-                    className="w-3 h-3 accent-sky-400"
-                  />
-                  <span className="text-[11px] text-white/50 whitespace-nowrap">
-                    {isZh ? "平滑(7日均線)" : "Smooth (7-day MA)"}
-                  </span>
-                </label>
-              )}
+              {/* Left: metric tabs — scrollable on mobile */}
+              <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto scrollbar-none">
+                {METRIC_CONFIG.map((m) => {
+                  const active = selectedMetric === m.key
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setSelectedMetric(m.key)}
+                      className={
+                        "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap " +
+                        (active
+                          ? "bg-white/15 text-white border border-white/20"
+                          : "text-white/55 hover:text-white/80 border border-transparent")
+                      }
+                      style={active ? { borderColor: m.color + "55", color: m.color } : undefined}
+                    >
+                      {isZh ? m.labelZh : m.labelEn}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Center: KPI pills */}
+              <div className="flex-none flex items-center justify-center gap-2">
+                {/* KPI 1: 區間總互動 */}
+                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                  <div className="text-[11px] text-white/60 leading-none mb-0.5">
+                    {isZh ? "區間總互動" : "Total Interactions"}
+                  </div>
+                  <div className="text-lg font-semibold tabular-nums leading-tight text-white">
+                    {kpiTotalInteractions.toLocaleString()}
+                  </div>
+                </div>
+                {/* KPI 2: 平均互動率 */}
+                <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
+                  <div className="text-[11px] text-white/60 leading-none mb-0.5">
+                    {isZh ? "平均互動率" : "Avg Engagement"}
+                  </div>
+                  <div className="text-lg font-semibold tabular-nums leading-tight text-white">
+                    {kpiEngagementRate !== null ? `${kpiEngagementRate.toFixed(2)}%` : "—"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: MA7 toggle — only visible for Reach */}
+              <div className="flex-none flex justify-end">
+                {selectedMetric === "reach" ? (
+                  <label className="flex items-center gap-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={smoothing}
+                      onChange={(e) => setSmoothing(e.target.checked)}
+                      className="w-3 h-3 accent-sky-400"
+                    />
+                    <span className="text-[11px] text-white/50 whitespace-nowrap">
+                      {isZh ? "平滑(7日均線)" : "Smooth (7-day MA)"}
+                    </span>
+                  </label>
+                ) : (
+                  <div className="w-px" />
+                )}
+              </div>
+
             </div>
 
             {/* Chart — responsive height */}
