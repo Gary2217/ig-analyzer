@@ -54,7 +54,7 @@ async function ensureTodaySnapshotForAccount(params: {
   pageId: string
   userId: string
   token: string
-}): Promise<{ did: boolean; reason?: string; chosen_day?: string; today_key?: string; available_days?: string[]; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
+}): Promise<{ did: boolean; reason?: string; chosen_day?: string; today_key?: string; available_days?: string[]; db?: { payload_keys: Record<string, unknown>; upsert_ok: boolean; upsert_error: string | null; row_after: Record<string, unknown> | null }; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
   const { igAccountId, igUserId, pageId, userId, token } = params
   const today = todayUtc()
 
@@ -179,7 +179,15 @@ async function ensureTodaySnapshotForAccount(params: {
   const chosenDay = byDay.has(today) ? today : availableDays[availableDays.length - 1]
   const chosenData = byDay.get(chosenDay)!
 
-  await upsertDailySnapshot(supabaseServer, {
+  const upsertPayloadKeys = {
+    ig_account_id: igAccountId,
+    user_id_text: userId,
+    ig_user_id: Number(igUserId),
+    page_id: pageId ? Number(pageId) : 0,
+    day: chosenDay,
+  }
+
+  const upsertResult = await upsertDailySnapshot(supabaseServer, {
     ig_account_id: igAccountId,
     user_id: userId,
     ig_user_id: Number(igUserId),
@@ -193,11 +201,35 @@ async function ensureTodaySnapshotForAccount(params: {
     wrote_at: nowIso(),
   })
 
+  const upsertOk = upsertResult.ok
+  const upsertError = !upsertResult.ok
+    ? (upsertResult.error instanceof Error ? upsertResult.error.message : String(upsertResult.error ?? ""))
+    : (upsertResult as any).skipped ? `skipped:${(upsertResult as any).reason}` : null
+
+  // Select row back to confirm what is actually in DB
+  let rowAfter: Record<string, unknown> | null = null
+  try {
+    const { data: rowData } = await supabaseServer
+      .from("account_daily_snapshot")
+      .select("id, day, updated_at, reach, impressions, total_interactions, accounts_engaged, source_used, user_id_text, ig_user_id, page_id")
+      .eq("ig_account_id", igAccountId)
+      .eq("day", chosenDay)
+      .limit(1)
+      .maybeSingle()
+    if (rowData) rowAfter = rowData as Record<string, unknown>
+  } catch { /* best-effort */ }
+
   return {
     did: true,
     chosen_day: chosenDay,
     today_key: today,
     available_days: availableDays,
+    db: {
+      payload_keys: upsertPayloadKeys,
+      upsert_ok: upsertOk,
+      upsert_error: upsertError,
+      row_after: rowAfter,
+    },
     ...(callA2Diag ? { graph_call_a2: callA2Diag } : {}),
     ...(callBDiag ? { graph_call_b: callBDiag } : {}),
   }
