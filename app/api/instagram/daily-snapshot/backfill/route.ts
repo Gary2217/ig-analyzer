@@ -17,6 +17,42 @@ const GRAPH_BASE = "https://graph.facebook.com/v24.0"
 const MAX_DAYS = 120
 const DEFAULT_DAYS = 90
 
+async function requireSsotIgAccountId(params: {
+  sb: any
+  userId: string
+  igUserId: string | number
+}) {
+  const { sb, userId } = params
+  const igUserIdNum =
+    typeof params.igUserId === "string" ? Number(params.igUserId) : params.igUserId
+
+  if (!igUserIdNum || Number.isNaN(igUserIdNum)) {
+    return { ok: false as const, status: 400 as const, error: "INVALID_IG_USER_ID" as const }
+  }
+
+  const q = await sb
+    .from("user_instagram_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("ig_user_id", igUserIdNum)
+    .maybeSingle()
+
+  if (q.error) {
+    return {
+      ok: false as const,
+      status: 500 as const,
+      error: "SSOT_LOOKUP_FAILED" as const,
+      message: (q.error as any)?.message ?? String(q.error),
+    }
+  }
+
+  if (!q.data?.id) {
+    return { ok: false as const, status: 409 as const, error: "SSOT_IG_ACCOUNT_NOT_FOUND" as const }
+  }
+
+  return { ok: true as const, ig_account_id: q.data.id as string }
+}
+
 function todayUtc(): string {
   const d = new Date()
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
@@ -57,43 +93,55 @@ export async function POST(req: NextRequest) {
     const requestedAccountId = typeof body.ig_account_id === "string" ? body.ig_account_id.trim() : ""
     const debugMode = body.debug === true
 
-    // --- Resolve ig_account (SSOT user_ig_accounts row) ---
-    let igAccountId = ""
+    // --- Resolve ig_account (igUserId + pageId from user_ig_accounts) ---
     let igUserId = ""
     let pageId = ""
 
     if (requestedAccountId) {
       const { data: acct } = await authed
         .from("user_ig_accounts")
-        .select("id, ig_user_id, page_id")
+        .select("ig_user_id, page_id")
         .eq("id", requestedAccountId)
         .eq("user_id", user.id)
         .eq("provider", "instagram")
         .limit(1)
         .maybeSingle()
-      igAccountId = acct && typeof (acct as any).id === "string" ? String((acct as any).id) : ""
       igUserId = acct && (acct as any).ig_user_id != null ? String((acct as any).ig_user_id) : ""
       pageId = acct && (acct as any).page_id != null ? String((acct as any).page_id) : ""
     }
 
-    if (!igAccountId) {
+    if (!igUserId) {
       const { data: latest } = await authed
         .from("user_ig_accounts")
-        .select("id, ig_user_id, page_id")
+        .select("ig_user_id, page_id")
         .eq("user_id", user.id)
         .eq("provider", "instagram")
         .is("revoked_at", null)
         .order("connected_at", { ascending: false })
         .limit(1)
         .maybeSingle()
-      igAccountId = latest && typeof (latest as any).id === "string" ? String((latest as any).id) : ""
       igUserId = latest && (latest as any).ig_user_id != null ? String((latest as any).ig_user_id) : ""
       pageId = latest && (latest as any).page_id != null ? String((latest as any).page_id) : ""
     }
 
-    if (!igAccountId || !igUserId) {
+    if (!igUserId) {
       return NextResponse.json({ ok: false, error: "no_ig_account" }, { status: 400 })
     }
+
+    const ssot = await requireSsotIgAccountId({
+      sb: authed,
+      userId: user.id,
+      igUserId: igUserId,
+    })
+
+    if (!ssot.ok) {
+      return NextResponse.json(
+        { ok: false, error: ssot.error, message: (ssot as any).message },
+        { status: ssot.status }
+      )
+    }
+
+    const ig_account_id = ssot.ig_account_id
 
     // --- Resolve access token ---
     // user_ig_account_tokens is keyed by (user_id, provider, ig_user_id) — no ig_account_id column.
@@ -139,7 +187,7 @@ export async function POST(req: NextRequest) {
     const { data: existingRows } = await supabaseServer
       .from("account_daily_snapshot")
       .select("day, reach")
-      .eq("ig_account_id", igAccountId)
+      .eq("ig_account_id", ig_account_id)
       .gte("day", rangeStart)
       .lte("day", today)
       .order("day", { ascending: true })
@@ -164,7 +212,7 @@ export async function POST(req: NextRequest) {
         inserted: 0,
         skipped: days,
         missing: [],
-        ...(debugMode ? { debug: { igAccountId, igUserId, pageId, days, rangeStart, today } } : {}),
+        ...(debugMode ? { debug: { ig_account_id, igUserId, pageId, days, rangeStart, today } } : {}),
       })
     }
 
@@ -317,7 +365,7 @@ export async function POST(req: NextRequest) {
       .map((d) => {
         const v = byDay.get(d)!
         return {
-          ig_account_id: igAccountId,
+          ig_account_id: ig_account_id,
           user_id: user.id,
           user_id_text: user.id,
           ig_user_id: Number(igUserId),
@@ -359,7 +407,7 @@ export async function POST(req: NextRequest) {
       missing: skippedNoData,
       ...(debugMode ? {
         debug: {
-          igAccountId, igUserId, pageId, days,
+          ig_account_id, igUserId, pageId, days,
           rangeStart, today,
           sinceDay, untilDay, sinceTs, untilTs,
           missingCount: missingDays.length,
