@@ -47,6 +47,22 @@ function dateFromTimestamp(ts: string): string {
   return ts.slice(0, 10)
 }
 
+function taipeiDayFromTimestamp(ts: string): string {
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return ts.slice(0, 10)
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" })
+}
+
+function taipeiDayUtcRange(day: string): { gte: string; lt: string } {
+  const [y, m, dd] = day.split("-").map(Number)
+  const startTaipei = new Date(Date.UTC(y, m - 1, dd, 0, 0, 0) - 8 * 3600_000)
+  const endTaipei = new Date(startTaipei.getTime() + 86400_000)
+  return {
+    gte: startTaipei.toISOString(),
+    lt: endTaipei.toISOString(),
+  }
+}
+
 function lookbackCutoff(lookbackDays: number): string {
   const ms = Date.now() - lookbackDays * 86400_000
   const d = new Date(ms)
@@ -146,7 +162,13 @@ async function fetchMediaInsights(
     const res = await fetch(url, { cache: "no-store" })
     if (!res.ok) {
       let msg = `status_${res.status}`
-      try { const b = await res.json() as any; msg = b?.error?.message ?? msg } catch { /* ignore */ }
+      let errBody: any = null
+      try { errBody = await res.json(); msg = errBody?.error?.message ?? msg } catch { /* ignore */ }
+      const isImpressionsUnsupported = res.status === 400 &&
+        typeof msg === "string" && msg.toLowerCase().includes("impressions")
+      if (isImpressionsUnsupported) {
+        return { reach: null, impressions: null, saves: null, shares: null, plays: null, ok: true }
+      }
       return { reach: null, impressions: null, saves: null, shares: null, plays: null, ok: false, status: res.status, message: msg }
     }
     const json = await safeJson(res) as any
@@ -198,7 +220,7 @@ async function runMediaSync(params: {
     const commentsCount: number = typeof item.comments_count === "number" ? item.comments_count : 0
 
     if (ts) {
-      const day = dateFromTimestamp(ts)
+      const day = taipeiDayFromTimestamp(ts)
       if (day >= cutoffDay) affectedDays.add(day)
     }
 
@@ -244,13 +266,14 @@ async function runMediaSync(params: {
   let rowsAggregated = 0
 
   for (const day of Array.from(affectedDays).sort()) {
+    const { gte: rangeGte, lt: rangeLt } = taipeiDayUtcRange(day)
     const { data: dayRows, error: dayErr } = await supabaseServer
       .from("media_raw")
       .select("like_count, comments_count, save_count, share_count")
       .eq("user_id_text", userIdText)
       .eq("ig_account_id", igAccountId)
-      .gte("media_timestamp", `${day}T00:00:00.000Z`)
-      .lt("media_timestamp", `${day}T23:59:59.999Z`)
+      .gte("media_timestamp", rangeGte)
+      .lt("media_timestamp", rangeLt)
 
     if (dayErr) {
       console.warn("[cron/media-sync] aggregate query error", { day, message: dayErr.message })
