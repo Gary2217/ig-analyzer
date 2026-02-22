@@ -54,7 +54,7 @@ async function ensureTodaySnapshotForAccount(params: {
   pageId: string
   userId: string
   token: string
-}): Promise<{ did: boolean; reason?: string; chosen_day?: string; today_key?: string; available_days?: string[]; graph_values?: { day: string; reach: number | null; views: number; total_interactions: number; accounts_engaged: number; call_status: { a1_reach_ok: boolean; a2_views_ok: boolean; b_totals_ok: boolean }; series_counts: { reach_values: number; views_values: number; int_values: number; engaged_values: number } }; db?: { payload_keys: Record<string, unknown>; upsert_ok: boolean; upsert_error: string | null; row_after: Record<string, unknown> | null }; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
+}): Promise<{ did: boolean; reason?: string; chosen_day?: string; today_key?: string; available_days?: string[]; graph_values?: { day: string; reach: number | null; views: number | null; total_interactions: number | null; accounts_engaged: number | null; call_status: { a1_reach_ok: boolean; a2_views_ok: boolean; b_totals_ok: boolean }; series_counts: { reach_values: number; views_values: number; int_values: number; engaged_values: number } }; db?: { payload_keys: Record<string, unknown>; upsert_ok: boolean; upsert_error: string | null; row_after: Record<string, unknown> | null }; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string }; diag_metrics?: { days_written: number; metrics_written: { impressions: number; total_interactions: number; accounts_engaged: number }; first_missing_metric_reason: string | null } }> {
   const { igAccountId, igUserId, pageId, userId, token } = params
   const today = todayUtc()
 
@@ -146,11 +146,11 @@ async function ensureTodaySnapshotForAccount(params: {
     }
   } catch { /* best-effort; continue with zeros */ }
 
-  const byDay = new Map<string, { reach: number | null; impressions: number; total_interactions: number; accounts_engaged: number }>()
+  const byDay = new Map<string, { reach: number | null; impressions: number | null; total_interactions: number | null; accounts_engaged: number | null }>()
   const ensureDay = (d: string) => {
     const ex = byDay.get(d)
     if (ex) return ex
-    const init = { reach: null as number | null, impressions: 0, total_interactions: 0, accounts_engaged: 0 }
+    const init = { reach: null as number | null, impressions: null as number | null, total_interactions: null as number | null, accounts_engaged: null as number | null }
     byDay.set(d, init)
     return init
   }
@@ -162,19 +162,22 @@ async function ensureTodaySnapshotForAccount(params: {
   for (const v of viewsValues) {
     const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
     if (!d) continue
-    ensureDay(d).impressions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+    const val = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : null
+    if (val !== null) ensureDay(d).impressions = val
   }
   for (const v of intValues) {
     const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
     if (!d) continue
     const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
-    ensureDay(d).total_interactions = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
+    const val = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : null
+    if (val !== null) ensureDay(d).total_interactions = val
   }
   for (const v of engagedValues) {
     const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
     if (!d) continue
     const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
-    ensureDay(d).accounts_engaged = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
+    const val = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : null
+    if (val !== null) ensureDay(d).accounts_engaged = val
   }
 
   const availableDays = Array.from(byDay.keys()).filter((d) => d.length === 10).sort()
@@ -186,9 +189,9 @@ async function ensureTodaySnapshotForAccount(params: {
   const graphValues = {
     day: chosenDay,
     reach: chosenData.reach,
-    views: chosenData.impressions,
-    total_interactions: chosenData.total_interactions,
-    accounts_engaged: chosenData.accounts_engaged,
+    views: chosenData.impressions ?? null,
+    total_interactions: chosenData.total_interactions ?? null,
+    accounts_engaged: chosenData.accounts_engaged ?? null,
     call_status: {
       a1_reach_ok: true,
       a2_views_ok: callA2Ok,
@@ -210,6 +213,11 @@ async function ensureTodaySnapshotForAccount(params: {
     day: chosenDay,
   }
 
+  const missingMetrics: string[] = []
+  if (chosenData.impressions === null) missingMetrics.push("impressions")
+  if (chosenData.total_interactions === null) missingMetrics.push("total_interactions")
+  if (chosenData.accounts_engaged === null) missingMetrics.push("accounts_engaged")
+
   const upsertResult = await upsertDailySnapshot(supabaseServer, {
     ig_account_id: igAccountId,
     user_id: userId,
@@ -217,9 +225,9 @@ async function ensureTodaySnapshotForAccount(params: {
     page_id: pageId ? Number(pageId) : 0,
     day: chosenDay,
     reach: chosenData.reach,
-    impressions: chosenData.impressions,
-    total_interactions: chosenData.total_interactions,
-    accounts_engaged: chosenData.accounts_engaged,
+    impressions: chosenData.impressions ?? undefined,
+    total_interactions: chosenData.total_interactions ?? undefined,
+    accounts_engaged: chosenData.accounts_engaged ?? undefined,
     source_used: "cron_prewarm",
     wrote_at: nowIso(),
   })
@@ -253,6 +261,17 @@ async function ensureTodaySnapshotForAccount(params: {
       upsert_ok: upsertOk,
       upsert_error: upsertError,
       row_after: rowAfter,
+    },
+    diag_metrics: {
+      days_written: upsertOk ? 1 : 0,
+      metrics_written: {
+        impressions: chosenData.impressions !== null ? 1 : 0,
+        total_interactions: chosenData.total_interactions !== null ? 1 : 0,
+        accounts_engaged: chosenData.accounts_engaged !== null ? 1 : 0,
+      },
+      first_missing_metric_reason: missingMetrics.length > 0
+        ? `missing_from_api: ${missingMetrics.join(",")}`
+        : null,
     },
     ...(callA2Diag ? { graph_call_a2: callA2Diag } : {}),
     ...(callBDiag ? { graph_call_b: callBDiag } : {}),

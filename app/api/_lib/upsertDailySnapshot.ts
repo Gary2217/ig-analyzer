@@ -15,9 +15,9 @@ export type DailySnapshotRow = {
   page_id: number
   day: string
   reach: number | null
-  impressions: number
-  total_interactions: number
-  accounts_engaged: number
+  impressions?: number | null
+  total_interactions?: number | null
+  accounts_engaged?: number | null
   source_used?: string
   wrote_at?: string
 }
@@ -61,18 +61,20 @@ export async function upsertDailySnapshot(
     }
   }
 
+  const isFiniteNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)
+
   try {
     const payload = rowArr.map((r) => ({
       ig_account_id: r.ig_account_id,
       user_id: r.user_id,
-      user_id_text: r.user_id,
+      user_id_text: String(r.user_id),
       ig_user_id: r.ig_user_id,
       page_id: r.page_id,
       day: r.day,
       reach: r.reach,
-      impressions: r.impressions,
-      total_interactions: r.total_interactions,
-      accounts_engaged: r.accounts_engaged,
+      ...(isFiniteNum(r.impressions) ? { impressions: r.impressions } : {}),
+      ...(isFiniteNum(r.total_interactions) ? { total_interactions: r.total_interactions } : {}),
+      ...(isFiniteNum(r.accounts_engaged) ? { accounts_engaged: r.accounts_engaged } : {}),
       ...(r.source_used !== undefined ? { source_used: r.source_used } : {}),
       ...(r.wrote_at !== undefined ? { wrote_at: r.wrote_at } : {}),
     }))
