@@ -54,7 +54,7 @@ async function ensureTodaySnapshotForAccount(params: {
   pageId: string
   userId: string
   token: string
-}): Promise<{ did: boolean; reason?: string; chosen_day?: string; today_key?: string; available_days?: string[]; db?: { payload_keys: Record<string, unknown>; upsert_ok: boolean; upsert_error: string | null; row_after: Record<string, unknown> | null }; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
+}): Promise<{ did: boolean; reason?: string; chosen_day?: string; today_key?: string; available_days?: string[]; graph_values?: { day: string; reach: number | null; views: number; total_interactions: number; accounts_engaged: number; call_status: { a1_reach_ok: boolean; a2_views_ok: boolean; b_totals_ok: boolean }; series_counts: { reach_values: number; views_values: number; int_values: number; engaged_values: number } }; db?: { payload_keys: Record<string, unknown>; upsert_ok: boolean; upsert_error: string | null; row_after: Record<string, unknown> | null }; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
   const { igAccountId, igUserId, pageId, userId, token } = params
   const today = todayUtc()
 
@@ -108,6 +108,7 @@ async function ensureTodaySnapshotForAccount(params: {
 
   // Call A2: views (period=day, metric_type=total_value) — best-effort
   let viewsValues: any[] = []
+  let callA2Ok = false
   let callA2Diag: { call: "A2"; status: number; error_body: unknown; url: string } | null = null
   try {
     const callA2Url = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
@@ -116,6 +117,7 @@ async function ensureTodaySnapshotForAccount(params: {
     if (viewsRes.ok) {
       const viewsJson = await safeJson(viewsRes) as any
       viewsValues = viewsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
+      callA2Ok = true
     } else {
       let errorBody: unknown = null
       try { errorBody = await viewsRes.json() } catch { try { errorBody = await viewsRes.text() } catch { /* ignore */ } }
@@ -126,6 +128,7 @@ async function ensureTodaySnapshotForAccount(params: {
   // Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort
   let intValues: any[] = []
   let engagedValues: any[] = []
+  let callBOk = false
   let callBDiag: { call: "B"; status: number; error_body: unknown; url: string } | null = null
   try {
     const callBUrl = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
@@ -135,6 +138,7 @@ async function ensureTodaySnapshotForAccount(params: {
       const tvJson = await safeJson(tvRes) as any
       intValues = tvJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
       engagedValues = tvJson?.data?.find((m: any) => m?.name === "accounts_engaged")?.values ?? []
+      callBOk = true
     } else {
       let errorBody: unknown = null
       try { errorBody = await tvRes.json() } catch { try { errorBody = await tvRes.text() } catch { /* ignore */ } }
@@ -178,6 +182,25 @@ async function ensureTodaySnapshotForAccount(params: {
 
   const chosenDay = byDay.has(today) ? today : availableDays[availableDays.length - 1]
   const chosenData = byDay.get(chosenDay)!
+
+  const graphValues = {
+    day: chosenDay,
+    reach: chosenData.reach,
+    views: chosenData.impressions,
+    total_interactions: chosenData.total_interactions,
+    accounts_engaged: chosenData.accounts_engaged,
+    call_status: {
+      a1_reach_ok: true,
+      a2_views_ok: callA2Ok,
+      b_totals_ok: callBOk,
+    },
+    series_counts: {
+      reach_values: reachValues.length,
+      views_values: viewsValues.length,
+      int_values: intValues.length,
+      engaged_values: engagedValues.length,
+    },
+  }
 
   const upsertPayloadKeys = {
     ig_account_id: igAccountId,
@@ -224,6 +247,7 @@ async function ensureTodaySnapshotForAccount(params: {
     chosen_day: chosenDay,
     today_key: today,
     available_days: availableDays,
+    graph_values: graphValues,
     db: {
       payload_keys: upsertPayloadKeys,
       upsert_ok: upsertOk,
