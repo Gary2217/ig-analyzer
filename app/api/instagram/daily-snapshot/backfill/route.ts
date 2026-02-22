@@ -242,52 +242,49 @@ export async function POST(req: NextRequest) {
     const byDay = new Map<string, { reach: number | null; total_interactions: number; impressions: number; accounts_engaged: number }>()
 
     for (const { chunkSince, chunkUntil } of chunks) {
-      // --- Call A: time-series metrics (reach + views) — no metric_type ---
-      let tsRes = await fetch(
+      // --- Call A1: reach only (period=day, no metric_type) ---
+      const reachRes = await fetch(
         `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-          `?metric=reach,views` +
+          `?metric=reach` +
           `&period=day` +
           `&since=${chunkSince}` +
           `&until=${chunkUntil}` +
           `&access_token=${pageAccessToken}`,
         { cache: "no-store" }
       )
-      let tsJson = await safeJson(tsRes) as any
-      // Fallback to reach-only if views rejected
-      if (!tsRes.ok) {
-        const graphCode = tsJson?.error?.code
-        const graphMsg = String(tsJson?.error?.message ?? "")
-        const isUnsupported = graphCode === 100 || graphMsg.includes("metric_type") || graphMsg.includes("unsupported") || graphMsg.includes("invalid")
-        if (isUnsupported) {
-          tsRes = await fetch(
-            `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-              `?metric=reach` +
-              `&period=day` +
-              `&since=${chunkSince}` +
-              `&until=${chunkUntil}` +
-              `&access_token=${pageAccessToken}`,
-            { cache: "no-store" }
-          )
-          tsJson = await safeJson(tsRes) as any
-        }
-      }
-
-      if (!tsRes.ok) {
-        const graphMsg = tsJson?.error?.message ?? "graph_error"
+      const reachJson = await safeJson(reachRes) as any
+      if (!reachRes.ok) {
+        const graphMsg = reachJson?.error?.message ?? "graph_error"
         return NextResponse.json({
           ok: false,
           error: "graph_fetch_failed",
-          status: tsRes.status,
+          status: reachRes.status,
           message: graphMsg,
           missing: missingDays,
           ...(debugMode ? { debug: { chunkSince, chunkUntil } } : {}),
         }, { status: 502 })
       }
+      const reachData: any[] = Array.isArray(reachJson?.data) ? reachJson.data : []
+      const reachSeries: any[] = reachData.find((m: any) => m?.name === "reach")?.values ?? []
 
-      const tsData: any[] = Array.isArray(tsJson?.data) ? tsJson.data : []
-      const extractTs = (name: string): any[] => tsData.find((m: any) => m?.name === name)?.values ?? []
-      const reachSeries: any[] = extractTs("reach")
-      const viewsSeries: any[] = extractTs("views")
+      // --- Call A2: views (period=day, metric_type=total_value) — best-effort ---
+      let viewsSeries: any[] = []
+      try {
+        const viewsRes = await fetch(
+          `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+            `?metric=views` +
+            `&period=day` +
+            `&metric_type=total_value` +
+            `&since=${chunkSince}` +
+            `&until=${chunkUntil}` +
+            `&access_token=${pageAccessToken}`,
+          { cache: "no-store" }
+        )
+        if (viewsRes.ok) {
+          const viewsJson = await safeJson(viewsRes) as any
+          viewsSeries = (Array.isArray(viewsJson?.data) ? viewsJson.data : []).find((m: any) => m?.name === "views")?.values ?? []
+        }
+      } catch { /* best-effort; impressions will be 0 */ }
 
       // --- Call B: total_value metrics — best-effort, do NOT fail backfill if this fails ---
       let interactionsSeries: any[] = []

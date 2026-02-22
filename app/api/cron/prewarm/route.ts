@@ -54,7 +54,7 @@ async function ensureTodaySnapshotForAccount(params: {
   pageId: string
   userId: string
   token: string
-}): Promise<{ did: boolean; reason?: string; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
+}): Promise<{ did: boolean; reason?: string; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
   const { igAccountId, igUserId, pageId, userId, token } = params
   const today = todayUtc()
 
@@ -90,23 +90,38 @@ async function ensureTodaySnapshotForAccount(params: {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
   })()
 
-  // Call A: time-series reach + views (period=day, no metric_type)
-  const callAUrl = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-    `?metric=reach,views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`
-  const insightsRes = await fetch(callAUrl, { cache: "no-store" })
-  if (!insightsRes.ok) {
+  // Call A1: reach only (period=day, no metric_type)
+  const callA1Url = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+    `?metric=reach&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`
+  const reachRes = await fetch(callA1Url, { cache: "no-store" })
+  if (!reachRes.ok) {
     let errorBody: unknown = null
-    try { errorBody = await insightsRes.json() } catch { try { errorBody = await insightsRes.text() } catch { /* ignore */ } }
+    try { errorBody = await reachRes.json() } catch { try { errorBody = await reachRes.text() } catch { /* ignore */ } }
     return {
       did: false,
-      reason: `graph_call_a_${insightsRes.status}`,
-      graph: { call: "A", status: insightsRes.status, error_body: errorBody, url: redactToken(callAUrl) },
+      reason: `graph_call_a1_${reachRes.status}`,
+      graph: { call: "A1", status: reachRes.status, error_body: errorBody, url: redactToken(callA1Url) },
     }
   }
+  const reachJson = await safeJson(reachRes) as any
+  const reachValues: any[] = reachJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
 
-  const insightsJson = await safeJson(insightsRes) as any
-  const reachValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
-  const viewsValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
+  // Call A2: views (period=day, metric_type=total_value) — best-effort
+  let viewsValues: any[] = []
+  let callA2Diag: { call: "A2"; status: number; error_body: unknown; url: string } | null = null
+  try {
+    const callA2Url = `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+      `?metric=views&period=day&metric_type=total_value&since=${yesterday}&until=${today}&access_token=${pageToken}`
+    const viewsRes = await fetch(callA2Url, { cache: "no-store" })
+    if (viewsRes.ok) {
+      const viewsJson = await safeJson(viewsRes) as any
+      viewsValues = viewsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
+    } else {
+      let errorBody: unknown = null
+      try { errorBody = await viewsRes.json() } catch { try { errorBody = await viewsRes.text() } catch { /* ignore */ } }
+      callA2Diag = { call: "A2", status: viewsRes.status, error_body: errorBody, url: redactToken(callA2Url) }
+    }
+  } catch { /* best-effort; impressions will be 0 */ }
 
   // Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort
   let intValues: any[] = []
@@ -175,7 +190,7 @@ async function ensureTodaySnapshotForAccount(params: {
     wrote_at: nowIso(),
   })
 
-  return { did: true, ...(callBDiag ? { graph_call_b: callBDiag } : {}) }
+  return { did: true, ...(callA2Diag ? { graph_call_a2: callA2Diag } : {}), ...(callBDiag ? { graph_call_b: callBDiag } : {}) }
 }
 
 // ---------------------------------------------------------------------------

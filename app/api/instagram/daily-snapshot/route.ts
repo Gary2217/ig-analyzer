@@ -1643,40 +1643,40 @@ async function handle(req: Request) {
           const sinceDay = fetchStartDay < rangeStart ? rangeStart : fetchStartDay
           const untilDay = rangeEnd
 
-          // Call A: time-series metrics (reach + views) — no metric_type
-          let insightsRes = await fetch(
+          // Call A1: reach only (period=day, no metric_type)
+          const reachResSync = await fetch(
             `${GRAPH_BASE}/${resolvedIgId}/insights` +
-              `?metric=reach,views` +
+              `?metric=reach` +
               `&period=day` +
               `&since=${sinceDay}` +
               `&until=${untilDay}` +
               `&access_token=${accessToken}`
           )
-          // Fallback to reach-only if views rejected
-          if (!insightsRes.ok) {
-            const errBody = await safeJson(insightsRes)
-            if (isUnsupportedMetricBody(errBody)) {
-              insightsRes = await fetch(
+          const reachJsonSync = await safeJson(reachResSync)
+
+          if (!reachResSync.ok) {
+            console.log("REACH SYNC DONE", { rows: 0, reason: "graph_not_ok", status: reachResSync.status })
+          } else {
+            const reachDataSync: any[] = Array.isArray((reachJsonSync as any)?.data) ? (reachJsonSync as any).data : []
+            const reachSeries: any[] = reachDataSync.find((m: any) => m?.name === "reach")?.values ?? []
+
+            // Call A2: views (period=day, metric_type=total_value) — best-effort
+            let viewsSeries: any[] = []
+            try {
+              const viewsResSync = await fetch(
                 `${GRAPH_BASE}/${resolvedIgId}/insights` +
-                  `?metric=reach` +
+                  `?metric=views` +
                   `&period=day` +
+                  `&metric_type=total_value` +
                   `&since=${sinceDay}` +
                   `&until=${untilDay}` +
                   `&access_token=${accessToken}`
               )
-            }
-          }
-          const insightsJson = await safeJson(insightsRes)
-
-          if (!insightsRes.ok) {
-            console.log("REACH SYNC DONE", { rows: 0, reason: "graph_not_ok", status: insightsRes.status })
-          } else {
-            const insightsData: any[] = Array.isArray(insightsJson?.data) ? insightsJson.data : []
-            const extractSyncSeries = (name: string): any[] =>
-              insightsData.find((m: any) => m?.name === name)?.values ?? []
-
-            const reachSeries = extractSyncSeries("reach")
-            const viewsSeries = extractSyncSeries("views")
+              if (viewsResSync.ok) {
+                const viewsJsonSync = await safeJson(viewsResSync) as any
+                viewsSeries = (Array.isArray(viewsJsonSync?.data) ? viewsJsonSync.data : []).find((m: any) => m?.name === "views")?.values ?? []
+              }
+            } catch { /* best-effort; impressions will be 0 */ }
 
             // Call B: total_value metrics — best-effort, do NOT fail reach-sync if this fails
             let interactionsSeries: any[] = []

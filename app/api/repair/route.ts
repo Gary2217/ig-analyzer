@@ -276,17 +276,29 @@ async function repairSnapshotToday(params: {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
   })()
 
-  // Call A: time-series reach + views (period=day, no metric_type)
-  const insightsRes = await fetch(
+  // Call A1: reach only (period=day, no metric_type)
+  const reachRes = await fetch(
     `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-      `?metric=reach,views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`,
+      `?metric=reach&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`,
     { cache: "no-store" }
   )
-  if (!insightsRes.ok) return { did: false, reason: `graph_${insightsRes.status}` }
+  if (!reachRes.ok) return { did: false, reason: `graph_a1_${reachRes.status}` }
+  const reachJson = await safeJson(reachRes) as any
+  const reachValues: any[] = reachJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
 
-  const insightsJson = await safeJson(insightsRes) as any
-  const reachValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
-  const viewsValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
+  // Call A2: views (period=day, metric_type=total_value) — best-effort
+  let viewsValues: any[] = []
+  try {
+    const viewsRes = await fetch(
+      `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+        `?metric=views&period=day&metric_type=total_value&since=${yesterday}&until=${today}&access_token=${pageToken}`,
+      { cache: "no-store" }
+    )
+    if (viewsRes.ok) {
+      const viewsJson = await safeJson(viewsRes) as any
+      viewsValues = viewsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
+    }
+  } catch { /* best-effort; impressions will be 0 */ }
 
   // Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort
   let intValues: any[] = []
