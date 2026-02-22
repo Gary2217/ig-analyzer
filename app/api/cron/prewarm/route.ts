@@ -225,9 +225,9 @@ async function ensureTodaySnapshotForAccount(params: {
     page_id: pageId ? Number(pageId) : 0,
     day: chosenDay,
     reach: chosenData.reach,
-    impressions: chosenData.impressions ?? undefined,
-    total_interactions: chosenData.total_interactions ?? undefined,
-    accounts_engaged: chosenData.accounts_engaged ?? undefined,
+    impressions: chosenData.impressions ?? 0,
+    total_interactions: chosenData.total_interactions ?? 0,
+    accounts_engaged: chosenData.accounts_engaged ?? 0,
     source_used: "cron_prewarm",
     wrote_at: nowIso(),
   })

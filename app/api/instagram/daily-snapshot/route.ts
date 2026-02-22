@@ -583,9 +583,9 @@ async function upsertAccountDailySnapshots(params: {
         page_id: Number(params.pageId),
         day: r.day,
         reach: r.reach,
-        impressions: r.impressions,
-        total_interactions: r.total_interactions,
-        accounts_engaged: r.accounts_engaged,
+        impressions: r.impressions ?? 0,
+        total_interactions: r.total_interactions ?? 0,
+        accounts_engaged: r.accounts_engaged ?? 0,
         source_used: r.source_used,
         wrote_at: r.wrote_at,
       }))
@@ -1773,9 +1773,9 @@ async function handle(req: Request) {
                   page_id: Number(resolvedPageId),
                   day,
                   reach: rec.reach,
-                  ...(rec.impressions !== null ? { impressions: rec.impressions } : {}),
-                  ...(rec.total_interactions !== null ? { total_interactions: rec.total_interactions } : {}),
-                  ...(rec.accounts_engaged !== null ? { accounts_engaged: rec.accounts_engaged } : {}),
+                  impressions: typeof rec.impressions === "number" && Number.isFinite(rec.impressions) ? rec.impressions : 0,
+                  total_interactions: typeof rec.total_interactions === "number" && Number.isFinite(rec.total_interactions) ? rec.total_interactions : 0,
+                  accounts_engaged: typeof rec.accounts_engaged === "number" && Number.isFinite(rec.accounts_engaged) ? rec.accounts_engaged : 0,
                   source_used: "reach_sync",
                   wrote_at: reachSyncWroteAt,
                 }))
@@ -1786,8 +1786,17 @@ async function handle(req: Request) {
                 if (!authed || !userId) {
                   console.warn("[daily-snapshot] skip account_daily_snapshot upsert (missing authed user)", { cronMode: Boolean(cronMode) })
                 } else {
-                  await upsertDailySnapshot(authed, rows)
+                  const reachSyncUpsertResult = await upsertDailySnapshot(authed, rows)
                   __dsReachSyncAt.set(reachSyncKey, nowMs())
+                  const lastRow = rows[rows.length - 1]
+                  console.log("REACH SYNC UPSERT RESULT", {
+                    ok: reachSyncUpsertResult.ok,
+                    rows: rows.length,
+                    last_day: lastRow?.day,
+                    last_impressions: lastRow?.impressions,
+                    last_total_interactions: lastRow?.total_interactions,
+                    last_accounts_engaged: lastRow?.accounts_engaged,
+                  })
                 }
               }
 
@@ -2026,6 +2035,20 @@ async function handle(req: Request) {
                 resolved_strategy: ssotDiag.strategy,
                 resolved_snapshot_rows: ssotDiag.snapshot_rows,
                 candidate_count: ssotDiag.candidate_count,
+                snapshot_write_diag: (() => {
+                  const latest = snapRows.length > 0 ? snapRows[snapRows.length - 1] as any : null
+                  if (!latest) return null
+                  return {
+                    day: latest.day ?? null,
+                    reach: latest.reach ?? null,
+                    impressions: latest.impressions ?? null,
+                    total_interactions: latest.total_interactions ?? null,
+                    accounts_engaged: latest.accounts_engaged ?? null,
+                    impressions_non_null: latest.impressions !== null && latest.impressions !== undefined,
+                    total_interactions_non_null: latest.total_interactions !== null && latest.total_interactions !== undefined,
+                    accounts_engaged_non_null: latest.accounts_engaged !== null && latest.accounts_engaged !== undefined,
+                  }
+                })(),
                 ...followersDiag,
               },
             },
