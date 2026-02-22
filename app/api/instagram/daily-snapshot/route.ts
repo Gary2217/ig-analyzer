@@ -199,7 +199,32 @@ async function resolveSsotBySnapshotRows(params: {
       .order("created_at", { ascending: false })
       .limit(20)
 
-    const rows: Array<{ id: string; created_at: string }> = Array.isArray(candidates) ? candidates : []
+    let rows: Array<{ id: string; created_at: string }> = Array.isArray(candidates) ? candidates : []
+
+    // Fallback: if user_instagram_accounts has no rows, try user_ig_accounts (SSOT table).
+    // user_ig_accounts.ig_user_id is TEXT — compare as string.
+    if (rows.length === 0) {
+      try {
+        const { data: igAcctCandidates } = await params.sb
+          .from("user_ig_accounts")
+          .select("id,connected_at")
+          .eq("user_id", params.userId)
+          .eq("ig_user_id", String(igUserIdNum))
+          .is("revoked_at", null)
+          .order("connected_at", { ascending: false })
+          .limit(20)
+
+        const igAcctRows = Array.isArray(igAcctCandidates) ? igAcctCandidates : []
+        // Normalize connected_at -> created_at so the rest of the function is unchanged
+        rows = igAcctRows.map((r: any) => ({
+          id: String(r.id ?? ""),
+          created_at: String(r.connected_at ?? r.created_at ?? ""),
+        })).filter((r) => r.id)
+      } catch {
+        // best-effort; leave rows empty
+      }
+    }
+
     if (rows.length === 0) return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
 
     // For each candidate, count snapshot rows
@@ -2035,6 +2060,8 @@ async function handle(req: Request) {
                 resolved_strategy: ssotDiag.strategy,
                 resolved_snapshot_rows: ssotDiag.snapshot_rows,
                 candidate_count: ssotDiag.candidate_count,
+                resolved_ig_user_id: resolvedIgId || null,
+                resolved_page_id: resolvedPageId || null,
                 snapshot_write_diag: (() => {
                   const latest = snapRows.length > 0 ? snapRows[snapRows.length - 1] as any : null
                   if (!latest) return null
