@@ -54,7 +54,7 @@ async function ensureTodaySnapshotForAccount(params: {
   pageId: string
   userId: string
   token: string
-}): Promise<{ did: boolean; reason?: string; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
+}): Promise<{ did: boolean; reason?: string; chosen_day?: string; today_key?: string; available_days?: string[]; graph?: { call: string; status: number; error_body: unknown; url: string }; graph_call_a2?: { call: string; status: number; error_body: unknown; url: string }; graph_call_b?: { call: string; status: number; error_body: unknown; url: string } }> {
   const { igAccountId, igUserId, pageId, userId, token } = params
   const today = todayUtc()
 
@@ -173,24 +173,34 @@ async function ensureTodaySnapshotForAccount(params: {
     ensureDay(d).accounts_engaged = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
   }
 
-  const todayData = byDay.get(today)
-  if (!todayData) return { did: false, reason: "no_graph_data_for_today" }
+  const availableDays = Array.from(byDay.keys()).filter((d) => d.length === 10).sort()
+  if (availableDays.length === 0) return { did: false, reason: "no_graph_data_for_today", available_days: [] }
+
+  const chosenDay = byDay.has(today) ? today : availableDays[availableDays.length - 1]
+  const chosenData = byDay.get(chosenDay)!
 
   await upsertDailySnapshot(supabaseServer, {
     ig_account_id: igAccountId,
     user_id: userId,
     ig_user_id: Number(igUserId),
     page_id: pageId ? Number(pageId) : 0,
-    day: today,
-    reach: todayData.reach,
-    impressions: todayData.impressions,
-    total_interactions: todayData.total_interactions,
-    accounts_engaged: todayData.accounts_engaged,
+    day: chosenDay,
+    reach: chosenData.reach,
+    impressions: chosenData.impressions,
+    total_interactions: chosenData.total_interactions,
+    accounts_engaged: chosenData.accounts_engaged,
     source_used: "cron_prewarm",
     wrote_at: nowIso(),
   })
 
-  return { did: true, ...(callA2Diag ? { graph_call_a2: callA2Diag } : {}), ...(callBDiag ? { graph_call_b: callBDiag } : {}) }
+  return {
+    did: true,
+    chosen_day: chosenDay,
+    today_key: today,
+    available_days: availableDays,
+    ...(callA2Diag ? { graph_call_a2: callA2Diag } : {}),
+    ...(callBDiag ? { graph_call_b: callBDiag } : {}),
+  }
 }
 
 // ---------------------------------------------------------------------------
