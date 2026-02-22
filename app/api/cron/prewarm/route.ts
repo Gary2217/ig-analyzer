@@ -1,0 +1,281 @@
+import { NextResponse } from "next/server"
+import { createHash } from "crypto"
+import { supabaseServer } from "@/lib/supabase/server"
+import { upsertDailySnapshot } from "@/app/api/_lib/upsertDailySnapshot"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+// ---------------------------------------------------------------------------
+// POST /api/cron/prewarm
+// Cron-safe prewarm: writes today's account_daily_snapshot row without a
+// browser session. Auth via x-cron-secret header (same env as cron/daily-snapshot).
+//
+// Required env vars:
+//   CRON_SECRET          — shared secret; must match x-cron-secret header
+//
+// Request body (JSON):
+//   { ig_account_id: string }   — UUID from user_instagram_accounts.id
+//   { debug?: true }            — optional: include extra fields in response
+// ---------------------------------------------------------------------------
+
+const BUILD_MARKER = "cron-prewarm-v1"
+const GRAPH_BASE = "https://graph.facebook.com/v24.0"
+const baseHeaders = { "Cache-Control": "no-store", "x-build-marker": BUILD_MARKER } as const
+
+function isVercelCron(req: Request) {
+  return req.headers.has("x-vercel-cron")
+}
+
+function todayUtc(): string {
+  const d = new Date()
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+}
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+async function safeJson(res: Response): Promise<unknown> {
+  try { return await res.json() } catch { return null }
+}
+
+// ---------------------------------------------------------------------------
+// Core: ensure today's snapshot row exists for the given ig_account_id
+// Uses service-role client — no user session required.
+// ---------------------------------------------------------------------------
+async function ensureTodaySnapshotForAccount(params: {
+  igAccountId: string
+  igUserId: string
+  pageId: string
+  userId: string
+  token: string
+}): Promise<{ did: boolean; reason?: string }> {
+  const { igAccountId, igUserId, pageId, userId, token } = params
+  const today = todayUtc()
+
+  // Skip if today already has a non-null reach row
+  const { data: existing } = await supabaseServer
+    .from("account_daily_snapshot")
+    .select("id, reach")
+    .eq("ig_account_id", igAccountId)
+    .eq("day", today)
+    .limit(1)
+    .maybeSingle()
+
+  if (existing && (existing as any).reach !== null) {
+    return { did: false, reason: "already_exists" }
+  }
+
+  // Resolve page access token
+  let pageToken = token
+  if (pageId) {
+    try {
+      const ptRes = await fetch(
+        `${GRAPH_BASE}/${encodeURIComponent(pageId)}?fields=access_token&access_token=${token}`,
+        { cache: "no-store" }
+      )
+      const ptBody = await safeJson(ptRes) as any
+      if (ptBody?.access_token) pageToken = String(ptBody.access_token)
+    } catch { /* use user token */ }
+  }
+
+  const yesterday = (() => {
+    const ms = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) - 86400_000
+    const d = new Date(ms)
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+  })()
+
+  // Call A: time-series reach + views (period=day, no metric_type)
+  const insightsRes = await fetch(
+    `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+      `?metric=reach,views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`,
+    { cache: "no-store" }
+  )
+  if (!insightsRes.ok) return { did: false, reason: `graph_call_a_${insightsRes.status}` }
+
+  const insightsJson = await safeJson(insightsRes) as any
+  const reachValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
+  const viewsValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
+
+  // Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort
+  let intValues: any[] = []
+  let engagedValues: any[] = []
+  try {
+    const tvRes = await fetch(
+      `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+        `?metric=total_interactions,accounts_engaged&period=day&metric_type=total_value&since=${yesterday}&until=${today}&access_token=${pageToken}`,
+      { cache: "no-store" }
+    )
+    if (tvRes.ok) {
+      const tvJson = await safeJson(tvRes) as any
+      intValues = tvJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
+      engagedValues = tvJson?.data?.find((m: any) => m?.name === "accounts_engaged")?.values ?? []
+    }
+  } catch { /* best-effort; continue with zeros */ }
+
+  const byDay = new Map<string, { reach: number | null; impressions: number; total_interactions: number; accounts_engaged: number }>()
+  const ensureDay = (d: string) => {
+    const ex = byDay.get(d)
+    if (ex) return ex
+    const init = { reach: null as number | null, impressions: 0, total_interactions: 0, accounts_engaged: 0 }
+    byDay.set(d, init)
+    return init
+  }
+  for (const v of reachValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    ensureDay(d).reach = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
+  }
+  for (const v of viewsValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    ensureDay(d).impressions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
+  }
+  for (const v of intValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+    ensureDay(d).total_interactions = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
+  }
+  for (const v of engagedValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+    ensureDay(d).accounts_engaged = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
+  }
+
+  const todayData = byDay.get(today)
+  if (!todayData) return { did: false, reason: "no_graph_data_for_today" }
+
+  await upsertDailySnapshot(supabaseServer, {
+    ig_account_id: igAccountId,
+    user_id: userId,
+    ig_user_id: Number(igUserId),
+    page_id: pageId ? Number(pageId) : 0,
+    day: today,
+    reach: todayData.reach,
+    impressions: todayData.impressions,
+    total_interactions: todayData.total_interactions,
+    accounts_engaged: todayData.accounts_engaged,
+    source_used: "cron_prewarm",
+    wrote_at: nowIso(),
+  })
+
+  return { did: true }
+}
+
+// ---------------------------------------------------------------------------
+// Main handler
+// ---------------------------------------------------------------------------
+async function runCron(req: Request) {
+  const cronSecret = (process.env.CRON_SECRET ?? "").trim()
+
+  // Auth: Vercel cron header OR matching x-cron-secret
+  if (!isVercelCron(req)) {
+    const provided = (req.headers.get("x-cron-secret") ?? "").trim()
+    if (!cronSecret || provided !== cronSecret) {
+      return NextResponse.json(
+        { ok: false, error: "unauthorized", build_marker: BUILD_MARKER },
+        { status: 401, headers: baseHeaders }
+      )
+    }
+  }
+
+  // Parse body
+  let body: Record<string, unknown> = {}
+  try { body = ((await (req as any).json()) ?? {}) } catch { /* empty body ok */ }
+
+  const igAccountId = typeof body.ig_account_id === "string" ? body.ig_account_id.trim() : ""
+  const debugMode = body.debug === true
+
+  if (!igAccountId) {
+    return NextResponse.json(
+      { ok: false, error: "missing_body:ig_account_id", build_marker: BUILD_MARKER },
+      { status: 400, headers: baseHeaders }
+    )
+  }
+
+  // Resolve account details from user_instagram_accounts (service role — no user session)
+  const { data: acct, error: acctErr } = await supabaseServer
+    .from("user_instagram_accounts")
+    .select("id, user_id, ig_user_id, page_id")
+    .eq("id", igAccountId)
+    .limit(1)
+    .maybeSingle()
+
+  if (acctErr || !acct) {
+    return NextResponse.json(
+      { ok: false, error: "ig_account_not_found", build_marker: BUILD_MARKER },
+      { status: 404, headers: baseHeaders }
+    )
+  }
+
+  const userId = typeof (acct as any).user_id === "string" ? String((acct as any).user_id) : ""
+  const igUserId = (acct as any).ig_user_id != null ? String((acct as any).ig_user_id) : ""
+  const pageId = (acct as any).page_id != null ? String((acct as any).page_id) : ""
+
+  if (!userId || !igUserId) {
+    return NextResponse.json(
+      { ok: false, error: "account_missing_user_or_ig_user_id", build_marker: BUILD_MARKER },
+      { status: 422, headers: baseHeaders }
+    )
+  }
+
+  // Resolve access token (scoped to this user + ig_user_id — multi-tenant safe)
+  const { data: tokenRow } = await supabaseServer
+    .from("user_ig_account_tokens")
+    .select("access_token")
+    .eq("user_id", userId)
+    .eq("provider", "instagram")
+    .eq("ig_user_id", igUserId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const token = tokenRow && typeof (tokenRow as any).access_token === "string"
+    ? String((tokenRow as any).access_token).trim()
+    : ""
+
+  if (!token) {
+    return NextResponse.json(
+      { ok: false, error: "no_token_for_account", build_marker: BUILD_MARKER },
+      { status: 422, headers: baseHeaders }
+    )
+  }
+
+  console.log("[cron/prewarm] running", { igAccountId, igUserId, pageId, userId })
+
+  let result: { did: boolean; reason?: string } = { did: false, reason: "unknown" }
+  let snapshotError: string | null = null
+
+  try {
+    result = await ensureTodaySnapshotForAccount({ igAccountId, igUserId, pageId, userId, token })
+  } catch (e: any) {
+    snapshotError = e?.message ?? String(e)
+    console.error("[cron/prewarm] snapshot error", { error: snapshotError })
+  }
+
+  console.log("[cron/prewarm] done", { did: result.did, reason: result.reason, snapshotError })
+
+  return NextResponse.json(
+    {
+      ok: true,
+      build_marker: BUILD_MARKER,
+      snapshot: result,
+      ...(snapshotError ? { snapshot_error: snapshotError } : {}),
+      ...(debugMode ? {
+        debug: { igAccountId, igUserId, pageId, userId, hasToken: Boolean(token) },
+      } : {}),
+    },
+    { headers: baseHeaders }
+  )
+}
+
+export async function GET(req: Request) {
+  return runCron(req)
+}
+
+export async function POST(req: Request) {
+  return runCron(req)
+}
