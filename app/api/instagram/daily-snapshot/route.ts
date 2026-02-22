@@ -662,7 +662,14 @@ function sanitizeTrendPointsV2(pts: ReturnType<typeof buildTrendPointsV2>): Retu
       const v = sanitized[j].reach
       if (typeof v === "number" && Number.isFinite(v)) { sum += v; count++ }
     }
-    return { ...p, reach_ma7: count > 0 ? Math.round(sum / count) : 0 }
+    const engagedVal = (p as any).engaged ?? (p as any).engaged_accounts ?? (p as any).accounts_engaged ?? 0
+    return {
+      ...p,
+      reach_ma7: count > 0 ? Math.round(sum / count) : 0,
+      engaged: engagedVal,
+      engaged_accounts: engagedVal,
+      accounts_engaged: engagedVal,
+    }
   })
 }
 
