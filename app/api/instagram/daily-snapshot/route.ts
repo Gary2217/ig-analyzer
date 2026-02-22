@@ -1391,7 +1391,16 @@ async function handle(req: Request) {
       userId = ""
       authedUser = null
     }
-    
+
+    // Derive effectiveUserId: authed user id takes priority, then CRON_USER_ID env var.
+    const cronUserId = (process.env.CRON_USER_ID ?? "").trim()
+    const effectiveUserId = userId || cronUserId || ""
+    const cronUserDiag = {
+      cron_user_id_present: cronUserId !== "",
+      cron_user_id: cronUserId || null,
+      resolved_user_id: effectiveUserId || null,
+    }
+
     if (__DEV__) {
       console.debug("[daily-snapshot][auth]", { 
         cronMode, 
@@ -1899,11 +1908,11 @@ async function handle(req: Request) {
       // FORCE SSOT resolve — prefer candidate with most snapshot rows.
       // Always run when userId is available; igUserId may be empty (latest_connected fallback).
       let ssotDiag: SsotResolution = { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
-      if (userId) {
+      if (effectiveUserId) {
         ssotDiag = await resolveSsotBySnapshotRows({
           sb: supabaseServer,
           igUserId: resolvedIgId || "",
-          userId: userId,
+          userId: effectiveUserId,
         })
         if (!ssotId && ssotDiag.ig_account_id) {
           // No prior resolution — use whatever the resolver found
@@ -2084,6 +2093,7 @@ async function handle(req: Request) {
                 candidate_sources: ssotDiag.candidate_sources ?? null,
                 resolved_ig_user_id: resolvedIgId || null,
                 resolved_page_id: resolvedPageId || null,
+                ...cronUserDiag,
                 snapshot_write_diag: (() => {
                   const latest = snapRows.length > 0 ? snapRows[snapRows.length - 1] as any : null
                   if (!latest) return null
@@ -2178,6 +2188,7 @@ async function handle(req: Request) {
                   resolved_strategy: ssotDiag.strategy,
                   resolved_snapshot_rows: ssotDiag.snapshot_rows,
                   candidate_count: ssotDiag.candidate_count,
+                  ...cronUserDiag,
                   ...followersDiag,
                 },
               },
@@ -2270,6 +2281,7 @@ async function handle(req: Request) {
                 resolved_strategy: ssotDiag.strategy,
                 resolved_snapshot_rows: ssotDiag.snapshot_rows,
                 candidate_count: ssotDiag.candidate_count,
+                ...cronUserDiag,
                 ...followersDiag,
               },
             },
@@ -2414,6 +2426,7 @@ async function handle(req: Request) {
                 start: rangeStart,
                 end: rangeEnd,
                 followers_error: followersError ? { message: followersError.message, code: (followersError as any).code } : null,
+                ...cronUserDiag,
                 ...followersDiag,
               },
             },
@@ -2542,6 +2555,7 @@ async function handle(req: Request) {
               resolved_strategy: ssotDiag.strategy,
               resolved_snapshot_rows: ssotDiag.snapshot_rows,
               candidate_count: ssotDiag.candidate_count,
+              ...cronUserDiag,
               ...followersDiag,
             },
           },
@@ -2598,6 +2612,7 @@ async function handle(req: Request) {
           resolved_strategy: ssotDiag.strategy,
           resolved_snapshot_rows: ssotDiag.snapshot_rows,
           candidate_count: ssotDiag.candidate_count,
+          ...cronUserDiag,
           ...followersDiag,
         },
       },
