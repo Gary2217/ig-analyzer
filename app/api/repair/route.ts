@@ -276,31 +276,63 @@ async function repairSnapshotToday(params: {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
   })()
 
+  // Call A: time-series reach + views (period=day, no metric_type)
   const insightsRes = await fetch(
     `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
-      `?metric=reach,total_interactions&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`,
+      `?metric=reach,views&period=day&since=${yesterday}&until=${today}&access_token=${pageToken}`,
     { cache: "no-store" }
   )
   if (!insightsRes.ok) return { did: false, reason: `graph_${insightsRes.status}` }
 
   const insightsJson = await safeJson(insightsRes) as any
   const reachValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "reach")?.values ?? []
-  const intValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
+  const viewsValues: any[] = insightsJson?.data?.find((m: any) => m?.name === "views")?.values ?? []
 
-  const byDay = new Map<string, { reach: number | null; total_interactions: number }>()
+  // Call B: total_value metrics (total_interactions, accounts_engaged) — best-effort
+  let intValues: any[] = []
+  let engagedValues: any[] = []
+  try {
+    const tvRes = await fetch(
+      `${GRAPH_BASE}/${encodeURIComponent(igUserId)}/insights` +
+        `?metric=total_interactions,accounts_engaged&period=day&metric_type=total_value&since=${yesterday}&until=${today}&access_token=${pageToken}`,
+      { cache: "no-store" }
+    )
+    if (tvRes.ok) {
+      const tvJson = await safeJson(tvRes) as any
+      intValues = tvJson?.data?.find((m: any) => m?.name === "total_interactions")?.values ?? []
+      engagedValues = tvJson?.data?.find((m: any) => m?.name === "accounts_engaged")?.values ?? []
+    }
+  } catch { /* best-effort; continue with zeros */ }
+
+  const byDay = new Map<string, { reach: number | null; impressions: number; total_interactions: number; accounts_engaged: number }>()
+  const ensureDay = (d: string) => {
+    const ex = byDay.get(d)
+    if (ex) return ex
+    const init = { reach: null as number | null, impressions: 0, total_interactions: 0, accounts_engaged: 0 }
+    byDay.set(d, init)
+    return init
+  }
   for (const v of reachValues) {
     const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
     if (!d) continue
-    const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
-    ex.reach = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
-    byDay.set(d, ex)
+    ensureDay(d).reach = typeof v?.value === "number" && Number.isFinite(v.value) ? v.value : null
+  }
+  for (const v of viewsValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    ensureDay(d).impressions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
   }
   for (const v of intValues) {
     const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
     if (!d) continue
-    const ex = byDay.get(d) ?? { reach: null, total_interactions: 0 }
-    ex.total_interactions = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : 0
-    byDay.set(d, ex)
+    const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+    ensureDay(d).total_interactions = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
+  }
+  for (const v of engagedValues) {
+    const d = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
+    if (!d) continue
+    const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
+    ensureDay(d).accounts_engaged = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 0
   }
 
   const todayData = byDay.get(today)
@@ -313,9 +345,9 @@ async function repairSnapshotToday(params: {
     page_id: pageId ? Number(pageId) : 0,
     day: today,
     reach: todayData.reach,
+    impressions: todayData.impressions,
     total_interactions: todayData.total_interactions,
-    impressions: 0,
-    accounts_engaged: 0,
+    accounts_engaged: todayData.accounts_engaged,
     source_used: "repair",
     wrote_at: nowIso(),
   })
