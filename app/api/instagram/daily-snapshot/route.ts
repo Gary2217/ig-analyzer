@@ -171,7 +171,7 @@ async function resolveActiveIgAccountForRequest(): Promise<ActiveIgAccount> {
 
 type SsotResolution = {
   ig_account_id: string | null
-  strategy: "snapshot_rows" | "created_at_fallback" | "none"
+  strategy: "snapshot_rows" | "created_at_fallback" | "latest_connected" | "none"
   snapshot_rows: number
   candidate_count: number
   ig_user_id_str?: string
@@ -186,19 +186,18 @@ async function resolveSsotBySnapshotRows(params: {
   // IMPORTANT: treat ig_user_id as a string end-to-end to avoid 64-bit precision loss.
   // Never convert to Number for DB queries or JS comparisons.
   const igUserIdStr = String(params.igUserId ?? "").trim()
-  if (!igUserIdStr || igUserIdStr === "0") {
-    return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0, ig_user_id_str: igUserIdStr }
-  }
   if (!params.userId) {
     return { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0, ig_user_id_str: igUserIdStr }
   }
 
+  const hasIgId = igUserIdStr !== "" && igUserIdStr !== "0"
   let countUia = 0
   let countUiga = 0
 
   try {
-    // A) user_instagram_accounts: query by user_id only (limit 50), then filter ig_user_id in JS as string.
+    // A) user_instagram_accounts: query by user_id only (limit 50), filter ig_user_id in JS as string.
     // This avoids bigint precision loss regardless of the column's numeric type.
+    // If igUserIdStr is empty, keep all rows as candidates.
     const { data: uiaCandidates } = await params.sb
       .from("user_instagram_accounts")
       .select("id,ig_user_id,created_at")
@@ -207,7 +206,9 @@ async function resolveSsotBySnapshotRows(params: {
       .limit(50)
 
     const uiaAll = Array.isArray(uiaCandidates) ? uiaCandidates : []
-    const uiaMatched = uiaAll.filter((r: any) => String(r.ig_user_id ?? "") === igUserIdStr)
+    const uiaMatched = hasIgId
+      ? uiaAll.filter((r: any) => String(r.ig_user_id ?? "") === igUserIdStr)
+      : uiaAll
     countUia = uiaMatched.length
 
     let rows: Array<{ id: string; created_at: string }> = uiaMatched.map((r: any) => ({
@@ -216,17 +217,22 @@ async function resolveSsotBySnapshotRows(params: {
     })).filter((r) => r.id)
 
     // B) Fallback: user_ig_accounts (SSOT table). ig_user_id is TEXT — safe to compare directly.
+    // If igUserIdStr is empty, omit the ig_user_id filter to pick latest connected account.
     if (rows.length === 0) {
       try {
-        const { data: igAcctCandidates } = await params.sb
+        let igAcctQuery = params.sb
           .from("user_ig_accounts")
           .select("id,connected_at")
           .eq("user_id", params.userId)
-          .eq("ig_user_id", igUserIdStr)
           .is("revoked_at", null)
           .order("connected_at", { ascending: false })
           .limit(20)
 
+        if (hasIgId) {
+          igAcctQuery = igAcctQuery.eq("ig_user_id", igUserIdStr)
+        }
+
+        const { data: igAcctCandidates } = await igAcctQuery
         const igAcctRows = Array.isArray(igAcctCandidates) ? igAcctCandidates : []
         countUiga = igAcctRows.length
         // Normalize connected_at -> created_at so the rest of the function is unchanged
@@ -265,7 +271,9 @@ async function resolveSsotBySnapshotRows(params: {
     })
 
     const best = counted[0]
-    const strategy: SsotResolution["strategy"] = best.snap_count > 0 ? "snapshot_rows" : "created_at_fallback"
+    const strategy: SsotResolution["strategy"] = best.snap_count > 0
+      ? "snapshot_rows"
+      : (!hasIgId ? "latest_connected" : "created_at_fallback")
     return {
       ig_account_id: best.id,
       strategy,
@@ -1888,26 +1896,20 @@ async function handle(req: Request) {
       let ssotId: string | null = ssotAccount?.id ?? null
       const ssotIgUserId = ssotAccount?.ig_user_id ?? null
 
-      // FORCE SSOT resolve when missing — prefer candidate with most snapshot rows
+      // FORCE SSOT resolve — prefer candidate with most snapshot rows.
+      // Always run when userId is available; igUserId may be empty (latest_connected fallback).
       let ssotDiag: SsotResolution = { ig_account_id: null, strategy: "none", snapshot_rows: 0, candidate_count: 0 }
-      if (!ssotId && resolvedIgId) {
+      if (userId) {
         ssotDiag = await resolveSsotBySnapshotRows({
           sb: supabaseServer,
-          igUserId: resolvedIgId,
-          userId: userId || "",
+          igUserId: resolvedIgId || "",
+          userId: userId,
         })
-        if (ssotDiag.ig_account_id) {
+        if (!ssotId && ssotDiag.ig_account_id) {
+          // No prior resolution — use whatever the resolver found
           ssotId = ssotDiag.ig_account_id
-        }
-      } else if (ssotId && resolvedIgId) {
-        // Already resolved from cookie/active — still count rows for diag
-        ssotDiag = await resolveSsotBySnapshotRows({
-          sb: supabaseServer,
-          igUserId: resolvedIgId,
-          userId: userId || "",
-        })
-        // Prefer the snapshot-rows winner over the cookie value
-        if (ssotDiag.ig_account_id && ssotDiag.snapshot_rows > 0) {
+        } else if (ssotId && ssotDiag.ig_account_id && ssotDiag.snapshot_rows > 0) {
+          // Already resolved from cookie/active — prefer snapshot-rows winner
           ssotId = ssotDiag.ig_account_id
         }
       }
