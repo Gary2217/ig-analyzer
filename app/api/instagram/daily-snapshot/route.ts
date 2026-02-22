@@ -551,9 +551,9 @@ async function upsertAccountDailySnapshots(params: {
   rows: Array<{
     day: string
     reach: number | null
-    impressions: number
-    total_interactions: number
-    accounts_engaged: number
+    impressions?: number | null
+    total_interactions?: number | null
+    accounts_engaged?: number | null
     source_used?: string
     wrote_at?: string
   }>
@@ -657,12 +657,15 @@ async function backfillMissingSnapshotsFromGraph(params: {
         reachStored: reach,
       })
 
+      const impVal = typeof p.impressions === "number" && Number.isFinite(p.impressions) ? Math.floor(p.impressions) : undefined
+      const intVal = typeof p.interactions === "number" && Number.isFinite(p.interactions) ? Math.floor(p.interactions) : undefined
+      const engVal = typeof p.engaged_accounts === "number" && Number.isFinite(p.engaged_accounts) ? Math.floor(p.engaged_accounts) : undefined
       return {
         day,
         reach,
-        impressions: toSafeInt(p.impressions),
-        total_interactions: toSafeInt(p.interactions),
-        accounts_engaged: toSafeInt(p.engaged_accounts),
+        ...(impVal !== undefined ? { impressions: impVal } : {}),
+        ...(intVal !== undefined ? { total_interactions: intVal } : {}),
+        ...(engVal !== undefined ? { accounts_engaged: engVal } : {}),
         source_used: "graph_backfill",
         wrote_at: new Date().toISOString(),
       }
@@ -1719,14 +1722,14 @@ async function handle(req: Request) {
               // Build per-day map aligned across all series
               const syncByDay = new Map<string, {
                 reach: number | null
-                total_interactions: number
-                accounts_engaged: number
-                impressions: number
+                total_interactions: number | null
+                accounts_engaged: number | null
+                impressions: number | null
               }>()
               const ensureSync = (day: string) => {
                 const ex = syncByDay.get(day)
                 if (ex) return ex
-                const init = { reach: null, total_interactions: 0, accounts_engaged: 0, impressions: 0 }
+                const init = { reach: null, total_interactions: null, accounts_engaged: null, impressions: null }
                 syncByDay.set(day, init)
                 return init
               }
@@ -1740,20 +1743,23 @@ async function handle(req: Request) {
               for (const v of viewsSeries) {
                 const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
                 if (!day || day.length !== 10) continue
-                ensureSync(day).impressions = toSafeInt(v?.value)
+                const val = typeof v?.value === "number" && Number.isFinite(v.value) ? Math.floor(v.value) : null
+                if (val !== null) ensureSync(day).impressions = val
               }
               for (const v of interactionsSeries) {
                 const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
                 if (!day || day.length !== 10) continue
                 // total_value shape: { end_time, total_value: { value } } or { end_time, value }
                 const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
-                ensureSync(day).total_interactions = toSafeInt(raw)
+                const val = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : null
+                if (val !== null) ensureSync(day).total_interactions = val
               }
               for (const v of engagedSeries) {
                 const day = typeof v?.end_time === "string" ? v.end_time.slice(0, 10) : ""
                 if (!day || day.length !== 10) continue
                 const raw = v?.total_value?.value !== undefined ? v.total_value.value : v?.value
-                ensureSync(day).accounts_engaged = toSafeInt(raw)
+                const val = typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : null
+                if (val !== null) ensureSync(day).accounts_engaged = val
               }
 
               const reachSyncWroteAt = new Date().toISOString()
@@ -1762,13 +1768,14 @@ async function handle(req: Request) {
                 .map(([day, rec]) => ({
                   ig_account_id: String(reachWriteSsotId),
                   user_id: String(userId),
+                  user_id_text: String(userId),
                   ig_user_id: Number(resolvedIgId),
                   page_id: Number(resolvedPageId),
                   day,
                   reach: rec.reach,
-                  total_interactions: rec.total_interactions,
-                  accounts_engaged: rec.accounts_engaged,
-                  impressions: rec.impressions,
+                  ...(rec.impressions !== null ? { impressions: rec.impressions } : {}),
+                  ...(rec.total_interactions !== null ? { total_interactions: rec.total_interactions } : {}),
+                  ...(rec.accounts_engaged !== null ? { accounts_engaged: rec.accounts_engaged } : {}),
                   source_used: "reach_sync",
                   wrote_at: reachSyncWroteAt,
                 }))
