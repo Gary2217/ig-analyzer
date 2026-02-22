@@ -4,7 +4,7 @@ import { createAuthedClient, supabaseServer } from "@/lib/supabase/server"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const BUILD_MARKER = "trend-db-v1"
+const BUILD_MARKER = "trend-db-v2"
 
 function utcDateStringFromOffset(daysAgo: number): string {
   const now = new Date()
@@ -27,11 +27,17 @@ function toFiniteIntOrNull(v: unknown): number | null {
   return Math.max(0, Math.floor(n))
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const days = clampDays(url.searchParams.get("days"))
   const today = utcDateStringFromOffset(0)
   const start = utcDateStringFromOffset(days - 1)
+
+  // Optional: caller may pass the already-resolved ig_account_id UUID to avoid
+  // a second DB round-trip. We validate it belongs to the authed user.
+  const paramAccountId = (url.searchParams.get("ig_account_id") ?? "").trim()
 
   try {
     const authed = await createAuthedClient()
@@ -45,26 +51,46 @@ export async function GET(req: NextRequest) {
     }
     const userId = String(user.id)
 
-    // ── Resolve ig_account_id (SSOT) ────────────────────────────────────────
+    // ── Resolve ig_account_id + ig_user_id + page_id ────────────────────────
+    // user_ig_accounts.ig_user_id and page_id are TEXT columns.
+    // account_daily_snapshot stores them as BIGINT (ig_user_id, page_id).
     let igAccountId = ""
-    let igUserId = ""
-    let pageId = ""
+    let igUserIdText = ""   // text from user_ig_accounts
+    let pageIdText = ""     // text from user_ig_accounts
 
     try {
-      const { data: activeRow } = await authed
-        .from("user_ig_accounts")
-        .select("id,ig_user_id,page_id")
-        .eq("user_id", userId)
-        .eq("provider", "instagram")
-        .is("revoked_at", null)
-        .order("connected_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      let row: Record<string, unknown> | null = null
 
-      if (activeRow) {
-        igAccountId = typeof (activeRow as any).id === "string" ? String((activeRow as any).id) : ""
-        igUserId = (activeRow as any).ig_user_id != null ? String((activeRow as any).ig_user_id) : ""
-        pageId = (activeRow as any).page_id != null ? String((activeRow as any).page_id) : ""
+      if (paramAccountId && UUID_RE.test(paramAccountId)) {
+        // Validate the supplied UUID belongs to this user
+        const { data } = await authed
+          .from("user_ig_accounts")
+          .select("id,ig_user_id,page_id")
+          .eq("id", paramAccountId)
+          .eq("user_id", userId)
+          .limit(1)
+          .maybeSingle()
+        row = (data as Record<string, unknown> | null) ?? null
+      }
+
+      if (!row) {
+        // Fall back to latest connected account for this user
+        const { data } = await authed
+          .from("user_ig_accounts")
+          .select("id,ig_user_id,page_id")
+          .eq("user_id", userId)
+          .eq("provider", "instagram")
+          .is("revoked_at", null)
+          .order("connected_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        row = (data as Record<string, unknown> | null) ?? null
+      }
+
+      if (row) {
+        igAccountId = typeof row.id === "string" ? row.id : ""
+        igUserIdText = row.ig_user_id != null ? String(row.ig_user_id) : ""
+        pageIdText = row.page_id != null ? String(row.page_id) : ""
       }
     } catch { /* best-effort */ }
 
@@ -75,7 +101,14 @@ export async function GET(req: NextRequest) {
       )
     }
 
+    // Numeric forms needed for account_daily_snapshot (bigint columns)
+    const igUserIdNum = igUserIdText ? Number(igUserIdText) : NaN
+    const pageIdNum = pageIdText ? Number(pageIdText) : NaN
+    const hasNumericIds = Number.isFinite(igUserIdNum) && igUserIdNum > 0
+      && Number.isFinite(pageIdNum) && pageIdNum > 0
+
     // ── 1. Followers: ig_daily_followers ────────────────────────────────────
+    // Primary key: ig_account_id. Legacy fallback: ig_user_id (text).
     let followersRows: Array<{ day: string; followers_count: number }> = []
     let followersLastWriteAt: string | null = null
     try {
@@ -90,19 +123,21 @@ export async function GET(req: NextRequest) {
       const arr = Array.isArray(fRows) ? fRows : []
       for (const r of arr) {
         const day = typeof (r as any).day === "string" ? String((r as any).day) : ""
-        const raw = typeof (r as any).followers_count === "number" ? (r as any).followers_count : Number((r as any).followers_count)
+        const raw = typeof (r as any).followers_count === "number"
+          ? (r as any).followers_count
+          : Number((r as any).followers_count)
         if (!day || !Number.isFinite(raw) || raw < 0) continue
         followersRows.push({ day, followers_count: Math.floor(raw) })
         const ca = typeof (r as any).captured_at === "string" ? String((r as any).captured_at) : ""
         if (ca && (!followersLastWriteAt || ca > followersLastWriteAt)) followersLastWriteAt = ca
       }
 
-      // Fallback: try legacy ig_user_id column if no rows via ig_account_id
-      if (followersRows.length === 0 && igUserId) {
+      // Legacy fallback: ig_user_id text column
+      if (followersRows.length === 0 && igUserIdText) {
         const { data: fRowsLegacy } = await supabaseServer
           .from("ig_daily_followers")
           .select("day,followers_count,captured_at")
-          .eq("ig_user_id", igUserId)
+          .eq("ig_user_id", igUserIdText)
           .gte("day", start)
           .lte("day", today)
           .order("day", { ascending: true })
@@ -110,7 +145,9 @@ export async function GET(req: NextRequest) {
         const arr2 = Array.isArray(fRowsLegacy) ? fRowsLegacy : []
         for (const r of arr2) {
           const day = typeof (r as any).day === "string" ? String((r as any).day) : ""
-          const raw = typeof (r as any).followers_count === "number" ? (r as any).followers_count : Number((r as any).followers_count)
+          const raw = typeof (r as any).followers_count === "number"
+            ? (r as any).followers_count
+            : Number((r as any).followers_count)
           if (!day || !Number.isFinite(raw) || raw < 0) continue
           followersRows.push({ day, followers_count: Math.floor(raw) })
           const ca = typeof (r as any).captured_at === "string" ? String((r as any).captured_at) : ""
@@ -120,13 +157,14 @@ export async function GET(req: NextRequest) {
     } catch { /* best-effort */ }
 
     // ── 2. Interactions: media_daily_aggregate ───────────────────────────────
+    // Keyed by: user_id_text + ig_account_id + day
     const interactionsByDay = new Map<string, number>()
     try {
       const { data: aggRows } = await supabaseServer
         .from("media_daily_aggregate")
         .select("day,total_interactions")
-        .eq("ig_account_id", igAccountId)
         .eq("user_id_text", userId)
+        .eq("ig_account_id", igAccountId)
         .gte("day", start)
         .lte("day", today)
         .order("day", { ascending: true })
@@ -141,6 +179,8 @@ export async function GET(req: NextRequest) {
     } catch { /* best-effort */ }
 
     // ── 3. Reach + account metrics: account_daily_snapshot ──────────────────
+    // Unique key: (user_id_text, ig_user_id BIGINT, page_id BIGINT, day)
+    // Do NOT filter by ig_account_id — that column is not in the unique index.
     const snapshotByDay = new Map<string, {
       reach: number | null
       impressions: number | null
@@ -148,14 +188,13 @@ export async function GET(req: NextRequest) {
       accounts_engaged: number | null
     }>()
     try {
-      const igUserIdNum = igUserId ? Number(igUserId) : null
-      const pageIdNum = pageId ? Number(pageId) : null
-
-      if (igUserIdNum && pageIdNum) {
+      if (hasNumericIds) {
         const { data: snapRows } = await supabaseServer
           .from("account_daily_snapshot")
           .select("day,reach,impressions,total_interactions,accounts_engaged")
-          .eq("ig_account_id", igAccountId)
+          .eq("user_id_text", userId)
+          .eq("ig_user_id", igUserIdNum)
+          .eq("page_id", pageIdNum)
           .gte("day", start)
           .lte("day", today)
           .order("day", { ascending: true })
@@ -175,7 +214,6 @@ export async function GET(req: NextRequest) {
     } catch { /* best-effort */ }
 
     // ── Build unified points array ───────────────────────────────────────────
-    // Collect all days that have any data
     const allDays = new Set<string>()
     for (const r of followersRows) allDays.add(r.day)
     for (const d of interactionsByDay.keys()) allDays.add(d)
@@ -197,7 +235,7 @@ export async function GET(req: NextRequest) {
         }
       })
 
-    // ── KPI: last-day values + delta vs previous period ──────────────────────
+    // ── KPI: last-day value + delta vs previous day ──────────────────────────
     const reachValues = points.map((p) => p.reach).filter((v): v is number => v !== null)
     const interactionValues = points.map((p) => p.interactions).filter((v): v is number => v !== null)
     const followerValues = followersRows.map((r) => r.followers_count)
@@ -237,6 +275,10 @@ export async function GET(req: NextRequest) {
         followers_last_write_at: followersLastWriteAt,
         kpi,
         __diag: {
+          resolved_ig_account_id: igAccountId,
+          resolved_ig_user_id: igUserIdText,
+          resolved_page_id: pageIdText,
+          has_numeric_ids: hasNumericIds,
           followers_rows: followersRows.length,
           snapshot_days: snapshotByDay.size,
           media_agg_days: interactionsByDay.size,

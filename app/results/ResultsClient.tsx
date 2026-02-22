@@ -1491,6 +1491,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     Array<{ day: string; followers_count: number }>
   >([])
   const [followersLastWriteAt, setFollowersLastWriteAt] = useState<string | null>(null)
+  const [activeIgAccountUuid, setActiveIgAccountUuid] = useState<string>("")
 
   const trendPointsHashRef = useRef<string>("")
   const hashTrendPoints = useCallback((pts: AccountTrendPoint[]) => {
@@ -1878,6 +1879,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
   const lastDailySnapshotFetchAtRef = useRef(0)
   const hasFetchedDailySnapshotRef = useRef<string>("")
   const hasFetchedTrendDbRef = useRef<string>("")
+  const hasFetchedActiveAccountUuidRef = useRef<string>("")
   const hasAppliedDailySnapshotTrendRef = useRef(false)
   const dailySnapshotAbortRef = useRef<AbortController | null>(null)
   const dailySnapshotRequestSeqRef = useRef(0)
@@ -4019,6 +4021,35 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     return () => { controller.abort() }
   }, [isConnectedInstagram, igCacheId, userScopeKey, trendRangeDays])
 
+  // ── Fetch active ig_account_id UUID once per connected session ─────────────
+  // Stores the UUID so trend-db can use it for precise DB queries.
+  useEffect(() => {
+    if (!isConnectedInstagram) {
+      setActiveIgAccountUuid("")
+      hasFetchedActiveAccountUuidRef.current = ""
+      return
+    }
+    const scopeKey = userScopeKey || igCacheId
+    if (!scopeKey || scopeKey === "me" || scopeKey === "session") return
+    if (hasFetchedActiveAccountUuidRef.current === scopeKey) return
+    hasFetchedActiveAccountUuidRef.current = scopeKey
+
+    const controller = new AbortController()
+    ;(async () => {
+      try {
+        const res = await fetch("/api/ig/active-account", {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const json = await res.json()
+        const uuid = typeof json?.ig_account_id === "string" ? json.ig_account_id.trim() : ""
+        if (uuid) setActiveIgAccountUuid(uuid)
+      } catch { /* best-effort */ }
+    })()
+    return () => { controller.abort() }
+  }, [isConnectedInstagram, userScopeKey, igCacheId])
+
   // ── DB-backed trend fetch (SSOT) ──────────────────────────────────────────
   // Reads ig_daily_followers + media_daily_aggregate + account_daily_snapshot.
   // Runs in parallel with the live daily-snapshot fetch.
@@ -4029,14 +4060,15 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
       ? igCacheId.trim()
       : ""
     if (!fetchKey) return
-    const key = `${fetchKey}:${trendRangeDays}`
+    const key = `${fetchKey}:${trendRangeDays}:${activeIgAccountUuid}`
     if (hasFetchedTrendDbRef.current === key) return
     hasFetchedTrendDbRef.current = key
 
+    const accountParam = activeIgAccountUuid ? `&ig_account_id=${encodeURIComponent(activeIgAccountUuid)}` : ""
     const controller = new AbortController()
     ;(async () => {
       try {
-        const res = await fetch(`/api/instagram/trend-db?days=${trendRangeDays}`, {
+        const res = await fetch(`/api/instagram/trend-db?days=${trendRangeDays}${accountParam}`, {
           cache: "no-store",
           signal: controller.signal,
         })
@@ -4100,7 +4132,7 @@ export default function ResultsClient({ initialDailySnapshot }: { initialDailySn
     })()
 
     return () => { controller.abort() }
-  }, [isConnectedInstagram, igCacheId, trendRangeDays, setTrendPointsDeduped])
+  }, [isConnectedInstagram, igCacheId, trendRangeDays, activeIgAccountUuid, setTrendPointsDeduped])
 
   useEffect(() => {
     if (!isConnectedInstagram) {
